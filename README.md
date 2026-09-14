@@ -226,3 +226,11 @@ docker            Production Dockerfile
 scripts           Smoke-test tooling
 docs              Project notes and public screenshots
 ```
+
+## License
+
+[](https://github.com/somali-lab/keep-the-house-clean-planner#license)
+
+Released under the [MIT License](https://opensource.org/licenses/MIT) - free to use, modify, and share, with attribution to the original source.
+
+Copyright (c) 2026 [somali-lab](https://github.com/somali-lab)
