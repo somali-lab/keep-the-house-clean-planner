@@ -1,0 +1,67 @@
+import { fireEvent, render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { App } from './App.tsx';
+import { ANNA, BRAM, mockApi, storeProfile, testQueryClient } from './test/fixtures.ts';
+import { makeSettings } from './test/render.tsx';
+import { setViewportWidth } from './test/setup.ts';
+
+describe('app shell', () => {
+  beforeEach(() => {
+    window.history.replaceState(null, '', '/');
+    mockApi({
+      '/api/users': [ANNA, BRAM],
+      '/api/tasks': [],
+      '/api/rooms': [],
+      '/api/settings': makeSettings(),
+      '/api/cycle-plans': [],
+      '/api/occurrences': [],
+    });
+    storeProfile(ANNA._id);
+  });
+
+  it('renders the mobile layout on narrow screens', async () => {
+    setViewportWidth(375);
+    render(<App queryClient={testQueryClient()} />);
+    const nav = await screen.findByRole('navigation', { name: 'Hoofdmenu' });
+    expect(nav).toHaveTextContent('Vandaag');
+    expect(nav).toHaveTextContent('Achterstand');
+    expect(nav).not.toHaveTextContent('Planner');
+    expect(screen.getByRole('group', { name: 'Kleurthema' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Taal' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '12-daags overzicht' })).toBeInTheDocument();
+  });
+
+  it('renders the desktop layout on wide screens', async () => {
+    setViewportWidth(1280);
+    render(<App queryClient={testQueryClient()} />);
+    const nav = await screen.findByRole('navigation', { name: 'Hoofdmenu' });
+    expect(nav).toHaveTextContent('Planner');
+    expect(nav).toHaveTextContent('Verdeling');
+    expect(nav).toHaveTextContent('AI-prompts');
+    expect(nav).toHaveTextContent('Instellingen');
+    expect(screen.getByRole('group', { name: 'Kleurthema' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '12-daags overzicht' })).toBeInTheDocument();
+  });
+
+  it('can switch to the other layout via the menu', async () => {
+    setViewportWidth(375);
+    render(<App queryClient={testQueryClient()} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Naar planweergave (desktop)' }));
+    expect(await screen.findByRole('heading', { name: '12-daags overzicht' })).toBeInTheDocument();
+  });
+
+  it('switches the interface to English immediately and remembers that choice', async () => {
+    setViewportWidth(1280);
+    render(<App queryClient={testQueryClient()} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Engels' }));
+
+    const nav = await screen.findByRole('navigation', { name: 'Main Menu' });
+    expect(nav).toHaveTextContent('Planner');
+    expect(nav).toHaveTextContent('Distribution');
+    expect(nav).toHaveTextContent('Statistics');
+    expect(screen.getByText(ANNA.name)).toBeInTheDocument();
+    expect(window.localStorage.getItem('huishoudplanner.language')).toBe('en');
+    expect(document.documentElement.lang).toBe('en');
+  });
+});

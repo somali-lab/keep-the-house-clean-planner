@@ -1,0 +1,24 @@
+import { completionQuerySchema, statsCyclesQuerySchema } from '@huishoudplanner/shared';
+import type { FastifyPluginAsync } from 'fastify';
+import { completionStats, intervalStats, resetStatistics, workloadStats } from '../domain/stats.ts';
+import { parseOrThrow } from '../http/errors.ts';
+import { auditContext, requireActor } from '../identity/index.ts';
+
+export const statsRoutes: FastifyPluginAsync = async (app) => {
+  app.get('/stats/workload', async (request) => {
+    const { cycles } = parseOrThrow(statsCyclesQuerySchema, request.query);
+    return workloadStats(app.deps.db, app.deps.clock.now(), cycles);
+  });
+
+  app.get('/stats/completion', async (request) => {
+    const { cycles, groupBy } = parseOrThrow(completionQuerySchema, request.query);
+    return completionStats(app.deps.db, app.deps.clock.now(), cycles, groupBy);
+  });
+
+  app.get('/stats/intervals', async (request) => {
+    const { cycles } = parseOrThrow(statsCyclesQuerySchema, request.query);
+    return intervalStats(app.deps.db, app.deps.clock.now(), cycles);
+  });
+
+  app.delete('/stats', { preHandler: requireActor }, async (request) => resetStatistics(auditContext(request)));
+};
