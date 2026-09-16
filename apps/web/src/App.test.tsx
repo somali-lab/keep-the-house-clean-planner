@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from './App.tsx';
+import { APP_VERSION } from './version.ts';
 import { ANNA, BRAM, mockApi, storeProfile, testQueryClient } from './test/fixtures.ts';
 import { makeSettings } from './test/render.tsx';
 import { setViewportWidth } from './test/setup.ts';
@@ -29,7 +30,7 @@ describe('app shell', () => {
     expect(nav).not.toHaveTextContent('Planner');
     expect(screen.getByRole('group', { name: 'Kleurthema' })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'Taal' })).toBeInTheDocument();
-    expect(screen.getByLabelText('Versie 1.1.0')).toHaveTextContent('v1.1.0');
+    expect(screen.getByLabelText(`Versie ${APP_VERSION}`)).toHaveTextContent(`v${APP_VERSION}`);
     expect(await screen.findByRole('heading', { name: '12-daags overzicht' })).toBeInTheDocument();
     expect(window.location.pathname).toBe('/mobile/week');
   });
@@ -61,7 +62,7 @@ describe('app shell', () => {
     expect(nav).toHaveTextContent('AI-prompts');
     expect(nav).toHaveTextContent('Instellingen');
     expect(screen.getByRole('group', { name: 'Kleurthema' })).toBeInTheDocument();
-    expect(screen.getByLabelText('Versie 1.1.0')).toHaveTextContent('v1.1.0');
+    expect(screen.getByLabelText(`Versie ${APP_VERSION}`)).toHaveTextContent(`v${APP_VERSION}`);
     expect(await screen.findByRole('heading', { name: '12-daags overzicht' })).toBeInTheDocument();
   });
 
