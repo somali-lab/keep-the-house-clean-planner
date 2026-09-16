@@ -1,5 +1,6 @@
 import { Scale } from 'lucide-react';
 import { useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { EmptyState } from '@/components/EmptyState';
 import { NativeSelect } from '@/components/NativeSelect';
 import { PageHeader } from '@/components/PageHeader';
@@ -18,6 +19,8 @@ export function DistributionPage() {
   const settings = useSettings();
   const { activeUsers } = useProfile();
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedTab = searchParams.get('tab') === 'spacing' ? 'spacing' : 'workload';
 
   if (plans.isPending || tasks.isPending || rooms.isPending || settings.isPending) {
     return (
@@ -68,7 +71,15 @@ export function DistributionPage() {
           {t('planner.noPlan')}
         </EmptyState>
       ) : (
-        <Tabs defaultValue="workload" className="gap-4">
+        <Tabs
+          value={selectedTab}
+          onValueChange={(tab) => {
+            const next = new URLSearchParams(searchParams);
+            next.set('tab', tab);
+            setSearchParams(next);
+          }}
+          className="gap-4"
+        >
           <TabsList className="h-auto max-w-full flex-wrap" aria-label={t('distribution.tabs')}>
             <TabsTrigger value="workload">{t('planner.distribution')}</TabsTrigger>
             <TabsTrigger value="spacing">{t('planner.spacing')}</TabsTrigger>

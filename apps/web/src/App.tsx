@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
-import { BrowserRouter } from 'react-router';
+import { BrowserRouter, Navigate, useLocation, useNavigate } from 'react-router';
 import { t } from './i18n/nl.ts';
 import { LanguageProvider } from './i18n/LanguageProvider.tsx';
 import { ProfilePicker, ProfileProvider, useProfile } from './identity/index.ts';
@@ -12,10 +12,34 @@ import { ThemeProvider } from './theme/ThemeProvider.tsx';
 
 type LayoutChoice = 'auto' | 'desktop' | 'mobile';
 
+const LEGACY_ROUTES: Record<string, string> = {
+  '/vandaag': '/mobile/today',
+  '/achterstand': '/mobile/due',
+  '/taken': '/tasks',
+  '/verdeling': '/distribution',
+  '/statistiek': '/statistics',
+  '/geschiedenis': '/history',
+  '/instellingen': '/settings',
+  '/weekoverzicht': '/week',
+};
+
 export function AppShell() {
   const { status, profile } = useProfile();
   const isDesktop = useIsDesktop();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [choice, setChoice] = useState<LayoutChoice>('auto');
+
+  const legacyTarget = LEGACY_ROUTES[location.pathname];
+  if (legacyTarget) {
+    return (
+      <Navigate
+        to={{ pathname: legacyTarget, search: location.search, hash: location.hash }}
+        replace
+      />
+    );
+  }
+  if (location.pathname === '/mobile') return <Navigate to="/mobile/week" replace />;
 
   if (status === 'loading')
     return (
@@ -34,11 +58,22 @@ export function AppShell() {
     );
   if (!profile) return <ProfilePicker />;
 
-  const desktop = choice === 'auto' ? isDesktop : choice === 'desktop';
+  const mobileUrl = location.pathname.startsWith('/mobile/');
+  const desktop = mobileUrl ? false : choice === 'auto' ? isDesktop : choice === 'desktop';
   return desktop ? (
-    <DesktopLayout onSwitchLayout={() => setChoice('mobile')} />
+    <DesktopLayout
+      onSwitchLayout={() => {
+        setChoice('mobile');
+        navigate('/mobile/week');
+      }}
+    />
   ) : (
-    <MobileLayout onSwitchLayout={() => setChoice('desktop')} />
+    <MobileLayout
+      onSwitchLayout={() => {
+        setChoice('desktop');
+        navigate('/week');
+      }}
+    />
   );
 }
 

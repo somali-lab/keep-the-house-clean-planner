@@ -29,6 +29,17 @@ function setup() {
 }
 
 describe('AiPromptsPage', () => {
+  it('opens a directly linked prompt tab', async () => {
+    setup();
+    renderWithProviders(<AiPromptsPage />, { route: '/ai-prompts?tab=tasks' });
+
+    expect(await screen.findByRole('tab', { name: 'Taken voorstellen' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByLabelText('Systemprompt')).toHaveValue('taken system {{schema}}');
+  });
+
   it('shows system and user prompts per AI action and saves all templates', async () => {
     const fetchMock = setup();
     renderWithProviders(<AiPromptsPage />);

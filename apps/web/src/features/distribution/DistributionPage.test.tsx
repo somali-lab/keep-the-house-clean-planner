@@ -1,5 +1,5 @@
 import type { CyclePlan, Slot } from '@huishoudplanner/shared';
-import { fireEvent, screen, within } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { makeUser, mockApi, storeProfile } from '../../test/fixtures.ts';
 import { makeRoom, makeSettings, makeTask, renderWithProviders } from '../../test/render.tsx';
@@ -159,10 +159,9 @@ describe('DistributionPage', () => {
       '/api/settings': makeSettings(),
       '/api/cycle-plans': [plan([slot('t1', 0, 1, ANNA._id), slot('t1', 2, 1, ANNA._id)])],
     });
-    renderWithProviders(<DistributionPage />);
+    renderWithProviders(<DistributionPage />, { route: '/distribution?tab=spacing' });
 
     const spacingTab = await screen.findByRole('tab', { name: 'Spreiding over de cyclus' });
-    fireEvent.mouseDown(spacingTab, { button: 0, ctrlKey: false });
     expect(spacingTab).toHaveAttribute('aria-selected', 'true');
     const spacing = await screen.findByRole('region', { name: 'Spreiding over de cyclus' });
     expect(screen.queryByRole('button', { name: 'Week 1' })).not.toBeInTheDocument();

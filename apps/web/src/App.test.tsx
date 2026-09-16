@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from './App.tsx';
 import { ANNA, BRAM, mockApi, storeProfile, testQueryClient } from './test/fixtures.ts';
@@ -29,6 +29,21 @@ describe('app shell', () => {
     expect(screen.getByRole('group', { name: 'Kleurthema' })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'Taal' })).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: '12-daags overzicht' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/mobile/week');
+  });
+
+  it('makes the focused mobile view directly accessible on wide screens', async () => {
+    setViewportWidth(1280);
+    window.history.replaceState(null, '', '/mobile/today');
+    render(<App queryClient={testQueryClient()} />);
+
+    const nav = await screen.findByRole('navigation', { name: 'Hoofdmenu' });
+    expect(nav).toHaveTextContent('Vandaag');
+    expect(nav).not.toHaveTextContent('Planner');
+    expect(screen.getByRole('link', { name: 'Achterstand' })).toHaveAttribute(
+      'href',
+      '/mobile/due',
+    );
   });
 
   it('renders the desktop layout on wide screens', async () => {
@@ -48,6 +63,17 @@ describe('app shell', () => {
     render(<App queryClient={testQueryClient()} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Naar planweergave (desktop)' }));
     expect(await screen.findByRole('heading', { name: '12-daags overzicht' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/week');
+  });
+
+  it('redirects old Dutch URLs to their English replacements', async () => {
+    setViewportWidth(1280);
+    window.history.replaceState(null, '', '/taken?source=bookmark');
+    render(<App queryClient={testQueryClient()} />);
+
+    await screen.findByRole('heading', { name: 'Taken' });
+    await waitFor(() => expect(window.location.pathname).toBe('/tasks'));
+    expect(window.location.search).toBe('?source=bookmark');
   });
 
   it('switches the interface to English immediately and remembers that choice', async () => {

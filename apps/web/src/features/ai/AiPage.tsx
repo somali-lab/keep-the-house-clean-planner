@@ -118,7 +118,7 @@ export function AiPage() {
             <p className="text-muted-foreground">{t('ai.off')}</p>
             <p>
               <Button asChild variant="outline">
-                <Link to="/instellingen">
+                <Link to="/settings">
                   <Settings aria-hidden="true" />
                   {t('ai.off.settingsLink')}
                 </Link>

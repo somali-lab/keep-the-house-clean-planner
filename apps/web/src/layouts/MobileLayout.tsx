@@ -14,15 +14,15 @@ import { PlaceholderPage } from './PlaceholderPage.tsx';
 
 /** Implemented pages; other tabs show a placeholder until their task is done. */
 const PAGES: Partial<Record<string, ReactElement>> = {
-  '/vandaag': <TodayPage />,
-  '/week': <WeekPage />,
-  '/achterstand': <DuePage />,
+  '/mobile/today': <TodayPage />,
+  '/mobile/week': <WeekPage />,
+  '/mobile/due': <DuePage />,
 };
 
 const TABS: { path: string; label: MessageKey; icon: LucideIcon }[] = [
-  { path: '/week', label: 'nav.week', icon: CalendarRange },
-  { path: '/vandaag', label: 'nav.today', icon: Sun },
-  { path: '/achterstand', label: 'nav.due', icon: Hourglass },
+  { path: '/mobile/week', label: 'nav.week', icon: CalendarRange },
+  { path: '/mobile/today', label: 'nav.today', icon: Sun },
+  { path: '/mobile/due', label: 'nav.due', icon: Hourglass },
 ];
 
 export function MobileLayout({ onSwitchLayout }: { onSwitchLayout: () => void }) {
@@ -54,7 +54,7 @@ export function MobileLayout({ onSwitchLayout }: { onSwitchLayout: () => void })
               element={PAGES[tab.path] ?? <PlaceholderPage titleKey={tab.label} />}
             />
           ))}
-          <Route path="*" element={<Navigate to="/week" replace />} />
+          <Route path="*" element={<Navigate to="/mobile/week" replace />} />
         </Routes>
       </main>
       <nav

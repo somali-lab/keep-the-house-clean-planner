@@ -66,7 +66,7 @@ describe('TasksPage — grouping', () => {
     const row = (await screen.findByText('Douche')).closest('li')!;
     expect(within(row).getByRole('link', { name: 'Geschiedenis' })).toHaveAttribute(
       'href',
-      '/geschiedenis?entity=task&entityId=t3',
+      '/history?entity=task&entityId=t3',
     );
   });
 
