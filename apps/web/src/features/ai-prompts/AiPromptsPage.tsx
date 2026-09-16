@@ -2,6 +2,7 @@ import type { AiPromptTemplates } from '@huishoudplanner/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Braces, RotateCcw, Save } from 'lucide-react';
 import { useId, useState, type FormEvent } from 'react';
+import { useSearchParams } from 'react-router';
 import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -24,6 +25,13 @@ const ACTIONS: { key: PromptAction; label: MessageKey }[] = [
   { key: 'taskSuggestions', label: 'settings.ai.prompt.tasks' },
   { key: 'planExplanation', label: 'settings.ai.prompt.explanation' },
 ];
+
+const ACTION_TABS: Record<PromptAction, string> = {
+  planProposal: 'proposal',
+  planRebalance: 'rebalance',
+  taskSuggestions: 'tasks',
+  planExplanation: 'explanation',
+};
 
 export function AiPromptsPage() {
   const settings = useSettings();
@@ -56,7 +64,10 @@ export function AiPromptsPage() {
 function PromptEditor({ initial, defaults, info }: { initial: AiPromptTemplates; defaults: AiPromptTemplates; info: PromptInfo }) {
   const id = useId();
   const queryClient = useQueryClient();
-  const [selected, setSelected] = useState<PromptAction>('planProposal');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selected =
+    ACTIONS.find(({ key }) => ACTION_TABS[key] === searchParams.get('tab'))?.key ??
+    'planProposal';
   const [prompts, setPrompts] = useState<AiPromptTemplates>(initial);
   const [message, setMessage] = useState<{ kind: 'status' | 'alert'; text: string } | null>(null);
 
@@ -99,7 +110,11 @@ function PromptEditor({ initial, defaults, info }: { initial: AiPromptTemplates;
               role="tab"
               aria-selected={selected === key}
               variant={selected === key ? 'default' : 'ghost'}
-              onClick={() => setSelected(key)}
+              onClick={() => {
+                const next = new URLSearchParams(searchParams);
+                next.set('tab', ACTION_TABS[key]);
+                setSearchParams(next);
+              }}
             >
               {t(label)}
             </Button>

@@ -38,25 +38,25 @@ import { PlaceholderPage } from './PlaceholderPage.tsx';
 const PAGES: Partial<Record<string, ReactElement>> = {
   '/week': <WeekPage />,
   '/planner': <PlannerPage />,
-  '/taken': <TasksPage />,
-  '/verdeling': <DistributionPage />,
-  '/statistiek': <StatsPage />,
-  '/geschiedenis': <HistoryPage />,
+  '/tasks': <TasksPage />,
+  '/distribution': <DistributionPage />,
+  '/statistics': <StatsPage />,
+  '/history': <HistoryPage />,
   '/ai': <AiPage />,
   '/ai-prompts': <AiPromptsPage />,
-  '/instellingen': <SettingsPage />,
+  '/settings': <SettingsPage />,
 };
 
 const SECTIONS: { path: string; label: MessageKey; icon: LucideIcon }[] = [
   { path: '/week', label: 'nav.week', icon: CalendarRange },
   { path: '/planner', label: 'nav.planner', icon: CalendarDays },
-  { path: '/taken', label: 'nav.tasks', icon: ListChecks },
-  { path: '/verdeling', label: 'nav.distribution', icon: Scale },
-  { path: '/statistiek', label: 'nav.stats', icon: ChartColumnBig },
-  { path: '/geschiedenis', label: 'nav.history', icon: History },
+  { path: '/tasks', label: 'nav.tasks', icon: ListChecks },
+  { path: '/distribution', label: 'nav.distribution', icon: Scale },
+  { path: '/statistics', label: 'nav.stats', icon: ChartColumnBig },
+  { path: '/history', label: 'nav.history', icon: History },
   { path: '/ai', label: 'nav.ai', icon: Sparkles },
   { path: '/ai-prompts', label: 'nav.aiPrompts', icon: MessageSquareCode },
-  { path: '/instellingen', label: 'nav.settings', icon: Settings },
+  { path: '/settings', label: 'nav.settings', icon: Settings },
 ];
 
 export function DesktopLayout({ onSwitchLayout }: { onSwitchLayout: () => void }) {
@@ -139,7 +139,7 @@ export function DesktopLayout({ onSwitchLayout }: { onSwitchLayout: () => void }
               />
             ))}
             {/* Week overview with drag-to-reschedule, reachable from the planner. */}
-            <Route path="/weekoverzicht" element={<Navigate to="/week" replace />} />
+            <Route path="/week-overview" element={<Navigate to="/week" replace />} />
             <Route path="*" element={<Navigate to="/week" replace />} />
           </Routes>
         </main>

@@ -14,7 +14,7 @@ test('check off, undo, skip with a reason, check off for someone else, and see b
   for (const task of Object.values(tasks)) await planOn(app, anna, task, TODAY, anna);
   const statusOf = async (taskId: string) => (await occurrencesOn(app, TODAY)).find((o) => o.taskId === taskId);
 
-  await openAs(page, app, anna, '/vandaag');
+  await openAs(page, app, anna, '/mobile/today');
   const mine = page.getByRole('region', { name: 'Mijn taken vandaag' });
   const finished = page.getByRole('region', { name: 'Afgerond vandaag' });
   await expect(mine).toContainText('Afwassen');
