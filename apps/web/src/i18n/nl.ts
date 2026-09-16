@@ -8,6 +8,7 @@ export const nl = {
   'app.name': 'Keep the House Clean',
   'app.loading': 'Laden…',
   'app.error': 'Er ging iets mis.',
+  'app.version': 'Versie {version}',
 
   'nav.today': 'Vandaag',
   'nav.week': 'Week',
