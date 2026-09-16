@@ -122,7 +122,8 @@ describe('GET /api/export/pdf', { timeout: 60_000 }, () => {
   it('is a blank checklist: completed items are listed without any done marking', async () => {
     const res = await get('/api/export/pdf?fromWeek=2026-W38&weeks=1');
     const { text } = await parsePdf(res.rawPayload);
-    expect(between(text, 'maandag', 'dinsdag')).toContain('Badkamer schoonmaken');
+    const mondayText = between(text, 'maandag', 'dinsdag').replace(/\s+/g, ' ');
+    expect(mondayText).toContain('Badkamer schoonmaken');
     for (const marker of ['done', 'gedaan', 'afgevinkt door', 'overgeslagen', '✓', '☑', '✔']) {
       expect(text.toLowerCase()).not.toContain(marker);
     }

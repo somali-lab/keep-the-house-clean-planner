@@ -78,6 +78,16 @@ git pull
 docker compose up -d --build
 ```
 
+## Releases and container images
+
+Releases are automated with semantic versions and generated release notes. Each release publishes a `linux/amd64` image to:
+
+```text
+ghcr.io/somali-lab/keep-the-house-clean-planner
+```
+
+Published tags include the full version (`1.4.2`), rolling minor and major tags (`1.4` and `1`), `latest`, and an immutable `sha-<commit>` tag. See [Releasing](docs/RELEASING.md) for the release flow and the one-time repository settings.
+
 ## Configuration
 
 Configuration is read from `.env`; see [.env.example](.env.example) for a ready-to-use template.

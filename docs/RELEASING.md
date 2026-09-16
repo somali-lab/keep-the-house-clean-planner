@@ -1,0 +1,51 @@
+# Releasing
+
+This repository uses [Release Please](https://github.com/googleapis/release-please-action) to create semantic versions, release notes, GitHub Releases, and versioned container images.
+
+## Release flow
+
+1. Merge changes into `main` using a Conventional Commit title.
+2. The **Release** workflow verifies the application and opens or updates a release pull request.
+3. Review the generated version and `CHANGELOG.md`, then merge the release pull request.
+4. The workflow creates the Git tag and GitHub Release.
+5. The released commit is built and published to GHCR.
+
+No repository secret is needed. The workflows publish with GitHub's short-lived `GITHUB_TOKEN`; runtime or homelab credentials do not belong in this repository.
+
+## Commit and pull-request titles
+
+Release Please derives the next semantic version from Conventional Commit messages. When pull requests are squash-merged, use a Conventional Commit title for the pull request:
+
+- `fix: correct overdue task calculation` creates a patch release.
+- `feat: add a monthly planning view` creates a minor release.
+- `feat!: replace the cycle configuration format` creates a major release.
+- `docs: explain backup recovery` is included in the next release notes but does not create a release by itself.
+- `chore: update dependencies` is included in the next release notes but does not create a release by itself.
+
+Scopes are optional, for example `feat(planner): add keyboard controls`.
+
+## Published image tags
+
+For a release such as `v1.4.2`, the workflow publishes:
+
+- `ghcr.io/somali-lab/keep-the-house-clean-planner:1.4.2`
+- `ghcr.io/somali-lab/keep-the-house-clean-planner:1.4`
+- `ghcr.io/somali-lab/keep-the-house-clean-planner:1`
+- `ghcr.io/somali-lab/keep-the-house-clean-planner:latest`
+- `ghcr.io/somali-lab/keep-the-house-clean-planner:sha-<full-commit-sha>`
+
+Production can follow `latest` for automatic updates or pin the full semantic version or commit SHA for deterministic rollbacks.
+
+The image currently targets `linux/amd64`, matching the Proxmox VM deployment target. It also contains OCI source, version, and revision labels, a software bill of materials, and build provenance.
+
+## One-time GitHub settings
+
+In **Settings → Actions → General → Workflow permissions**, enable **Allow GitHub Actions to create and approve pull requests**. The workflow declares only the permissions needed to create the release pull request, GitHub Release, and GHCR package.
+
+The built-in `GITHUB_TOKEN` intentionally does not start a second workflow for events it creates. Normal pull requests receive both CI checks; the generated release pull request does not. The release workflow runs the full verification again before creating the release. If strict branch protection must also require checks on the generated release pull request, configure Release Please with a separate automation token; keep that token in the repository's GitHub Actions secrets (and in a password manager such as 1Password), never in Git.
+
+The first package publication normally inherits repository access. Choose the required package visibility in the package settings after the first image has been published.
+
+## Recover a failed image publication
+
+If the GitHub Release exists but the image publication failed, rerun only the failed job. Alternatively, manually run **Publish container image** with the release's full commit SHA and its version without the `v` prefix. The operation is safe to repeat for the same release.
