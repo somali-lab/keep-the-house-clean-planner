@@ -15,6 +15,7 @@ COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/
 RUN npm ci
 COPY tsconfig.base.json ./
+COPY version.txt ./
 COPY packages/shared packages/shared
 COPY apps/web apps/web
 RUN npm run build --workspace apps/web

@@ -2,6 +2,7 @@ export const en = {
   "app.name": "Keep the House Clean",
   "app.loading": "Loading...",
   "app.error": "Something went wrong.",
+  "app.version": "Version {version}",
   "nav.today": "Today",
   "nav.week": "Week",
   "nav.due": "Overdue",

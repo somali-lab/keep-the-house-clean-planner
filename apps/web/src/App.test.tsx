@@ -29,6 +29,7 @@ describe('app shell', () => {
     expect(nav).not.toHaveTextContent('Planner');
     expect(screen.getByRole('group', { name: 'Kleurthema' })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'Taal' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Versie 1.1.0')).toHaveTextContent('v1.1.0');
     expect(await screen.findByRole('heading', { name: '12-daags overzicht' })).toBeInTheDocument();
     expect(window.location.pathname).toBe('/mobile/week');
   });
@@ -60,6 +61,7 @@ describe('app shell', () => {
     expect(nav).toHaveTextContent('AI-prompts');
     expect(nav).toHaveTextContent('Instellingen');
     expect(screen.getByRole('group', { name: 'Kleurthema' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Versie 1.1.0')).toHaveTextContent('v1.1.0');
     expect(await screen.findByRole('heading', { name: '12-daags overzicht' })).toBeInTheDocument();
   });
 

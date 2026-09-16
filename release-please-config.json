@@ -11,6 +11,10 @@
         { "type": "fix", "section": "Bug fixes" },
         { "type": "perf", "section": "Performance" },
         { "type": "refactor", "section": "Code refactoring", "hidden": false },
+        { "type": "build", "section": "Build system and dependencies", "hidden": false },
+        { "type": "ci", "section": "Continuous integration", "hidden": false },
+        { "type": "test", "section": "Tests", "hidden": false },
+        { "type": "style", "section": "Code style", "hidden": false },
         { "type": "revert", "section": "Reverts" },
         { "type": "docs", "section": "Documentation", "hidden": false },
         { "type": "chore", "section": "Maintenance", "hidden": false }
