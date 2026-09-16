@@ -1,11 +1,12 @@
 import type { ReactElement } from 'react';
-import { CalendarRange, Hourglass, Monitor, Sun, type LucideIcon } from 'lucide-react';
+import { CalendarRange, Hourglass, ListChecks, Monitor, Sun, type LucideIcon } from 'lucide-react';
 import { NavLink, Navigate, Route, Routes } from 'react-router';
 import { Button } from '@/components/ui/button';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { ThemeSwitcher } from '@/components/ThemeSwitcher';
 import { cn } from '@/lib/utils';
 import { DuePage } from '../features/due/DuePage.tsx';
+import { MobileTasksPage } from '../features/mobile-tasks/MobileTasksPage.tsx';
 import { TodayPage } from '../features/today/TodayPage.tsx';
 import { WeekPage } from '../features/week/WeekPage.tsx';
 import { t, type MessageKey } from '../i18n/nl.ts';
@@ -17,11 +18,13 @@ const PAGES: Partial<Record<string, ReactElement>> = {
   '/mobile/today': <TodayPage />,
   '/mobile/week': <WeekPage />,
   '/mobile/due': <DuePage />,
+  '/mobile/tasks': <MobileTasksPage />,
 };
 
 const TABS: { path: string; label: MessageKey; icon: LucideIcon }[] = [
   { path: '/mobile/week', label: 'nav.week', icon: CalendarRange },
   { path: '/mobile/today', label: 'nav.today', icon: Sun },
+  { path: '/mobile/tasks', label: 'nav.tasks', icon: ListChecks },
   { path: '/mobile/due', label: 'nav.due', icon: Hourglass },
 ];
 
@@ -61,7 +64,7 @@ export function MobileLayout({ onSwitchLayout }: { onSwitchLayout: () => void })
         aria-label={t('nav.main')}
         className="fixed inset-x-0 bottom-0 z-20 border-t bg-card/95 px-4 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur"
       >
-        <div className="mx-auto grid max-w-xl grid-cols-3 gap-2">
+        <div className="mx-auto grid max-w-xl grid-cols-4 gap-1 sm:gap-2">
           {TABS.map(({ path, label, icon: Icon }) => (
             <NavLink
               key={path}
