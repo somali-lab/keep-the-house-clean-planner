@@ -24,6 +24,7 @@ describe('app shell', () => {
     render(<App queryClient={testQueryClient()} />);
     const nav = await screen.findByRole('navigation', { name: 'Hoofdmenu' });
     expect(nav).toHaveTextContent('Vandaag');
+    expect(nav).toHaveTextContent('Taken');
     expect(nav).toHaveTextContent('Achterstand');
     expect(nav).not.toHaveTextContent('Planner');
     expect(screen.getByRole('group', { name: 'Kleurthema' })).toBeInTheDocument();
@@ -43,6 +44,10 @@ describe('app shell', () => {
     expect(screen.getByRole('link', { name: 'Achterstand' })).toHaveAttribute(
       'href',
       '/mobile/due',
+    );
+    expect(screen.getByRole('link', { name: 'Taken' })).toHaveAttribute(
+      'href',
+      '/mobile/tasks',
     );
   });
 

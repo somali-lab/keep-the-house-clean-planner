@@ -122,6 +122,16 @@ export const nl = {
   'tasks.error.durationInvalid': 'De duur moet een heel aantal minuten van minimaal 1 zijn.',
   'tasks.error.server': 'Deze waarde is niet geldig.',
 
+  'mobileTasks.title': 'Takenoverzicht',
+  'mobileTasks.rangeDescription': '{from} t/m {to}',
+  'mobileTasks.period': 'Periode',
+  'mobileTasks.rooms': 'Ruimtes',
+  'mobileTasks.oneWeek': '1 week',
+  'mobileTasks.weeks': '{count} weken',
+  'mobileTasks.task': 'Taak',
+  'mobileTasks.dates': 'Datums',
+  'mobileTasks.empty': 'Geen taken gepland in deze periode.',
+
   'common.close': 'Sluiten',
 
   'weekday.0': 'zo',
