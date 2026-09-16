@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/somali-lab/keep-the-house-clean-planner/compare/v1.0.1...v1.1.0) (2026-09-16)
+
+
+### Features
+
+* **mobile-tasks:** implement mobile task overview page with filtering and display logic ([#8](https://github.com/somali-lab/keep-the-house-clean-planner/issues/8)) ([cc8e80c](https://github.com/somali-lab/keep-the-house-clean-planner/commit/cc8e80c177e65127476059e7c00c0de223cdcc04))
+
 ## [1.0.1](https://github.com/somali-lab/keep-the-house-clean-planner/compare/v1.0.0...v1.0.1) (2026-09-16)
 
 
