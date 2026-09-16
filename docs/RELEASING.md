@@ -5,10 +5,12 @@ This repository uses [Release Please](https://github.com/googleapis/release-plea
 ## Release flow
 
 1. Merge changes into `main` using a Conventional Commit title.
-2. The **Release** workflow verifies the application and opens or updates a release pull request.
+2. The **Release** workflow opens or updates a release pull request.
 3. Review the generated version and `CHANGELOG.md`, then merge the release pull request.
 4. The workflow creates the Git tag and GitHub Release.
 5. The released commit is built and published to GHCR.
+
+Normal pull requests run linting, type checking, tests, and a container build before they are merged. The release workflow does not repeat those checks; it only manages the release and builds the image that is actually published.
 
 No repository secret is needed. The workflows publish with GitHub's short-lived `GITHUB_TOKEN`; runtime or homelab credentials do not belong in this repository.
 
@@ -18,6 +20,7 @@ Release Please derives the next semantic version from Conventional Commit messag
 
 - `fix: correct overdue task calculation` creates a patch release.
 - `feat: add a monthly planning view` creates a minor release.
+- `refactor: simplify route handling` creates a patch release.
 - `feat!: replace the cycle configuration format` creates a major release.
 - `docs: explain backup recovery` is included in the next release notes but does not create a release by itself.
 - `chore: update dependencies` is included in the next release notes but does not create a release by itself.
@@ -42,7 +45,7 @@ The image currently targets `linux/amd64`, matching the Proxmox VM deployment ta
 
 In **Settings → Actions → General → Workflow permissions**, enable **Allow GitHub Actions to create and approve pull requests**. The workflow declares only the permissions needed to create the release pull request, GitHub Release, and GHCR package.
 
-The built-in `GITHUB_TOKEN` intentionally does not start a second workflow for events it creates. Normal pull requests receive both CI checks; the generated release pull request does not. The release workflow runs the full verification again before creating the release. If strict branch protection must also require checks on the generated release pull request, configure Release Please with a separate automation token; keep that token in the repository's GitHub Actions secrets (and in a password manager such as 1Password), never in Git.
+The built-in `GITHUB_TOKEN` intentionally does not start a second workflow for events it creates. Normal pull requests receive both CI checks; the generated release pull request does not. That generated pull request only updates release metadata such as `CHANGELOG.md` and `version.txt`. If strict branch protection must also require checks on the generated release pull request, configure Release Please with a separate automation token; keep that token in the repository's GitHub Actions secrets (and in a password manager such as 1Password), never in Git.
 
 The first package publication normally inherits repository access. Choose the required package visibility in the package settings after the first image has been published.
 
