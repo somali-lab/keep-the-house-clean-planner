@@ -19,6 +19,7 @@ interface WeekTableProps {
   rooms: Room[];
   users: User[];
   showUnassigned: boolean;
+  showQuickDays: boolean;
   summary: PlanSummary;
   onRemoveSlot(index: number): void;
 }
@@ -34,6 +35,7 @@ export function WeekTable({
   rooms,
   users,
   showUnassigned,
+  showQuickDays,
   summary,
   onRemoveSlot,
 }: WeekTableProps) {
@@ -71,16 +73,18 @@ export function WeekTable({
           />
         </label>
       </div>
-      <div className="border-b bg-background/50 px-3 py-2.5">
-        <p className="mb-2 text-xs font-semibold text-muted-foreground">
-          {t('planner.quickPlanHint')}
-        </p>
-        <div className="grid grid-cols-7 gap-1.5">
-          {WEEKDAYS_MONDAY_FIRST.map((weekday) => (
-            <QuickDayTarget key={weekday} weekIndex={weekIndex} weekday={weekday} />
-          ))}
+      {showQuickDays && (
+        <div className="border-b bg-primary/5 px-3 py-2.5" role="status">
+          <p className="mb-2 text-xs font-semibold text-primary">
+            {t('planner.quickPlanHint')}
+          </p>
+          <div className="grid grid-cols-7 gap-1.5">
+            {WEEKDAYS_MONDAY_FIRST.map((weekday) => (
+              <QuickDayTarget key={weekday} weekIndex={weekIndex} weekday={weekday} />
+            ))}
+          </div>
         </div>
-      </div>
+      )}
       <div className="grid gap-2 border-b bg-secondary/15 px-3 py-3 sm:grid-cols-2">
         {users.map((user) => {
           const weekdayMinutes = minutesFor(user._id, [1, 2, 3, 4, 5]);

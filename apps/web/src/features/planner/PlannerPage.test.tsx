@@ -7,12 +7,16 @@ import { makeRoom, makeSettings, makeTask, renderWithProviders } from '../../tes
 import { PlannerPage } from './PlannerPage.tsx';
 
 // Capture DndContext's onDragEnd so tests can simulate a drop without pointer physics.
-const dnd = vi.hoisted(() => ({ onDragEnd: undefined as undefined | ((event: unknown) => void) }));
+const dnd = vi.hoisted(() => ({
+  onDragStart: undefined as undefined | ((event: unknown) => void),
+  onDragEnd: undefined as undefined | ((event: unknown) => void),
+}));
 vi.mock('@dnd-kit/core', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@dnd-kit/core')>();
   return {
     ...actual,
     DndContext: (props: ComponentProps<typeof actual.DndContext>) => {
+      dnd.onDragStart = props.onDragStart as (event: unknown) => void;
       dnd.onDragEnd = props.onDragEnd as (event: unknown) => void;
       return createElement(actual.DndContext, props);
     },
@@ -105,6 +109,21 @@ async function openPlanManagement() {
 describe('PlannerPage — drops', () => {
   beforeEach(() => {
     dnd.onDragEnd = undefined;
+    dnd.onDragStart = undefined;
+  });
+
+  it('shows weekday shortcuts only while a task is being dragged', async () => {
+    setup([makePlan({ _id: 'p1', name: 'Standaard', active: true })]);
+    renderWithProviders(<PlannerPage />);
+    await screen.findByRole('group', { name: 'Kies een week' });
+
+    expect(screen.queryByText('Laat los op een dag om snel in te plannen:')).not.toBeInTheDocument();
+    act(() => dnd.onDragStart!({ active: { id: 'task:t1' } }));
+    expect(screen.getByText('Laat los op een dag om snel in te plannen:')).toBeInTheDocument();
+    expect(screen.getByTestId('day:0:1')).toBeInTheDocument();
+
+    drop('task:t1', `cell:0:1:${BRAM._id}`);
+    expect(screen.queryByText('Laat los op een dag om snel in te plannen:')).not.toBeInTheDocument();
   });
 
   it('refuses a drop on a day the assignee is unavailable and explains why', async () => {

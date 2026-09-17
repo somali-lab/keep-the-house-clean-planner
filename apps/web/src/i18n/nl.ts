@@ -197,7 +197,7 @@ export const nl = {
   'planner.allRooms': 'Alle ruimtes',
   'planner.filterInterval': 'Filter taken op cyclus',
   'planner.allIntervals': 'Alle cyclussen',
-  'planner.quickPlanHint': 'Snel inplannen — sleep een taak direct op een dag:',
+  'planner.quickPlanHint': 'Laat los op een dag om snel in te plannen:',
   'planner.quickPlanDay': 'Taak snel inplannen op {day}',
   'planner.placed': '{placed}/{required}',
   'planner.placedLabel': '{placed} van {required} gepland',

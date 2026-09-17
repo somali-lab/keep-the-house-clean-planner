@@ -162,7 +162,7 @@ export const en = {
   "planner.allRooms": "All rooms",
   "planner.filterInterval": "Filter tasks by cycle",
   "planner.allIntervals": "All cycles",
-  "planner.quickPlanHint": "Quick schedule — drag a task directly onto a day:",
+  "planner.quickPlanHint": "Drop on a day to schedule it quickly:",
   "planner.quickPlanDay": "Quick plan tasks for {day}",
   "planner.placed": "{placed}/{required}",
   "planner.placedLabel": "{placed} of {required} planned",
