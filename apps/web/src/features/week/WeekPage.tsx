@@ -46,6 +46,7 @@ import {
   overviewDays,
   parseDayDropId,
   parseOccurrenceDragId,
+  shortDay,
   weekRangeLabel,
   weekdayName,
 } from './weekModel.ts';
@@ -428,6 +429,11 @@ function WeekItem({
                 <TriangleAlert aria-hidden="true" />
                 {t('today.overdue')}
               </Badge>
+            )}
+            {occ.movedFrom && (
+              <span className="text-xs font-semibold text-muted-foreground">
+                {format('week.movedFrom', { date: shortDay(occ.movedFrom) })}
+              </span>
             )}
           </span>
         </span>
