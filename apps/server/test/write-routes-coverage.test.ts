@@ -1,9 +1,6 @@
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import type { LightMyRequestResponse } from 'fastify';
 import { ObjectId } from 'mongodb';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { findActivePlan } from '../src/data/cyclePlans.ts';
 import { defaultMockResponders } from '../src/domain/ai/mockResponders.ts';
 import { MockProvider } from '../src/domain/ai/providers/mock.ts';
@@ -19,13 +16,7 @@ import { createTestApp, type TestApp } from './helpers/testApp.ts';
  * scenario here makes the first test fail.
  */
 
-// The backup route must not start a real mongodump.
-vi.mock('node:child_process', () => ({
-  execFile: vi.fn((_command: string, _args: string[], _options: object, callback: (error: null) => void) => callback(null)),
-}));
-
 let t: TestApp;
-let backupDir: string;
 let p1: UserDoc;
 let p2: UserDoc;
 let activePlanId: string;
@@ -262,11 +253,6 @@ const READ_ONLY_POSTS: ReadOnlyScenario[] = [
     route: 'POST /api/jobs/morning-notify',
     run: () => call('POST', '/api/jobs/morning-notify'),
   },
-  {
-    // Backups write files (mongodump is mocked above), never documents.
-    route: 'POST /api/jobs/backup',
-    run: () => call('POST', '/api/jobs/backup'),
-  },
 ];
 
 const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
@@ -276,8 +262,7 @@ const INTENTIONALLY_UNAUDITED_ROUTES = ['DELETE /api/audit'];
 
 beforeAll(async () => {
   // The deterministic mock always proposes a valid plan, so the AI routes really write.
-  backupDir = await mkdtemp(join(tmpdir(), 'huishoudplanner-coverage-'));
-  t = await createTestApp({ aiProvider: new MockProvider({ responders: defaultMockResponders }), env: { BACKUP_DIR: backupDir } });
+  t = await createTestApp({ aiProvider: new MockProvider({ responders: defaultMockResponders }) });
   [p1, p2] = await seededUsers(t);
   activePlanId = (await findActivePlan(t.db))!._id.toHexString();
   const deleteRoom = await call('POST', '/api/rooms', { name: 'Tijdelijke ruimte' });
@@ -291,7 +276,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await t.close();
-  await rm(backupDir, { recursive: true, force: true });
 });
 
 describe('audit coverage of write routes', () => {

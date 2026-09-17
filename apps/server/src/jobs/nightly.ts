@@ -3,7 +3,6 @@ import type { FastifyInstance } from 'fastify';
 import cron, { type ScheduledTask } from 'node-cron';
 import { systemContext, type AuditContext } from '../audit/context.ts';
 import { runAuditRetention } from '../domain/auditRetention.ts';
-import { runBackup } from '../domain/backup.ts';
 import { computeDueList, summarizeDue } from '../domain/due.ts';
 import { generateUpcoming, type GenerationResult } from '../domain/generation.ts';
 import { runMorningNotify } from '../domain/notify/morning.ts';
@@ -36,8 +35,8 @@ export interface SchedulerHandle {
 }
 
 /**
- * All jobs in the app timezone: generation 03:00, backup 03:30, audit retention
- * 03:45 (only with AUDIT_RETENTION_DAYS) and the morning message 07:30 (only with
+ * All jobs in the app timezone: generation 03:00, audit retention 03:45 (only
+ * with AUDIT_RETENTION_DAYS) and the morning message 07:30 (only with
  * a notifier). A failing job is logged and never stops the others.
  * Returns null when DISABLE_SCHEDULER=true.
  */
@@ -60,7 +59,6 @@ export function startScheduler(app: FastifyInstance): SchedulerHandle | null {
 
   const tasks: ScheduledTask[] = [
     job('0 3 * * *', 'nightly-generation', () => runNightly(systemContext({ db, clock }, app.log))),
-    job('30 3 * * *', 'nightly-backup', () => runBackup({ config, clock, log: app.log })),
   ];
   if (config.auditRetentionDays !== undefined) {
     tasks.push(

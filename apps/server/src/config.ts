@@ -47,8 +47,6 @@ const envSchema = z
       emptyToUndefined,
       z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
     ),
-    BACKUP_DIR: z.preprocess(emptyToUndefined, z.string().default('/backups')),
-    BACKUP_RETENTION_DAYS: z.preprocess(emptyToUndefined, z.coerce.number().int().min(1).default(14)),
     AUDIT_RETENTION_DAYS: optionalInt,
     AI_API_KEY: z.preprocess(emptyToUndefined, z.string().optional()),
     NOTIFY_TYPE: z.preprocess(
@@ -85,8 +83,6 @@ export interface AppConfig {
   timezone: string;
   seedUsers: SeedUser[];
   logLevel: 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace' | 'silent';
-  backupDir: string;
-  backupRetentionDays: number;
   auditRetentionDays: number | undefined;
   aiApiKey: string | undefined;
   notify: {
@@ -125,8 +121,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     timezone: e.TZ_APP,
     seedUsers: e.SEED_USERS,
     logLevel: e.LOG_LEVEL,
-    backupDir: e.BACKUP_DIR,
-    backupRetentionDays: e.BACKUP_RETENTION_DAYS,
     auditRetentionDays: e.AUDIT_RETENTION_DAYS,
     aiApiKey: e.AI_API_KEY,
     notify: { type: e.NOTIFY_TYPE, url: e.NOTIFY_URL, token: e.NOTIFY_TOKEN },

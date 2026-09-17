@@ -15,10 +15,7 @@ services:
         required: false
     environment:
       MONGO_URL: ${MONGO_URL:-mongodb://mongo:27017/huishoudplanner}
-      BACKUP_DIR: /backups
       PORT: '3000'
-    volumes:
-      - ${BACKUP_HOST_DIR:-./backups}:/backups
     depends_on:
       mongo:
         condition: service_healthy
@@ -32,6 +29,26 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+
+  backup:
+    image: mongo:8
+    init: true
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      MONGO_URL: ${MONGO_URL:-mongodb://mongo:27017/huishoudplanner}
+      BACKUP_DIR: /backups
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      TZ: ${TZ_APP:-Europe/Amsterdam}
+    volumes:
+      - ${BACKUP_HOST_DIR:-./backups}:/backups
+      - ./docker/backup.sh:/usr/local/bin/huishoudplanner-backup:ro
+    depends_on:
+      mongo:
+        condition: service_healthy
+    entrypoint: ['/bin/sh', '/usr/local/bin/huishoudplanner-backup']
 
   mongo:
     image: mongo:8

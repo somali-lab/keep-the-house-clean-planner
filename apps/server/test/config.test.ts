@@ -10,7 +10,6 @@ describe('loadConfig', () => {
       port: 3000,
       timezone: 'Europe/Amsterdam',
       seedUsers: DEFAULT_SEED_USERS,
-      backupRetentionDays: 14,
       auditRetentionDays: undefined,
       disableScheduler: false,
       notify: { type: 'none' },

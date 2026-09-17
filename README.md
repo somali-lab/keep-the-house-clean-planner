@@ -67,8 +67,9 @@ On its first start, the application creates the base settings, household profile
 
 The Docker stack contains:
 
-- `app`: the Node.js application, including Chromium for PDF generation and `mongodump` for backups.
+- `app`: the Node.js application, including the headless Chromium shell for PDF generation.
 - `mongo`: MongoDB 8, with persistent data in the `mongo-data` volume.
+- `backup`: a separate MongoDB-tools container that creates and retains database archives.
 - `./backups`: the host directory used for database backups.
 
 To update an existing installation:
@@ -99,7 +100,7 @@ Configuration is read from `.env`; see [.env.example](.env.example) for a ready-
 - `SEED_USERS` — JSON array of profiles created only when no profiles exist yet.
 - `LOG_LEVEL` — `fatal`, `error`, `warn`, `info`, `debug`, `trace`, or `silent`.
 - `BACKUP_HOST_DIR` — host backup directory; defaults to `./backups`.
-- `BACKUP_RETENTION_DAYS` — number of days to retain automatic backups; defaults to `14`.
+- `BACKUP_RETENTION_DAYS` — number of days the backup container retains automatic backups; defaults to `14`.
 - `AUDIT_RETENTION_DAYS` — optional maximum history age; empty keeps the complete history.
 - `AI_API_KEY` — optional secret for the configured AI provider.
 - `NOTIFY_TYPE` — `none`, `ntfy`, or `homeassistant`.
@@ -114,24 +115,24 @@ Some database, backup, package, and browser-storage identifiers retain the origi
 All times follow `TZ_APP`:
 
 - `03:00` — generate upcoming cycles.
-- `03:30` — create a database backup.
+- `03:30` — the separate backup container creates a database backup.
 - `03:45` — remove old history when audit retention is enabled.
 - `07:30` — send the morning notification when notifications are enabled.
 
 ## Backups and data transfer
 
-The application creates a compressed `mongodump` archive every night in `./backups`. Files older than `BACKUP_RETENTION_DAYS` are removed after a successful backup.
+The separate `backup` container creates a compressed `mongodump` archive every night in `./backups`. Files older than `BACKUP_RETENTION_DAYS` are removed after a successful backup.
 
 Start a manual backup:
 
 ```sh
-curl -X POST -H "X-Profile-Id: <profile-id>" http://localhost:3000/api/jobs/backup
+docker compose run --rm backup once
 ```
 
 Restore an archive:
 
 ```sh
-docker compose exec app mongorestore \
+docker compose run --rm --entrypoint mongorestore backup \
   --uri="mongodb://mongo:27017" \
   --archive=/backups/huishoudplanner-20260916.archive.gz \
   --gzip --drop

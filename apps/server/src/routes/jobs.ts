@@ -1,7 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { runBackup } from '../domain/backup.ts';
 import { runMorningNotify } from '../domain/notify/morning.ts';
-import { HttpError } from '../http/errors.ts';
 import { toApi } from '../http/serialize.ts';
 import { auditContext, requirePlanner } from '../identity/index.ts';
 import { runNightly } from '../jobs/nightly.ts';
@@ -18,15 +16,4 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
     return runMorningNotify({ db, clock, log: request.log, notifier });
   });
 
-  /** Runs mongodump plus retention now. Writes files, not documents. */
-  app.post('/jobs/backup', { preHandler: requirePlanner }, async (request) => {
-    const { config, clock } = app.deps;
-    try {
-      return await runBackup({ config, clock, log: request.log });
-    } catch (err) {
-      // BackupError messages never contain the Mongo URI.
-      request.log.error({ err }, 'backup failed');
-      throw new HttpError(500, 'backup_failed', err instanceof Error ? err.message : undefined);
-    }
-  });
 };
