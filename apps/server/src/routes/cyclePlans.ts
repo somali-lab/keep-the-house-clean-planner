@@ -4,6 +4,7 @@ import {
   updateCyclePlanInputSchema,
 } from '@huishoudplanner/shared';
 import type { FastifyPluginAsync } from 'fastify';
+import { randomUUID } from 'node:crypto';
 import { ObjectId } from 'mongodb';
 import {
   createPlan,
@@ -20,9 +21,11 @@ import { listTasks } from '../data/tasks.ts';
 import { listRooms } from '../data/rooms.ts';
 import { activatePlan, applyProposal, discardProposal } from '../domain/activation.ts';
 import { diffPlans } from '../domain/planDiff.ts';
+import { replaceUpcomingOccurrences } from '../domain/generation.ts';
 import { slotsToDocs, validateSlotsAgainstDb } from '../domain/plans.ts';
 
 const diffQuerySchema = z.object({ against: z.literal('active').optional() });
+const putSlotsQuerySchema = z.object({ sync: z.enum(['true', 'false']).optional() });
 import { HttpError, notFound, parseOrThrow } from '../http/errors.ts';
 import { parseIdParam } from '../http/params.ts';
 import { toApi } from '../http/serialize.ts';
@@ -110,7 +113,11 @@ export const cyclePlanRoutes: FastifyPluginAsync = async (app) => {
     const taskInfo = new Map(
       tasks.map((task) => [
         task._id.toHexString(),
-        { name: task.name, roomName: roomNames.get(task.roomId.toHexString()) ?? null, durationMinutes: task.durationMinutes },
+        {
+          name: task.name,
+          roomName: roomNames.get(task.roomId.toHexString()) ?? null,
+          durationMinutes: task.durationMinutes,
+        },
       ]),
     );
     const [before, after] = await Promise.all([
@@ -139,6 +146,7 @@ export const cyclePlanRoutes: FastifyPluginAsync = async (app) => {
   app.put('/cycle-plans/:id/slots', { preHandler: requireActor }, async (request) => {
     const id = parseIdParam(request.params);
     const input = parseOrThrow(putSlotsInputSchema, request.body);
+    const query = parseOrThrow(putSlotsQuerySchema, request.query);
     if (!(await findPlanById(app.deps.db, id))) throw notFound('cycle plan');
 
     const slots = slotsToDocs(input.slots);
@@ -147,8 +155,23 @@ export const cyclePlanRoutes: FastifyPluginAsync = async (app) => {
       throw new HttpError(422, 'invalid_plan', 'Plan violates hard rules', validation);
     }
 
-    const plan = await replaceSlots(auditContext(request), id, slots);
+    const ctx = auditContext(request);
+    const plan = await replaceSlots(ctx, id, slots);
     if (!plan) throw notFound('cycle plan');
-    return { plan: toApi(plan), warnings: validation.warnings, summary: validation.summary };
+    const synchronized =
+      query.sync === 'true' && plan.active
+        ? await replaceUpcomingOccurrences(
+            { ...ctx, source: 'system' },
+            plan,
+            randomUUID(),
+            'plan_update',
+          )
+        : null;
+    return {
+      plan: toApi(plan),
+      warnings: validation.warnings,
+      summary: validation.summary,
+      synchronized,
+    };
   });
 };

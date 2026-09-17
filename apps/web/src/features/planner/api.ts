@@ -27,9 +27,14 @@ export function usePutSlots() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ planId, slots }: { planId: string; slots: Slot[] }) =>
-      (await api.put<PutSlotsResponse>(`/api/cycle-plans/${planId}/slots`, { slots })).data,
+      (await api.put<PutSlotsResponse>(`/api/cycle-plans/${planId}/slots?sync=true`, { slots }))
+        .data,
     onSuccess: (data) => {
       queryClient.setQueryData<CyclePlan[]>(planKeys.all, (plans) => replacePlan(plans, data.plan));
+      if (data.plan.active) {
+        void queryClient.invalidateQueries({ queryKey: ['occurrences'] });
+        void queryClient.invalidateQueries({ queryKey: ['due'] });
+      }
     },
   });
 }
@@ -37,8 +42,13 @@ export function usePutSlots() {
 export function useUpdatePlan() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ planId, patch }: { planId: string; patch: { name?: string; weekThemes?: string[] } }) =>
-      (await api.patch<CyclePlan>(`/api/cycle-plans/${planId}`, patch)).data,
+    mutationFn: async ({
+      planId,
+      patch,
+    }: {
+      planId: string;
+      patch: { name?: string; weekThemes?: string[] };
+    }) => (await api.patch<CyclePlan>(`/api/cycle-plans/${planId}`, patch)).data,
     onSuccess: (plan) => {
       queryClient.setQueryData<CyclePlan[]>(planKeys.all, (plans) => replacePlan(plans, plan));
     },
@@ -58,7 +68,8 @@ export function useActivatePlan() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (planId: string) =>
-      (await api.post<{ plan: CyclePlan; removed: number }>(`/api/cycle-plans/${planId}/activate`)).data,
+      (await api.post<{ plan: CyclePlan; removed: number }>(`/api/cycle-plans/${planId}/activate`))
+        .data,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: planKeys.all }),
   });
 }

@@ -34,8 +34,15 @@ interface Ctx {
   p2: UserDoc;
   planId: string;
   task(name: string, intervalKey: string, durationMinutes?: number): Promise<string>;
-  putSlots(planId: string, slots: { taskId: string; weekIndex: number; weekday: number; assigneeId?: string | null }[]): Promise<void>;
-  nightly(): Promise<{ runId: string; generated: { cycleIndex: number; inserted: number; skipped: number }[] }>;
+  putSlots(
+    planId: string,
+    slots: { taskId: string; weekIndex: number; weekday: number; assigneeId?: string | null }[],
+    sync?: boolean,
+  ): Promise<void>;
+  nightly(): Promise<{
+    runId: string;
+    generated: { cycleIndex: number; inserted: number; skipped: number }[];
+  }>;
 }
 
 async function setup(now = MONDAY_MORNING): Promise<Ctx> {
@@ -60,10 +67,10 @@ async function setup(now = MONDAY_MORNING): Promise<Ctx> {
       expect(res.statusCode).toBe(201);
       return res.json<{ _id: string }>()._id;
     },
-    async putSlots(id, slots) {
+    async putSlots(id, slots, sync = false) {
       const res = await app.app.inject({
         method: 'PUT',
-        url: `/api/cycle-plans/${id}/slots`,
+        url: `/api/cycle-plans/${id}/slots${sync ? '?sync=true' : ''}`,
         headers,
         payload: { slots: slots.map((s) => ({ assigneeId: null, ...s })) },
       });
@@ -83,7 +90,10 @@ describe('generateCycle via nightly job', () => {
   it('(a) is idempotent: a second run inserts and audits nothing', async () => {
     const c = await setup();
     const weekly = await c.task('Badkamer', '1w');
-    await c.putSlots(c.planId, [0, 1, 2, 3].map((w) => ({ taskId: weekly, weekIndex: w, weekday: 3 })));
+    await c.putSlots(
+      c.planId,
+      [0, 1, 2, 3].map((w) => ({ taskId: weekly, weekIndex: w, weekday: 3 })),
+    );
 
     const first = await c.nightly();
     expect(first.generated.map((g) => [g.cycleIndex, g.inserted])).toEqual([
@@ -94,7 +104,11 @@ describe('generateCycle via nightly job', () => {
     expect(count).toBe(8);
     expect(await listCycles(c.t.db)).toHaveLength(2);
 
-    const { result } = await expectAudited(c.t, () => c.nightly(), { entity: 'occurrence', action: 'create', count: 0 });
+    const { result } = await expectAudited(c.t, () => c.nightly(), {
+      entity: 'occurrence',
+      action: 'create',
+      count: 0,
+    });
     expect(result.generated.map((g) => [g.inserted, g.skipped])).toEqual([
       [0, 4],
       [0, 4],
@@ -113,15 +127,23 @@ describe('generateCycle via nightly job', () => {
       count: 2,
     });
     expect(entries.every((e) => e.meta?.runId === result.runId)).toBe(true);
-    expect(entries[0]!.after).toMatchObject({ status: 'open', origin: 'generated', taskNameSnapshot: 'Badkamer' });
-    const cycleAudit = await c.t.db.collection(COLLECTIONS.auditLog).countDocuments({ entity: 'cycle', action: 'create' });
+    expect(entries[0]!.after).toMatchObject({
+      status: 'open',
+      origin: 'generated',
+      taskNameSnapshot: 'Badkamer',
+    });
+    const cycleAudit = await c.t.db
+      .collection(COLLECTIONS.auditLog)
+      .countDocuments({ entity: 'cycle', action: 'create' });
     expect(cycleAudit).toBe(2);
   });
 
   it('snapshots name, duration, assignee and plan; plannedDate equals date', async () => {
     const c = await setup();
     const weekly = await c.task('Badkamer', '1w', 30);
-    await c.putSlots(c.planId, [{ taskId: weekly, weekIndex: 2, weekday: 5, assigneeId: c.p2._id.toHexString() }]);
+    await c.putSlots(c.planId, [
+      { taskId: weekly, weekIndex: 2, weekday: 5, assigneeId: c.p2._id.toHexString() },
+    ]);
     await c.nightly();
     const [occ] = await findOccurrences(c.t.db, {});
     expect(occ).toMatchObject({
@@ -140,17 +162,31 @@ describe('generateCycle via nightly job', () => {
     const daily = await c.task('Afwas', 'daily', 15);
     await c.putSlots(
       c.planId,
-      [0, 1].flatMap((w) => [1, 2, 3, 4, 5, 6, 0].map((d) => ({ taskId: daily, weekIndex: w, weekday: d }))),
+      [0, 1].flatMap((w) =>
+        [1, 2, 3, 4, 5, 6, 0].map((d) => ({ taskId: daily, weekIndex: w, weekday: d })),
+      ),
     );
     await c.t.app.inject({
       method: 'PATCH',
       url: '/api/settings',
       headers: asProfile(c.p1),
-      payload: { vacationRanges: [{ from: '2026-09-17', to: '2026-09-20' }, { from: '2026-10-12', to: '2026-10-18' }] },
+      payload: {
+        vacationRanges: [
+          { from: '2026-09-17', to: '2026-09-20' },
+          { from: '2026-10-12', to: '2026-10-18' },
+        ],
+      },
     });
     await c.nightly();
     const keys = dayKeys(await findOccurrences(c.t.db, {}));
-    for (const vacation of ['2026-09-17', '2026-09-18', '2026-09-19', '2026-09-20', '2026-10-12', '2026-10-18']) {
+    for (const vacation of [
+      '2026-09-17',
+      '2026-09-18',
+      '2026-09-19',
+      '2026-09-20',
+      '2026-10-12',
+      '2026-10-18',
+    ]) {
       expect(keys).not.toContain(vacation);
     }
     expect(keys).toContain('2026-09-16');
@@ -168,10 +204,17 @@ describe('generateCycle via nightly job', () => {
       { taskId: weekly, weekIndex: 0, weekday: 3 }, // Wed 16 Sep: today
       { taskId: old, weekIndex: 0, weekday: 4 },
     ]);
-    await c.t.app.inject({ method: 'PATCH', url: `/api/tasks/${old}`, headers: asProfile(c.p1), payload: { active: false } });
+    await c.t.app.inject({
+      method: 'PATCH',
+      url: `/api/tasks/${old}`,
+      headers: asProfile(c.p1),
+      payload: { active: false },
+    });
     await c.nightly();
     // cycle 1 starts at local midnight of 12 Oct = 11 Oct 22:00 UTC
-    const cycle0 = await findOccurrences(c.t.db, { date: { $lt: new Date('2026-10-11T22:00:00Z') } });
+    const cycle0 = await findOccurrences(c.t.db, {
+      date: { $lt: new Date('2026-10-11T22:00:00Z') },
+    });
     expect(dayKeys(cycle0)).toEqual(['2026-09-16']);
   });
 
@@ -184,8 +227,13 @@ describe('generateCycle via nightly job', () => {
       { taskId: weekly, weekIndex: 2, weekday: 1 },
     ]);
     await c.nightly();
-    const cycle1 = await findOccurrences(c.t.db, { date: { $gte: new Date('2026-10-11T22:00:00Z') } });
-    expect(cycle1.map((o) => o.date.toISOString())).toEqual(['2026-10-24T22:00:00.000Z', '2026-10-25T23:00:00.000Z']);
+    const cycle1 = await findOccurrences(c.t.db, {
+      date: { $gte: new Date('2026-10-11T22:00:00Z') },
+    });
+    expect(cycle1.map((o) => o.date.toISOString())).toEqual([
+      '2026-10-24T22:00:00.000Z',
+      '2026-10-25T23:00:00.000Z',
+    ]);
     expect(dayKeys(cycle1)).toEqual(['2026-10-25', '2026-10-26']);
   });
 
@@ -204,13 +252,64 @@ describe('generateCycle via nightly job', () => {
   });
 });
 
+describe('editing the active plan', () => {
+  it('synchronizes upcoming occurrences when requested by the planner', async () => {
+    const c = await setup();
+    const weekly = await c.task('Badkamer', '1w', 30);
+    await c.putSlots(
+      c.planId,
+      [0, 1, 2, 3].map((weekIndex) => ({
+        taskId: weekly,
+        weekIndex,
+        weekday: 1,
+        assigneeId: c.p1._id.toHexString(),
+      })),
+    );
+    await c.nightly();
+
+    await c.putSlots(
+      c.planId,
+      [0, 1, 2, 3].map((weekIndex) => ({
+        taskId: weekly,
+        weekIndex,
+        weekday: 4,
+        assigneeId: c.p2._id.toHexString(),
+      })),
+      true,
+    );
+
+    const occurrences = await findOccurrences(c.t.db, { taskId: new ObjectId(weekly) });
+    expect(dayKeys(occurrences)).toEqual([
+      '2026-09-17',
+      '2026-09-24',
+      '2026-10-01',
+      '2026-10-08',
+      '2026-10-15',
+      '2026-10-22',
+      '2026-10-29',
+      '2026-11-05',
+    ]);
+    expect(occurrences.every((occurrence) => occurrence.assigneeId?.equals(c.p2._id))).toBe(true);
+    const deletions = await c.t.db
+      .collection(COLLECTIONS.auditLog)
+      .find({ entity: 'occurrence', action: 'delete', 'meta.reason': 'plan_update' })
+      .toArray();
+    expect(deletions).toHaveLength(8);
+  });
+});
+
 describe('POST /api/cycle-plans/:id/activate', () => {
   it('(c) mid-cycle activation keeps done, skipped, dragged, past and ad-hoc occurrences and replaces the rest', async () => {
     const c = await setup(); // Monday 14 Sep
     const weekly = await c.task('Badkamer', '1w', 30);
     const twice = await c.task('Wastafel', '2w', 10);
     await c.putSlots(c.planId, [
-      ...[0, 1, 2, 3].map((w) => ({ taskId: weekly, weekIndex: w, weekday: 1, assigneeId: c.p1._id.toHexString() })),
+      ...[0, 1, 2, 3].map((w) => ({
+        taskId: weekly,
+        weekIndex: w,
+        weekday: 1,
+        assigneeId: c.p1._id.toHexString(),
+      })),
       ...[0, 1, 2, 3].flatMap((w) => [
         { taskId: twice, weekIndex: w, weekday: 3 },
         { taskId: twice, weekIndex: w, weekday: 6 },
@@ -219,26 +318,63 @@ describe('POST /api/cycle-plans/:id/activate', () => {
     await c.nightly();
     const ctx = c.t.systemCtx();
     const byDay = async (key: string, taskId: string) =>
-      (await findOccurrences(c.t.db, { taskId: new ObjectId(taskId) })).find((o) => toDayKey(o.date) === key)!;
+      (await findOccurrences(c.t.db, { taskId: new ObjectId(taskId) })).find(
+        (o) => toDayKey(o.date) === key,
+      )!;
 
     const past = await byDay('2026-09-14', weekly); // stays open, before "today"
     const done = await byDay('2026-09-21', weekly);
-    await updateOccurrence(ctx, done._id, { status: 'done', completedAt: new Date(), completedBy: c.p1._id }, { action: 'complete' });
+    await updateOccurrence(
+      ctx,
+      done._id,
+      { status: 'done', completedAt: new Date(), completedBy: c.p1._id },
+      { action: 'complete' },
+    );
     const skipped = await byDay('2026-09-23', twice);
     await updateOccurrence(ctx, skipped._id, { status: 'skipped' }, { action: 'skip' });
     const dragged = await byDay('2026-09-28', weekly);
-    await updateOccurrence(ctx, dragged._id, { date: new Date('2026-09-28T22:00:00Z') }, { action: 'reschedule' });
+    await updateOccurrence(
+      ctx,
+      dragged._id,
+      { date: new Date('2026-09-28T22:00:00Z') },
+      { action: 'reschedule' },
+    );
     const [adhoc] = await insertOccurrencesIdempotent(
       ctx,
-      [{ ...done, _id: new ObjectId(), date: new Date('2026-09-29T22:00:00Z'), plannedDate: new Date('2026-09-29T22:00:00Z'), status: 'open', completedAt: null, completedBy: null, origin: 'adhoc', planId: null }],
+      [
+        {
+          ...done,
+          _id: new ObjectId(),
+          date: new Date('2026-09-29T22:00:00Z'),
+          plannedDate: new Date('2026-09-29T22:00:00Z'),
+          status: 'open',
+          completedAt: null,
+          completedBy: null,
+          origin: 'adhoc',
+          planId: null,
+        },
+      ],
       {},
     );
 
     // Two days later a new plan is activated
     c.t.clock.set('2026-09-16T08:00:00.000Z');
-    const created = await c.t.app.inject({ method: 'POST', url: '/api/cycle-plans', headers: asProfile(c.p1), payload: { name: 'Nieuw' } });
+    const created = await c.t.app.inject({
+      method: 'POST',
+      url: '/api/cycle-plans',
+      headers: asProfile(c.p1),
+      payload: { name: 'Nieuw' },
+    });
     const newPlanId = created.json<{ _id: string }>()._id;
-    await c.putSlots(newPlanId, [0, 1, 2, 3].map((w) => ({ taskId: twice, weekIndex: w, weekday: 4, assigneeId: c.p2._id.toHexString() })));
+    await c.putSlots(
+      newPlanId,
+      [0, 1, 2, 3].map((w) => ({
+        taskId: twice,
+        weekIndex: w,
+        weekday: 4,
+        assigneeId: c.p2._id.toHexString(),
+      })),
+    );
 
     const oldOpenFuture = await findOccurrences(c.t.db, {
       planId: new ObjectId(c.planId),
@@ -251,7 +387,12 @@ describe('POST /api/cycle-plans/:id/activate', () => {
 
     const { result, entries } = await expectAudited(
       c.t,
-      () => c.t.app.inject({ method: 'POST', url: `/api/cycle-plans/${newPlanId}/activate`, headers: asProfile(c.p1) }),
+      () =>
+        c.t.app.inject({
+          method: 'POST',
+          url: `/api/cycle-plans/${newPlanId}/activate`,
+          headers: asProfile(c.p1),
+        }),
       { entity: 'cyclePlan', action: 'activate', source: 'ui', count: 1 },
     );
     expect(result.statusCode, result.body).toBe(200);
@@ -262,22 +403,35 @@ describe('POST /api/cycle-plans/:id/activate', () => {
 
     // kept
     for (const kept of [past, done, skipped, dragged, adhoc!]) {
-      expect(await c.t.db.collection(COLLECTIONS.occurrences).countDocuments({ _id: kept._id }), toDayKey(kept.date)).toBe(1);
+      expect(
+        await c.t.db.collection(COLLECTIONS.occurrences).countDocuments({ _id: kept._id }),
+        toDayKey(kept.date),
+      ).toBe(1);
     }
     // replaced
-    expect(await countOccurrences(c.t.db, { _id: { $in: oldOpenFuture.map((o) => o._id) } })).toBe(0);
+    expect(await countOccurrences(c.t.db, { _id: { $in: oldOpenFuture.map((o) => o._id) } })).toBe(
+      0,
+    );
     const deletions = await c.t.db
       .collection(COLLECTIONS.auditLog)
       .find({ entity: 'occurrence', action: 'delete' })
       .toArray();
     expect(deletions).toHaveLength(oldOpenFuture.length);
-    expect(deletions.every((d) => d.source === 'system' && d.meta?.runId === body.runId)).toBe(true);
+    expect(deletions.every((d) => d.source === 'system' && d.meta?.runId === body.runId)).toBe(
+      true,
+    );
 
     // regenerated from the new plan: Thursdays from today in cycle 0 and all of cycle 1
     const fresh = await findOccurrences(c.t.db, { planId: new ObjectId(newPlanId) });
     expect(dayKeys(fresh)).toEqual([
-      '2026-09-17', '2026-09-24', '2026-10-01', '2026-10-08',
-      '2026-10-15', '2026-10-22', '2026-10-29', '2026-11-05',
+      '2026-09-17',
+      '2026-09-24',
+      '2026-10-01',
+      '2026-10-08',
+      '2026-10-15',
+      '2026-10-22',
+      '2026-10-29',
+      '2026-11-05',
     ]);
     expect(fresh.every((o) => c.p2._id.equals(o.assigneeId!))).toBe(true);
 
@@ -286,7 +440,12 @@ describe('POST /api/cycle-plans/:id/activate', () => {
     expect(plans.map((p) => p._id.toHexString())).toEqual([newPlanId]);
     const deactivated = await c.t.db
       .collection(COLLECTIONS.auditLog)
-      .findOne({ entity: 'cyclePlan', entityId: new ObjectId(c.planId), action: 'update' , 'after.active': false });
+      .findOne({
+        entity: 'cyclePlan',
+        entityId: new ObjectId(c.planId),
+        action: 'update',
+        'after.active': false,
+      });
     expect(deactivated).not.toBeNull();
   });
 
@@ -298,7 +457,10 @@ describe('POST /api/cycle-plans/:id/activate', () => {
       headers: asProfile(c.p1),
     });
     expect(unknown.statusCode).toBe(404);
-    const anonymous = await c.t.app.inject({ method: 'POST', url: `/api/cycle-plans/${c.planId}/activate` });
+    const anonymous = await c.t.app.inject({
+      method: 'POST',
+      url: `/api/cycle-plans/${c.planId}/activate`,
+    });
     expect(anonymous.statusCode).toBe(400);
   });
 });
@@ -318,10 +480,17 @@ describe('scheduler', () => {
 
   it('schedules backup, audit retention and the morning notification when configured', async () => {
     t = await createTestApp({
-      env: { DISABLE_SCHEDULER: 'false', NOTIFY_TYPE: 'ntfy', NOTIFY_URL: 'https://ntfy.example/huis', AUDIT_RETENTION_DAYS: '365' },
+      env: {
+        DISABLE_SCHEDULER: 'false',
+        NOTIFY_TYPE: 'ntfy',
+        NOTIFY_URL: 'https://ntfy.example/huis',
+        AUDIT_RETENTION_DAYS: '365',
+      },
     });
     const handle = startScheduler(t.app);
-    const scheduled = new Map([...cron.getTasks().values()].map((task) => [task.name, task.getPattern()]));
+    const scheduled = new Map(
+      [...cron.getTasks().values()].map((task) => [task.name, task.getPattern()]),
+    );
     expect(Object.fromEntries(scheduled)).toMatchObject({
       'nightly-generation': '0 3 * * *',
       'nightly-backup': '30 3 * * *',
