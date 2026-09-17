@@ -1,6 +1,7 @@
 import {
   DndContext,
   KeyboardSensor,
+  MeasuringStrategy,
   PointerSensor,
   TouchSensor,
   useSensor,
@@ -148,6 +149,7 @@ export function PlanEditor({ plan, tasks, rooms, users, intervals, debounceMs = 
   return (
     <DndContext
       sensors={sensors}
+      measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
       onDragStart={() => setIsDragging(true)}
       onDragCancel={() => setIsDragging(false)}
       onDragEnd={onDragEnd}

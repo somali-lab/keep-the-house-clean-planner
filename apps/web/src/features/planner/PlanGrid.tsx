@@ -51,7 +51,7 @@ export function WeekTable({
 
   return (
     <section
-      className="overflow-hidden rounded-2xl border bg-card shadow-sm"
+      className="relative overflow-hidden rounded-2xl border bg-card shadow-sm"
       aria-label={format('planner.week', { n: weekNumber })}
     >
       <div className="flex flex-wrap items-center gap-3 border-b bg-secondary/25 px-4 py-3">
@@ -74,7 +74,10 @@ export function WeekTable({
         </label>
       </div>
       {showQuickDays && (
-        <div className="border-b bg-primary/5 px-3 py-2.5" role="status">
+        <div
+          className="absolute inset-x-0 top-0 z-30 border-b bg-card/95 px-3 py-2.5 shadow-md backdrop-blur"
+          role="status"
+        >
           <p className="mb-2 text-xs font-semibold text-primary">
             {t('planner.quickPlanHint')}
           </p>

@@ -60,7 +60,11 @@ export function useCreatePlan() {
   return useMutation({
     mutationFn: async (input: { name: string; copyFromId?: string }) =>
       (await api.post<CyclePlan>('/api/cycle-plans', input)).data,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: planKeys.all }),
+    onSuccess: (created) => {
+      queryClient.setQueryData<CyclePlan[]>(planKeys.all, (plans) =>
+        plans ? [...plans, created] : [created],
+      );
+    },
   });
 }
 
