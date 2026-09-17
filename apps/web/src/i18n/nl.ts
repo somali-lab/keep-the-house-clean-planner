@@ -123,7 +123,9 @@ export const nl = {
   'tasks.error.durationInvalid': 'De duur moet een heel aantal minuten van minimaal 1 zijn.',
   'tasks.error.server': 'Deze waarde is niet geldig.',
 
-  'mobileTasks.title': 'Takenoverzicht',
+  'mobileTasks.title': 'Mijn taken',
+  'mobileTasks.mine': 'Aan mij toegewezen',
+  'mobileTasks.unassigned': 'Nog niet toegewezen',
   'mobileTasks.rangeDescription': '{from} t/m {to}',
   'mobileTasks.period': 'Periode',
   'mobileTasks.rooms': 'Ruimtes',
