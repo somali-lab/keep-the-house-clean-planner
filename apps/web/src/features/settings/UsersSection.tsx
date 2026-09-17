@@ -1,10 +1,11 @@
-import type { User } from '@huishoudplanner/shared';
+import type { User, UserRole } from '@huishoudplanner/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Pencil, Plus, Save, Users } from 'lucide-react';
 import { useId, useState, type CSSProperties, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/NativeSelect';
 import { cn } from '@/lib/utils';
 import { api } from '../../api/index.ts';
 import { useUsers } from '../../api/queries.ts';
@@ -60,6 +61,7 @@ export function UsersSection() {
                     aria-hidden="true"
                   />
                   <strong className="font-bold">{user.name}</strong>
+                  <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold">{t(`settings.users.role.${user.role}` as MessageKey)}</span>
                   {!user.active && <span className="text-sm text-muted-foreground">({t('settings.users.inactive')})</span>}
                   <span className="text-sm text-muted-foreground">{format('settings.users.summary', user.dailyBudgetMinutes)}</span>
                   <span className="text-sm text-muted-foreground">
@@ -103,6 +105,7 @@ function UserForm({ user, onSaved, onCancel }: { user?: User; onSaved(): void; o
   const [name, setName] = useState(user?.name ?? '');
   const [color, setColor] = useState(user?.color ?? '#2563eb');
   const [active, setActive] = useState(user?.active ?? true);
+  const [role, setRole] = useState<UserRole>(user?.role ?? 'member');
   const [unavailable, setUnavailable] = useState<number[]>(user?.unavailableWeekdays ?? []);
   const [weekday, setWeekday] = useState(String(user?.dailyBudgetMinutes.weekday ?? 60));
   const [weekend, setWeekend] = useState(String(user?.dailyBudgetMinutes.weekend ?? 120));
@@ -115,6 +118,7 @@ function UserForm({ user, onSaved, onCancel }: { user?: User; onSaved(): void; o
       const body = {
         name: name.trim(),
         color,
+        role,
         unavailableWeekdays: [...unavailable].sort((a, b) => a - b),
         dailyBudgetMinutes: { weekday: Number(weekday), weekend: Number(weekend) },
         maxDailyMinutes: { weekday: Number(maxWeekday), weekend: Number(maxWeekend) },
@@ -146,10 +150,18 @@ function UserForm({ user, onSaved, onCancel }: { user?: User; onSaved(): void; o
       noValidate
       aria-label={user ? format('settings.users.edit', { name: user.name }) : t('settings.users.new')}
     >
-      <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
+      <div className="grid gap-4 sm:grid-cols-[1fr_12rem_auto]">
         <Field>
           <Label htmlFor={`${idPrefix}-name`}>{t('settings.users.name')}</Label>
           <Input id={`${idPrefix}-name`} className="h-10 bg-card" value={name} onChange={(e) => setName(e.target.value)} />
+        </Field>
+        <Field>
+          <Label htmlFor={`${idPrefix}-role`}>{t('settings.users.role')}</Label>
+          <NativeSelect id={`${idPrefix}-role`} value={role} onChange={(event) => setRole(event.target.value as UserRole)}>
+            {(['member', 'planner', 'admin'] as UserRole[]).map((value) => (
+              <option key={value} value={value}>{t(`settings.users.role.${value}` as MessageKey)}</option>
+            ))}
+          </NativeSelect>
         </Field>
         <Field>
           <Label htmlFor={`${idPrefix}-color`}>{t('settings.users.color')}</Label>

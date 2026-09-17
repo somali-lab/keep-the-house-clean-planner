@@ -14,7 +14,7 @@ import { AiProviderError } from '../domain/ai/provider.ts';
 import { AI_CONNECTION_TEST_REQUEST, AI_CONNECTION_TEST_SCHEMA, getAiPromptCodeInfo } from '../domain/ai/prompt.ts';
 import { generatePlanProposal, type ProposalResult } from '../domain/ai/proposals.ts';
 import { notFound, parseOrThrow } from '../http/errors.ts';
-import { auditContext, requireActor } from '../identity/index.ts';
+import { auditContext, requirePlanner } from '../identity/index.ts';
 
 function respond(result: ProposalResult) {
   return {
@@ -39,7 +39,7 @@ export const aiRoutes: FastifyPluginAsync = async (app) => {
     return getAiPromptCodeInfo(settings.aiPrompts, settings.aiPromptTemplates);
   });
 
-  app.post('/ai/test', { preHandler: requireActor }, async (request) => {
+  app.post('/ai/test', { preHandler: requirePlanner }, async (request) => {
     const input = parseOrThrow(testAiProviderInputSchema, request.body);
     const testProvider = app.deps.aiProviderFor(input.aiProvider);
     const raw = await testProvider.completeJson({
@@ -61,7 +61,7 @@ export const aiRoutes: FastifyPluginAsync = async (app) => {
     return { ok: true };
   });
 
-  app.post('/ai/propose-plan', { preHandler: requireActor }, async (request) => {
+  app.post('/ai/propose-plan', { preHandler: requirePlanner }, async (request) => {
     const input = parseOrThrow(proposePlanInputSchema, request.body ?? {});
     const result = await generatePlanProposal(auditContext(request), await provider(), {
       mode: 'propose',
@@ -71,7 +71,7 @@ export const aiRoutes: FastifyPluginAsync = async (app) => {
     return respond(result);
   });
 
-  app.post('/ai/rebalance', { preHandler: requireActor }, async (request) => {
+  app.post('/ai/rebalance', { preHandler: requirePlanner }, async (request) => {
     const input = parseOrThrow(rebalanceInputSchema, request.body);
     const basePlan = await findPlanById(app.deps.db, new ObjectId(input.planId));
     if (!basePlan) throw notFound('cycle plan');
@@ -84,12 +84,12 @@ export const aiRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // Read-only AI actions still require a profile: they cost provider usage and should be attributable.
-  app.post('/ai/suggest-tasks', { preHandler: requireActor }, async (request) => {
+  app.post('/ai/suggest-tasks', { preHandler: requirePlanner }, async (request) => {
     const input = parseOrThrow(suggestTasksInputSchema, request.body);
     return { suggestions: await suggestTasks(app.deps.db, await provider(), new ObjectId(input.roomId)) };
   });
 
-  app.post('/ai/explain', { preHandler: requireActor }, async (request) => {
+  app.post('/ai/explain', { preHandler: requirePlanner }, async (request) => {
     const input = parseOrThrow(explainPlanInputSchema, request.body);
     return { rationale: await explainPlan(app.deps.db, await provider(), new ObjectId(input.planId)) };
   });

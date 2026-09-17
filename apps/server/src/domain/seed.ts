@@ -46,12 +46,13 @@ export async function seed(ctx: AuditContext, options: SeedOptions): Promise<See
 
   let usersCreated = 0;
   if ((await countUsers(ctx.db)) === 0) {
-    for (const user of options.seedUsers) {
+    for (const [index, user] of options.seedUsers.entries()) {
       await createUser(ctx, {
         name: user.name,
         color: user.color,
         unavailableWeekdays: [],
         dailyBudgetMinutes: SEED_BUDGET,
+        role: index === 0 ? 'admin' : 'member',
       });
       usersCreated++;
     }

@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { useRooms, useTasks, useUsers } from '../../api/queries.ts';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
+import { useProfile } from '../../identity/index.ts';
 import { useCompletion, useDeviations, useIntervals, useResetStatistics, useWorkload } from './api.ts';
 import { statsTableClass } from './ChartFrame.tsx';
 import { FairnessBars, type FairnessRow } from './FairnessBars.tsx';
@@ -85,6 +86,7 @@ export function StatsPage() {
   const [groupBy, setGroupBy] = useState<StatsGroupBy>('task');
   const [confirmReset, setConfirmReset] = useState(false);
   const [resetDone, setResetDone] = useState(false);
+  const { profile } = useProfile();
   const workload = useWorkload(cycles);
   const completion = useCompletion(cycles, groupBy);
   const intervals = useIntervals(cycles);
@@ -130,16 +132,18 @@ export function StatsPage() {
           ))}
         </NativeSelect>
       </div>
-      <Button
-        type="button"
-        variant="outline"
-        className="text-destructive hover:text-destructive"
-        disabled={resetStatistics.isPending}
-        onClick={() => setConfirmReset(true)}
-      >
-        <Trash2 aria-hidden="true" />
-        {t('stats.reset')}
-      </Button>
+      {profile?.role === 'admin' && (
+        <Button
+          type="button"
+          variant="outline"
+          className="text-destructive hover:text-destructive"
+          disabled={resetStatistics.isPending}
+          onClick={() => setConfirmReset(true)}
+        >
+          <Trash2 aria-hidden="true" />
+          {t('stats.reset')}
+        </Button>
+      )}
     </div>
   );
 

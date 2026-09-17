@@ -20,10 +20,11 @@ describe('users API', () => {
   it('lists users as JSON with string ids', async () => {
     const res = await t.app.inject({ method: 'GET', url: '/api/users' });
     expect(res.statusCode).toBe(200);
-    const users = res.json<{ _id: string; name: string; createdAt: string }[]>();
+    const users = res.json<{ _id: string; name: string; role: string; createdAt: string }[]>();
     expect(users.map((u) => u.name)).toEqual(['Persoon 1', 'Persoon 2']);
     expect(users[0]!._id).toBe(p1._id.toHexString());
     expect(users[0]!.createdAt).toBe('2026-09-16T08:00:00.000Z');
+    expect(users.map((user) => user.role)).toEqual(['admin', 'member']);
   });
 
   it('creates a user (201) and audits the create with source ui', async () => {
@@ -39,8 +40,8 @@ describe('users API', () => {
       { entity: 'user', action: 'create', source: 'ui', count: 1 },
     );
     expect(result.statusCode).toBe(201);
-    const body = result.json<{ _id: string; unavailableWeekdays: number[]; active: boolean }>();
-    expect(body).toMatchObject({ unavailableWeekdays: [0, 2], active: true });
+    const body = result.json<{ _id: string; unavailableWeekdays: number[]; active: boolean; role: string }>();
+    expect(body).toMatchObject({ unavailableWeekdays: [0, 2], active: true, role: 'member' });
     expect(entries[0]!.entityId.toHexString()).toBe(body._id);
     expect(entries[0]!.actorId).toEqual(p1._id);
   });
@@ -100,6 +101,17 @@ describe('users API', () => {
     expect(all.json<{ _id: string }[]>().map((u) => u._id)).toContain(id);
     const del = await t.app.inject({ method: 'DELETE', url: `/api/users/${id}`, headers: asProfile(p1) });
     expect(del.statusCode).toBe(404);
+  });
+
+  it('does not allow removing the last active administrator', async () => {
+    const res = await t.app.inject({
+      method: 'PATCH',
+      url: `/api/users/${p1._id.toHexString()}`,
+      headers: asProfile(p1),
+      payload: { role: 'member' },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ code: 'last_admin' });
   });
 
   it('returns 404 for unknown and 400 for malformed ids', async () => {

@@ -29,7 +29,7 @@ const putSlotsQuerySchema = z.object({ sync: z.enum(['true', 'false']).optional(
 import { HttpError, notFound, parseOrThrow } from '../http/errors.ts';
 import { parseIdParam } from '../http/params.ts';
 import { toApi } from '../http/serialize.ts';
-import { auditContext, requireActor } from '../identity/index.ts';
+import { auditContext, requirePlanner } from '../identity/index.ts';
 
 export const cyclePlanRoutes: FastifyPluginAsync = async (app) => {
   app.get('/cycle-plans', async () => toApi(await listPlans(app.deps.db)));
@@ -46,7 +46,7 @@ export const cyclePlanRoutes: FastifyPluginAsync = async (app) => {
     return toApi(plan);
   });
 
-  app.post('/cycle-plans', { preHandler: requireActor }, async (request, reply) => {
+  app.post('/cycle-plans', { preHandler: requirePlanner }, async (request, reply) => {
     const input = parseOrThrow(createCyclePlanInputSchema, request.body);
     let source = null;
     if (input.copyFromId) {
@@ -71,7 +71,7 @@ export const cyclePlanRoutes: FastifyPluginAsync = async (app) => {
     return reply.status(201).send(toApi(plan));
   });
 
-  app.patch('/cycle-plans/:id', { preHandler: requireActor }, async (request) => {
+  app.patch('/cycle-plans/:id', { preHandler: requirePlanner }, async (request) => {
     const id = parseIdParam(request.params);
     const input = parseOrThrow(updateCyclePlanInputSchema, request.body);
     const plan = await updatePlanMeta(auditContext(request), id, input);
@@ -79,7 +79,7 @@ export const cyclePlanRoutes: FastifyPluginAsync = async (app) => {
     return toApi(plan);
   });
 
-  app.delete('/cycle-plans/:id', { preHandler: requireActor }, async (request) => {
+  app.delete('/cycle-plans/:id', { preHandler: requirePlanner }, async (request) => {
     const id = parseIdParam(request.params);
     const plans = await listPlans(app.deps.db);
     const plan = plans.find((candidate) => candidate._id.equals(id));
@@ -94,7 +94,7 @@ export const cyclePlanRoutes: FastifyPluginAsync = async (app) => {
     return { deleted: true };
   });
 
-  app.post('/cycle-plans/:id/activate', { preHandler: requireActor }, async (request) => {
+  app.post('/cycle-plans/:id/activate', { preHandler: requirePlanner }, async (request) => {
     const id = parseIdParam(request.params);
     return toApi(await activatePlan(auditContext(request), id));
   });
@@ -133,17 +133,17 @@ export const cyclePlanRoutes: FastifyPluginAsync = async (app) => {
     };
   });
 
-  app.post('/cycle-plans/:id/apply-proposal', { preHandler: requireActor }, async (request) => {
+  app.post('/cycle-plans/:id/apply-proposal', { preHandler: requirePlanner }, async (request) => {
     const id = parseIdParam(request.params);
     return toApi(await applyProposal(auditContext(request), id));
   });
 
-  app.post('/cycle-plans/:id/discard', { preHandler: requireActor }, async (request) => {
+  app.post('/cycle-plans/:id/discard', { preHandler: requirePlanner }, async (request) => {
     const id = parseIdParam(request.params);
     return toApi(await discardProposal(auditContext(request), id));
   });
 
-  app.put('/cycle-plans/:id/slots', { preHandler: requireActor }, async (request) => {
+  app.put('/cycle-plans/:id/slots', { preHandler: requirePlanner }, async (request) => {
     const id = parseIdParam(request.params);
     const input = parseOrThrow(putSlotsInputSchema, request.body);
     const query = parseOrThrow(putSlotsQuerySchema, request.query);

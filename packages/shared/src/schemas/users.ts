@@ -6,12 +6,16 @@ export const dailyBudgetSchema = z.object({
   weekend: z.number().int().min(0),
 });
 
+export const userRoleSchema = z.enum(['admin', 'planner', 'member']);
+export type UserRole = z.infer<typeof userRoleSchema>;
+
 export const userSchema = z
   .object({
     _id: objectIdSchema,
     name: z.string().trim().min(1),
     color: hexColorSchema,
     active: z.boolean(),
+    role: userRoleSchema.default('member'),
     unavailableWeekdays: z.array(weekdaySchema),
     dailyBudgetMinutes: dailyBudgetSchema,
     maxDailyMinutes: dailyBudgetSchema.default({ weekday: 480, weekend: 480 }),
@@ -22,6 +26,7 @@ export type User = z.infer<typeof userSchema>;
 export const createUserInputSchema = z.object({
   name: z.string().trim().min(1),
   color: hexColorSchema,
+  role: userRoleSchema.default('member'),
   unavailableWeekdays: z.array(weekdaySchema).default([]),
   dailyBudgetMinutes: dailyBudgetSchema.default({ weekday: 60, weekend: 120 }),
   maxDailyMinutes: dailyBudgetSchema.default({ weekday: 60, weekend: 120 }),
@@ -33,6 +38,7 @@ export const updateUserInputSchema = z
     name: z.string().trim().min(1),
     color: hexColorSchema,
     active: z.boolean(),
+    role: userRoleSchema,
     unavailableWeekdays: z.array(weekdaySchema),
     dailyBudgetMinutes: dailyBudgetSchema,
     maxDailyMinutes: dailyBudgetSchema,

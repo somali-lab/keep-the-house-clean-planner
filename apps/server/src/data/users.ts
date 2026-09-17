@@ -1,8 +1,9 @@
-import type { CreateUserInput, UpdateUserInput } from '@huishoudplanner/shared';
+import type { CreateUserInput, UpdateUserInput, UserRole } from '@huishoudplanner/shared';
 import { ObjectId, type Db } from 'mongodb';
 import type { AuditContext } from '../audit/context.ts';
 import { diffFields, isEmptyDiff } from '../audit/diff.ts';
 import { record } from '../audit/record.ts';
+import { HttpError } from '../http/errors.ts';
 import { COLLECTIONS } from './db.ts';
 
 export interface UserDoc {
@@ -10,6 +11,7 @@ export interface UserDoc {
   name: string;
   color: string;
   active: boolean;
+  role: UserRole;
   unavailableWeekdays: number[];
   dailyBudgetMinutes: { weekday: number; weekend: number };
   maxDailyMinutes: { weekday: number; weekend: number };
@@ -23,6 +25,8 @@ const usersCollection = (db: Db) => db.collection<UserDoc>(COLLECTIONS.users);
 
 const withDefaults = (user: UserDoc): UserDoc => ({
   ...user,
+  // Existing installations predate roles. Preserve access until an admin assigns explicit roles.
+  role: user.role ?? 'admin',
   maxDailyMinutes: user.maxDailyMinutes ?? { weekday: 480, weekend: 480 },
 });
 
@@ -42,7 +46,7 @@ export function countUsers(db: Db): Promise<number> {
 
 export async function createUser(
   ctx: AuditContext,
-  input: Omit<CreateUserInput, 'maxDailyMinutes'> & Partial<Pick<CreateUserInput, 'maxDailyMinutes'>>,
+  input: Omit<CreateUserInput, 'maxDailyMinutes' | 'role'> & Partial<Pick<CreateUserInput, 'maxDailyMinutes' | 'role'>>,
 ): Promise<UserDoc> {
   const now = ctx.clock.now();
   const doc: UserDoc = {
@@ -50,6 +54,7 @@ export async function createUser(
     name: input.name,
     color: input.color,
     active: true,
+    role: input.role ?? 'member',
     unavailableWeekdays: [...new Set(input.unavailableWeekdays)].sort(),
     dailyBudgetMinutes: input.dailyBudgetMinutes,
     maxDailyMinutes: input.maxDailyMinutes ?? { weekday: 60, weekend: 120 },
@@ -70,6 +75,19 @@ export async function updateUser(
 ): Promise<UserDoc | null> {
   const before = await findUserById(ctx.db, id);
   if (!before) return null;
+
+  const removesLastAdmin =
+    before.active &&
+    before.role === 'admin' &&
+    (patch.active === false || (patch.role !== undefined && patch.role !== 'admin'));
+  if (removesLastAdmin) {
+    const otherAdmins = await usersCollection(ctx.db).countDocuments({
+      _id: { $ne: id },
+      active: true,
+      $or: [{ role: 'admin' }, { role: { $exists: false } }],
+    });
+    if (otherAdmins === 0) throw new HttpError(409, 'last_admin', 'At least one active administrator is required');
+  }
 
   const changes: Partial<UserDoc> = { ...patch };
   if (patch.unavailableWeekdays) {

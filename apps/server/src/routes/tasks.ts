@@ -17,7 +17,7 @@ import { assertTaskReferences } from '../domain/tasks.ts';
 import { notFound, parseOrThrow } from '../http/errors.ts';
 import { booleanQuery, parseIdParam, toObjectId } from '../http/params.ts';
 import { toApi } from '../http/serialize.ts';
-import { auditContext, requireActor } from '../identity/index.ts';
+import { auditContext, requirePlanner } from '../identity/index.ts';
 
 const listQuerySchema = z.object({
   roomId: objectIdSchema.optional(),
@@ -34,7 +34,7 @@ export const taskRoutes: FastifyPluginAsync = async (app) => {
     return toApi(tasks);
   });
 
-  app.post('/tasks', { preHandler: requireActor }, async (request, reply) => {
+  app.post('/tasks', { preHandler: requirePlanner }, async (request, reply) => {
     const input = parseOrThrow(createTaskInputSchema, request.body);
     const roomId = toObjectId(input.roomId);
     const defaultAssigneeId = toObjectId(input.defaultAssigneeId);
@@ -51,7 +51,7 @@ export const taskRoutes: FastifyPluginAsync = async (app) => {
     return reply.status(201).send(toApi(task));
   });
 
-  app.patch('/tasks/:id', { preHandler: requireActor }, async (request) => {
+  app.patch('/tasks/:id', { preHandler: requirePlanner }, async (request) => {
     const id = parseIdParam(request.params);
     const before = await findTaskById(app.deps.db, id);
     const input = parseOrThrow(updateTaskInputSchema, request.body);
@@ -82,7 +82,7 @@ export const taskRoutes: FastifyPluginAsync = async (app) => {
     return toApi(task);
   });
 
-  app.delete('/tasks/:id', { preHandler: requireActor }, async (request) => {
+  app.delete('/tasks/:id', { preHandler: requirePlanner }, async (request) => {
     const id = parseIdParam(request.params);
     const ctx = auditContext(request);
     await removeTaskFromPlans(ctx, id);
@@ -91,7 +91,7 @@ export const taskRoutes: FastifyPluginAsync = async (app) => {
     return { deleted: true };
   });
 
-  app.post('/rooms/:id/tasks/bulk', { preHandler: requireActor }, async (request) => {
+  app.post('/rooms/:id/tasks/bulk', { preHandler: requirePlanner }, async (request) => {
     const roomId = parseIdParam(request.params);
     const input = parseOrThrow(bulkRoomTasksInputSchema, request.body);
     if (!(await findRoomById(app.deps.db, roomId))) throw notFound('room');

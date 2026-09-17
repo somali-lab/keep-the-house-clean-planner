@@ -69,6 +69,29 @@ describe('app shell', () => {
     expect(await screen.findByRole('heading', { name: '12-daags overzicht' })).toBeInTheDocument();
   });
 
+  it('shows household members only the read and execution sections', async () => {
+    setViewportWidth(1280);
+    const member = { ...BRAM, role: 'member' as const };
+    mockApi({
+      '/api/users': [ANNA, member],
+      '/api/tasks': [],
+      '/api/rooms': [],
+      '/api/settings': makeSettings(),
+      '/api/cycle-plans': [],
+      '/api/occurrences': [],
+    });
+    storeProfile(member._id);
+    render(<App queryClient={testQueryClient()} />);
+
+    const nav = await screen.findByRole('navigation', { name: 'Hoofdmenu' });
+    expect(nav).toHaveTextContent('Week');
+    expect(nav).toHaveTextContent('Verdeling');
+    expect(nav).toHaveTextContent('Statistiek');
+    expect(nav).not.toHaveTextContent('Planner');
+    expect(nav).not.toHaveTextContent('Taken');
+    expect(nav).not.toHaveTextContent('Instellingen');
+  });
+
   it('can switch to the other layout via the menu', async () => {
     setViewportWidth(375);
     render(<App queryClient={testQueryClient()} />);
