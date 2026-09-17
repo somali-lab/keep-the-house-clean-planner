@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { SYSTEM_ACTOR_ID } from '../src/audit/context.ts';
-import type { UserDoc } from '../src/data/users.ts';
+import { updateUser, type UserDoc } from '../src/data/users.ts';
 import { asProfile, seededUsers } from './helpers/http.ts';
 import { createTestApp, type TestApp } from './helpers/testApp.ts';
 
@@ -36,7 +36,7 @@ beforeAll(async () => {
   t = await createTestApp({ now: '2026-09-16T08:00:00.000Z' });
   [p1, p2] = await seededUsers(t);
   // This suite exercises actor/source filtering, so give its second actor admin rights explicitly.
-  await t.db.collection<UserDoc>('users').updateOne({ _id: p2._id }, { $set: { role: 'admin' } });
+  await updateUser(t.systemCtx(), p2._id, { role: 'admin' });
   t.clock.set('2026-09-17T08:00:00.000Z');
   const room = await t.app.inject({ method: 'POST', url: '/api/rooms', headers: asProfile(p1), payload: { name: 'Zolder' } });
   roomId = room.json<{ _id: string }>()._id;

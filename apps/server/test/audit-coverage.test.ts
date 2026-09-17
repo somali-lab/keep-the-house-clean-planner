@@ -62,6 +62,7 @@ describe('audit record', () => {
       name: 'Persoon 2',
       color: '#db2777',
       active: true,
+      role: 'member',
       unavailableWeekdays: [],
       dailyBudgetMinutes: { weekday: 60, weekend: 120 },
       maxDailyMinutes: { weekday: 60, weekend: 120 },
