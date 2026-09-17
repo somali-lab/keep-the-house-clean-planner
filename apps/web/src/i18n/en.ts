@@ -156,6 +156,8 @@ export const en = {
   "planner.poolCollapse": "Collapse To be scheduled",
   "planner.poolExpand": "Expand To be scheduled",
   "planner.chooseWeek": "Choose a week",
+  "planner.filterAssignee": "Filter planner by person",
+  "planner.filterAllPeople": "All people",
   "planner.filterRoom": "Filter tasks by room",
   "planner.allRooms": "All rooms",
   "planner.filterInterval": "Filter tasks by cycle",

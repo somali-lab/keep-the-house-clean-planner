@@ -182,6 +182,27 @@ describe('PlannerPage — drops', () => {
 });
 
 describe('PlannerPage — budgets and pool', () => {
+  it('filters the planning lanes by person without changing the plan', async () => {
+    setup([
+      makePlan({
+        _id: 'p1',
+        name: 'Standaard',
+        active: true,
+        slots: [slot('t1', 0, 1, ANNA._id), slot('t2', 0, 1, BRAM._id), slot('t3', 0, 1, null)],
+      }),
+    ]);
+    renderWithProviders(<PlannerPage />);
+    await screen.findByRole('group', { name: 'Kies een week' });
+
+    fireEvent.change(screen.getByLabelText('Filter planner op persoon'), {
+      target: { value: BRAM._id },
+    });
+
+    expect(screen.queryByTestId(`cell:0:1:${ANNA._id}`)).not.toBeInTheDocument();
+    expect(within(screen.getByTestId(`cell:0:1:${BRAM._id}`)).getByText('Stofzuigen')).toBeInTheDocument();
+    expect(screen.queryByTestId('cell:0:1:any')).not.toBeInTheDocument();
+  });
+
   it('uses the weekend budget on Saturday and the weekday budget on Monday', async () => {
     setup([
       makePlan({

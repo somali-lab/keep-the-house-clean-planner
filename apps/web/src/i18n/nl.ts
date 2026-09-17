@@ -191,6 +191,8 @@ export const nl = {
   'planner.poolCollapse': 'Nog in te plannen inklappen',
   'planner.poolExpand': 'Nog in te plannen uitklappen',
   'planner.chooseWeek': 'Kies een week',
+  'planner.filterAssignee': 'Filter planner op persoon',
+  'planner.filterAllPeople': 'Alle personen',
   'planner.filterRoom': 'Filter taken op ruimte',
   'planner.allRooms': 'Alle ruimtes',
   'planner.filterInterval': 'Filter taken op cyclus',

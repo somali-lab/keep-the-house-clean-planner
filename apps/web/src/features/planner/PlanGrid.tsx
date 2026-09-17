@@ -18,6 +18,7 @@ interface WeekTableProps {
   tasks: Task[];
   rooms: Room[];
   users: User[];
+  showUnassigned: boolean;
   summary: PlanSummary;
   onRemoveSlot(index: number): void;
 }
@@ -32,6 +33,7 @@ export function WeekTable({
   tasks,
   rooms,
   users,
+  showUnassigned,
   summary,
   onRemoveSlot,
 }: WeekTableProps) {
@@ -127,7 +129,7 @@ export function WeekTable({
                   {t(`weekdayLong.${weekday}` as MessageKey)}
                 </h3>
                 <div className="grid gap-1.5">
-                  {[...users, null].map((user) => (
+                  {[...users, ...(showUnassigned ? [null] : [])].map((user) => (
                     <Cell
                       key={user?._id ?? 'any'}
                       weekIndex={weekIndex}
@@ -161,10 +163,12 @@ export function WeekTable({
               </span>
             );
           })}
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-accent px-3 py-1 font-semibold text-accent-foreground">
-            <Users className="size-3" aria-hidden="true" />
-            {format('planner.weekUnassigned', { minutes: weekTotals.unassignedMinutes })}
-          </span>
+          {showUnassigned && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-accent px-3 py-1 font-semibold text-accent-foreground">
+              <Users className="size-3" aria-hidden="true" />
+              {format('planner.weekUnassigned', { minutes: weekTotals.unassignedMinutes })}
+            </span>
+          )}
         </p>
       )}
     </section>

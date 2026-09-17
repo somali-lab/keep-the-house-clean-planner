@@ -13,6 +13,7 @@ import { validatePlan } from '@huishoudplanner/shared/validation/plan';
 import { Ban, Menu, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { NativeSelect } from '@/components/NativeSelect';
 import { cn } from '@/lib/utils';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
 import { useUpdatePlan, usePutSlots } from './api.ts';
@@ -54,6 +55,7 @@ export function PlanEditor({ plan, tasks, rooms, users, intervals, debounceMs = 
   const [slots, setSlots] = useState<Slot[]>(plan.slots);
   const [themes, setThemes] = useState<string[]>(plan.weekThemes);
   const [selectedWeek, setSelectedWeek] = useState(0);
+  const [assigneeFilter, setAssigneeFilter] = useState('all');
   const [poolCollapsed, setPoolCollapsed] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>('idle');
@@ -185,6 +187,20 @@ export function PlanEditor({ plan, tasks, rooms, users, intervals, debounceMs = 
               {format('planner.week', { n: weekIndex + 1 })}
             </Button>
           ))}
+          <NativeSelect
+            className="w-48"
+            aria-label={t('planner.filterAssignee')}
+            value={assigneeFilter}
+            onChange={(event) => setAssigneeFilter(event.target.value)}
+          >
+            <option value="all">{t('planner.filterAllPeople')}</option>
+            {users.map((user) => (
+              <option key={user._id} value={user._id}>
+                {user.name}
+              </option>
+            ))}
+            <option value="unassigned">{t('planner.anyone')}</option>
+          </NativeSelect>
           <span
             role="status"
             className={cn(
@@ -230,7 +246,12 @@ export function PlanEditor({ plan, tasks, rooms, users, intervals, debounceMs = 
               slots={slots}
               tasks={tasks}
               rooms={rooms}
-              users={users}
+              users={
+                assigneeFilter === 'all'
+                  ? users
+                  : users.filter((user) => user._id === assigneeFilter)
+              }
+              showUnassigned={assigneeFilter === 'all' || assigneeFilter === 'unassigned'}
               summary={validation.summary}
               onRemoveSlot={(index) => handleDrop({ kind: 'slot', index }, { kind: 'pool' })}
             />
