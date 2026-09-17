@@ -1,0 +1,17 @@
+---
+description: Server layering, authorization, persistence, and audit rules
+globs: "apps/server/**/*.ts"
+alwaysApply: false
+---
+
+# Server rules
+
+- Routes own HTTP parsing, permission guards, status codes, and `toApi()` serialization.
+- Domain modules own orchestration and business rules; data modules own MongoDB access.
+- Raw MongoDB writes are allowed only in `apps/server/src/data/`.
+- Pass `AuditContext` into state-changing data operations. Audit every real write and skip both write and audit for no-ops.
+- Validate request bodies and queries with shared Zod schemas plus `parseOrThrow()`.
+- Preserve the error contract `{ code, message?, details? }`; field errors use `validation_error` details.
+- Protect planner/admin operations with the existing role guards. A profile header is not authentication.
+- Keep config errors value-free because values can contain secrets.
+- Cover write routes with integration tests and keep audit/write-route coverage complete.

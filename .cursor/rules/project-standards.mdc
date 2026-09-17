@@ -1,0 +1,14 @@
+---
+description: Core engineering constraints for Keep the House Clean
+alwaysApply: true
+---
+
+# Project standards
+
+- Read root `AGENTS.md`, relevant tests, and matching `docs/DECISIONS.md` entries before editing.
+- Preserve unrelated user changes and keep the diff scoped to the request.
+- Use Node.js 24+, strict TypeScript, ESM, and explicit `.ts` extensions on relative imports.
+- Do not edit generated output, `node_modules`, backups, reports, or real `.env` files.
+- Keep public behavior and configuration documented.
+- Add regression coverage for behavior changes and run proportional verification.
+- Never commit, push, publish, deploy, or mutate real data unless explicitly requested.
