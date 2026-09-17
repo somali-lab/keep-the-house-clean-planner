@@ -1,0 +1,15 @@
+---
+description: Shared API schema, time, cycle, and validation constraints
+globs: "packages/shared/**/*.ts"
+alwaysApply: false
+---
+
+# Shared-domain rules
+
+- Treat exported Zod schemas and types as API contracts consumed by both server and web.
+- Represent calendar dates as `YYYY-MM-DD` day keys and instants as ISO timestamps.
+- Use the shared time helpers for timezone and DST-safe calendar arithmetic.
+- Keep four-week cycle behavior anchored to a Monday; week indexes are `0..3`, weekdays are `0=Sunday..6=Saturday`.
+- Keep plan validation deterministic and side-effect free. Machine-readable issue codes are API surface.
+- Add boundary tests for DST, cycle edges, invalid inputs, and deterministic sort order when relevant.
+- Export new modules deliberately; prefer focused runtime subpath imports in the web app.
