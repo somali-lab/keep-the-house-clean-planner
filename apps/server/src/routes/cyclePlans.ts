@@ -4,6 +4,7 @@ import {
   updateCyclePlanInputSchema,
 } from '@huishoudplanner/shared';
 import type { FastifyPluginAsync } from 'fastify';
+import { randomUUID } from 'node:crypto';
 import { ObjectId } from 'mongodb';
 import {
   createPlan,
@@ -20,13 +21,15 @@ import { listTasks } from '../data/tasks.ts';
 import { listRooms } from '../data/rooms.ts';
 import { activatePlan, applyProposal, discardProposal } from '../domain/activation.ts';
 import { diffPlans } from '../domain/planDiff.ts';
+import { replaceUpcomingOccurrences } from '../domain/generation.ts';
 import { slotsToDocs, validateSlotsAgainstDb } from '../domain/plans.ts';
 
 const diffQuerySchema = z.object({ against: z.literal('active').optional() });
+const putSlotsQuerySchema = z.object({ sync: z.enum(['true', 'false']).optional() });
 import { HttpError, notFound, parseOrThrow } from '../http/errors.ts';
 import { parseIdParam } from '../http/params.ts';
 import { toApi } from '../http/serialize.ts';
-import { auditContext, requireActor } from '../identity/index.ts';
+import { auditContext, requirePlanner } from '../identity/index.ts';
 
 export const cyclePlanRoutes: FastifyPluginAsync = async (app) => {
   app.get('/cycle-plans', async () => toApi(await listPlans(app.deps.db)));
@@ -43,7 +46,7 @@ export const cyclePlanRoutes: FastifyPluginAsync = async (app) => {
     return toApi(plan);
   });
 
-  app.post('/cycle-plans', { preHandler: requireActor }, async (request, reply) => {
+  app.post('/cycle-plans', { preHandler: requirePlanner }, async (request, reply) => {
     const input = parseOrThrow(createCyclePlanInputSchema, request.body);
     let source = null;
     if (input.copyFromId) {
@@ -68,7 +71,7 @@ export const cyclePlanRoutes: FastifyPluginAsync = async (app) => {
     return reply.status(201).send(toApi(plan));
   });
 
-  app.patch('/cycle-plans/:id', { preHandler: requireActor }, async (request) => {
+  app.patch('/cycle-plans/:id', { preHandler: requirePlanner }, async (request) => {
     const id = parseIdParam(request.params);
     const input = parseOrThrow(updateCyclePlanInputSchema, request.body);
     const plan = await updatePlanMeta(auditContext(request), id, input);
@@ -76,7 +79,7 @@ export const cyclePlanRoutes: FastifyPluginAsync = async (app) => {
     return toApi(plan);
   });
 
-  app.delete('/cycle-plans/:id', { preHandler: requireActor }, async (request) => {
+  app.delete('/cycle-plans/:id', { preHandler: requirePlanner }, async (request) => {
     const id = parseIdParam(request.params);
     const plans = await listPlans(app.deps.db);
     const plan = plans.find((candidate) => candidate._id.equals(id));
@@ -91,7 +94,7 @@ export const cyclePlanRoutes: FastifyPluginAsync = async (app) => {
     return { deleted: true };
   });
 
-  app.post('/cycle-plans/:id/activate', { preHandler: requireActor }, async (request) => {
+  app.post('/cycle-plans/:id/activate', { preHandler: requirePlanner }, async (request) => {
     const id = parseIdParam(request.params);
     return toApi(await activatePlan(auditContext(request), id));
   });
@@ -110,7 +113,11 @@ export const cyclePlanRoutes: FastifyPluginAsync = async (app) => {
     const taskInfo = new Map(
       tasks.map((task) => [
         task._id.toHexString(),
-        { name: task.name, roomName: roomNames.get(task.roomId.toHexString()) ?? null, durationMinutes: task.durationMinutes },
+        {
+          name: task.name,
+          roomName: roomNames.get(task.roomId.toHexString()) ?? null,
+          durationMinutes: task.durationMinutes,
+        },
       ]),
     );
     const [before, after] = await Promise.all([
@@ -126,19 +133,20 @@ export const cyclePlanRoutes: FastifyPluginAsync = async (app) => {
     };
   });
 
-  app.post('/cycle-plans/:id/apply-proposal', { preHandler: requireActor }, async (request) => {
+  app.post('/cycle-plans/:id/apply-proposal', { preHandler: requirePlanner }, async (request) => {
     const id = parseIdParam(request.params);
     return toApi(await applyProposal(auditContext(request), id));
   });
 
-  app.post('/cycle-plans/:id/discard', { preHandler: requireActor }, async (request) => {
+  app.post('/cycle-plans/:id/discard', { preHandler: requirePlanner }, async (request) => {
     const id = parseIdParam(request.params);
     return toApi(await discardProposal(auditContext(request), id));
   });
 
-  app.put('/cycle-plans/:id/slots', { preHandler: requireActor }, async (request) => {
+  app.put('/cycle-plans/:id/slots', { preHandler: requirePlanner }, async (request) => {
     const id = parseIdParam(request.params);
     const input = parseOrThrow(putSlotsInputSchema, request.body);
+    const query = parseOrThrow(putSlotsQuerySchema, request.query);
     if (!(await findPlanById(app.deps.db, id))) throw notFound('cycle plan');
 
     const slots = slotsToDocs(input.slots);
@@ -147,8 +155,23 @@ export const cyclePlanRoutes: FastifyPluginAsync = async (app) => {
       throw new HttpError(422, 'invalid_plan', 'Plan violates hard rules', validation);
     }
 
-    const plan = await replaceSlots(auditContext(request), id, slots);
+    const ctx = auditContext(request);
+    const plan = await replaceSlots(ctx, id, slots);
     if (!plan) throw notFound('cycle plan');
-    return { plan: toApi(plan), warnings: validation.warnings, summary: validation.summary };
+    const synchronized =
+      query.sync === 'true' && plan.active
+        ? await replaceUpcomingOccurrences(
+            { ...ctx, source: 'system' },
+            plan,
+            randomUUID(),
+            'plan_update',
+          )
+        : null;
+    return {
+      plan: toApi(plan),
+      warnings: validation.warnings,
+      summary: validation.summary,
+      synchronized,
+    };
   });
 };

@@ -5,6 +5,7 @@ import {
   today,
   type CompletionResponse,
   type CompletionRow,
+  type DeviationsResponse,
   type IntervalsResponse,
   type StatsGroupBy,
   type UserWorkload,
@@ -269,4 +270,73 @@ export async function intervalStats(db: Db, now: Date, count: number): Promise<I
       a.name.localeCompare(b.name, 'nl'),
   );
   return { rows };
+}
+
+export async function deviationStats(db: Db, now: Date, count: number): Promise<DeviationsResponse> {
+  const { settings, cycles } = await scope(db, now, count);
+  if (cycles.length === 0) return { rows: [] };
+
+  const grouped = await occurrencesCollection(db)
+    .aggregate<{
+      _id: ObjectId;
+      name: string;
+      completions: number;
+      averagePlanningShiftDays: number;
+      averageCompletionDelayDays: number;
+      early: number;
+      onTime: number;
+      late: number;
+    }>([
+      {
+        $match: {
+          cycleId: { $in: cycles.map((cycle) => cycle._id) },
+          status: 'done',
+          completedAt: { $ne: null },
+        },
+      },
+      {
+        $set: {
+          planningShiftDays: {
+            $dateDiff: {
+              startDate: { $ifNull: ['$plannedDate', '$date'] },
+              endDate: '$date',
+              unit: 'day',
+              timezone: settings.timezone,
+            },
+          },
+          completionDelayDays: {
+            $dateDiff: {
+              startDate: '$date',
+              endDate: '$completedAt',
+              unit: 'day',
+              timezone: settings.timezone,
+            },
+          },
+        },
+      },
+      {
+        $group: {
+          _id: '$taskId',
+          name: { $max: '$taskNameSnapshot' },
+          completions: { $sum: 1 },
+          averagePlanningShiftDays: { $avg: '$planningShiftDays' },
+          averageCompletionDelayDays: { $avg: '$completionDelayDays' },
+          early: { $sum: { $cond: [{ $lt: ['$completionDelayDays', 0] }, 1, 0] } },
+          onTime: { $sum: { $cond: [{ $eq: ['$completionDelayDays', 0] }, 1, 0] } },
+          late: { $sum: { $cond: [{ $gt: ['$completionDelayDays', 0] }, 1, 0] } },
+        },
+      },
+    ])
+    .toArray();
+
+  return {
+    rows: grouped
+      .map(({ _id, ...row }) => ({ taskId: _id.toHexString(), ...row }))
+      .sort(
+        (a, b) =>
+          Math.abs(b.averageCompletionDelayDays) - Math.abs(a.averageCompletionDelayDays) ||
+          Math.abs(b.averagePlanningShiftDays) - Math.abs(a.averagePlanningShiftDays) ||
+          a.name.localeCompare(b.name, 'nl'),
+      ),
+  };
 }

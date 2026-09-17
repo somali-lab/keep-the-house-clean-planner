@@ -1,5 +1,5 @@
 import type { IntervalRow, StatsGroupBy, UserWorkload, WorkloadCycle } from '@huishoudplanner/shared';
-import { ChartColumnBig, CircleCheck, Clock, Hourglass, ListChecks, Scale, Trash2, TrendingUp } from 'lucide-react';
+import { CalendarClock, ChartColumnBig, CircleCheck, Clock, Hourglass, ListChecks, Scale, Trash2, TrendingUp } from 'lucide-react';
 import { useId, useState, type ReactNode } from 'react';
 import { EmptyState } from '@/components/EmptyState';
 import { NativeSelect } from '@/components/NativeSelect';
@@ -10,7 +10,8 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { useRooms, useTasks, useUsers } from '../../api/queries.ts';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
-import { useCompletion, useIntervals, useResetStatistics, useWorkload } from './api.ts';
+import { useProfile } from '../../identity/index.ts';
+import { useCompletion, useDeviations, useIntervals, useResetStatistics, useWorkload } from './api.ts';
 import { statsTableClass } from './ChartFrame.tsx';
 import { FairnessBars, type FairnessRow } from './FairnessBars.tsx';
 import { formatDays, formatFactor, formatMinutes, formatNumber, formatPercent, MAX_SERIES } from './scale.ts';
@@ -33,6 +34,19 @@ function intervalVerdict(row: IntervalRow): { key: MessageKey; warn: boolean } {
   if (row.deviation >= LESS_OFTEN) return { key: 'stats.intervals.lessOften', warn: true };
   if (row.deviation <= MORE_OFTEN) return { key: 'stats.intervals.moreOften', warn: false };
   return { key: 'stats.intervals.asIntended', warn: false };
+}
+
+function deviationVerdict(row: { completions: number; averagePlanningShiftDays: number; averageCompletionDelayDays: number }): MessageKey {
+  if (row.completions < 2) return 'stats.deviations.tooFew';
+  if (Math.abs(row.averagePlanningShiftDays) >= 0.75) return 'stats.deviations.replan';
+  if (row.averageCompletionDelayDays >= 0.75) return 'stats.deviations.planLater';
+  if (row.averageCompletionDelayDays <= -0.75) return 'stats.deviations.planEarlier';
+  return 'stats.deviations.onTime';
+}
+
+function signedDays(value: number): string {
+  const sign = value > 0 ? '+' : '';
+  return `${sign}${formatDays(value)}`;
 }
 
 const sectionCardClass = 'flex flex-col gap-5 rounded-2xl border bg-card p-6 text-card-foreground shadow-sm';
@@ -72,9 +86,11 @@ export function StatsPage() {
   const [groupBy, setGroupBy] = useState<StatsGroupBy>('task');
   const [confirmReset, setConfirmReset] = useState(false);
   const [resetDone, setResetDone] = useState(false);
+  const { profile } = useProfile();
   const workload = useWorkload(cycles);
   const completion = useCompletion(cycles, groupBy);
   const intervals = useIntervals(cycles);
+  const deviations = useDeviations(cycles);
   const users = useUsers();
   const tasks = useTasks();
   const rooms = useRooms();
@@ -116,16 +132,18 @@ export function StatsPage() {
           ))}
         </NativeSelect>
       </div>
-      <Button
-        type="button"
-        variant="outline"
-        className="text-destructive hover:text-destructive"
-        disabled={resetStatistics.isPending}
-        onClick={() => setConfirmReset(true)}
-      >
-        <Trash2 aria-hidden="true" />
-        {t('stats.reset')}
-      </Button>
+      {profile?.role === 'admin' && (
+        <Button
+          type="button"
+          variant="outline"
+          className="text-destructive hover:text-destructive"
+          disabled={resetStatistics.isPending}
+          onClick={() => setConfirmReset(true)}
+        >
+          <Trash2 aria-hidden="true" />
+          {t('stats.reset')}
+        </Button>
+      )}
     </div>
   );
 
@@ -151,7 +169,7 @@ export function StatsPage() {
   }
 
   const cycleList: WorkloadCycle[] = workload.data.cycles;
-  const refreshing = workload.isFetching || completion.isFetching || intervals.isFetching;
+  const refreshing = workload.isFetching || completion.isFetching || intervals.isFetching || deviations.isFetching;
 
   // People in a fixed order (creation order from the users list), so colors follow the person.
   const orderedUserIds = [
@@ -399,6 +417,45 @@ export function StatsPage() {
           ) : (
             <p className="rounded-xl border border-dashed px-4 py-3 text-sm text-muted-foreground">
               {intervals.isPending ? t('app.loading') : t('stats.intervals.none')}
+            </p>
+          )}
+        </section>
+
+        <section className={sectionCardClass} aria-labelledby={`${idPrefix}-deviations`}>
+          <SectionHeader
+            id={`${idPrefix}-deviations`}
+            icon={<CalendarClock aria-hidden="true" />}
+            title={t('stats.deviations')}
+            explainer={t('stats.deviations.explainer')}
+          />
+          {deviations.data && deviations.data.rows.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className={statsTableClass}>
+                <thead>
+                  <tr>
+                    <th scope="col">{t('stats.groupBy.task')}</th>
+                    <th scope="col">{t('stats.deviations.measurements')}</th>
+                    <th scope="col">{t('stats.deviations.planning')}</th>
+                    <th scope="col">{t('stats.deviations.execution')}</th>
+                    <th scope="col">{t('stats.deviations.advice')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deviations.data.rows.map((row) => (
+                    <tr key={row.taskId}>
+                      <th scope="row">{taskWithRoom(row.taskId, row.name)}</th>
+                      <td>{row.completions}</td>
+                      <td>{signedDays(row.averagePlanningShiftDays)}</td>
+                      <td>{signedDays(row.averageCompletionDelayDays)}</td>
+                      <td className="text-muted-foreground">{t(deviationVerdict(row))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="rounded-xl border border-dashed px-4 py-3 text-sm text-muted-foreground">
+              {deviations.isPending ? t('app.loading') : t('stats.deviations.none')}
             </p>
           )}
         </section>

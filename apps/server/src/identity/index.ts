@@ -1,3 +1,4 @@
+import type { UserRole } from '@huishoudplanner/shared';
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { ObjectId } from 'mongodb';
 import type { AuditContext } from '../audit/context.ts';
@@ -12,6 +13,7 @@ import { HttpError } from '../http/errors.ts';
 export interface Actor {
   actorId: ObjectId;
   source: 'ui' | 'api';
+  role: UserRole;
 }
 
 declare module 'fastify' {
@@ -36,6 +38,7 @@ const identity: FastifyPluginAsync = async (app) => {
     request.actor = {
       actorId: user._id,
       source: request.headers[CLIENT_HEADER] === 'web' ? 'ui' : 'api',
+      role: user.role,
     };
   });
 };
@@ -48,6 +51,27 @@ export async function requireActor(request: FastifyRequest): Promise<void> {
   if (!request.actor) {
     throw new HttpError(400, 'profile_required', 'An active profile is required (X-Profile-Id)');
   }
+}
+
+const LEVEL: Record<UserRole, number> = { member: 0, planner: 1, admin: 2 };
+
+function requireLevel(request: FastifyRequest, minimum: UserRole): void {
+  if (!request.actor) {
+    throw new HttpError(400, 'profile_required', 'An active profile is required (X-Profile-Id)');
+  }
+  if (LEVEL[request.actor.role] < LEVEL[minimum]) {
+    throw new HttpError(403, 'permission_denied', `The ${minimum} role is required`);
+  }
+}
+
+/** Planning, task and optimisation changes. */
+export async function requirePlanner(request: FastifyRequest): Promise<void> {
+  requireLevel(request, 'planner');
+}
+
+/** Household configuration, people and destructive maintenance. */
+export async function requireAdmin(request: FastifyRequest): Promise<void> {
+  requireLevel(request, 'admin');
 }
 
 /** Audit context for the current request; throws profile_required without an actor. */

@@ -27,9 +27,9 @@ describe('UsersSection', () => {
     const section = await screen.findByRole('region', { name: 'Personen' });
     await waitFor(() => expect(within(section).getAllByRole('listitem')).toHaveLength(3));
     const rows = within(section).getAllByRole('listitem').map((li) => li.textContent);
-    expect(rows[0]).toContain('Anna60 min doordeweeks · 120 min weekend');
+    expect(rows[0]).toContain('AnnaBeheerder60 min doordeweeks · 120 min weekend');
     expect(rows[0]).toContain('max. 480 min per werkdag · 480 min per weekenddag');
-    expect(rows[2]).toContain('Logé(inactief)0 min doordeweeks · 30 min weekend');
+    expect(rows[2]).toContain('LogéHuisgenoot(inactief)0 min doordeweeks · 30 min weekend');
   });
 
   it('edits name, availability, budget and active state', async () => {
@@ -39,6 +39,7 @@ describe('UsersSection', () => {
     const form = screen.getByRole('form', { name: 'Bewerk Bram de Vries' });
 
     fireEvent.change(within(form).getByLabelText('Naam'), { target: { value: '  Bram  ' } });
+    fireEvent.change(within(form).getByLabelText('Rol'), { target: { value: 'planner' } });
     fireEvent.click(within(form).getByLabelText('zaterdag'));
     fireEvent.click(within(form).getByLabelText('maandag'));
     fireEvent.change(within(form).getByLabelText('Budget weekend (zaterdag en zondag samen)'), { target: { value: '90' } });
@@ -54,6 +55,7 @@ describe('UsersSection', () => {
           {
             name: 'Bram',
             color: BRAM.color,
+            role: 'planner',
             unavailableWeekdays: [1, 6],
             dailyBudgetMinutes: { weekday: 60, weekend: 90 },
             maxDailyMinutes: { weekday: 45, weekend: 75 },
@@ -84,6 +86,7 @@ describe('UsersSection', () => {
           {
             name: 'Chris',
             color: '#16a34a',
+            role: 'member',
             unavailableWeekdays: [],
             dailyBudgetMinutes: { weekday: 60, weekend: 120 },
             maxDailyMinutes: { weekday: 60, weekend: 120 },

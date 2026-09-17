@@ -4,7 +4,7 @@ This repository uses [Release Please](https://github.com/googleapis/release-plea
 
 ## Release flow
 
-1. Merge changes into `main` using a Conventional Commit title.
+1. Merge changes into `main` using a Conventional Commit title and the release-note rules below.
 2. The **Release** workflow opens or updates a release pull request.
 3. Review the generated version and `CHANGELOG.md`, then merge the release pull request.
 4. The workflow creates the Git tag and GitHub Release.
@@ -26,6 +26,22 @@ Release Please derives the next semantic version from Conventional Commit messag
 - `chore: update dependencies` is included in the next release notes but does not create a release by itself.
 
 Scopes are optional, for example `feat(planner): add keyboard controls`.
+
+### Several release-note entries in one pull request
+
+One pull request per commit is not required. Prefer one coherent pull request and squash-merge it. When that pull request contains several changes that each deserve their own release-note entry, add this block to the pull-request description before merging:
+
+```text
+BEGIN_COMMIT_OVERRIDE
+fix(planner): keep the week overview in sync
+feat(planner): filter scheduled tasks by person
+test(planner): cover plan synchronization regressions
+END_COMMIT_OVERRIDE
+```
+
+List every intended changelog entry as a valid Conventional Commit line. Release Please then uses those lines instead of reducing the pull request to only its squash title. Review the generated release pull request and confirm that each line appears under the configured section in `CHANGELOG.md`.
+
+Commit overrides only work for squash merges. Do not use a plain merge for a pull request that depends on this block. If the pull request has one release-note entry, a Conventional Commit pull-request title is sufficient.
 
 ## Published image tags
 

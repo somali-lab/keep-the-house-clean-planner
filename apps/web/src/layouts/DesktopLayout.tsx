@@ -1,3 +1,4 @@
+import type { UserRole } from '@huishoudplanner/shared';
 import type { ReactElement } from 'react';
 import { useState } from 'react';
 import {
@@ -17,6 +18,7 @@ import {
 } from 'lucide-react';
 import { NavLink, Navigate, Route, Routes } from 'react-router';
 import { AppLogo } from '@/components/AppLogo';
+import { AppVersion } from '@/components/AppVersion';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { ThemeSwitcher } from '@/components/ThemeSwitcher';
 import { Button } from '@/components/ui/button';
@@ -31,7 +33,7 @@ import { StatsPage } from '../features/stats/StatsPage.tsx';
 import { TasksPage } from '../features/tasks/TasksPage.tsx';
 import { WeekPage } from '../features/week/WeekPage.tsx';
 import { t, type MessageKey } from '../i18n/nl.ts';
-import { ProfileSwitcher } from '../identity/index.ts';
+import { ProfileSwitcher, useProfile } from '../identity/index.ts';
 import { PlaceholderPage } from './PlaceholderPage.tsx';
 
 /** Implemented pages; other sections show a placeholder until their task is done. */
@@ -47,20 +49,24 @@ const PAGES: Partial<Record<string, ReactElement>> = {
   '/settings': <SettingsPage />,
 };
 
-const SECTIONS: { path: string; label: MessageKey; icon: LucideIcon }[] = [
-  { path: '/week', label: 'nav.week', icon: CalendarRange },
-  { path: '/planner', label: 'nav.planner', icon: CalendarDays },
-  { path: '/tasks', label: 'nav.tasks', icon: ListChecks },
-  { path: '/distribution', label: 'nav.distribution', icon: Scale },
-  { path: '/statistics', label: 'nav.stats', icon: ChartColumnBig },
-  { path: '/history', label: 'nav.history', icon: History },
-  { path: '/ai', label: 'nav.ai', icon: Sparkles },
-  { path: '/ai-prompts', label: 'nav.aiPrompts', icon: MessageSquareCode },
-  { path: '/settings', label: 'nav.settings', icon: Settings },
+const SECTIONS: { path: string; label: MessageKey; icon: LucideIcon; minimumRole: UserRole }[] = [
+  { path: '/week', label: 'nav.week', icon: CalendarRange, minimumRole: 'member' },
+  { path: '/planner', label: 'nav.planner', icon: CalendarDays, minimumRole: 'planner' },
+  { path: '/tasks', label: 'nav.tasks', icon: ListChecks, minimumRole: 'planner' },
+  { path: '/distribution', label: 'nav.distribution', icon: Scale, minimumRole: 'member' },
+  { path: '/statistics', label: 'nav.stats', icon: ChartColumnBig, minimumRole: 'member' },
+  { path: '/history', label: 'nav.history', icon: History, minimumRole: 'member' },
+  { path: '/ai', label: 'nav.ai', icon: Sparkles, minimumRole: 'planner' },
+  { path: '/ai-prompts', label: 'nav.aiPrompts', icon: MessageSquareCode, minimumRole: 'planner' },
+  { path: '/settings', label: 'nav.settings', icon: Settings, minimumRole: 'admin' },
 ];
+
+const ROLE_LEVEL: Record<UserRole, number> = { member: 0, planner: 1, admin: 2 };
 
 export function DesktopLayout({ onSwitchLayout }: { onSwitchLayout: () => void }) {
   const [collapsed, setCollapsed] = useState(false);
+  const { profile } = useProfile();
+  const sections = SECTIONS.filter((section) => profile && ROLE_LEVEL[profile.role] >= ROLE_LEVEL[section.minimumRole]);
 
   return (
     <div
@@ -90,7 +96,7 @@ export function DesktopLayout({ onSwitchLayout }: { onSwitchLayout: () => void }
         </Button>
         <nav aria-label={t('nav.main')} className="flex-1">
           <ul className="flex flex-col gap-1">
-            {SECTIONS.map(({ path, label, icon: Icon }) => (
+            {sections.map(({ path, label, icon: Icon }) => (
               <li key={path}>
                 <NavLink
                   to={path}
@@ -110,8 +116,9 @@ export function DesktopLayout({ onSwitchLayout }: { onSwitchLayout: () => void }
             ))}
           </ul>
         </nav>
-        <div className="mt-auto">
+        <div className="mt-auto grid gap-2">
           <ProfileSwitcher sidebar compact={collapsed} />
+          <AppVersion className="block text-center" />
         </div>
       </aside>
       <div className="flex min-w-0 flex-col">
@@ -131,7 +138,7 @@ export function DesktopLayout({ onSwitchLayout }: { onSwitchLayout: () => void }
         </header>
         <main className="mx-auto w-full max-w-[96rem] flex-1 px-6 py-7">
           <Routes>
-            {SECTIONS.map((section) => (
+            {sections.map((section) => (
               <Route
                 key={section.path}
                 path={section.path}

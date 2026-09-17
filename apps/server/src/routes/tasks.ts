@@ -3,17 +3,21 @@ import {
   createTaskInputSchema,
   objectIdSchema,
   updateTaskInputSchema,
+  fromDayKey,
+  today,
 } from '@huishoudplanner/shared';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { removeTaskFromPlans } from '../data/cyclePlans.ts';
 import { findRoomById } from '../data/rooms.ts';
-import { bulkUpdateRoomTasks, createTask, deleteTask, listTasks, updateTask } from '../data/tasks.ts';
+import { getSettings } from '../data/settings.ts';
+import { updateUpcomingOccurrenceRoomSnapshots } from '../data/occurrences.ts';
+import { bulkUpdateRoomTasks, createTask, deleteTask, findTaskById, listTasks, updateTask } from '../data/tasks.ts';
 import { assertTaskReferences } from '../domain/tasks.ts';
 import { notFound, parseOrThrow } from '../http/errors.ts';
 import { booleanQuery, parseIdParam, toObjectId } from '../http/params.ts';
 import { toApi } from '../http/serialize.ts';
-import { auditContext, requireActor } from '../identity/index.ts';
+import { auditContext, requirePlanner } from '../identity/index.ts';
 
 const listQuerySchema = z.object({
   roomId: objectIdSchema.optional(),
@@ -30,7 +34,7 @@ export const taskRoutes: FastifyPluginAsync = async (app) => {
     return toApi(tasks);
   });
 
-  app.post('/tasks', { preHandler: requireActor }, async (request, reply) => {
+  app.post('/tasks', { preHandler: requirePlanner }, async (request, reply) => {
     const input = parseOrThrow(createTaskInputSchema, request.body);
     const roomId = toObjectId(input.roomId);
     const defaultAssigneeId = toObjectId(input.defaultAssigneeId);
@@ -47,8 +51,9 @@ export const taskRoutes: FastifyPluginAsync = async (app) => {
     return reply.status(201).send(toApi(task));
   });
 
-  app.patch('/tasks/:id', { preHandler: requireActor }, async (request) => {
+  app.patch('/tasks/:id', { preHandler: requirePlanner }, async (request) => {
     const id = parseIdParam(request.params);
+    const before = await findTaskById(app.deps.db, id);
     const input = parseOrThrow(updateTaskInputSchema, request.body);
     const { roomId, defaultAssigneeId, ...rest } = input;
     const patch = {
@@ -59,10 +64,25 @@ export const taskRoutes: FastifyPluginAsync = async (app) => {
     await assertTaskReferences(app.deps.db, patch);
     const task = await updateTask(auditContext(request), id, patch);
     if (!task) throw notFound('task');
+    if (before && roomId !== undefined && !before.roomId.equals(task.roomId)) {
+      const [room, settings] = await Promise.all([
+        findRoomById(app.deps.db, task.roomId),
+        getSettings(app.deps.db),
+      ]);
+      if (room && settings) {
+        await updateUpcomingOccurrenceRoomSnapshots(
+          app.deps.db,
+          task._id,
+          fromDayKey(today(settings.timezone, app.deps.clock.now()), settings.timezone),
+          room._id,
+          room.name,
+        );
+      }
+    }
     return toApi(task);
   });
 
-  app.delete('/tasks/:id', { preHandler: requireActor }, async (request) => {
+  app.delete('/tasks/:id', { preHandler: requirePlanner }, async (request) => {
     const id = parseIdParam(request.params);
     const ctx = auditContext(request);
     await removeTaskFromPlans(ctx, id);
@@ -71,7 +91,7 @@ export const taskRoutes: FastifyPluginAsync = async (app) => {
     return { deleted: true };
   });
 
-  app.post('/rooms/:id/tasks/bulk', { preHandler: requireActor }, async (request) => {
+  app.post('/rooms/:id/tasks/bulk', { preHandler: requirePlanner }, async (request) => {
     const roomId = parseIdParam(request.params);
     const input = parseOrThrow(bulkRoomTasksInputSchema, request.body);
     if (!(await findRoomById(app.deps.db, roomId))) throw notFound('room');

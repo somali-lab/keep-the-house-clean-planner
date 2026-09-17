@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { getSettings } from '../data/settings.ts';
 import { buildExport, importData, parseImport } from '../domain/transfer.ts';
 import { HttpError, parseOrThrow } from '../http/errors.ts';
-import { auditContext, requireActor } from '../identity/index.ts';
+import { auditContext, requireAdmin } from '../identity/index.ts';
 
 /** A household's full history easily exceeds Fastify's default 1 MB body limit. */
 const IMPORT_BODY_LIMIT = 200 * 1024 * 1024;
@@ -28,7 +28,7 @@ export const transferRoutes: FastifyPluginAsync = async (app) => {
   });
 
   /** Replaces all data with the file. Requires `mode=replace&confirm=true`; validates everything first. */
-  app.post('/import/json', { preHandler: requireActor, bodyLimit: IMPORT_BODY_LIMIT }, async (request) => {
+  app.post('/import/json', { preHandler: requireAdmin, bodyLimit: IMPORT_BODY_LIMIT }, async (request) => {
     const query = parseOrThrow(importQuerySchema, request.query);
     if (query.confirm !== 'true') {
       throw new HttpError(400, 'confirmation_required', 'Importing replaces all data; add confirm=true');

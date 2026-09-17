@@ -72,3 +72,20 @@ export interface IntervalRow {
 export interface IntervalsResponse {
   rows: IntervalRow[];
 }
+
+export interface DeviationRow {
+  taskId: string;
+  name: string;
+  completions: number;
+  /** Average number of calendar days between the original and current planned date. */
+  averagePlanningShiftDays: number;
+  /** Average number of calendar days between the current planned date and completion. */
+  averageCompletionDelayDays: number;
+  early: number;
+  onTime: number;
+  late: number;
+}
+
+export interface DeviationsResponse {
+  rows: DeviationRow[];
+}

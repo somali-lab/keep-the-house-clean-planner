@@ -3,6 +3,7 @@ import { systemContext } from './audit/context.ts';
 import { fixedClock, systemClock } from './clock.ts';
 import { ConfigError, loadConfig } from './config.ts';
 import { connectMongo, ensureIndexes } from './data/db.ts';
+import { backfillOccurrenceRoomSnapshots } from './data/occurrences.ts';
 import { seed } from './domain/seed.ts';
 import { startScheduler } from './jobs/nightly.ts';
 
@@ -20,6 +21,7 @@ async function main(): Promise<void> {
 
   const { client, db } = await connectMongo(config.mongoUrl);
   await ensureIndexes(db);
+  await backfillOccurrenceRoomSnapshots(db);
 
   const clock = config.fakeNow ? fixedClock(config.fakeNow) : systemClock;
   const app = await buildApp({ db, config, clock });

@@ -8,6 +8,7 @@ export function makeUser(overrides: Partial<User> & Pick<User, '_id' | 'name'>):
   return {
     color: '#2563eb',
     active: true,
+    role: 'member',
     unavailableWeekdays: [],
     dailyBudgetMinutes: { weekday: 60, weekend: 120 },
     maxDailyMinutes: { weekday: 480, weekend: 480 },
@@ -17,7 +18,7 @@ export function makeUser(overrides: Partial<User> & Pick<User, '_id' | 'name'>):
   };
 }
 
-export const ANNA = makeUser({ _id: 'a00000000000000000000001', name: 'Anna', color: '#2563eb' });
+export const ANNA = makeUser({ _id: 'a00000000000000000000001', name: 'Anna', color: '#2563eb', role: 'admin' });
 export const BRAM = makeUser({ _id: 'b00000000000000000000002', name: 'Bram de Vries', color: '#db2777' });
 
 export type RouteHandler = unknown | ((init: RequestInit | undefined, url: string) => unknown);

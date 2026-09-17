@@ -62,8 +62,34 @@ describe('app shell', () => {
     expect(nav).toHaveTextContent('AI-prompts');
     expect(nav).toHaveTextContent('Instellingen');
     expect(screen.getByRole('group', { name: 'Kleurthema' })).toBeInTheDocument();
-    expect(screen.getByLabelText(`Versie ${APP_VERSION}`)).toHaveTextContent(`v${APP_VERSION}`);
+    const version = screen.getByLabelText(`Versie ${APP_VERSION}`);
+    expect(version).toHaveTextContent(`v${APP_VERSION}`);
+    fireEvent.click(screen.getByRole('button', { name: 'Menu inklappen' }));
+    expect(version.closest('.visually-hidden')).toBeNull();
     expect(await screen.findByRole('heading', { name: '12-daags overzicht' })).toBeInTheDocument();
+  });
+
+  it('shows household members only the read and execution sections', async () => {
+    setViewportWidth(1280);
+    const member = { ...BRAM, role: 'member' as const };
+    mockApi({
+      '/api/users': [ANNA, member],
+      '/api/tasks': [],
+      '/api/rooms': [],
+      '/api/settings': makeSettings(),
+      '/api/cycle-plans': [],
+      '/api/occurrences': [],
+    });
+    storeProfile(member._id);
+    render(<App queryClient={testQueryClient()} />);
+
+    const nav = await screen.findByRole('navigation', { name: 'Hoofdmenu' });
+    expect(nav).toHaveTextContent('Week');
+    expect(nav).toHaveTextContent('Verdeling');
+    expect(nav).toHaveTextContent('Statistiek');
+    expect(nav).not.toHaveTextContent('Planner');
+    expect(nav).not.toHaveTextContent('Taken');
+    expect(nav).not.toHaveTextContent('Instellingen');
   });
 
   it('can switch to the other layout via the menu', async () => {

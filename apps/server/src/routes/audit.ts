@@ -4,7 +4,7 @@ import { ObjectId } from 'mongodb';
 import { clearAuditEntries, findAuditEntries, type AuditEntryDoc } from '../data/auditLog.ts';
 import { HttpError, parseOrThrow } from '../http/errors.ts';
 import { toApi } from '../http/serialize.ts';
-import { requireActor } from '../identity/index.ts';
+import { requireAdmin } from '../identity/index.ts';
 
 const OBJECT_ID_RE = /^[0-9a-f]{24}$/;
 
@@ -50,7 +50,7 @@ export const auditRoutes: FastifyPluginAsync = async (app) => {
 
   // Deliberately not audited: recording this action would immediately make a
   // user-requested empty history non-empty again.
-  app.delete('/audit', { preHandler: requireActor }, async () => ({
+  app.delete('/audit', { preHandler: requireAdmin }, async () => ({
     deleted: await clearAuditEntries(app.deps.db),
   }));
 };

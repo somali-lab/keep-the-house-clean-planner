@@ -1,4 +1,4 @@
-import type { CompletionResponse, IntervalsResponse, StatsGroupBy, WorkloadResponse } from '@huishoudplanner/shared';
+import type { CompletionResponse, DeviationsResponse, IntervalsResponse, StatsGroupBy, WorkloadResponse } from '@huishoudplanner/shared';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/index.ts';
 
@@ -25,6 +25,14 @@ export function useIntervals(cycles: number) {
   return useQuery({
     queryKey: ['stats', 'intervals', cycles],
     queryFn: async () => (await api.get<IntervalsResponse>(`/api/stats/intervals?cycles=${cycles}`)).data,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useDeviations(cycles: number) {
+  return useQuery({
+    queryKey: ['stats', 'deviations', cycles],
+    queryFn: async () => (await api.get<DeviationsResponse>(`/api/stats/deviations?cycles=${cycles}`)).data,
     placeholderData: keepPreviousData,
   });
 }

@@ -1,5 +1,4 @@
 import { cn } from '@/lib/utils';
-import { AppVersion } from '@/components/AppVersion';
 import { format, t } from '../i18n/nl.ts';
 import { Avatar } from './Avatar.tsx';
 import { useProfile } from './ProfileProvider.tsx';
@@ -56,7 +55,6 @@ export function ProfileSwitcher({ sidebar = false, compact = false }: { sidebar?
         <strong data-testid="current-profile" className="block truncate font-bold">
           {profile?.name}
         </strong>
-        <AppVersion className="mt-1 block" />
       </span>
     </div>
   );

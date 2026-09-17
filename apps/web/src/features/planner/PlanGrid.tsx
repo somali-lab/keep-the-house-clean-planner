@@ -18,6 +18,8 @@ interface WeekTableProps {
   tasks: Task[];
   rooms: Room[];
   users: User[];
+  showUnassigned: boolean;
+  showQuickDays: boolean;
   summary: PlanSummary;
   onRemoveSlot(index: number): void;
 }
@@ -32,6 +34,8 @@ export function WeekTable({
   tasks,
   rooms,
   users,
+  showUnassigned,
+  showQuickDays,
   summary,
   onRemoveSlot,
 }: WeekTableProps) {
@@ -47,7 +51,7 @@ export function WeekTable({
 
   return (
     <section
-      className="overflow-hidden rounded-2xl border bg-card shadow-sm"
+      className="relative overflow-hidden rounded-2xl border bg-card shadow-sm"
       aria-label={format('planner.week', { n: weekNumber })}
     >
       <div className="flex flex-wrap items-center gap-3 border-b bg-secondary/25 px-4 py-3">
@@ -69,16 +73,21 @@ export function WeekTable({
           />
         </label>
       </div>
-      <div className="border-b bg-background/50 px-3 py-2.5">
-        <p className="mb-2 text-xs font-semibold text-muted-foreground">
-          {t('planner.quickPlanHint')}
-        </p>
-        <div className="grid grid-cols-7 gap-1.5">
-          {WEEKDAYS_MONDAY_FIRST.map((weekday) => (
-            <QuickDayTarget key={weekday} weekIndex={weekIndex} weekday={weekday} />
-          ))}
+      {showQuickDays && (
+        <div
+          className="absolute inset-x-0 top-0 z-30 border-b bg-card/95 px-3 py-2.5 shadow-md backdrop-blur"
+          role="status"
+        >
+          <p className="mb-2 text-xs font-semibold text-primary">
+            {t('planner.quickPlanHint')}
+          </p>
+          <div className="grid grid-cols-7 gap-1.5">
+            {WEEKDAYS_MONDAY_FIRST.map((weekday) => (
+              <QuickDayTarget key={weekday} weekIndex={weekIndex} weekday={weekday} />
+            ))}
+          </div>
         </div>
-      </div>
+      )}
       <div className="grid gap-2 border-b bg-secondary/15 px-3 py-3 sm:grid-cols-2">
         {users.map((user) => {
           const weekdayMinutes = minutesFor(user._id, [1, 2, 3, 4, 5]);
@@ -127,7 +136,7 @@ export function WeekTable({
                   {t(`weekdayLong.${weekday}` as MessageKey)}
                 </h3>
                 <div className="grid gap-1.5">
-                  {[...users, null].map((user) => (
+                  {[...users, ...(showUnassigned ? [null] : [])].map((user) => (
                     <Cell
                       key={user?._id ?? 'any'}
                       weekIndex={weekIndex}
@@ -161,10 +170,12 @@ export function WeekTable({
               </span>
             );
           })}
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-accent px-3 py-1 font-semibold text-accent-foreground">
-            <Users className="size-3" aria-hidden="true" />
-            {format('planner.weekUnassigned', { minutes: weekTotals.unassignedMinutes })}
-          </span>
+          {showUnassigned && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-accent px-3 py-1 font-semibold text-accent-foreground">
+              <Users className="size-3" aria-hidden="true" />
+              {format('planner.weekUnassigned', { minutes: weekTotals.unassignedMinutes })}
+            </span>
+          )}
         </p>
       )}
     </section>

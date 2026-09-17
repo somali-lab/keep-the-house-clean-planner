@@ -18,6 +18,7 @@ import {
 } from '../data/occurrences.ts';
 import { getSettings } from '../data/settings.ts';
 import { findTaskById, setTaskLastCompletedAt } from '../data/tasks.ts';
+import { findRoomById } from '../data/rooms.ts';
 import { findUserById } from '../data/users.ts';
 import { HttpError, notFound } from '../http/errors.ts';
 import { toApi } from '../http/serialize.ts';
@@ -227,6 +228,7 @@ export async function createAdhocOccurrence(ctx: AuditContext, input: AdhocOccur
       { field: 'taskId', message: task ? 'inactive_task' : 'unknown_task' },
     ]);
   }
+  const room = await findRoomById(ctx.db, task.roomId);
   const assigneeId = input.assigneeId === undefined ? task.defaultAssigneeId : input.assigneeId;
   if (assigneeId) {
     const user = await findUserById(ctx.db, assigneeId);
@@ -261,6 +263,8 @@ export async function createAdhocOccurrence(ctx: AuditContext, input: AdhocOccur
     skipReason: null,
     durationMinutesSnapshot: task.durationMinutes,
     taskNameSnapshot: task.name,
+    roomIdSnapshot: task.roomId,
+    roomNameSnapshot: room?.name ?? null,
     origin: 'adhoc',
     createdAt: now,
     updatedAt: now,

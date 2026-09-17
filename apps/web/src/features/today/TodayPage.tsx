@@ -139,7 +139,7 @@ export function TodayPage({ now }: { now?: Date }) {
                 <OccurrenceItem
                   key={occ._id}
                   occurrence={occ}
-                  roomName={roomByTask.get(occ.taskId)}
+                  roomName={occ.roomNameSnapshot ?? roomByTask.get(occ.taskId)}
                   users={activeUsers}
                   profileId={profileId}
                   onComplete={(completedBy) =>

@@ -46,6 +46,7 @@ import {
   overviewDays,
   parseDayDropId,
   parseOccurrenceDragId,
+  shortDay,
   weekRangeLabel,
   weekdayName,
 } from './weekModel.ts';
@@ -323,7 +324,7 @@ function DayColumn({ dayKey, isToday, period, items, users, roomByTask, onComple
               key={occ._id}
               occ={occ}
               users={users}
-              roomName={roomByTask.get(occ.taskId) ?? t('tasks.unknownRoom')}
+              roomName={occ.roomNameSnapshot ?? roomByTask.get(occ.taskId) ?? t('tasks.unknownRoom')}
               onComplete={onComplete}
               onUncomplete={onUncomplete}
             />
@@ -428,6 +429,11 @@ function WeekItem({
                 <TriangleAlert aria-hidden="true" />
                 {t('today.overdue')}
               </Badge>
+            )}
+            {occ.movedFrom && (
+              <span className="text-xs font-semibold text-muted-foreground">
+                {format('week.movedFrom', { date: shortDay(occ.movedFrom) })}
+              </span>
             )}
           </span>
         </span>

@@ -13,7 +13,7 @@ test('AI with the mock provider: propose, review the changes, apply, and see it 
   const review = page.getByRole('region', { name: 'Voorstel bekijken' });
   // Both tasks four times, against an empty active plan.
   await expect(review).toContainText('8 toegevoegd, 0 verwijderd, 0 verplaatst, 0 ongewijzigd');
-  await expect(review.getByRole('table', { name: 'Wijzigingen per dag ten opzichte van het actieve plan' })).toContainText('Afwassen');
+  await expect(review).toContainText('Toegevoegd: Afwassen');
 
   await review.getByRole('button', { name: 'Toepassen' }).click();
   await expect(page.getByText('Voorstel toegepast. Het plan is actief.')).toBeVisible();

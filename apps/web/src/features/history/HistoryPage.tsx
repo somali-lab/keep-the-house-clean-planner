@@ -21,6 +21,7 @@ import { useRooms, useSettings, useTasks, useUsers } from '../../api/queries.ts'
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
 import { getLocale } from '../../i18n/runtime.ts';
 import { Avatar } from '../../identity/Avatar.tsx';
+import { useProfile } from '../../identity/index.ts';
 import { usePlans } from '../planner/api.ts';
 import { useAuditFeed, useClearAudit, type AuditFilters } from './api.ts';
 import { collectOccurrenceNames, describeEntry, entityName, SYSTEM_ACTOR_ID, type NameLookup } from './describe.ts';
@@ -49,6 +50,7 @@ export function HistoryPage() {
   const toDay = params.get('to') ?? '';
   const panelMode = Boolean(entity && entityId);
   const [confirmClear, setConfirmClear] = useState(false);
+  const { profile } = useProfile();
 
   const filters: AuditFilters = {
     entity,
@@ -131,7 +133,7 @@ export function HistoryPage() {
                 {t('history.all')}
               </Link>
             </Button>
-          ) : (
+          ) : profile?.role === 'admin' ? (
             <Button
               type="button"
               variant="outline"
@@ -142,7 +144,7 @@ export function HistoryPage() {
               <Trash2 aria-hidden="true" />
               {t('history.clear')}
             </Button>
-          )
+          ) : undefined
         }
       />
 

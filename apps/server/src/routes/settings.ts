@@ -5,7 +5,7 @@ import { intervalKeysInUse } from '../data/tasks.ts';
 import { removedIntervalKeys } from '../domain/intervals.ts';
 import { HttpError, notFound, parseOrThrow } from '../http/errors.ts';
 import { toApi } from '../http/serialize.ts';
-import { auditContext, requireActor } from '../identity/index.ts';
+import { auditContext, requireAdmin } from '../identity/index.ts';
 
 export const settingsRoutes: FastifyPluginAsync = async (app) => {
   app.get('/settings', async () => {
@@ -14,7 +14,7 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
     return toApi(settings);
   });
 
-  app.patch('/settings', { preHandler: requireActor }, async (request) => {
+  app.patch('/settings', { preHandler: requireAdmin }, async (request) => {
     const input = parseOrThrow(updateSettingsInputSchema, request.body);
     const current = await getSettings(app.deps.db);
     if (!current) throw notFound('settings');

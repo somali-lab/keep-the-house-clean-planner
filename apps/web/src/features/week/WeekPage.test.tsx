@@ -109,7 +109,7 @@ describe('WeekPage', () => {
     expect(screen.getByTestId('day:2026-09-13')).toHaveAttribute('data-period', 'past');
     expect(screen.getByTestId('day:2026-09-16')).toHaveAttribute('data-period', 'today');
     expect(screen.getByTestId('day:2026-09-24')).toHaveAttribute('data-period', 'future');
-    expect(within(screen.getByTestId('day:2026-09-17')).queryByText(/verplaatst van/)).not.toBeInTheDocument();
+    expect(within(screen.getByTestId('day:2026-09-17')).getByText('verplaatst van wo 16 sep')).toBeInTheDocument();
     expect(within(screen.getByTestId('day:2026-09-17')).getByLabelText('15 min')).toBeInTheDocument();
     expect(within(screen.getByTestId('day:2026-09-17')).getByText('Woonkamer')).toBeInTheDocument();
     expect(within(screen.getByTestId('day:2026-09-17')).getByText('BV')).toBeInTheDocument();

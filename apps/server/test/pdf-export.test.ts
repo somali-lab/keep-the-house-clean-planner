@@ -137,6 +137,7 @@ describe('GET /api/export/pdf', { timeout: 60_000 }, () => {
     expect(text).toContain('Thema: Keuken');
     expect(text).toContain('Keuken'); // room of "Ramen lappen"
     expect(text).toContain('Persoon 1');
+    expect(text.match(/Persoon 1/g)?.length).toBeGreaterThan(1);
     expect(text).toContain('Wie dan ook');
     expect(text).toContain('Gegenereerd op 14-09-2026 08:00');
     expect(text).toContain('Afvinken op papier wordt niet automatisch in de app verwerkt.');

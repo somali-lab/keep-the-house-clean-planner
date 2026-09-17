@@ -1,4 +1,4 @@
-import type { CompletionResponse, IntervalsResponse, OccurrenceView, WorkloadResponse } from '@huishoudplanner/shared';
+import type { CompletionResponse, DeviationsResponse, IntervalsResponse, OccurrenceView, WorkloadResponse } from '@huishoudplanner/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { findActivePlan } from '../src/data/cyclePlans.ts';
 import type { UserDoc } from '../src/data/users.ts';
@@ -13,7 +13,7 @@ import { createTestApp, type TestApp } from './helpers/testApp.ts';
  * Actions in cycle 0:
  *   A 14 Sep done by P1 · A 21 Sep done by P2 · A 28 Sep skipped · A 5 Oct left open
  *   B 17 Sep done by P2 · B 1 Oct done by P2 (on 2 Oct)
- *   C 26 Sep done by P1 (claims it: assignee becomes P1)
+ *   C moved from 26 to 27 Sep, then done by P1 (claims it: assignee becomes P1)
  * Cycle 1: A 12 Oct done by P1; the rest still to come.
  * Statistics are asked on Wednesday 14 Oct 2026.
  */
@@ -86,7 +86,8 @@ beforeAll(async () => {
   await act(task.A, '2026-09-14', '2026-09-14T18:00:00.000Z', { action: 'complete' });
   await act(task.B, '2026-09-17', '2026-09-17T18:00:00.000Z', { action: 'complete', completedBy: P2 });
   await act(task.A, '2026-09-21', '2026-09-21T18:00:00.000Z', { action: 'complete', completedBy: P2 });
-  await act(task.C, '2026-09-26', '2026-09-26T10:00:00.000Z', { action: 'complete' });
+  await act(task.C, '2026-09-26', '2026-09-25T10:00:00.000Z', { action: 'reschedule', date: '2026-09-27' });
+  await act(task.C, '2026-09-27', '2026-09-27T10:00:00.000Z', { action: 'complete' });
   await act(task.A, '2026-09-28', '2026-09-28T18:00:00.000Z', { action: 'skip', reason: 'ziek' });
   await act(task.B, '2026-10-01', '2026-10-02T09:00:00.000Z', { action: 'complete', completedBy: P2 });
   await act(task.A, '2026-10-12', '2026-10-12T18:00:00.000Z', { action: 'complete' });
@@ -202,5 +203,43 @@ describe('GET /api/stats/intervals', () => {
     expect(rows[0]!.deviation).toBe(2);
     expect(rows[1]!.deviation).toBeCloseTo(15 / 14, 10);
     expect(rows[2]!.deviation).toBeNull();
+  });
+});
+
+describe('GET /api/stats/deviations', () => {
+  it('separates plan changes from early or late completion', async () => {
+    const { rows } = await get<DeviationsResponse>('/api/stats/deviations?cycles=2');
+    expect(rows).toEqual([
+      {
+        taskId: task.B,
+        name: 'Keuken dweilen',
+        completions: 2,
+        averagePlanningShiftDays: 0,
+        averageCompletionDelayDays: 0.5,
+        early: 0,
+        onTime: 1,
+        late: 1,
+      },
+      {
+        taskId: task.C,
+        name: 'Ramen lappen',
+        completions: 1,
+        averagePlanningShiftDays: 1,
+        averageCompletionDelayDays: 0,
+        early: 0,
+        onTime: 1,
+        late: 0,
+      },
+      {
+        taskId: task.A,
+        name: 'Badkamer schoonmaken',
+        completions: 3,
+        averagePlanningShiftDays: 0,
+        averageCompletionDelayDays: 0,
+        early: 0,
+        onTime: 3,
+        late: 0,
+      },
+    ]);
   });
 });

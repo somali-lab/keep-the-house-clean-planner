@@ -5,7 +5,7 @@ import { countTasksInRoom } from '../data/tasks.ts';
 import { HttpError, notFound, parseOrThrow } from '../http/errors.ts';
 import { activeQuerySchema, parseIdParam } from '../http/params.ts';
 import { toApi } from '../http/serialize.ts';
-import { auditContext, requireActor } from '../identity/index.ts';
+import { auditContext, requireAdmin } from '../identity/index.ts';
 
 export const roomRoutes: FastifyPluginAsync = async (app) => {
   app.get('/rooms', async (request) => {
@@ -13,13 +13,13 @@ export const roomRoutes: FastifyPluginAsync = async (app) => {
     return toApi(await listRooms(app.deps.db, query));
   });
 
-  app.post('/rooms', { preHandler: requireActor }, async (request, reply) => {
+  app.post('/rooms', { preHandler: requireAdmin }, async (request, reply) => {
     const input = parseOrThrow(createRoomInputSchema, request.body);
     const room = await createRoom(auditContext(request), input);
     return reply.status(201).send(toApi(room));
   });
 
-  app.patch('/rooms/:id', { preHandler: requireActor }, async (request) => {
+  app.patch('/rooms/:id', { preHandler: requireAdmin }, async (request) => {
     const id = parseIdParam(request.params);
     const input = parseOrThrow(updateRoomInputSchema, request.body);
     const room = await updateRoom(auditContext(request), id, input);
@@ -27,7 +27,7 @@ export const roomRoutes: FastifyPluginAsync = async (app) => {
     return toApi(room);
   });
 
-  app.delete('/rooms/:id', { preHandler: requireActor }, async (request) => {
+  app.delete('/rooms/:id', { preHandler: requireAdmin }, async (request) => {
     const id = parseIdParam(request.params);
     if (!(await findRoomById(app.deps.db, id))) throw notFound('room');
     const taskCount = await countTasksInRoom(app.deps.db, id);

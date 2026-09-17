@@ -5,9 +5,15 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useRooms, useSettings, useTasks } from '../../api/queries.ts';
 import { format, t } from '../../i18n/nl.ts';
+import { useProfile } from '../../identity/index.ts';
 import { useOccurrences } from '../today/api.ts';
 import { addDaysKey, dayKeyInZone } from '../today/todayModel.ts';
-import { compactDate, datedWeekday, taskOverviewRows } from './taskOverviewModel.ts';
+import {
+  compactDate,
+  datedWeekday,
+  taskOverviewRows,
+  type TaskOverviewRow,
+} from './taskOverviewModel.ts';
 
 type WeekRange = 1 | 2 | 4;
 const WEEK_RANGES: WeekRange[] = [1, 2, 4];
@@ -16,24 +22,31 @@ export function MobileTasksPage({ now }: { now?: Date }) {
   const settings = useSettings();
   const tasks = useTasks();
   const rooms = useRooms();
+  const { profile } = useProfile();
   const [weeks, setWeeks] = useState<WeekRange>(2);
   const [hiddenRoomIds, setHiddenRoomIds] = useState<Set<string>>(() => new Set());
   const from = dayKeyInZone(now ?? new Date(), settings.data?.timezone ?? 'Europe/Amsterdam');
   const to = addDaysKey(from, weeks * 7 - 1);
   const occurrences = useOccurrences(from, to, settings.isSuccess);
-  const rows = useMemo(
-    () =>
+  const rows = useMemo(() => {
+    const relevant = (occurrences.data ?? []).filter(
+      (occurrence) => occurrence.assigneeId === profile?._id || occurrence.assigneeId === null,
+    );
+    const build = (assigneeId: string | null) =>
       taskOverviewRows(
-        occurrences.data ?? [],
+        relevant.filter((occurrence) => occurrence.assigneeId === assigneeId),
         tasks.data ?? [],
         rooms.data ?? [],
         t('tasks.unknownRoom'),
-      ),
-    [occurrences.data, rooms.data, tasks.data],
-  );
-  const visibleRows = rows.filter((row) => row.roomId === null || !hiddenRoomIds.has(row.roomId));
+      );
+    return { mine: build(profile?._id ?? ''), unassigned: build(null) };
+  }, [occurrences.data, profile?._id, rooms.data, tasks.data]);
+  const filterRooms = (items: TaskOverviewRow[]) =>
+    items.filter((row) => row.roomId === null || !hiddenRoomIds.has(row.roomId));
+  const visible = { mine: filterRooms(rows.mine), unassigned: filterRooms(rows.unassigned) };
+  const allRows = [...rows.mine, ...rows.unassigned];
   const usedRooms = (rooms.data ?? [])
-    .filter((room) => rows.some((row) => row.roomId === room._id))
+    .filter((room) => allRows.some((row) => row.roomId === room._id))
     .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
 
   if (settings.isPending || tasks.isPending || rooms.isPending || occurrences.isPending) {
@@ -120,43 +133,59 @@ export function MobileTasksPage({ now }: { now?: Date }) {
         </fieldset>
       </div>
 
-      {visibleRows.length === 0 ? (
+      {visible.mine.length + visible.unassigned.length === 0 ? (
         <div className="grid place-items-center gap-2 rounded-2xl border border-dashed px-4 py-10 text-center text-muted-foreground">
           <ListChecks className="size-7" aria-hidden="true" />
           <p>{t('mobileTasks.empty')}</p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
-          <table className="w-full table-fixed border-collapse text-left text-sm">
-            <thead className="bg-muted/70 text-xs text-muted-foreground">
-              <tr>
-                <th scope="col" className="w-[22%] px-1.5 py-2.5 font-semibold sm:px-2">
-                  {t('tasks.field.room')}
-                </th>
-                <th scope="col" className="w-[26%] px-2 py-2.5 font-semibold sm:px-3">
-                  {t('mobileTasks.task')}
-                </th>
-                <th scope="col" className="w-[52%] px-1.5 py-2.5 font-semibold sm:px-2">
-                  {t('mobileTasks.dates')}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleRows.map((row) => (
-                <tr key={row.taskId} className="border-t align-top first:border-t-0">
-                  <td className="px-1.5 py-3 text-muted-foreground break-words sm:px-2">{row.roomName}</td>
-                  <th scope="row" className="px-2 py-3 font-semibold break-words sm:px-3">
-                    {row.taskName}
-                  </th>
-                  <td className="px-1.5 py-3 leading-relaxed text-muted-foreground break-words sm:px-2">
-                    {row.dates.map(datedWeekday).join(', ')}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="grid gap-5">
+          <TaskTable title={t('mobileTasks.mine')} rows={visible.mine} />
+          <TaskTable title={t('mobileTasks.unassigned')} rows={visible.unassigned} />
         </div>
       )}
+    </section>
+  );
+}
+
+function TaskTable({ title, rows }: { title: string; rows: TaskOverviewRow[] }) {
+  if (rows.length === 0) return null;
+  return (
+    <section className="grid gap-2" aria-label={title}>
+      <h2 className="px-1 text-lg font-extrabold">{title}</h2>
+      <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+        <table className="w-full table-fixed border-collapse text-left text-sm">
+          <thead className="bg-muted/70 text-xs text-muted-foreground">
+            <tr>
+              <th scope="col" className="w-[22%] px-1.5 py-2.5 font-semibold sm:px-2">
+                {t('tasks.field.room')}
+              </th>
+              <th scope="col" className="w-[26%] px-2 py-2.5 font-semibold sm:px-3">
+                {t('mobileTasks.task')}
+              </th>
+              <th scope="col" className="w-[52%] px-1.5 py-2.5 font-semibold sm:px-2">
+                {t('mobileTasks.dates')}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr
+                key={`${row.taskId}:${row.roomId ?? row.roomName}`}
+                className="border-t align-top first:border-t-0"
+              >
+                <td className="px-1.5 py-3 text-muted-foreground break-words sm:px-2">{row.roomName}</td>
+                <th scope="row" className="px-2 py-3 font-semibold break-words sm:px-3">
+                  {row.taskName}
+                </th>
+                <td className="px-1.5 py-3 leading-relaxed text-muted-foreground break-words sm:px-2">
+                  {row.dates.map(datedWeekday).join(', ')}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }

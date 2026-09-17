@@ -22,6 +22,8 @@ export const occurrenceSchema = z
     skipReason: z.string().nullable(),
     durationMinutesSnapshot: z.number().int().min(1),
     taskNameSnapshot: z.string(),
+    roomIdSnapshot: objectIdSchema.nullable().optional(),
+    roomNameSnapshot: z.string().nullable().optional(),
     origin: occurrenceOriginSchema,
   })
   .extend(timestampsSchema.shape);

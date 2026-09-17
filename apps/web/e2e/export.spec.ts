@@ -7,6 +7,7 @@ test('export two weeks as PDF: the file name names both weeks and there are two 
   await generateCycles(app, anna);
 
   await openAs(page, app, anna, '/planner');
+  await page.getByRole('button', { name: 'Plannen beheren' }).click();
   await page.getByRole('button', { name: 'PDF exporteren' }).click();
   const dialog = page.getByRole('dialog', { name: 'PDF exporteren' });
   await dialog.getByLabel('2 weken').check();

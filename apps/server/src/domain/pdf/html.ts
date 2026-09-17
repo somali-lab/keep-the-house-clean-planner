@@ -62,7 +62,7 @@ const STYLES = `
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
   body { font-family: "DejaVu Sans", "Liberation Sans", Arial, sans-serif; font-size: 9pt; color: #000; background: #fff; }
-  .page { page-break-after: always; break-after: page; display: flex; flex-direction: column; min-height: 100%; }
+  .page { page-break-after: always; break-after: page; display: flex; flex-direction: column; min-height: 277mm; }
   .page:last-child { page-break-after: auto; break-after: auto; }
   .side-by-side { display: flex; gap: 6mm; }
   .side-by-side .week { flex: 1; min-width: 0; }
@@ -70,6 +70,9 @@ const STYLES = `
   header p { margin: 0 0 1mm; }
   .theme { font-weight: bold; }
   table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 2mm; }
+  .week table { height: 230mm; }
+  .side-by-side .week table { height: 150mm; }
+  .week tbody tr { height: 14.285%; }
   th, td { border: 0.3mm solid #000; padding: 1mm; vertical-align: top; text-align: left; }
   thead th { font-weight: bold; }
   tbody th { width: 22mm; font-weight: bold; }
@@ -77,13 +80,14 @@ const STYLES = `
   .box { display: inline-block; flex: none; width: 5mm; height: 5mm; border: 0.4mm solid #000; }
   .task { font-weight: bold; }
   .room { font-style: italic; }
+  .assignee { display: block; margin-top: 0.4mm; font-size: 8pt; }
   .minutes { margin-top: 1mm; font-size: 8pt; border-top: 0.2mm dashed #000; padding-top: 0.5mm; }
-  footer { margin-top: 3mm; font-size: 8pt; display: flex; justify-content: space-between; gap: 4mm; }
+  footer { margin-top: auto; padding-top: 3mm; font-size: 8pt; display: flex; justify-content: space-between; gap: 4mm; }
 `;
 
 function lineHtml(line: SheetLine): string {
   const room = line.room ? ` <span class="room">${escapeHtml(line.room)}</span>` : '';
-  return `<div class="line"><span class="box"></span><span><span class="task">${escapeHtml(line.name)}</span>${room}</span></div>`;
+  return `<div class="line"><span class="box"></span><span><span class="task">${escapeHtml(line.name)}</span>${room}<span class="assignee">${escapeHtml(line.assignee)}</span></span></div>`;
 }
 
 function cellHtml(lines: SheetLine[], totals: boolean): string {
@@ -125,7 +129,7 @@ export function scheduleDocument(sheets: WeekSheet[], options: RenderOptions): s
   const language = options.language ?? 'nl';
   const week = (sheet: WeekSheet) => `<section class="week">${weekHeader(sheet, language)}${tableHtml(sheet, options.totals, language)}</section>`;
   if (options.orientation === 'landscape' && sheets.length === 2) {
-    return document(`<div class="page"><div class="side-by-side">${sheets.map(week).join('')}</div>${footer(options.generatedAt, copy(language).paperNote, language)}</div>`, '', language);
+    return document(`<div class="page"><div class="side-by-side">${sheets.map(week).join('')}</div>${footer(options.generatedAt, copy(language).paperNote, language)}</div>`, '.page { min-height: 190mm; }', language);
   }
   return document(sheets.map((sheet) => `<div class="page">${week(sheet)}${footer(options.generatedAt, copy(language).paperNote, language)}</div>`).join(''), '', language);
 }

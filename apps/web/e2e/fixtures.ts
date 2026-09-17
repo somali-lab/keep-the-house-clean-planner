@@ -78,22 +78,44 @@ export async function occurrencesOn(app: AppServer, date: string) {
 }
 
 async function centre(locator: Locator) {
-  await locator.scrollIntoViewIfNeeded();
-  const box = await locator.boundingBox();
-  if (!box) throw new Error('element has no bounding box');
-  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  let lastError: unknown;
+  // A query refetch can replace a card between resolving the locator and scrolling it.
+  // Re-resolve the locator instead of making drag tests depend on render timing.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await expect(locator).toBeVisible();
+      await locator.scrollIntoViewIfNeeded();
+      const box = await locator.boundingBox();
+      if (box) return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError ?? new Error('element has no bounding box');
 }
 
 /** Mouse drag in small steps, so dnd-kit's pointer sensor (5 px) activates and sees the target. */
 export async function mouseDrag(page: Page, source: Locator, target: Locator) {
-  const from = await centre(source);
-  await page.mouse.move(from.x, from.y);
-  await page.mouse.down();
-  await page.mouse.move(from.x + 10, from.y + 10, { steps: 5 });
-  const to = await centre(target);
-  await page.mouse.move(to.x, to.y, { steps: 20 });
-  await page.mouse.move(to.x + 1, to.y + 1);
-  await page.mouse.up();
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const from = await centre(source);
+      await page.mouse.move(from.x, from.y);
+      await page.mouse.down();
+      await page.mouse.move(from.x + 12, from.y + 12, { steps: 5 });
+      await expect(source).toHaveClass(/opacity-60/, { timeout: 2_000 });
+      const to = await centre(target);
+      await page.mouse.move(to.x, to.y, { steps: 20 });
+      await page.mouse.move(to.x + 1, to.y + 1);
+      await expect(target).toHaveClass(/is-over/, { timeout: 2_000 });
+      await page.mouse.up();
+      return;
+    } catch (error) {
+      lastError = error;
+      await page.mouse.up();
+    }
+  }
+  throw lastError;
 }
 
 /** Touch drag through the Chrome DevTools protocol: hold (dnd-kit touch delay is 200 ms), then move. */
