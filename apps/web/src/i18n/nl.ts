@@ -686,6 +686,19 @@ export const nl = {
   'stats.intervals.asIntended': 'Ongeveer zoals bedoeld ({factor})',
   'stats.intervals.tooFew': 'Te weinig voltooiingen om te beoordelen',
   'stats.intervals.none': 'Geen taken in deze periode.',
+  'stats.deviations': 'Afwijking tussen planning en uitvoering',
+  'stats.deviations.explainer':
+    'Planverschuiving vergelijkt de oorspronkelijke met de actuele plandatum. Uitvoering vergelijkt de actuele plandatum met de dag waarop de taak is afgerond.',
+  'stats.deviations.measurements': 'Metingen',
+  'stats.deviations.planning': 'Planverschuiving',
+  'stats.deviations.execution': 'Uitvoering',
+  'stats.deviations.advice': 'Suggestie',
+  'stats.deviations.tooFew': 'Nog te weinig metingen voor een advies',
+  'stats.deviations.replan': 'Deze taak wordt vaak verplaatst; heroverweeg de vaste dag',
+  'stats.deviations.planLater': 'Plan deze taak mogelijk later',
+  'stats.deviations.planEarlier': 'Plan deze taak mogelijk eerder',
+  'stats.deviations.onTime': 'Planning en uitvoering sluiten op elkaar aan',
+  'stats.deviations.none': 'Nog geen voltooide taken in deze periode.',
 } as const satisfies Partial<Record<MessageKey, string>>;
 
 function message(key: MessageKey): string {

@@ -1,5 +1,6 @@
 import type {
   CompletionResponse,
+  DeviationsResponse,
   IntervalsResponse,
   WorkloadResponse,
 } from '@huishoudplanner/shared';
@@ -117,6 +118,41 @@ const INTERVALS: IntervalsResponse = {
   ],
 };
 
+const DEVIATIONS: DeviationsResponse = {
+  rows: [
+    {
+      taskId: 't2',
+      name: 'Keuken dweilen',
+      completions: 4,
+      averagePlanningShiftDays: 0,
+      averageCompletionDelayDays: 1.25,
+      early: 0,
+      onTime: 2,
+      late: 2,
+    },
+    {
+      taskId: 't1',
+      name: 'Badkamer schoonmaken',
+      completions: 5,
+      averagePlanningShiftDays: 1,
+      averageCompletionDelayDays: 0,
+      early: 0,
+      onTime: 5,
+      late: 0,
+    },
+    {
+      taskId: 't3',
+      name: 'Ramen lappen',
+      completions: 1,
+      averagePlanningShiftDays: 0,
+      averageCompletionDelayDays: 0,
+      early: 0,
+      onTime: 1,
+      late: 0,
+    },
+  ],
+};
+
 function setup(workload: WorkloadResponse = WORKLOAD) {
   storeProfile(ANNA._id);
   return mockApi({
@@ -135,6 +171,7 @@ function setup(workload: WorkloadResponse = WORKLOAD) {
     '/api/stats/completion': (_init: RequestInit | undefined, url: string) =>
       COMPLETION(new URL(url, 'http://x').searchParams.get('groupBy') ?? 'task'),
     '/api/stats/intervals': INTERVALS,
+    '/api/stats/deviations': DEVIATIONS,
     'DELETE /api/stats': {
       deletedOccurrences: 12,
       resetOccurrences: 4,
@@ -271,9 +308,22 @@ describe('StatsPage', () => {
           '/api/stats/workload?cycles=8',
           '/api/stats/completion?cycles=8&groupBy=task',
           '/api/stats/intervals?cycles=8',
+          '/api/stats/deviations?cycles=8',
         ]),
       ),
     );
+  });
+
+  it('shows planning shifts separately from completion delays and suggests improvements', async () => {
+    setup();
+    renderWithProviders(<StatsPage />);
+    const heading = await screen.findByRole('heading', { name: 'Afwijking tussen planning en uitvoering' });
+    const rows = within(heading.closest('section')!).getAllByRole('row').slice(1);
+    expect(rows.map((row) => row.textContent)).toEqual([
+      'Keuken dweilenKeuken40,0 dagen+1,3 dagenPlan deze taak mogelijk later',
+      'Badkamer schoonmakenBadkamer5+1,0 dagen0,0 dagenDeze taak wordt vaak verplaatst; heroverweeg de vaste dag',
+      'Ramen lappenBadkamer10,0 dagen0,0 dagenNog te weinig metingen voor een advies',
+    ]);
   });
 
   it('explains when there is nothing to show yet', async () => {
