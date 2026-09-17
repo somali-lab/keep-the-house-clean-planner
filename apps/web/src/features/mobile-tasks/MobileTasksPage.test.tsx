@@ -76,6 +76,38 @@ describe('taskOverviewRows', () => {
       },
     ]);
   });
+
+  it('keeps historical room snapshots separate after a task moves rooms', () => {
+    const movedTask = { ...VACUUM, roomId: BEDROOM._id };
+    const rows = taskOverviewRows(
+      [
+        makeOccurrence({
+          _id: 'old-room',
+          taskId: VACUUM._id,
+          taskNameSnapshot: VACUUM.name,
+          date: '2026-09-16',
+          roomIdSnapshot: LIVING._id,
+          roomNameSnapshot: LIVING.name,
+        }),
+        makeOccurrence({
+          _id: 'new-room',
+          taskId: VACUUM._id,
+          taskNameSnapshot: VACUUM.name,
+          date: '2026-09-23',
+          roomIdSnapshot: BEDROOM._id,
+          roomNameSnapshot: BEDROOM.name,
+        }),
+      ],
+      [movedTask],
+      [LIVING, BEDROOM],
+      'Onbekend',
+    );
+
+    expect(rows.map((row) => [row.roomName, row.dates])).toEqual([
+      ['Slaapkamer', ['2026-09-23']],
+      ['Woonkamer', ['2026-09-16']],
+    ]);
+  });
 });
 
 describe('MobileTasksPage', () => {

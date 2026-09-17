@@ -19,6 +19,7 @@ import {
 } from '../data/occurrences.ts';
 import { getSettings, type SettingsDoc } from '../data/settings.ts';
 import { listTasks } from '../data/tasks.ts';
+import { listRooms } from '../data/rooms.ts';
 import { HttpError } from '../http/errors.ts';
 
 export function isInVacation(dayKey: string, ranges: VacationRange[]): boolean {
@@ -72,7 +73,9 @@ export async function generateCycle(
 
   const now = ctx.clock.now();
   const todayKey = today(settings.timezone, now);
-  const tasks = new Map((await listTasks(ctx.db)).map((t) => [t._id.toHexString(), t]));
+  const [taskDocs, rooms] = await Promise.all([listTasks(ctx.db), listRooms(ctx.db)]);
+  const tasks = new Map(taskDocs.map((task) => [task._id.toHexString(), task]));
+  const roomNames = new Map(rooms.map((room) => [room._id.toHexString(), room.name]));
   const docs: OccurrenceDoc[] = [];
   for (const slot of plan.slots) {
     const task = tasks.get(slot.taskId.toHexString());
@@ -95,6 +98,8 @@ export async function generateCycle(
       skipReason: null,
       durationMinutesSnapshot: task.durationMinutes,
       taskNameSnapshot: task.name,
+      roomIdSnapshot: task.roomId,
+      roomNameSnapshot: roomNames.get(task.roomId.toHexString()) ?? null,
       origin: 'generated',
       createdAt: now,
       updatedAt: now,

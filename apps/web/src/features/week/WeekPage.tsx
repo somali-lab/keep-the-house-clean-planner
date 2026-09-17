@@ -323,7 +323,7 @@ function DayColumn({ dayKey, isToday, period, items, users, roomByTask, onComple
               key={occ._id}
               occ={occ}
               users={users}
-              roomName={roomByTask.get(occ.taskId) ?? t('tasks.unknownRoom')}
+              roomName={occ.roomNameSnapshot ?? roomByTask.get(occ.taskId) ?? t('tasks.unknownRoom')}
               onComplete={onComplete}
               onUncomplete={onUncomplete}
             />

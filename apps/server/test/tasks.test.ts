@@ -1,6 +1,11 @@
 import { DEFAULT_INTERVALS } from '@huishoudplanner/shared';
+import { ObjectId } from 'mongodb';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { COLLECTIONS } from '../src/data/db.ts';
+import {
+  backfillOccurrenceRoomSnapshots,
+  insertOccurrencesIdempotent,
+} from '../src/data/occurrences.ts';
 import type { RoomDoc } from '../src/data/rooms.ts';
 import type { UserDoc } from '../src/data/users.ts';
 import { expectAudited } from './helpers/audit.ts';
@@ -141,6 +146,57 @@ describe('POST /api/tasks', () => {
 });
 
 describe('PATCH /api/tasks/:id', () => {
+  it('moves future open work to the new room while completed history keeps its old room', async () => {
+    const task = await newTask({ name: 'Kast opruimen' });
+    const taskId = new ObjectId(task._id);
+    const base = {
+      taskId,
+      cycleId: new ObjectId(),
+      planId: null,
+      assigneeId: p1._id,
+      statusBeforeCompletion: null,
+      completedBy: null,
+      skipReason: null,
+      durationMinutesSnapshot: 20,
+      taskNameSnapshot: task.name,
+      origin: 'generated',
+      createdAt: new Date('2026-09-01T08:00:00Z'),
+      updatedAt: new Date('2026-09-01T08:00:00Z'),
+    } as const;
+    const completedId = new ObjectId();
+    const upcomingId = new ObjectId();
+    await insertOccurrencesIdempotent(t.systemCtx(), [
+      {
+        ...base,
+        _id: completedId,
+        date: new Date('2026-09-14T22:00:00Z'),
+        plannedDate: new Date('2026-09-14T22:00:00Z'),
+        status: 'done',
+        completedAt: new Date('2026-09-15T08:00:00Z'),
+      },
+      {
+        ...base,
+        _id: upcomingId,
+        date: new Date('2026-09-17T22:00:00Z'),
+        plannedDate: new Date('2026-09-17T22:00:00Z'),
+        status: 'open',
+        completedAt: null,
+      },
+    ], { setup: true });
+
+    expect(await backfillOccurrenceRoomSnapshots(t.db)).toBe(2);
+    expect((await t.db.collection(COLLECTIONS.occurrences).findOne({ _id: completedId }))?.roomNameSnapshot).toBe('Badkamer');
+
+    expect((await patch(`/api/tasks/${task._id}`, { roomId: keuken._id.toHexString() })).statusCode).toBe(200);
+    const [completed, upcoming] = await Promise.all([
+      t.db.collection(COLLECTIONS.occurrences).findOne({ _id: completedId }),
+      t.db.collection(COLLECTIONS.occurrences).findOne({ _id: upcomingId }),
+    ]);
+    expect(completed?.roomNameSnapshot).toBe('Badkamer');
+    expect(upcoming?.roomNameSnapshot).toBe('Keuken');
+    expect(upcoming?.roomIdSnapshot).toEqual(keuken._id);
+  });
+
   it('audits old and new values of name, interval, duration and room', async () => {
     const task = await newTask();
     const { result, entries } = await expectAudited(

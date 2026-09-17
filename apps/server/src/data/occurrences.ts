@@ -23,6 +23,9 @@ export interface OccurrenceDoc {
   skipReason: string | null;
   durationMinutesSnapshot: number;
   taskNameSnapshot: string;
+  /** Room at the time this occurrence was planned; optional on pre-migration data. */
+  roomIdSnapshot?: ObjectId | null;
+  roomNameSnapshot?: string | null;
   origin: 'generated' | 'adhoc';
   createdAt: Date;
   updatedAt: Date;
@@ -42,6 +45,57 @@ export function findOccurrences(db: Db, filter: Filter<OccurrenceDoc>): Promise<
 
 export function countOccurrences(db: Db, filter: Filter<OccurrenceDoc> = {}): Promise<number> {
   return occurrencesCollection(db).countDocuments(filter);
+}
+
+/** Backfills room snapshots on occurrences created before room history was introduced. */
+export async function backfillOccurrenceRoomSnapshots(db: Db): Promise<number> {
+  const docs = await occurrencesCollection(db)
+    .find({
+      $or: [
+        { roomIdSnapshot: { $exists: false } },
+        { roomNameSnapshot: { $exists: false } },
+      ],
+    })
+    .toArray();
+  if (docs.length === 0) return 0;
+  const taskIds = [...new Map(docs.map((doc) => [doc.taskId.toHexString(), doc.taskId])).values()];
+  const tasks = await db.collection<{ _id: ObjectId; roomId: ObjectId }>(COLLECTIONS.tasks).find({ _id: { $in: taskIds } }).toArray();
+  const roomIds = [...new Map(tasks.map((task) => [task.roomId.toHexString(), task.roomId])).values()];
+  const rooms = await db.collection<{ _id: ObjectId; name: string }>(COLLECTIONS.rooms).find({ _id: { $in: roomIds } }).toArray();
+  const taskRoom = new Map(tasks.map((task) => [task._id.toHexString(), task.roomId]));
+  const roomName = new Map(rooms.map((room) => [room._id.toHexString(), room.name]));
+  const result = await occurrencesCollection(db).bulkWrite(
+    docs.map((doc) => {
+      const roomId = taskRoom.get(doc.taskId.toHexString()) ?? null;
+      return {
+        updateOne: {
+          filter: { _id: doc._id },
+          update: {
+            $set: {
+              roomIdSnapshot: roomId,
+              roomNameSnapshot: roomId ? (roomName.get(roomId.toHexString()) ?? null) : null,
+            },
+          },
+        },
+      };
+    }),
+  );
+  return result.modifiedCount;
+}
+
+/** A room move follows future open work while completed history keeps its snapshot. */
+export async function updateUpcomingOccurrenceRoomSnapshots(
+  db: Db,
+  taskId: ObjectId,
+  from: Date,
+  roomId: ObjectId,
+  roomName: string,
+): Promise<number> {
+  const result = await occurrencesCollection(db).updateMany(
+    { taskId, status: 'open', date: { $gte: from } },
+    { $set: { roomIdSnapshot: roomId, roomNameSnapshot: roomName } },
+  );
+  return result.modifiedCount;
 }
 
 /**

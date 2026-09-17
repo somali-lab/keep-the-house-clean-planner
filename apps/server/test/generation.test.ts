@@ -131,6 +131,7 @@ describe('generateCycle via nightly job', () => {
       status: 'open',
       origin: 'generated',
       taskNameSnapshot: 'Badkamer',
+      roomNameSnapshot: 'Badkamer',
     });
     const cycleAudit = await c.t.db
       .collection(COLLECTIONS.auditLog)
@@ -148,6 +149,8 @@ describe('generateCycle via nightly job', () => {
     const [occ] = await findOccurrences(c.t.db, {});
     expect(occ).toMatchObject({
       taskNameSnapshot: 'Badkamer',
+      roomNameSnapshot: 'Badkamer',
+      roomIdSnapshot: expect.any(ObjectId),
       durationMinutesSnapshot: 30,
       assigneeId: c.p2._id,
       planId: new ObjectId(c.planId),

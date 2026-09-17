@@ -52,6 +52,7 @@ describe('POST /api/occurrences (ad-hoc)', () => {
       origin: 'adhoc',
       planId: null,
       taskNameSnapshot: 'Ramen lappen',
+      roomNameSnapshot: 'Woonkamer',
       durationMinutesSnapshot: 60,
       isOverdue: false,
       movedFrom: null,

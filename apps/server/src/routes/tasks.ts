@@ -3,12 +3,16 @@ import {
   createTaskInputSchema,
   objectIdSchema,
   updateTaskInputSchema,
+  fromDayKey,
+  today,
 } from '@huishoudplanner/shared';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { removeTaskFromPlans } from '../data/cyclePlans.ts';
 import { findRoomById } from '../data/rooms.ts';
-import { bulkUpdateRoomTasks, createTask, deleteTask, listTasks, updateTask } from '../data/tasks.ts';
+import { getSettings } from '../data/settings.ts';
+import { updateUpcomingOccurrenceRoomSnapshots } from '../data/occurrences.ts';
+import { bulkUpdateRoomTasks, createTask, deleteTask, findTaskById, listTasks, updateTask } from '../data/tasks.ts';
 import { assertTaskReferences } from '../domain/tasks.ts';
 import { notFound, parseOrThrow } from '../http/errors.ts';
 import { booleanQuery, parseIdParam, toObjectId } from '../http/params.ts';
@@ -49,6 +53,7 @@ export const taskRoutes: FastifyPluginAsync = async (app) => {
 
   app.patch('/tasks/:id', { preHandler: requireActor }, async (request) => {
     const id = parseIdParam(request.params);
+    const before = await findTaskById(app.deps.db, id);
     const input = parseOrThrow(updateTaskInputSchema, request.body);
     const { roomId, defaultAssigneeId, ...rest } = input;
     const patch = {
@@ -59,6 +64,21 @@ export const taskRoutes: FastifyPluginAsync = async (app) => {
     await assertTaskReferences(app.deps.db, patch);
     const task = await updateTask(auditContext(request), id, patch);
     if (!task) throw notFound('task');
+    if (before && roomId !== undefined && !before.roomId.equals(task.roomId)) {
+      const [room, settings] = await Promise.all([
+        findRoomById(app.deps.db, task.roomId),
+        getSettings(app.deps.db),
+      ]);
+      if (room && settings) {
+        await updateUpcomingOccurrenceRoomSnapshots(
+          app.deps.db,
+          task._id,
+          fromDayKey(today(settings.timezone, app.deps.clock.now()), settings.timezone),
+          room._id,
+          room.name,
+        );
+      }
+    }
     return toApi(task);
   });
 

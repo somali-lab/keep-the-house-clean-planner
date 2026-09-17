@@ -22,9 +22,12 @@ export function taskOverviewRows(
 
   for (const occurrence of [...occurrences].sort((a, b) => a.date.localeCompare(b.date))) {
     const task = taskById.get(occurrence.taskId);
-    const roomId = task?.roomId ?? null;
-    const roomName = roomId ? (roomById.get(roomId)?.name ?? unknownRoom) : unknownRoom;
-    const row = grouped.get(occurrence.taskId) ?? {
+    const roomId = occurrence.roomIdSnapshot ?? task?.roomId ?? null;
+    const roomName =
+      occurrence.roomNameSnapshot ??
+      (roomId ? (roomById.get(roomId)?.name ?? unknownRoom) : unknownRoom);
+    const groupKey = `${occurrence.taskId}:${roomId ?? ''}:${roomName}`;
+    const row = grouped.get(groupKey) ?? {
       taskId: occurrence.taskId,
       taskName: task?.name ?? occurrence.taskNameSnapshot,
       roomId,
@@ -32,7 +35,7 @@ export function taskOverviewRows(
       dates: [],
     };
     if (!row.dates.includes(occurrence.date)) row.dates.push(occurrence.date);
-    grouped.set(occurrence.taskId, row);
+    grouped.set(groupKey, row);
   }
 
   return [...grouped.values()].sort(

@@ -170,7 +170,10 @@ function TaskTable({ title, rows }: { title: string; rows: TaskOverviewRow[] }) 
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.taskId} className="border-t align-top first:border-t-0">
+              <tr
+                key={`${row.taskId}:${row.roomId ?? row.roomName}`}
+                className="border-t align-top first:border-t-0"
+              >
                 <td className="px-1.5 py-3 text-muted-foreground break-words sm:px-2">{row.roomName}</td>
                 <th scope="row" className="px-2 py-3 font-semibold break-words sm:px-3">
                   {row.taskName}
