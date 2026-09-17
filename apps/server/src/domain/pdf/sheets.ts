@@ -21,6 +21,7 @@ import { HttpError } from '../../http/errors.ts';
 export interface SheetLine {
   name: string;
   room: string | null;
+  assignee: string;
   minutes: number;
 }
 
@@ -124,9 +125,11 @@ export async function buildWeekSheets(db: Db, fromWeek: string, weeks: number): 
       const dayKey = toDayKey(occ.date, tz);
       const day = days.find((d) => d.dayKey === dayKey);
       if (!day) continue;
-      day.cells[columnIndex(occ.assigneeId)]!.push({
+      const assignedColumn = columnIndex(occ.assigneeId);
+      day.cells[assignedColumn]!.push({
         name: occ.taskNameSnapshot,
         room: occ.roomNameSnapshot ?? taskRoom.get(occ.taskId.toHexString()) ?? null,
+        assignee: columns[assignedColumn]?.name ?? ANYONE_COLUMN_NAME,
         minutes: occ.durationMinutesSnapshot,
       });
     }
