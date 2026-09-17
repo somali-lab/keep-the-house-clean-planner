@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { NavLink, Navigate, Route, Routes } from 'react-router';
 import { AppLogo } from '@/components/AppLogo';
+import { AppVersion } from '@/components/AppVersion';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { ThemeSwitcher } from '@/components/ThemeSwitcher';
 import { Button } from '@/components/ui/button';
@@ -110,8 +111,9 @@ export function DesktopLayout({ onSwitchLayout }: { onSwitchLayout: () => void }
             ))}
           </ul>
         </nav>
-        <div className="mt-auto">
+        <div className="mt-auto grid gap-2">
           <ProfileSwitcher sidebar compact={collapsed} />
+          <AppVersion className="block text-center" />
         </div>
       </aside>
       <div className="flex min-w-0 flex-col">

@@ -2,6 +2,7 @@ import type { ReactElement } from 'react';
 import { CalendarRange, Hourglass, ListChecks, Monitor, Sun, type LucideIcon } from 'lucide-react';
 import { NavLink, Navigate, Route, Routes } from 'react-router';
 import { Button } from '@/components/ui/button';
+import { AppVersion } from '@/components/AppVersion';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { ThemeSwitcher } from '@/components/ThemeSwitcher';
 import { cn } from '@/lib/utils';
@@ -32,7 +33,10 @@ export function MobileLayout({ onSwitchLayout }: { onSwitchLayout: () => void })
   return (
     <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-2 border-b bg-background/85 px-4 backdrop-blur">
-        <ProfileSwitcher />
+        <div className="flex min-w-0 items-center gap-2">
+          <ProfileSwitcher />
+          <AppVersion className="shrink-0" />
+        </div>
         <div className="flex items-center gap-1">
           <LanguageSwitcher />
           <ThemeSwitcher />

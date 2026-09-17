@@ -62,7 +62,10 @@ describe('app shell', () => {
     expect(nav).toHaveTextContent('AI-prompts');
     expect(nav).toHaveTextContent('Instellingen');
     expect(screen.getByRole('group', { name: 'Kleurthema' })).toBeInTheDocument();
-    expect(screen.getByLabelText(`Versie ${APP_VERSION}`)).toHaveTextContent(`v${APP_VERSION}`);
+    const version = screen.getByLabelText(`Versie ${APP_VERSION}`);
+    expect(version).toHaveTextContent(`v${APP_VERSION}`);
+    fireEvent.click(screen.getByRole('button', { name: 'Menu inklappen' }));
+    expect(version.closest('.visually-hidden')).toBeNull();
     expect(await screen.findByRole('heading', { name: '12-daags overzicht' })).toBeInTheDocument();
   });
 
