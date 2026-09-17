@@ -1,9 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# Must match the `playwright` version in apps/server/package.json.
-ARG PLAYWRIGHT_VERSION=1.63.0
 ARG NODE_IMAGE=node:24-bookworm-slim
-ARG MONGO_TOOLS_VERSION=100.18.0
 
 # ---------- build: install all deps, build the web app ----------
 FROM ${NODE_IMAGE} AS build
@@ -30,47 +27,27 @@ COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/
 RUN npm ci --omit=dev
 
-# ---------- node binary source ----------
-FROM ${NODE_IMAGE} AS node
+# ---------- runtime: Node + the only browser the app needs ----------
+FROM ${NODE_IMAGE} AS runtime
 
-# ---------- runtime: Playwright image (Chromium + deps) ----------
-FROM mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-noble AS runtime
-ARG TARGETARCH
-ARG MONGO_TOOLS_VERSION
-
-# Node 24 (native TypeScript type stripping); /usr/local/bin precedes the image's own node.
-COPY --from=node /usr/local/bin/node /usr/local/bin/node
-
-# mongodump for nightly backups
-RUN set -eux; \
-    apt-get update; \
-    apt-get install -y --no-install-recommends ca-certificates curl; \
-    case "${TARGETARCH:-amd64}" in \
-      arm64) tools_arch=arm64 ;; \
-      *) tools_arch=x86_64 ;; \
-    esac; \
-    curl -fsSL -o /tmp/mongo-tools.deb \
-      "https://fastdl.mongodb.org/tools/db/mongodb-database-tools-ubuntu2404-${tools_arch}-${MONGO_TOOLS_VERSION}.deb"; \
-    apt-get install -y --no-install-recommends /tmp/mongo-tools.deb; \
-    rm /tmp/mongo-tools.deb; \
-    rm -rf /var/lib/apt/lists/*; \
-    node --version; \
-    mongodump --version; \
-    mkdir -p /backups /app; \
-    chown pwuser:pwuser /backups /app
+# PDF rendering is always headless, so install only Playwright's Chromium headless shell.
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=3000 \
-    BACKUP_DIR=/backups \
     WEB_DIST_DIR=/app/apps/web/dist
 
-COPY --from=deps --chown=pwuser:pwuser /app ./
-COPY --chown=pwuser:pwuser package.json tsconfig.base.json ./
-COPY --chown=pwuser:pwuser packages/shared/src packages/shared/src
-COPY --chown=pwuser:pwuser apps/server/src apps/server/src
-COPY --from=build --chown=pwuser:pwuser /app/apps/web/dist apps/web/dist
+COPY --from=deps --chown=node:node /app ./
+RUN ./node_modules/.bin/playwright install --with-deps --only-shell chromium >/tmp/playwright-install.log 2>&1 \
+    || (cat /tmp/playwright-install.log >&2; exit 1); \
+    rm -f /tmp/playwright-install.log; \
+    rm -rf /var/lib/apt/lists/*
+COPY --chown=node:node package.json tsconfig.base.json ./
+COPY --chown=node:node packages/shared/src packages/shared/src
+COPY --chown=node:node apps/server/src apps/server/src
+COPY --from=build --chown=node:node /app/apps/web/dist apps/web/dist
 
-USER pwuser
+USER node
 EXPOSE 3000
 CMD ["node", "apps/server/src/main.ts"]

@@ -6,7 +6,7 @@
  * and its volumes again. Usage: node scripts/smoke.mjs
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -129,10 +129,13 @@ async function walkThrough() {
   assert(contentType.startsWith('application/pdf'), `content-type is application/pdf (kreeg ${contentType})`);
   assert(size > 1024, `PDF is groter dan 1 KB (kreeg ${size} bytes)`);
 
-  step('backup-job starten');
-  const backup = await request('POST', '/api/jobs/backup', { profile });
-  const archive = join(BACKUP_DIR, backup.archive);
-  assert(existsSync(archive) && statSync(archive).size > 0, `archief ${backup.archive} staat in ${BACKUP_DIR_RELATIVE}`);
+  step('backup-container starten');
+  const expiredArchive = join(BACKUP_DIR, 'huishoudplanner-20200101.archive.gz');
+  writeFileSync(expiredArchive, 'old backup');
+  compose(['run', '--rm', 'backup', 'once']);
+  const archive = join(BACKUP_DIR, `huishoudplanner-${dayKey.replaceAll('-', '')}.archive.gz`);
+  assert(existsSync(archive) && statSync(archive).size > 0, `archief staat in ${BACKUP_DIR_RELATIVE}`);
+  assert(!existsSync(expiredArchive), 'verlopen backup is verwijderd');
 }
 
 let failed = false;

@@ -481,7 +481,7 @@ describe('scheduler', () => {
     handle!.stop();
   });
 
-  it('schedules backup, audit retention and the morning notification when configured', async () => {
+  it('schedules audit retention and the morning notification when configured', async () => {
     t = await createTestApp({
       env: {
         DISABLE_SCHEDULER: 'false',
@@ -496,7 +496,6 @@ describe('scheduler', () => {
     );
     expect(Object.fromEntries(scheduled)).toMatchObject({
       'nightly-generation': '0 3 * * *',
-      'nightly-backup': '30 3 * * *',
       'audit-retention': '45 3 * * *',
       'morning-notify': '30 7 * * *',
     });
