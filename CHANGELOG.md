@@ -1,5 +1,43 @@
 # Changelog
 
+## [1.2.0](https://github.com/somali-lab/keep-the-house-clean-planner/compare/v1.1.0...v1.2.0) (2026-09-17)
+
+
+### Features
+
+* **export:** show assignees and use full A4 schedule ([726f3c4](https://github.com/somali-lab/keep-the-house-clean-planner/commit/726f3c4a0e152e20976502f047760ca1fcf32b52))
+* **planner:** filter scheduled tasks by person ([726f3c4](https://github.com/somali-lab/keep-the-house-clean-planner/commit/726f3c4a0e152e20976502f047760ca1fcf32b52))
+* **roles:** add household permissions without passwords ([726f3c4](https://github.com/somali-lab/keep-the-house-clean-planner/commit/726f3c4a0e152e20976502f047760ca1fcf32b52))
+* **stats:** detect planning and completion deviations ([726f3c4](https://github.com/somali-lab/keep-the-house-clean-planner/commit/726f3c4a0e152e20976502f047760ca1fcf32b52))
+* **tasks:** add personal task overview with unassigned work ([726f3c4](https://github.com/somali-lab/keep-the-house-clean-planner/commit/726f3c4a0e152e20976502f047760ca1fcf32b52))
+* **tasks:** preserve room history when moving tasks ([726f3c4](https://github.com/somali-lab/keep-the-house-clean-planner/commit/726f3c4a0e152e20976502f047760ca1fcf32b52))
+* **version:** display app version in the UI and update changelog ([#10](https://github.com/somali-lab/keep-the-house-clean-planner/issues/10)) ([4435ca4](https://github.com/somali-lab/keep-the-house-clean-planner/commit/4435ca41ca2650d5bb82dd6847794bda30dbff70))
+
+
+### Bug fixes
+
+* **planner:** keep drag targets stable while planning ([726f3c4](https://github.com/somali-lab/keep-the-house-clean-planner/commit/726f3c4a0e152e20976502f047760ca1fcf32b52))
+* **planner:** sync active plan changes to task overviews ([726f3c4](https://github.com/somali-lab/keep-the-house-clean-planner/commit/726f3c4a0e152e20976502f047760ca1fcf32b52))
+* **version:** keep app version visible in all layouts ([726f3c4](https://github.com/somali-lab/keep-the-house-clean-planner/commit/726f3c4a0e152e20976502f047760ca1fcf32b52))
+* **week:** show the original date of moved tasks ([726f3c4](https://github.com/somali-lab/keep-the-house-clean-planner/commit/726f3c4a0e152e20976502f047760ca1fcf32b52))
+
+
+### Code refactoring
+
+* **planner:** reveal weekday drop targets during planning ([726f3c4](https://github.com/somali-lab/keep-the-house-clean-planner/commit/726f3c4a0e152e20976502f047760ca1fcf32b52))
+
+
+### Tests
+
+* **e2e:** align AI and PDF flows with current controls ([726f3c4](https://github.com/somali-lab/keep-the-house-clean-planner/commit/726f3c4a0e152e20976502f047760ca1fcf32b52))
+* **roles:** cover role fields in audit regressions ([726f3c4](https://github.com/somali-lab/keep-the-house-clean-planner/commit/726f3c4a0e152e20976502f047760ca1fcf32b52))
+* **version:** follow release version dynamically ([#12](https://github.com/somali-lab/keep-the-house-clean-planner/issues/12)) ([b28afb7](https://github.com/somali-lab/keep-the-house-clean-planner/commit/b28afb7b1e640a41c3634641ccca247c949a227e))
+
+
+### Documentation
+
+* **release:** preserve every changelog entry on squash merge ([726f3c4](https://github.com/somali-lab/keep-the-house-clean-planner/commit/726f3c4a0e152e20976502f047760ca1fcf32b52))
+
 ## [1.1.0](https://github.com/somali-lab/keep-the-house-clean-planner/compare/v1.0.1...v1.1.0) (2026-09-16)
 
 
