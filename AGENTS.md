@@ -8,7 +8,8 @@ These instructions apply to the entire repository. More focused rules live in `.
 2. Locate the implementation, its nearest tests, and the relevant entries in `docs/DECISIONS.md` before editing.
 3. Trace cross-layer changes end to end: shared contract -> server route/domain/data -> web API/UI -> tests.
 4. Prefer the smallest coherent change. Do not refactor unrelated code or update dependencies incidentally.
-5. Never commit, push, publish, deploy, restore data, or modify a real installation unless the user explicitly asks.
+5. Commit every completed coherent change with a Conventional Commit message, even when the user does not ask separately. Keep unrelated user changes out of the commit and leave no finished work uncommitted; these commits are the source for Release Please changelog and release notes.
+6. Never push, publish, deploy, restore data, or modify a real installation unless the user explicitly asks.
 
 ## Sources of truth
 

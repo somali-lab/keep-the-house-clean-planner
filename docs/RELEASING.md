@@ -18,6 +18,8 @@ No repository secret is needed. The workflows publish with GitHub's short-lived 
 
 Release Please derives the next semantic version from Conventional Commit messages. When pull requests are squash-merged, use a Conventional Commit title for the pull request:
 
+Repository agents commit every completed coherent change using this format, without requiring a separate commit request. This keeps the unreleased history usable as the input for generated changelog and release-note entries. Agents still never push, publish, merge, or deploy without explicit permission.
+
 - `fix: correct overdue task calculation` creates a patch release.
 - `feat: add a monthly planning view` creates a minor release.
 - `refactor: simplify route handling` creates a patch release.
