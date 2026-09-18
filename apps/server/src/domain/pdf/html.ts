@@ -70,18 +70,24 @@ const STYLES = `
   header p { margin: 0 0 1mm; }
   .theme { font-weight: bold; }
   table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 2mm; }
-  .week table { height: 230mm; }
+  .week table { width: calc(100% - 0.5mm); height: 230mm; }
   .side-by-side .week table { height: 150mm; }
   .week tbody tr { height: 14.285%; }
+  .week col.day-column { width: 18%; }
+  .week col.task-column { width: 82%; }
   th, td { border: 0.3mm solid #000; padding: 1mm; vertical-align: top; text-align: left; }
   thead th { font-weight: bold; }
-  tbody th { width: 22mm; font-weight: bold; }
+  tbody th { font-weight: bold; }
   .line { display: flex; align-items: flex-start; gap: 1.5mm; margin-bottom: 1mm; }
+  .line > span:last-child { min-width: 0; overflow-wrap: anywhere; }
   .box { display: inline-block; flex: none; width: 5mm; height: 5mm; border: 0.4mm solid #000; }
   .task { font-weight: bold; }
   .room { font-style: italic; }
   .assignee { display: block; margin-top: 0.4mm; font-size: 8pt; }
-  .person-group + .person-group { margin-top: 1.5mm; padding-top: 1mm; border-top: 0.2mm solid #888; }
+  .person-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5mm 4mm; }
+  .person-group { min-width: 0; }
+  .person-group:only-child { grid-column: 1 / -1; }
+  .person-group:nth-child(even) { border-left: 0.2mm solid #888; padding-left: 3mm; }
   .person-heading { margin-bottom: 1mm; font-size: 8pt; font-weight: bold; }
   .minutes { margin-top: 1mm; font-size: 8pt; border-top: 0.2mm dashed #000; padding-top: 0.5mm; }
   footer { margin-top: auto; padding-top: 3mm; font-size: 8pt; display: flex; justify-content: space-between; gap: 4mm; }
@@ -102,11 +108,12 @@ function cellHtml(lines: SheetLine[], totals: boolean): string {
     const personMinutes = personLines.reduce((sum, line) => sum + line.minutes, 0);
     return `<div class="person-group"><div class="person-heading">${escapeHtml(assignee)} · ${personMinutes} min</div>${personLines.map((line) => lineHtml(line, false)).join('')}</div>`;
   }).join('');
-  return `<td>${body}${total}</td>`;
+  return `<td><div class="person-groups">${body}</div>${total}</td>`;
 }
 
 function tableHtml(sheet: WeekSheet, totals: boolean, language: PdfLanguage = 'nl'): string {
   const text = copy(language);
+  const columns = `<colgroup><col class="day-column">${sheet.columns.map(() => '<col class="task-column">').join('')}</colgroup>`;
   const head = sheet.columns.map((c) => `<th>${escapeHtml(c.id === 'all' ? text.task : c.name)}</th>`).join('');
   const rows = sheet.days
     .map(
@@ -114,7 +121,7 @@ function tableHtml(sheet: WeekSheet, totals: boolean, language: PdfLanguage = 'n
         `<tr><th>${text.weekdaysLong[day.weekday]}<br>${dayMonth(day.dayKey)}</th>${day.cells.map((cell) => cellHtml(cell, totals)).join('')}</tr>`,
     )
     .join('');
-  return `<table><thead><tr><th>${text.day}</th>${head}</tr></thead><tbody>${rows}</tbody></table>`;
+  return `<table>${columns}<thead><tr><th>${text.day}</th>${head}</tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 function weekHeader(sheet: WeekSheet, language: PdfLanguage = 'nl'): string {
