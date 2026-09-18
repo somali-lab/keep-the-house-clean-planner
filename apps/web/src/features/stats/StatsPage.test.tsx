@@ -195,7 +195,10 @@ describe('StatsPage', () => {
   it('shows planned vs done per person for the period, with legend and a table view', async () => {
     setup();
     renderWithProviders(<StatsPage />);
-    expect(await screen.findByRole('tab', { name: 'Overzicht' })).toHaveAttribute('aria-selected', 'true');
+    const overviewTab = await screen.findByRole('tab', { name: 'Overzicht' });
+    expect(overviewTab).toHaveAttribute('aria-selected', 'true');
+    expect(overviewTab).toHaveClass('min-w-0');
+    expect(screen.getByRole('tablist', { name: 'Statistiekonderdeel' })).toHaveClass('max-w-4xl', 'overflow-hidden');
     await selectStatsTab('Eerlijkheid');
     const figure = await screen.findByRole('figure', { name: 'Gepland en gedaan per persoon' });
 

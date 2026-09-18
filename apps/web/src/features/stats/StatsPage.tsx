@@ -7,7 +7,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { panelTabsListClass, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { panelTabsListClass, panelTabsTriggerClass, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { useRooms, useTasks, useUsers } from '../../api/queries.ts';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
@@ -253,13 +253,13 @@ export function StatsPage() {
       {resetDone && <p role="status" className="mb-6 rounded-xl bg-success/15 px-4 py-3 font-semibold text-success">{t('stats.resetDone')}</p>}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="gap-6">
-        <TabsList className={cn(panelTabsListClass, 'grid grid-cols-6 gap-1 overflow-hidden p-1.5')} aria-label={t('stats.tabs')}>
-          <TabsTrigger className="min-h-11 min-w-0 rounded-xl px-1 text-[11px] sm:px-2 sm:text-sm" value="overview">{t('stats.tab.overview')}</TabsTrigger>
-          <TabsTrigger aria-label={t('stats.fairness')} className="min-h-11 min-w-0 rounded-xl px-1 text-[11px] sm:px-2 sm:text-sm" value="fairness">{t('stats.tab.fairness')}</TabsTrigger>
-          <TabsTrigger aria-label={t('stats.trend')} className="min-h-11 min-w-0 rounded-xl px-1 text-[11px] sm:px-2 sm:text-sm" value="trend">{t('stats.tab.trend')}</TabsTrigger>
-          <TabsTrigger aria-label={t('stats.completion')} className="min-h-11 min-w-0 rounded-xl px-1 text-[11px] sm:px-2 sm:text-sm" value="completion">{t('stats.tab.completion')}</TabsTrigger>
-          <TabsTrigger aria-label={t('stats.intervals')} className="min-h-11 min-w-0 rounded-xl px-1 text-[11px] sm:px-2 sm:text-sm" value="intervals">{t('stats.tab.intervals')}</TabsTrigger>
-          <TabsTrigger aria-label={t('stats.deviations')} className="min-h-11 min-w-0 rounded-xl px-1 text-[11px] sm:px-2 sm:text-sm" value="deviations">{t('stats.tab.deviations')}</TabsTrigger>
+        <TabsList className={cn(panelTabsListClass, 'grid max-w-4xl grid-cols-6 gap-1 overflow-hidden p-1.5')} aria-label={t('stats.tabs')}>
+          <TabsTrigger aria-label={t('stats.tab.overview')} className={cn(panelTabsTriggerClass, 'w-full min-w-0 px-2')} value="overview"><ChartColumnBig aria-hidden="true" /><span className="hidden md:inline">{t('stats.tab.overview')}</span></TabsTrigger>
+          <TabsTrigger aria-label={t('stats.fairness')} className={cn(panelTabsTriggerClass, 'w-full min-w-0 px-2')} value="fairness"><Scale aria-hidden="true" /><span className="hidden md:inline">{t('stats.tab.fairness')}</span></TabsTrigger>
+          <TabsTrigger aria-label={t('stats.trend')} className={cn(panelTabsTriggerClass, 'w-full min-w-0 px-2')} value="trend"><TrendingUp aria-hidden="true" /><span className="hidden md:inline">{t('stats.tab.trend')}</span></TabsTrigger>
+          <TabsTrigger aria-label={t('stats.completion')} className={cn(panelTabsTriggerClass, 'w-full min-w-0 px-2')} value="completion"><CircleCheck aria-hidden="true" /><span className="hidden md:inline">{t('stats.tab.completion')}</span></TabsTrigger>
+          <TabsTrigger aria-label={t('stats.intervals')} className={cn(panelTabsTriggerClass, 'w-full min-w-0 px-2')} value="intervals"><CalendarClock aria-hidden="true" /><span className="hidden md:inline">{t('stats.tab.intervals')}</span></TabsTrigger>
+          <TabsTrigger aria-label={t('stats.deviations')} className={cn(panelTabsTriggerClass, 'w-full min-w-0 px-2')} value="deviations"><Clock aria-hidden="true" /><span className="hidden md:inline">{t('stats.tab.deviations')}</span></TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">
