@@ -438,7 +438,6 @@ export const nl = {
   'week.overview': 'Weekoverzicht',
   'week.title': 'Weekoverzicht',
   'week.thisWeek': 'Deze week',
-  'week.overviewTitle': '12-daags overzicht',
   'week.aroundToday': 'Rond vandaag',
   'week.pastDays': 'Afgelopen 3 dagen',
   'week.nextWeek': 'Volgende week',

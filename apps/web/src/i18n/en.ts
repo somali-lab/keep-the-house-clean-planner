@@ -383,7 +383,6 @@ export const en = {
   "week.overview": "Week overview",
   "week.title": "Week overview",
   "week.thisWeek": "This week",
-  "week.overviewTitle": "12-day overview",
   "week.aroundToday": "Around today",
   "week.pastDays": "Past 3 days",
   "week.nextWeek": "Next week",

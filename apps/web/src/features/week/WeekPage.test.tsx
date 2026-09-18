@@ -120,15 +120,17 @@ describe('WeekPage', () => {
   it('browses between periods and can return to the days around today', async () => {
     setup();
     renderWithProviders(<WeekPage now={NOW} />);
-    await screen.findByText('13 – 24 sep 2026');
+    expect(await screen.findByRole('heading', { name: 'Weekoverzicht' })).toHaveClass('sr-only');
+    expect(screen.queryByRole('heading', { name: '12-daags overzicht' })).not.toBeInTheDocument();
+    await screen.findByRole('heading', { name: 'woensdag 16 sep Vandaag' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Volgende periode' }));
-    expect(await screen.findByText('20 sep – 1 okt 2026')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'woensdag 23 sep' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Volgende periode' }));
-    expect(await screen.findByText('27 sep – 8 okt 2026')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'woensdag 30 sep' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Rond vandaag' }));
-    expect(await screen.findByText('13 – 24 sep 2026')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'woensdag 16 sep Vandaag' })).toBeInTheDocument();
   });
 
   it('keeps the overview compact without separate move buttons', async () => {

@@ -26,7 +26,6 @@ import {
   ThumbsUp,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { PageHeader } from '@/components/PageHeader';
 import { NativeSelect } from '@/components/NativeSelect';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -165,47 +164,7 @@ export function WeekPage({ now }: { now?: Date }) {
 
   return (
     <section className="flex flex-col gap-3">
-      <PageHeader
-        title={t('week.overviewTitle')}
-        description={weekRangeLabel(from, to)}
-        className="mb-0 gap-3"
-        actions={
-          <div
-            className="inline-flex items-center gap-1 rounded-full border bg-card p-1 shadow-sm"
-            role="group"
-            aria-label={t('week.navigation')}
-          >
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="rounded-full"
-              aria-label={t('week.previous')}
-              onClick={() => setPeriodOffset((offset) => offset - 1)}
-            >
-              <ChevronLeft aria-hidden="true" />
-            </Button>
-            <Button
-              type="button"
-              variant={periodOffset === 0 ? 'default' : 'ghost'}
-              className="h-10 rounded-full px-4"
-              onClick={() => setPeriodOffset(0)}
-            >
-              {t('week.aroundToday')}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="rounded-full"
-              aria-label={t('week.next')}
-              onClick={() => setPeriodOffset((offset) => offset + 1)}
-            >
-              <ChevronRight aria-hidden="true" />
-            </Button>
-          </div>
-        }
-      />
+      <h1 className="sr-only">{t('week.title')}</h1>
       <div data-testid="week-summary" className="flex min-h-12 flex-wrap items-center gap-2 rounded-xl border bg-card px-3 py-2 shadow-sm">
         <span className="flex items-center gap-2 text-sm font-extrabold">
           <CalendarDays className="size-4 text-primary" aria-hidden="true" />
@@ -228,6 +187,40 @@ export function WeekPage({ now }: { now?: Date }) {
           <CheckCircle2 aria-hidden="true" />
           {format('week.finished', { count: finishedCount })}
         </Badge>
+        <div
+          className="inline-flex items-center gap-0.5 rounded-full bg-muted/60 p-0.5"
+          role="group"
+          aria-label={t('week.navigation')}
+        >
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-9 rounded-full"
+            aria-label={t('week.previous')}
+            onClick={() => setPeriodOffset((offset) => offset - 1)}
+          >
+            <ChevronLeft aria-hidden="true" />
+          </Button>
+          <Button
+            type="button"
+            variant={periodOffset === 0 ? 'default' : 'ghost'}
+            className="h-9 rounded-full px-3"
+            onClick={() => setPeriodOffset(0)}
+          >
+            {t('week.aroundToday')}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-9 rounded-full"
+            aria-label={t('week.next')}
+            onClick={() => setPeriodOffset((offset) => offset + 1)}
+          >
+            <ChevronRight aria-hidden="true" />
+          </Button>
+        </div>
       </div>
       <PromoteBanner />
 
