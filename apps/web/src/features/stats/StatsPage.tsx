@@ -7,7 +7,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { panelTabsListClass, panelTabsTriggerClass, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { panelTabsListClass, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { useRooms, useTasks, useUsers } from '../../api/queries.ts';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
@@ -141,16 +141,6 @@ export function StatsPage() {
           </optgroup>
         </NativeSelect>
       </div>
-      <div className="flex w-44 flex-col gap-2">
-        <Label htmlFor={`${idPrefix}-group`}>{t('stats.completion.groupBy')}</Label>
-        <NativeSelect id={`${idPrefix}-group`} value={groupBy} onChange={(e) => setGroupBy(e.target.value as StatsGroupBy)}>
-          {GROUP_BY.map((g) => (
-            <option key={g} value={g}>
-              {t(`stats.groupBy.${g}` as MessageKey)}
-            </option>
-          ))}
-        </NativeSelect>
-      </div>
       {profile?.role === 'admin' && (
         <Button
           type="button"
@@ -263,13 +253,13 @@ export function StatsPage() {
       {resetDone && <p role="status" className="mb-6 rounded-xl bg-success/15 px-4 py-3 font-semibold text-success">{t('stats.resetDone')}</p>}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="gap-6">
-        <TabsList className={panelTabsListClass} aria-label={t('stats.tabs')}>
-          <TabsTrigger className={panelTabsTriggerClass} value="overview"><ChartColumnBig />{t('stats.overview')}</TabsTrigger>
-          <TabsTrigger className={panelTabsTriggerClass} value="fairness"><Scale />{t('stats.fairness')}</TabsTrigger>
-          <TabsTrigger className={panelTabsTriggerClass} value="trend"><TrendingUp />{t('stats.trend')}</TabsTrigger>
-          <TabsTrigger className={panelTabsTriggerClass} value="completion"><CircleCheck />{t('stats.completion')}</TabsTrigger>
-          <TabsTrigger className={panelTabsTriggerClass} value="intervals"><Clock />{t('stats.intervals')}</TabsTrigger>
-          <TabsTrigger className={panelTabsTriggerClass} value="deviations"><CalendarClock />{t('stats.deviations')}</TabsTrigger>
+        <TabsList className={cn(panelTabsListClass, 'grid grid-cols-6 gap-1 overflow-hidden p-1.5')} aria-label={t('stats.tabs')}>
+          <TabsTrigger className="min-h-11 min-w-0 rounded-xl px-1 text-[11px] sm:px-2 sm:text-sm" value="overview">{t('stats.tab.overview')}</TabsTrigger>
+          <TabsTrigger aria-label={t('stats.fairness')} className="min-h-11 min-w-0 rounded-xl px-1 text-[11px] sm:px-2 sm:text-sm" value="fairness">{t('stats.tab.fairness')}</TabsTrigger>
+          <TabsTrigger aria-label={t('stats.trend')} className="min-h-11 min-w-0 rounded-xl px-1 text-[11px] sm:px-2 sm:text-sm" value="trend">{t('stats.tab.trend')}</TabsTrigger>
+          <TabsTrigger aria-label={t('stats.completion')} className="min-h-11 min-w-0 rounded-xl px-1 text-[11px] sm:px-2 sm:text-sm" value="completion">{t('stats.tab.completion')}</TabsTrigger>
+          <TabsTrigger aria-label={t('stats.intervals')} className="min-h-11 min-w-0 rounded-xl px-1 text-[11px] sm:px-2 sm:text-sm" value="intervals">{t('stats.tab.intervals')}</TabsTrigger>
+          <TabsTrigger aria-label={t('stats.deviations')} className="min-h-11 min-w-0 rounded-xl px-1 text-[11px] sm:px-2 sm:text-sm" value="deviations">{t('stats.tab.deviations')}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">
@@ -385,6 +375,16 @@ export function StatsPage() {
             title={t('stats.completion')}
             explainer={t('stats.completion.explainer')}
           />
+          <div className="flex w-44 flex-col gap-2">
+            <Label htmlFor={`${idPrefix}-group`}>{t('stats.completion.groupBy')}</Label>
+            <NativeSelect id={`${idPrefix}-group`} value={groupBy} onChange={(e) => setGroupBy(e.target.value as StatsGroupBy)}>
+              {GROUP_BY.map((g) => (
+                <option key={g} value={g}>
+                  {t(`stats.groupBy.${g}` as MessageKey)}
+                </option>
+              ))}
+            </NativeSelect>
+          </div>
           {completion.data && completion.data.rows.length > 0 ? (
             <div className="overflow-x-auto">
               <table className={statsTableClass}>
