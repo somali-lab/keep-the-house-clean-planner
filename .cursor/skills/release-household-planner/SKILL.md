@@ -9,8 +9,10 @@ Read `docs/RELEASING.md`, the three workflows in `.github/workflows/`, `release-
 
 ## Normal change flow
 
+- Before creating or updating a pull request, compare the branch with its target and derive the intended release-note entries from all logical changes, not only from the final commit or pull-request title.
 - Use a Conventional Commit pull-request title. `fix` creates a patch, `feat` a minor, and `feat!` a major release.
-- For several user-visible entries in one squash merge, prepare the documented `BEGIN_COMMIT_OVERRIDE` block with one valid Conventional Commit line per entry.
+- For several release-worthy entries in one squash merge, automatically add the documented `BEGIN_COMMIT_OVERRIDE` block with one valid Conventional Commit line per logical entry. Consolidate fixup and iteration commits without omitting distinct changes.
+- Read the published pull-request description back and verify both override markers and every intended entry before considering the pull request complete.
 - Do not manually edit `version.txt`, `.release-please-manifest.json`, or `CHANGELOG.md`; the Release Please pull request owns them.
 - Do not publish or merge anything unless the user explicitly asks.
 

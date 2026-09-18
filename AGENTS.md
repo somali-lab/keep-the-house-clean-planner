@@ -12,6 +12,14 @@ These instructions apply to the entire repository. More focused rules live in `.
 6. Commit every completed coherent change with a Conventional Commit message, even when the user does not ask separately. Keep unrelated user changes out of the commit and leave no finished work uncommitted; these commits are the source for Release Please changelog and release notes.
 7. Never push, publish, deploy, restore data, or modify a real installation unless the user explicitly asks.
 
+## Pull requests and release notes
+
+1. Before creating or updating a pull request, compare the branch with its target and identify every distinct release-worthy change.
+2. Use a Conventional Commit pull-request title.
+3. For a squash-merged pull request with multiple release-note entries, automatically add the documented `BEGIN_COMMIT_OVERRIDE` block to the pull-request description. Include one valid Conventional Commit line per logical change. Consolidate fixup and iteration commits, but never collapse unrelated changes into one vague entry.
+4. After publishing or updating the pull request, read its description back and verify that both override markers and all intended entries are present before reporting the pull request as complete.
+5. Do not manually edit `version.txt`, `.release-please-manifest.json`, or `CHANGELOG.md`; Release Please owns those files in its release pull request.
+
 ## Sources of truth
 
 When sources disagree, use this order and call out the conflict:

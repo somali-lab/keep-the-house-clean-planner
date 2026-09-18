@@ -43,6 +43,8 @@ END_COMMIT_OVERRIDE
 
 List every intended changelog entry as a valid Conventional Commit line. Release Please then uses those lines instead of reducing the pull request to only its squash title. Review the generated release pull request and confirm that each line appears under the configured section in `CHANGELOG.md`.
 
+Repository agents add this override automatically whenever a squash-merged pull request contains multiple release-worthy changes. They derive the logical entries from the complete branch diff and commit history, consolidate fixup or iteration commits, and keep distinct changes separate. After creating or updating the pull request, they read the published description back to verify the exact markers and entries.
+
 Commit overrides only work for squash merges. Do not use a plain merge for a pull request that depends on this block. If the pull request has one release-note entry, a Conventional Commit pull-request title is sufficient.
 
 ## Published image tags
