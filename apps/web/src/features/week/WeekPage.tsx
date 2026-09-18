@@ -15,6 +15,7 @@ import {
   CalendarDays,
   Check,
   CheckCircle2,
+  Circle,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -22,10 +23,11 @@ import {
   GripVertical,
   SkipForward,
   TriangleAlert,
-  Undo2,
+  ThumbsUp,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { PageHeader } from '@/components/PageHeader';
+import { NativeSelect } from '@/components/NativeSelect';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -76,6 +78,7 @@ export function WeekPage({ now }: { now?: Date }) {
   const todayKey = dayKeyInZone(now ?? new Date(), settings.data?.timezone ?? 'Europe/Amsterdam');
   const [periodOffset, setPeriodOffset] = useState(0);
   const [pastExpanded, setPastExpanded] = useState(false);
+  const [personFilter, setPersonFilter] = useState('all');
   const days = overviewDays(addDaysKey(todayKey, periodOffset * 7));
   const visibleDays = pastExpanded ? days : days.slice(3);
   const from = days[0]!;
@@ -147,8 +150,15 @@ export function WeekPage({ now }: { now?: Date }) {
       </p>
     );
 
-  const openCount = occurrences.data.filter((occurrence) => occurrence.status === 'open').length;
-  const finishedCount = occurrences.data.length - openCount;
+  const filteredOccurrences = occurrences.data.filter((occurrence) =>
+    personFilter === 'all'
+      ? true
+      : personFilter === 'unassigned'
+        ? occurrence.assigneeId === null
+        : occurrence.assigneeId === personFilter,
+  );
+  const openCount = filteredOccurrences.filter((occurrence) => occurrence.status === 'open').length;
+  const finishedCount = filteredOccurrences.length - openCount;
 
   return (
     <section className="flex flex-col gap-5">
@@ -196,9 +206,19 @@ export function WeekPage({ now }: { now?: Date }) {
       <div className="flex flex-wrap items-center gap-2 rounded-2xl border bg-card px-4 py-3 shadow-sm">
         <span className="flex items-center gap-2 font-extrabold">
           <CalendarDays className="size-5 text-primary" aria-hidden="true" />
-          {format('week.total', { count: occurrences.data.length })}
+          {format('week.total', { count: filteredOccurrences.length })}
         </span>
-        <Badge className="ml-auto rounded-full px-3 py-1">
+        <NativeSelect
+          className="ml-auto w-48"
+          aria-label={t('week.filterPerson')}
+          value={personFilter}
+          onChange={(event) => setPersonFilter(event.target.value)}
+        >
+          <option value="all">{t('week.allPeople')}</option>
+          {activeUsers.map((user) => <option key={user._id} value={user._id}>{user.name}</option>)}
+          <option value="unassigned">{t('planner.anyone')}</option>
+        </NativeSelect>
+        <Badge className="rounded-full px-3 py-1">
           {format('week.open', { count: openCount })}
         </Badge>
         <Badge variant="secondary" className="rounded-full px-3 py-1">
@@ -250,7 +270,7 @@ export function WeekPage({ now }: { now?: Date }) {
           </Badge>
         </button>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {groupByDay(occurrences.data, visibleDays).map((day) => (
+          {groupByDay(filteredOccurrences, visibleDays).map((day) => (
             <DayColumn
               key={day.dayKey}
               dayKey={day.dayKey}
@@ -259,6 +279,7 @@ export function WeekPage({ now }: { now?: Date }) {
               items={day.items}
               users={activeUsers}
               roomByTask={roomByTask}
+              completionControl={settings.data.completionControl ?? 'circle'}
               onComplete={(id) => occurrenceAction.mutate({ id, kind: 'complete' }, { onError: () => setFailed(true) })}
               onUncomplete={(id) => occurrenceAction.mutate({ id, kind: 'uncomplete' }, { onError: () => setFailed(true) })}
             />
@@ -276,11 +297,12 @@ interface DayColumnProps {
   items: OccurrenceView[];
   users: User[];
   roomByTask: Map<string, string>;
+  completionControl: 'circle' | 'thumb';
   onComplete(id: string): void;
   onUncomplete(id: string): void;
 }
 
-function DayColumn({ dayKey, isToday, period, items, users, roomByTask, onComplete, onUncomplete }: DayColumnProps) {
+function DayColumn({ dayKey, isToday, period, items, users, roomByTask, completionControl, onComplete, onUncomplete }: DayColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: dayDropId(dayKey) });
   const headingId = `day-${dayKey}`;
   return (
@@ -325,6 +347,7 @@ function DayColumn({ dayKey, isToday, period, items, users, roomByTask, onComple
               occ={occ}
               users={users}
               roomName={occ.roomNameSnapshot ?? roomByTask.get(occ.taskId) ?? t('tasks.unknownRoom')}
+              completionControl={completionControl}
               onComplete={onComplete}
               onUncomplete={onUncomplete}
             />
@@ -339,12 +362,14 @@ function WeekItem({
   occ,
   users,
   roomName,
+  completionControl,
   onComplete,
   onUncomplete,
 }: {
   occ: OccurrenceView;
   users: User[];
   roomName: string;
+  completionControl: 'circle' | 'thumb';
   onComplete(id: string): void;
   onUncomplete(id: string): void;
 }) {
@@ -453,19 +478,19 @@ function WeekItem({
             aria-label={format('today.completeNamed', { task })}
             onClick={() => onComplete(occ._id)}
           >
-            <Check aria-hidden="true" />
+            {completionControl === 'thumb' ? <ThumbsUp aria-hidden="true" /> : <Circle aria-hidden="true" />}
           </Button>
         )}
         {occ.status === 'done' && (
           <Button
             type="button"
-            variant="ghost"
+            variant="default"
             size="icon"
-            className="size-9 shrink-0 rounded-full text-muted-foreground"
+            className="size-9 shrink-0 rounded-full bg-success text-success-foreground hover:bg-success/90"
             aria-label={format('today.undoNamed', { task })}
             onClick={() => onUncomplete(occ._id)}
           >
-            <Undo2 aria-hidden="true" />
+            <Check aria-hidden="true" />
           </Button>
         )}
       </div>

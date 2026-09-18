@@ -78,6 +78,20 @@ describe('TasksPage — grouping', () => {
     expect(within(sections[0]!).getByRole('heading', { level: 2 })).toHaveTextContent('Badkamer');
     expect(screen.queryByText('Aanrecht')).not.toBeInTheDocument();
   });
+
+  it('collapses one room or all rooms and expands them again', async () => {
+    renderWithProviders(<TasksPage />);
+    const kitchenToggle = await screen.findByRole('button', { name: 'Keuken inklappen' });
+    fireEvent.click(kitchenToggle);
+    expect(screen.queryByText('Aanrecht')).not.toBeInTheDocument();
+    expect(screen.getByText('Douche')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Alles inklappen' }));
+    expect(screen.queryByText('Douche')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Alles uitklappen' }));
+    expect(await screen.findByText('Aanrecht')).toBeInTheDocument();
+    expect(screen.getByText('Douche')).toBeInTheDocument();
+  });
 });
 
 describe('TasksPage — form validation', () => {

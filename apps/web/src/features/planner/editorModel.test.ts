@@ -1,6 +1,6 @@
 import type { Slot } from '@huishoudplanner/shared';
 import { describe, expect, it } from 'vitest';
-import { applyDrop, cellId, dragId, parseDragId, parseDropId, POOL_ID, quickDayId } from './editorModel.ts';
+import { applyDrop, cellId, dragId, parseDragId, parseDropId, POOL_ID } from './editorModel.ts';
 
 const ANNA = { _id: 'u1', name: 'Anna', unavailableWeekdays: [2] }; // not on Tuesday
 const BRAM = { _id: 'u2', name: 'Bram', unavailableWeekdays: [] };
@@ -25,7 +25,7 @@ describe('dnd ids', () => {
     expect(parseDropId(cellId(3, 0, 'u1'))).toEqual({ kind: 'cell', weekIndex: 3, weekday: 0, assigneeId: 'u1' });
     expect(parseDropId(cellId(1, 6, null))).toEqual({ kind: 'cell', weekIndex: 1, weekday: 6, assigneeId: null });
     expect(parseDropId(POOL_ID)).toEqual({ kind: 'pool' });
-    expect(parseDropId(quickDayId(2, 5))).toEqual({ kind: 'day', weekIndex: 2, weekday: 5 });
+    expect(parseDropId('day:2:5')).toBeNull();
     expect(parseDropId('nonsense')).toBeNull();
     expect(parseDragId(dragId({ kind: 'pool', taskId: 't1' }))).toEqual({ kind: 'pool', taskId: 't1' });
     expect(parseDragId(dragId({ kind: 'slot', index: 12 }))).toEqual({ kind: 'slot', index: 12 });
@@ -35,16 +35,6 @@ describe('dnd ids', () => {
 describe('applyDrop', () => {
   it('adds a slot when dropping a pool task on a cell', () => {
     const result = applyDrop([], { kind: 'pool', taskId: 't1' }, { kind: 'cell', weekIndex: 0, weekday: 1, assigneeId: 'u1' }, context);
-    expect(result).toEqual({ ok: true, changed: true, slots: [slot('t1', 0, 1, 'u1')] });
-  });
-
-  it('uses the default assignee when a task is dropped on a quick day target', () => {
-    const result = applyDrop(
-      [],
-      { kind: 'pool', taskId: 't1' },
-      { kind: 'day', weekIndex: 0, weekday: 1 },
-      context,
-    );
     expect(result).toEqual({ ok: true, changed: true, slots: [slot('t1', 0, 1, 'u1')] });
   });
 

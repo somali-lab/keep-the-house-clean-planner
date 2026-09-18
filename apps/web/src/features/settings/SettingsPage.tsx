@@ -4,20 +4,23 @@ import {
   MIN_AI_TIMEOUT_SECONDS,
   type AiProviderSettings,
   type AiProviderType,
+  type CompletionControl,
   type Settings,
 } from '@huishoudplanner/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Bot, Save, TestTube2 } from 'lucide-react';
+import { Bot, CalendarDays, Circle, Database, LayoutPanelTop, Save, TestTube2, Users, WandSparkles } from 'lucide-react';
 import { useId, useState, type FormEvent } from 'react';
 import { NativeSelect } from '@/components/NativeSelect';
 import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { api, ApiRequestError } from '../../api/index.ts';
 import { queryKeys, useSettings } from '../../api/queries.ts';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
 import { CalendarSection } from './CalendarSection.tsx';
+import { AiPromptsPage } from '../ai-prompts/AiPromptsPage.tsx';
 import { DataSection } from './DataSection.tsx';
 import { RoomsSection } from './RoomsSection.tsx';
 import { Field, FormActions, FormMessage, SettingsCardHeader, settingsCardClass } from './SettingsCard.tsx';
@@ -27,7 +30,7 @@ const PROVIDERS: AiProviderType[] = ['none', 'mock', 'anthropic', 'openai-compat
 const NEEDS_ENDPOINT: AiProviderType[] = ['openai-compatible', 'ollama'];
 const NEEDS_MODEL: AiProviderType[] = ['anthropic', 'openai-compatible', 'ollama'];
 /** Settings screen: calendar, people, rooms, AI provider and data export/import. */
-export function SettingsPage() {
+export function SettingsPage({ initialTab = 'calendar' }: { initialTab?: 'calendar' | 'people' | 'rooms' | 'interface' | 'ai' | 'data' }) {
   const settings = useSettings();
   if (settings.isPending)
     return (
@@ -44,18 +47,60 @@ export function SettingsPage() {
   return (
     <section>
       <PageHeader title={t('nav.settings')} />
-      <div className="grid items-start gap-6 xl:grid-cols-2">
-        <CalendarSection settings={settings.data} />
-        <div className="xl:col-span-2">
-          <UsersSection />
-        </div>
-        <RoomsSection />
-        <AiProviderForm key={settings.data.updatedAt} settings={settings.data} />
-        <div className="xl:col-span-2">
-          <DataSection />
-        </div>
-      </div>
+      <Tabs defaultValue={initialTab} className="gap-6">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-2 rounded-2xl border bg-card p-2 shadow-sm md:grid-cols-3 xl:grid-cols-6">
+          <TabsTrigger className="min-h-12 rounded-xl" value="calendar"><CalendarDays />{t('settings.tab.calendar')}</TabsTrigger>
+          <TabsTrigger className="min-h-12 rounded-xl" value="people"><Users />{t('settings.tab.people')}</TabsTrigger>
+          <TabsTrigger className="min-h-12 rounded-xl" value="rooms"><LayoutPanelTop />{t('settings.tab.rooms')}</TabsTrigger>
+          <TabsTrigger className="min-h-12 rounded-xl" value="interface"><LayoutPanelTop />{t('settings.tab.interface')}</TabsTrigger>
+          <TabsTrigger className="min-h-12 rounded-xl" value="ai"><Bot />{t('settings.tab.ai')}</TabsTrigger>
+          <TabsTrigger className="min-h-12 rounded-xl" value="data"><Database />{t('settings.tab.data')}</TabsTrigger>
+        </TabsList>
+        <TabsContent value="calendar"><CalendarSection settings={settings.data} /></TabsContent>
+        <TabsContent value="people"><UsersSection /></TabsContent>
+        <TabsContent value="rooms"><RoomsSection /></TabsContent>
+        <TabsContent value="interface"><CompletionControlForm key={settings.data.updatedAt} settings={settings.data} /></TabsContent>
+        <TabsContent value="ai">
+          <Tabs defaultValue="provider" className="gap-4">
+            <TabsList variant="line" className="w-full justify-start overflow-x-auto border-b pb-2">
+              <TabsTrigger value="provider"><Bot />{t('settings.ai.providerTab')}</TabsTrigger>
+              <TabsTrigger value="prompts"><WandSparkles />{t('settings.ai.promptsTab')}</TabsTrigger>
+            </TabsList>
+            <TabsContent value="provider"><AiProviderForm key={settings.data.updatedAt} settings={settings.data} /></TabsContent>
+            <TabsContent value="prompts"><AiPromptsPage embedded /></TabsContent>
+          </Tabs>
+        </TabsContent>
+        <TabsContent value="data"><DataSection /></TabsContent>
+      </Tabs>
     </section>
+  );
+}
+
+function CompletionControlForm({ settings }: { settings: Settings }) {
+  const queryClient = useQueryClient();
+  const [value, setValue] = useState<CompletionControl>(settings.completionControl ?? 'circle');
+  const save = useMutation({
+    mutationFn: async () => api.patch('/api/settings', { completionControl: value }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.settings }),
+  });
+  return (
+    <form
+      className={settingsCardClass}
+      aria-label={t('settings.completion.title')}
+      onSubmit={(event) => { event.preventDefault(); save.mutate(); }}
+    >
+      <SettingsCardHeader icon={<Circle aria-hidden="true" />} titleId="completion-control-title" title={t('settings.completion.title')} description={t('settings.completion.help')} />
+      <fieldset className="grid gap-3 sm:grid-cols-2">
+        {(['circle', 'thumb'] as const).map((option) => (
+          <label key={option} className="flex min-h-14 cursor-pointer items-center gap-3 rounded-xl border bg-background px-4 py-3 font-semibold">
+            <input type="radio" name="completion-control" value={option} checked={value === option} onChange={() => setValue(option)} />
+            {t(`settings.completion.${option}` as MessageKey)}
+          </label>
+        ))}
+      </fieldset>
+      {save.isSuccess && <FormMessage kind="status">{t('settings.saved')}</FormMessage>}
+      <FormActions><Button type="submit" disabled={save.isPending}><Save />{t('common.save')}</Button></FormActions>
+    </form>
   );
 }
 

@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
 import { Avatar } from '../../identity/Avatar.tsx';
-import { cellId, dragId, quickDayId } from './editorModel.ts';
+import { cellId, dragId } from './editorModel.ts';
 
 interface WeekTableProps {
   weekIndex: number;
@@ -19,7 +19,6 @@ interface WeekTableProps {
   rooms: Room[];
   users: User[];
   showUnassigned: boolean;
-  showQuickDays: boolean;
   summary: PlanSummary;
   onRemoveSlot(index: number): void;
 }
@@ -35,7 +34,6 @@ export function WeekTable({
   rooms,
   users,
   showUnassigned,
-  showQuickDays,
   summary,
   onRemoveSlot,
 }: WeekTableProps) {
@@ -73,21 +71,6 @@ export function WeekTable({
           />
         </label>
       </div>
-      {showQuickDays && (
-        <div
-          className="absolute inset-x-0 top-0 z-30 border-b bg-card/95 px-3 py-2.5 shadow-md backdrop-blur"
-          role="status"
-        >
-          <p className="mb-2 text-xs font-semibold text-primary">
-            {t('planner.quickPlanHint')}
-          </p>
-          <div className="grid grid-cols-7 gap-1.5">
-            {WEEKDAYS_MONDAY_FIRST.map((weekday) => (
-              <QuickDayTarget key={weekday} weekIndex={weekIndex} weekday={weekday} />
-            ))}
-          </div>
-        </div>
-      )}
       <div className="grid gap-2 border-b bg-secondary/15 px-3 py-3 sm:grid-cols-2">
         {users.map((user) => {
           const weekdayMinutes = minutesFor(user._id, [1, 2, 3, 4, 5]);
@@ -179,24 +162,6 @@ export function WeekTable({
         </p>
       )}
     </section>
-  );
-}
-
-function QuickDayTarget({ weekIndex, weekday }: { weekIndex: number; weekday: number }) {
-  const { setNodeRef, isOver } = useDroppable({ id: quickDayId(weekIndex, weekday) });
-  const day = t(`weekdayLong.${weekday}` as MessageKey);
-  return (
-    <div
-      ref={setNodeRef}
-      data-testid={quickDayId(weekIndex, weekday)}
-      aria-label={format('planner.quickPlanDay', { day })}
-      className={cn(
-        'grid min-h-12 place-items-center rounded-xl border-2 border-dashed bg-card px-1 text-center text-xs font-extrabold transition-all',
-        isOver && 'border-solid border-primary bg-primary/10 text-primary ring-2 ring-primary/20',
-      )}
-    >
-      {day}
-    </div>
   );
 }
 

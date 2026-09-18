@@ -17,7 +17,6 @@ export type DragSource = { kind: 'pool'; taskId: string } | { kind: 'slot'; inde
 
 export type DropTarget =
   | { kind: 'cell'; weekIndex: number; weekday: number; assigneeId: string | null }
-  | { kind: 'day'; weekIndex: number; weekday: number }
   | { kind: 'pool' };
 
 export type DropRejection =
@@ -34,14 +33,8 @@ export function cellId(weekIndex: number, weekday: number, assigneeId: string | 
   return `cell:${weekIndex}:${weekday}:${assigneeId ?? ANY}`;
 }
 
-export function quickDayId(weekIndex: number, weekday: number): string {
-  return `day:${weekIndex}:${weekday}`;
-}
-
 export function parseDropId(id: string): DropTarget | null {
   if (id === POOL_ID) return { kind: 'pool' };
-  const day = /^day:(\d):(\d)$/.exec(id);
-  if (day) return { kind: 'day', weekIndex: Number(day[1]), weekday: Number(day[2]) };
   const match = /^cell:(\d):(\d):(.+)$/.exec(id);
   if (!match) return null;
   return {
@@ -86,12 +79,7 @@ export function applyDrop(
   const taskId = source.kind === 'pool' ? source.taskId : moving!.taskId;
   const task = context.tasks.find((candidate) => candidate._id === taskId);
   const taskName = task?.name ?? taskId;
-  const targetAssigneeId =
-    target.kind === 'day'
-      ? source.kind === 'slot'
-        ? moving!.assigneeId
-        : (task?.defaultAssigneeId ?? null)
-      : target.assigneeId;
+  const targetAssigneeId = target.assigneeId;
 
   if (
     moving &&

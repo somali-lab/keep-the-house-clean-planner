@@ -138,6 +138,21 @@ describe('WeekPage', () => {
     expect(screen.queryByRole('button', { name: /Verplaats/ })).not.toBeInTheDocument();
   });
 
+  it('filters the overview by person and by unassigned tasks', async () => {
+    setup();
+    renderWithProviders(<WeekPage now={NOW} />);
+    fireEvent.click(await screen.findByRole('button', { name: /Afgelopen 3 dagen/ }));
+
+    const filter = screen.getByLabelText('Filter op persoon');
+    fireEvent.change(filter, { target: { value: BRAM._id } });
+    expect(await screen.findByText('Stofzuigen')).toBeInTheDocument();
+    expect(screen.queryByText('Badkamer')).not.toBeInTheDocument();
+
+    fireEvent.change(filter, { target: { value: 'unassigned' } });
+    await waitFor(() => expect(screen.queryByText('Stofzuigen')).not.toBeInTheDocument());
+    expect(screen.getAllByText('Niets gepland.').length).toBeGreaterThan(0);
+  });
+
   it('can complete a task and undo it from the overview', async () => {
     const fetchMock = setup();
     renderWithProviders(<WeekPage now={NOW} />);
@@ -147,6 +162,22 @@ describe('WeekPage', () => {
     fireEvent.click(undo);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Afvinken: Badkamer' })).toBeInTheDocument());
     expect(patchBodies(fetchMock, 'o1')).toEqual([{ action: 'complete' }, { action: 'uncomplete' }]);
+  });
+
+  it('uses the configured completion control and always shows a green check when done', async () => {
+    mockApi({
+      '/api/users': [ANNA, BRAM],
+      '/api/settings': makeSettings({ completionControl: 'thumb' }),
+      '/api/rooms': [makeRoom({ _id: 'r1', name: 'Woonkamer' })],
+      '/api/tasks': [makeTask({ _id: 't1', name: 'Huishoudtaak', roomId: 'r1' })],
+      '/api/occurrences': () => db,
+    });
+    storeProfile(ANNA._id);
+    db = [makeOccurrence({ _id: 'o3', taskNameSnapshot: 'Afwas', date: '2026-09-15', status: 'done', assigneeId: ANNA._id })];
+    renderWithProviders(<WeekPage now={NOW} />);
+    fireEvent.click(await screen.findByRole('button', { name: /Afgelopen 3 dagen/ }));
+    const done = await screen.findByRole('button', { name: 'Afwas ongedaan maken' });
+    expect(done).toHaveClass('bg-success');
   });
 
   it('moves an item when it is dropped on another day', async () => {

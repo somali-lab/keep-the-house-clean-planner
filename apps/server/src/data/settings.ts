@@ -2,6 +2,7 @@ import type {
   AiProviderSettings,
   AiPromptTemplates,
   AiPrompts,
+  CompletionControl,
   DismissedPromotion,
   Interval,
   UpdateSettingsInput,
@@ -27,6 +28,7 @@ export interface SettingsDoc {
   aiProvider: AiProviderSettings;
   aiPrompts?: AiPrompts;
   aiPromptTemplates?: AiPromptTemplates;
+  completionControl?: CompletionControl;
   promoteThreshold: number;
   dismissedPromotions: DismissedPromotion[];
   createdAt: Date;

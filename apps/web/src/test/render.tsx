@@ -66,6 +66,7 @@ export function makeSettings(overrides: Partial<Settings> = {}): Settings {
     vacationRanges: [],
     intervals: DEFAULT_INTERVALS,
     aiProvider: { type: 'none' },
+    completionControl: 'circle',
     promoteThreshold: 2,
     dismissedPromotions: [],
     createdAt: STAMP,

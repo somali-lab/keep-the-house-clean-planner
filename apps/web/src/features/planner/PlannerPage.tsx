@@ -34,6 +34,7 @@ import { useRooms, useSettings, useTasks } from '../../api/queries.ts';
 import { format, t } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
 import { ExportDialog } from '../export/ExportDialog.tsx';
+import { AiPage } from '../ai/AiPage.tsx';
 import { PromoteBanner } from '../promote/PromoteBanner.tsx';
 import {
   useActivatePlan,
@@ -252,6 +253,8 @@ export function PlannerPage() {
               </SheetContent>
             </Sheet>
       )}
+
+      <AiPage section="plan" embedded />
 
       <PromoteBanner />
 

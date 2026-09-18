@@ -12,11 +12,8 @@ import { cn } from '@/lib/utils';
 import { api, ApiRequestError } from '../../api/index.ts';
 import { queryKeys, useRooms, useSettings } from '../../api/queries.ts';
 import { format, t } from '../../i18n/nl.ts';
-import { getLanguage, getLocale } from '../../i18n/runtime.ts';
-import { useProfile } from '../../identity/index.ts';
 import { usePlans } from '../planner/api.ts';
-import { useAiActions, useAiGenerationStartedAt, usePlanDiff } from './api.ts';
-import { ProposalReview } from './ProposalReview.tsx';
+import { useAiActions, useAiGenerationStartedAt } from './api.ts';
 
 function errorText(error: unknown): string {
   if (error instanceof ApiRequestError) {
@@ -31,25 +28,6 @@ function errorText(error: unknown): string {
 
 const cardClass = 'flex flex-col gap-5 rounded-2xl border bg-card p-6 text-card-foreground shadow-sm';
 
-function proposalLabel(name: string, createdAt: string): string {
-  const cleanName = /^AI-voorstel \d{4}-\d{2}-\d{2}$/.test(name)
-    ? getLanguage() === 'nl'
-      ? 'AI-voorstel'
-      : 'AI proposal'
-    : name;
-  const dateTime = new Intl.DateTimeFormat(getLocale(), {
-    timeZone: 'Europe/Amsterdam',
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  });
-  return `${cleanName} · ${dateTime.format(new Date(createdAt)).replace(',', '')}`;
-}
-
 function CardHeading({ id, icon, children }: { id?: string; icon: ReactNode; children: ReactNode }) {
   return (
     <div className="flex items-center gap-3">
@@ -63,24 +41,21 @@ function CardHeading({ id, icon, children }: { id?: string; icon: ReactNode; chi
   );
 }
 
-export function AiPage() {
+export function AiPage({ section = 'all', embedded = false }: { section?: 'all' | 'plan' | 'tasks'; embedded?: boolean }) {
   const idPrefix = useId();
   const settings = useSettings();
   const plans = usePlans();
   const rooms = useRooms();
-  const { activeUsers } = useProfile();
   const queryClient = useQueryClient();
-  const { propose, rebalance, suggestTasks, explain, apply, discard } = useAiActions();
+  const { propose, rebalance, suggestTasks, explain } = useAiActions();
 
   const [constraints, setConstraints] = useState('');
-  const [selectedDraft, setSelectedDraft] = useState<string | null>(null);
   const [roomId, setRoomId] = useState('');
   const [message, setMessage] = useState<{ kind: 'status' | 'alert'; text: string } | null>(null);
   const [addedSuggestions, setAddedSuggestions] = useState<string[]>([]);
   const [timerNow, setTimerNow] = useState(() => Date.now());
   const explanationRef = useRef<HTMLElement | null>(null);
 
-  const diff = usePlanDiff(selectedDraft);
   const aiStartedAt = useAiGenerationStartedAt();
   const aiWorking = aiStartedAt !== null;
   const aiElapsedSeconds = aiStartedAt === null ? 0 : Math.max(0, Math.floor((timerNow - aiStartedAt) / 1000));
@@ -109,7 +84,7 @@ export function AiPage() {
   if (settings.data.aiProvider.type === 'none') {
     return (
       <section>
-        <PageHeader title={t('nav.ai')} />
+        {!embedded && <PageHeader title={t('nav.ai')} />}
         <div className="flex max-w-2xl items-start gap-4 rounded-2xl border bg-muted/60 p-6">
           <div className="grid size-12 shrink-0 place-items-center rounded-2xl bg-card text-muted-foreground shadow-sm">
             <Bot className="size-6" aria-hidden="true" />
@@ -131,9 +106,7 @@ export function AiPage() {
   }
 
   const activePlan = plans.data.find((p) => p.active);
-  const openDrafts = plans.data.filter((p) => p.draft && !p.discarded);
-  const draft = openDrafts.find((p) => p._id === selectedDraft) ?? null;
-  const busy = aiWorking || apply.isPending || discard.isPending;
+  const busy = aiWorking;
   const fail = (error: unknown) => setMessage({ kind: 'alert', text: errorText(error) });
   const withConstraints = constraints.trim() ? { constraints: constraints.trim() } : {};
 
@@ -149,8 +122,9 @@ export function AiPage() {
 
   return (
     <section className="flex flex-col gap-6">
-      <PageHeader className="mb-0" title={t('nav.ai')} description={t('ai.intro')} />
+      {!embedded && <PageHeader className="mb-0" title={t('nav.ai')} description={t('ai.intro')} />}
 
+      {section !== 'tasks' && <>
       <div className={cn(cardClass, 'bg-gradient-to-br from-card to-secondary/50')}>
         <CardHeading icon={<Bot aria-hidden="true" />}>{t('settings.ai.title')}</CardHeading>
 
@@ -173,8 +147,7 @@ export function AiPage() {
             onClick={() => {
               setMessage(null);
               propose.mutate(withConstraints, {
-                onSuccess: (result) => {
-                  setSelectedDraft(result.planId);
+                onSuccess: () => {
                   setMessage({ kind: 'status', text: t('ai.proposed') });
                 },
                 onError: fail,
@@ -195,8 +168,7 @@ export function AiPage() {
               rebalance.mutate(
                 { planId: activePlan._id, ...withConstraints },
                 {
-                  onSuccess: (result) => {
-                    setSelectedDraft(result.planId);
+                  onSuccess: () => {
                     setMessage({ kind: 'status', text: t('ai.proposed') });
                   },
                   onError: fail,
@@ -251,19 +223,6 @@ export function AiPage() {
           </p>
         )}
 
-        {openDrafts.length > 0 && (
-          <div className="flex max-w-md flex-col gap-2 border-t pt-5">
-            <Label htmlFor={`${idPrefix}-draft`}>{t('ai.drafts')}</Label>
-            <NativeSelect id={`${idPrefix}-draft`} value={selectedDraft ?? ''} onChange={(e) => setSelectedDraft(e.target.value || null)}>
-              <option value="">{t('tasks.field.choose')}</option>
-              {openDrafts.map((p) => (
-                <option key={p._id} value={p._id}>
-                  {proposalLabel(p.name, p.createdAt)}
-                </option>
-              ))}
-            </NativeSelect>
-          </div>
-        )}
       </div>
 
       {explain.data && (
@@ -280,7 +239,9 @@ export function AiPage() {
           </ol>
         </section>
       )}
+      </>}
 
+      {section !== 'plan' && (
       <section aria-labelledby="suggest-title" className={cardClass}>
         <CardHeading id="suggest-title" icon={<WandSparkles aria-hidden="true" />}>
           {t('ai.suggest.title')}
@@ -350,37 +311,6 @@ export function AiPage() {
             </ul>
           ))}
       </section>
-
-      {draft && diff.isPending && (
-        <p role="status" className="text-muted-foreground">
-          {t('app.loading')}
-        </p>
-      )}
-      {draft && diff.data && (
-        <ProposalReview
-          diff={diff.data}
-          users={activeUsers}
-          rationale={draft.rationale}
-          busy={busy}
-          onApply={() =>
-            apply.mutate(draft._id, {
-              onSuccess: () => {
-                setSelectedDraft(null);
-                setMessage({ kind: 'status', text: t('ai.applied') });
-              },
-              onError: fail,
-            })
-          }
-          onDiscard={() =>
-            discard.mutate(draft._id, {
-              onSuccess: () => {
-                setSelectedDraft(null);
-                setMessage({ kind: 'status', text: t('ai.discarded') });
-              },
-              onError: fail,
-            })
-          }
-        />
       )}
     </section>
   );

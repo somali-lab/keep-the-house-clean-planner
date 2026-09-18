@@ -1,5 +1,5 @@
 import type { User } from '@huishoudplanner/shared';
-import { CalendarDays, Check, CheckCircle2, Clock, TriangleAlert } from 'lucide-react';
+import { CalendarDays, CheckCircle2, Circle, Clock, ThumbsUp, TriangleAlert } from 'lucide-react';
 import { useId, useState, type FormEvent } from 'react';
 import { EmptyState } from '@/components/EmptyState';
 import { NativeSelect } from '@/components/NativeSelect';
@@ -75,6 +75,7 @@ export function DuePage({ now }: { now?: Date }) {
               rank={index + 1}
               item={item}
               users={activeUsers}
+              completionControl={settings.data.completionControl ?? 'circle'}
               todayKey={todayKey}
               planning={planning === item.taskId}
               busy={plan.isPending || doneNow.isPending}
@@ -103,6 +104,7 @@ interface DueRowProps {
   rank: number;
   item: DueItemView;
   users: User[];
+  completionControl: 'circle' | 'thumb';
   todayKey: string;
   planning: boolean;
   busy: boolean;
@@ -116,6 +118,7 @@ function DueRow({
   rank,
   item,
   users,
+  completionControl,
   todayKey,
   planning,
   busy,
@@ -217,7 +220,7 @@ function DueRow({
           disabled={busy}
           aria-label={format('due.doneNowNamed', { task })}
         >
-          <Check aria-hidden="true" />
+          {completionControl === 'thumb' ? <ThumbsUp aria-hidden="true" /> : <Circle aria-hidden="true" />}
           {t('due.doneNow')}
         </Button>
       </div>

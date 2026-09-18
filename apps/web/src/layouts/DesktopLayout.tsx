@@ -11,8 +11,6 @@ import {
   CalendarRange,
   Settings,
   Smartphone,
-  Sparkles,
-  MessageSquareCode,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
@@ -23,8 +21,6 @@ import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { ThemeSwitcher } from '@/components/ThemeSwitcher';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { AiPage } from '../features/ai/AiPage.tsx';
-import { AiPromptsPage } from '../features/ai-prompts/AiPromptsPage.tsx';
 import { DistributionPage } from '../features/distribution/DistributionPage.tsx';
 import { HistoryPage } from '../features/history/HistoryPage.tsx';
 import { PlannerPage } from '../features/planner/PlannerPage.tsx';
@@ -44,8 +40,6 @@ const PAGES: Partial<Record<string, ReactElement>> = {
   '/distribution': <DistributionPage />,
   '/statistics': <StatsPage />,
   '/history': <HistoryPage />,
-  '/ai': <AiPage />,
-  '/ai-prompts': <AiPromptsPage />,
   '/settings': <SettingsPage />,
 };
 
@@ -56,8 +50,6 @@ const SECTIONS: { path: string; label: MessageKey; icon: LucideIcon; minimumRole
   { path: '/distribution', label: 'nav.distribution', icon: Scale, minimumRole: 'member' },
   { path: '/statistics', label: 'nav.stats', icon: ChartColumnBig, minimumRole: 'member' },
   { path: '/history', label: 'nav.history', icon: History, minimumRole: 'member' },
-  { path: '/ai', label: 'nav.ai', icon: Sparkles, minimumRole: 'planner' },
-  { path: '/ai-prompts', label: 'nav.aiPrompts', icon: MessageSquareCode, minimumRole: 'planner' },
   { path: '/settings', label: 'nav.settings', icon: Settings, minimumRole: 'admin' },
 ];
 
@@ -147,6 +139,8 @@ export function DesktopLayout({ onSwitchLayout }: { onSwitchLayout: () => void }
             ))}
             {/* Week overview with drag-to-reschedule, reachable from the planner. */}
             <Route path="/week-overview" element={<Navigate to="/week" replace />} />
+            <Route path="/ai" element={<Navigate to="/planner" replace />} />
+            <Route path="/ai-prompts" element={<Navigate to="/settings" replace />} />
             <Route path="*" element={<Navigate to="/week" replace />} />
           </Routes>
         </main>

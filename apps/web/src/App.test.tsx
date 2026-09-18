@@ -59,7 +59,8 @@ describe('app shell', () => {
     const nav = await screen.findByRole('navigation', { name: 'Hoofdmenu' });
     expect(nav).toHaveTextContent('Planner');
     expect(nav).toHaveTextContent('Verdeling');
-    expect(nav).toHaveTextContent('AI-prompts');
+    expect(nav).not.toHaveTextContent('AI-assistent');
+    expect(nav).not.toHaveTextContent('AI-prompts');
     expect(nav).toHaveTextContent('Instellingen');
     expect(screen.getByRole('group', { name: 'Kleurthema' })).toBeInTheDocument();
     const version = screen.getByLabelText(`Versie ${APP_VERSION}`);

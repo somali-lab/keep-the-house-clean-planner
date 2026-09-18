@@ -3,10 +3,12 @@ import {
   ArrowRight,
   Check,
   CheckCircle2,
+  Circle,
   Hand,
   MoreHorizontal,
   SkipForward,
   TriangleAlert,
+  ThumbsUp,
   Undo2,
 } from 'lucide-react';
 import { useId, useState } from 'react';
@@ -23,6 +25,7 @@ export interface OccurrenceItemProps {
   roomName: string | undefined;
   users: User[];
   profileId: string;
+  completionControl?: 'circle' | 'thumb';
   onComplete(completedBy?: string): void;
   onUncomplete(): void;
   onSkip(reason: string): void;
@@ -41,6 +44,7 @@ export function OccurrenceItem({
   roomName,
   users,
   profileId,
+  completionControl = 'circle',
   onComplete,
   onUncomplete,
   onSkip,
@@ -70,11 +74,15 @@ export function OccurrenceItem({
         {isOpen ? (
           <button
             type="button"
-            className="check-button grid size-14 shrink-0 cursor-pointer place-items-center rounded-full border-2 border-muted-foreground/40 bg-background text-transparent transition-all outline-none hover:border-success hover:bg-success/10 hover:text-success focus-visible:ring-[3px] focus-visible:ring-ring/50 active:scale-95"
+            className="check-button grid size-14 shrink-0 cursor-pointer place-items-center rounded-full border-2 border-muted-foreground/40 bg-background text-muted-foreground transition-all outline-none hover:border-success hover:bg-success/10 hover:text-success focus-visible:ring-[3px] focus-visible:ring-ring/50 active:scale-95"
             aria-label={format('today.completeNamed', { task })}
             onClick={() => onComplete()}
           >
-            <Check className="size-7" strokeWidth={3} aria-hidden="true" />
+            {completionControl === 'thumb' ? (
+              <ThumbsUp className="size-7" aria-hidden="true" />
+            ) : (
+              <Circle className="size-7" aria-hidden="true" />
+            )}
           </button>
         ) : (
           <span

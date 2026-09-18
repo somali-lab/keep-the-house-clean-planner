@@ -142,6 +142,7 @@ export function TodayPage({ now }: { now?: Date }) {
                   roomName={occ.roomNameSnapshot ?? roomByTask.get(occ.taskId)}
                   users={activeUsers}
                   profileId={profileId}
+                  completionControl={settings.data.completionControl ?? 'circle'}
                   onComplete={(completedBy) =>
                     run({ id: occ._id, kind: 'complete', completedBy }, occ)
                   }

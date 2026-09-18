@@ -39,6 +39,15 @@ function setup(due: DueItemView[] = DUE) {
   });
 }
 
+function setupWithSettings(settings: ReturnType<typeof makeSettings>) {
+  storeProfile(ANNA._id);
+  return mockApi({
+    '/api/users': [ANNA, BRAM],
+    '/api/settings': settings,
+    '/api/due': DUE,
+  });
+}
+
 const callsTo = (fetchMock: ReturnType<typeof mockApi>, method: string, url: string) =>
   fetchMock.mock.calls
     .filter(([u, init]) => u === url && (init as RequestInit | undefined)?.method === method)
@@ -88,6 +97,13 @@ describe('DuePage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Stofzuigen nu gedaan' }));
     await waitFor(() => expect(callsTo(fetchMock, 'PATCH', '/api/occurrences/new1')).toEqual([{ action: 'complete' }]));
     expect(callsTo(fetchMock, 'POST', '/api/occurrences')).toEqual([{ taskId: 't2', date: '2026-09-16', assigneeId: ANNA._id }]);
+  });
+
+  it('uses the configured control for completing a due task', async () => {
+    setupWithSettings(makeSettings({ completionControl: 'thumb' }));
+    renderWithProviders(<DuePage now={NOW} />);
+    const button = await screen.findByRole('button', { name: 'Stofzuigen nu gedaan' });
+    expect(button.querySelector('.lucide-thumbs-up')).not.toBeNull();
   });
 
   it('"Nu gedaan" completes today\'s planned occurrence instead of adding one', async () => {
