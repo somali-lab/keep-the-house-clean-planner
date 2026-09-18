@@ -48,13 +48,13 @@ export function SettingsPage({ initialTab = 'calendar' }: { initialTab?: 'calend
     <section>
       <PageHeader title={t('nav.settings')} />
       <Tabs defaultValue={initialTab} className="gap-6">
-        <TabsList className="grid h-auto w-full grid-cols-2 gap-2 rounded-2xl border bg-card p-2 shadow-sm md:grid-cols-3 xl:grid-cols-6">
-          <TabsTrigger className="min-h-12 rounded-xl" value="calendar"><CalendarDays />{t('settings.tab.calendar')}</TabsTrigger>
-          <TabsTrigger className="min-h-12 rounded-xl" value="people"><Users />{t('settings.tab.people')}</TabsTrigger>
-          <TabsTrigger className="min-h-12 rounded-xl" value="rooms"><LayoutPanelTop />{t('settings.tab.rooms')}</TabsTrigger>
-          <TabsTrigger className="min-h-12 rounded-xl" value="interface"><LayoutPanelTop />{t('settings.tab.interface')}</TabsTrigger>
-          <TabsTrigger className="min-h-12 rounded-xl" value="ai"><Bot />{t('settings.tab.ai')}</TabsTrigger>
-          <TabsTrigger className="min-h-12 rounded-xl" value="data"><Database />{t('settings.tab.data')}</TabsTrigger>
+        <TabsList className="flex h-auto w-full flex-nowrap justify-start gap-2 overflow-x-auto rounded-2xl border bg-card p-2 shadow-sm">
+          <TabsTrigger className="min-h-12 flex-none rounded-xl px-4" value="calendar"><CalendarDays />{t('settings.tab.calendar')}</TabsTrigger>
+          <TabsTrigger className="min-h-12 flex-none rounded-xl px-4" value="people"><Users />{t('settings.tab.people')}</TabsTrigger>
+          <TabsTrigger className="min-h-12 flex-none rounded-xl px-4" value="rooms"><LayoutPanelTop />{t('settings.tab.rooms')}</TabsTrigger>
+          <TabsTrigger className="min-h-12 flex-none rounded-xl px-4" value="interface"><LayoutPanelTop />{t('settings.tab.interface')}</TabsTrigger>
+          <TabsTrigger className="min-h-12 flex-none rounded-xl px-4" value="ai"><Bot />{t('settings.tab.ai')}</TabsTrigger>
+          <TabsTrigger className="min-h-12 flex-none rounded-xl px-4" value="data"><Database />{t('settings.tab.data')}</TabsTrigger>
         </TabsList>
         <TabsContent value="calendar"><CalendarSection settings={settings.data} /></TabsContent>
         <TabsContent value="people"><UsersSection /></TabsContent>

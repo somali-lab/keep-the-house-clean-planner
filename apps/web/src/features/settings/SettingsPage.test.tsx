@@ -37,6 +37,15 @@ const renderSettings = async () => {
 };
 
 describe('SettingsPage — AI provider', () => {
+  it('keeps every main settings tab on one horizontally scrollable row', async () => {
+    setup();
+    await renderSettings();
+    const tabList = screen.getAllByRole('tablist')[0]!;
+    expect(tabList).toHaveClass('flex-nowrap', 'overflow-x-auto');
+    expect(within(tabList).getAllByRole('tab')).toHaveLength(6);
+    expect(within(tabList).getAllByRole('tab').every((tab) => tab.classList.contains('flex-none'))).toBe(true);
+  });
+
   it('has no field for the API key and explains it comes from the environment', async () => {
     setup();
     const { container } = await renderSettings();
