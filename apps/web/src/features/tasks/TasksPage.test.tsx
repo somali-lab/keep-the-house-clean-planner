@@ -45,6 +45,7 @@ describe('TasksPage — grouping', () => {
       'href',
       '/api/export/pdf/tasks',
     );
+    expect(screen.getByRole('complementary', { name: 'AI-assistent' })).toBeInTheDocument();
     const sections = await screen.findAllByRole('region');
     expect(sections.map((s) => within(s).getByRole('heading', { level: 2 }).textContent)).toEqual(['Keuken', 'Badkamer']);
     await expandAllRooms();

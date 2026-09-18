@@ -254,8 +254,6 @@ export function PlannerPage() {
             </Sheet>
       )}
 
-      <AiPage section="plan" embedded />
-
       <PromoteBanner />
 
       <Dialog open={confirmReset} onOpenChange={setConfirmReset}>
@@ -341,23 +339,25 @@ export function PlannerPage() {
         </p>
       )}
 
-      {!plan ? (
-        <EmptyState icon={<CalendarRange className="size-6" aria-hidden="true" />}>
-          <p>{t('planner.noPlan')}</p>
-        </EmptyState>
-      ) : (
-        <>
-          {notice && (
-            <p
-              role="status"
-              className="rounded-xl border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success"
-            >
-              {notice}
-            </p>
-          )}
-          {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} />}
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="flex min-w-0 flex-col gap-5">
+          {!plan ? (
+            <EmptyState icon={<CalendarRange className="size-6" aria-hidden="true" />}>
+              <p>{t('planner.noPlan')}</p>
+            </EmptyState>
+          ) : (
+            <>
+              {notice && (
+                <p
+                  role="status"
+                  className="rounded-xl border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success"
+                >
+                  {notice}
+                </p>
+              )}
+              {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} />}
 
-          {confirmActivate && (
+              {confirmActivate && (
             <div
               role="dialog"
               aria-modal="true"
@@ -396,19 +396,27 @@ export function PlannerPage() {
                 </p>
               )}
             </div>
-          )}
+              )}
 
-          <PlanEditor
-            key={plan._id}
-            plan={plan}
-            tasks={tasks.data.filter((task) => task.active)}
-            rooms={rooms.data}
-            users={activeUsers}
-            intervals={settings.data.intervals}
-            onManagePlans={() => setPlansOpen(true)}
-          />
-        </>
-      )}
+              <PlanEditor
+                key={plan._id}
+                plan={plan}
+                tasks={tasks.data.filter((task) => task.active)}
+                rooms={rooms.data}
+                users={activeUsers}
+                intervals={settings.data.intervals}
+                onManagePlans={() => setPlansOpen(true)}
+              />
+            </>
+          )}
+        </div>
+        <aside
+          aria-label={t('settings.ai.title')}
+          className="min-w-0 xl:sticky xl:top-6"
+        >
+          <AiPage section="plan" embedded />
+        </aside>
+      </div>
     </section>
   );
 }

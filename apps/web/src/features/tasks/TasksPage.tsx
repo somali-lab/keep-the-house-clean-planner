@@ -281,53 +281,61 @@ export function TasksPage() {
           </p>
         )}
 
-      <AiPage section="tasks" embedded />
-
-      {groups.map((group) => (
-        <RoomSection
-          key={group.roomId}
-          group={group}
-          collapsed={collapsedRooms === null || collapsedRooms.has(group.roomId)}
-          onCollapsedChange={(collapsed) =>
-            setCollapsedRooms((current) => {
-              const next = current
-                ? new Set(current)
-                : new Set(groups.map((item) => item.roomId));
-              if (collapsed) next.add(group.roomId);
-              else next.delete(group.roomId);
-              return next;
-            })
-          }
-          users={activeUsers}
-          intervalLabel={intervalLabel}
-          userName={userName}
-          onAdd={() => {
-            saveTask.reset();
-            setEditing({ mode: 'new', roomId: group.room?.active ? group.roomId : undefined });
-          }}
-          onEdit={(task) => {
-            saveTask.reset();
-            setEditing({ mode: 'edit', task });
-          }}
-          onToggleActive={(task) => setActive.mutate({ id: task._id, active: !task.active })}
-          onDelete={setDeleting}
-          onBulkDeactivate={() => {
-            if (
-              window.confirm(
-                format('tasks.bulk.confirmDeactivate', { room: group.room?.name ?? '' }),
-              )
-            ) {
-              bulk.mutate({ roomId: group.roomId, body: { op: 'deactivate' } });
-            }
-          }}
-          onBulkReassign={(assigneeId) =>
-            bulk.mutate({
-              roomId: group.roomId,
-              body: { op: 'reassign', defaultAssigneeId: assigneeId },
-            })
-          }
-        />
-      ))}
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="flex min-w-0 flex-col gap-6">
+          {groups.map((group) => (
+            <RoomSection
+              key={group.roomId}
+              group={group}
+              collapsed={collapsedRooms === null || collapsedRooms.has(group.roomId)}
+              onCollapsedChange={(collapsed) =>
+                setCollapsedRooms((current) => {
+                  const next = current
+                    ? new Set(current)
+                    : new Set(groups.map((item) => item.roomId));
+                  if (collapsed) next.add(group.roomId);
+                  else next.delete(group.roomId);
+                  return next;
+                })
+              }
+              users={activeUsers}
+              intervalLabel={intervalLabel}
+              userName={userName}
+              onAdd={() => {
+                saveTask.reset();
+                setEditing({ mode: 'new', roomId: group.room?.active ? group.roomId : undefined });
+              }}
+              onEdit={(task) => {
+                saveTask.reset();
+                setEditing({ mode: 'edit', task });
+              }}
+              onToggleActive={(task) => setActive.mutate({ id: task._id, active: !task.active })}
+              onDelete={setDeleting}
+              onBulkDeactivate={() => {
+                if (
+                  window.confirm(
+                    format('tasks.bulk.confirmDeactivate', { room: group.room?.name ?? '' }),
+                  )
+                ) {
+                  bulk.mutate({ roomId: group.roomId, body: { op: 'deactivate' } });
+                }
+              }}
+              onBulkReassign={(assigneeId) =>
+                bulk.mutate({
+                  roomId: group.roomId,
+                  body: { op: 'reassign', defaultAssigneeId: assigneeId },
+                })
+              }
+            />
+          ))}
+        </div>
+        <aside
+          aria-label={t('settings.ai.title')}
+          className="min-w-0 xl:sticky xl:top-6"
+        >
+          <AiPage section="tasks" embedded />
+        </aside>
+      </div>
     </section>
   );
 }
