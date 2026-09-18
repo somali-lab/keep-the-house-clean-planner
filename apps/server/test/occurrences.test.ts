@@ -114,7 +114,15 @@ describe('PATCH /api/occurrences/:id', () => {
       completedBy: p1._id.toHexString(),
       completedAt: '2026-09-16T08:00:00.000Z',
     });
-    expect(entries[0]!.meta).toEqual({ completedBy: p1._id, wasAssignee: true });
+    expect(entries[0]!.meta).toMatchObject({
+      completedBy: p1._id,
+      wasAssignee: true,
+      occurrence: {
+        taskNameSnapshot: occ.taskNameSnapshot,
+        roomNameSnapshot: occ.roomNameSnapshot,
+        date: expect.any(Date),
+      },
+    });
     expect(entries[0]!.actorId).toEqual(p2._id);
     expect((await findTaskById(t.db, new ObjectId(weekly)))?.lastCompletedAt).toEqual(new Date('2026-09-16T08:00:00Z'));
   });
@@ -127,7 +135,15 @@ describe('PATCH /api/occurrences/:id', () => {
       { entity: 'occurrence', action: 'complete', count: 1 },
     );
     expect(entries[0]!.actorId).toEqual(p1._id);
-    expect(entries[0]!.meta).toEqual({ completedBy: p2._id, wasAssignee: false });
+    expect(entries[0]!.meta).toMatchObject({
+      completedBy: p2._id,
+      wasAssignee: false,
+      occurrence: {
+        taskNameSnapshot: occ.taskNameSnapshot,
+        roomNameSnapshot: occ.roomNameSnapshot,
+      },
+    });
+    expect(entries[0]!.meta?.occurrence).toMatchObject({ date: expect.any(Date) });
     expect(entries[0]!.after).toMatchObject({ completedBy: p2._id });
   });
 
@@ -152,6 +168,15 @@ describe('PATCH /api/occurrences/:id', () => {
       entity: 'occurrence',
       action: 'uncomplete',
       count: 1,
+    });
+    const uncompleteEntry = await t.db.collection(COLLECTIONS.auditLog).findOne({
+      entityId: new ObjectId(occ._id),
+      action: 'uncomplete',
+    });
+    expect(uncompleteEntry?.meta?.occurrence).toMatchObject({
+      taskNameSnapshot: occ.taskNameSnapshot,
+      roomNameSnapshot: occ.roomNameSnapshot,
+      date: expect.any(Date),
     });
     expect(result.json()).toMatchObject({
       status: 'skipped',

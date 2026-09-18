@@ -1,5 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { ObjectId } from 'mongodb';
 import { SYSTEM_ACTOR_ID } from '../src/audit/context.ts';
+import { insertAuditEntry } from '../src/data/auditLog.ts';
+import { insertOccurrencesIdempotent, type OccurrenceDoc } from '../src/data/occurrences.ts';
 import { updateUser, type UserDoc } from '../src/data/users.ts';
 import { asProfile, seededUsers } from './helpers/http.ts';
 import { createTestApp, type TestApp } from './helpers/testApp.ts';
@@ -14,6 +17,7 @@ interface EntryJson {
   source: string;
   before: Record<string, unknown>;
   after: Record<string, unknown>;
+  meta?: Record<string, unknown>;
 }
 
 interface PageJson {
@@ -113,6 +117,48 @@ describe('GET /api/audit', () => {
       const res = await t.app.inject({ method: 'GET', url: `/api/audit?${query}` });
       expect(res.statusCode, query).toBe(400);
     }
+  });
+
+  it('enriches older occurrence entries with task, room and date context', async () => {
+    const occurrence: OccurrenceDoc = {
+      _id: new ObjectId(),
+      taskId: new ObjectId(),
+      cycleId: new ObjectId(),
+      planId: null,
+      date: new Date('2026-09-18T22:00:00.000Z'),
+      plannedDate: new Date('2026-09-18T22:00:00.000Z'),
+      assigneeId: p1._id,
+      status: 'open',
+      statusBeforeCompletion: null,
+      completedAt: null,
+      completedBy: null,
+      skipReason: null,
+      durationMinutesSnapshot: 20,
+      taskNameSnapshot: 'Douche schoonmaken',
+      roomIdSnapshot: new ObjectId(),
+      roomNameSnapshot: 'Badkamer',
+      origin: 'generated',
+      createdAt: t.clock.now(),
+      updatedAt: t.clock.now(),
+    };
+    await insertOccurrencesIdempotent(t.systemCtx(), [occurrence], { runId: 'audit-context-test' });
+    await insertAuditEntry(t.db, {
+      at: t.clock.now(),
+      actorId: p1._id,
+      entity: 'occurrence',
+      entityId: occurrence._id,
+      action: 'uncomplete',
+      before: { status: 'done' },
+      after: { status: 'open' },
+      source: 'ui',
+    });
+
+    const { items } = await list(`entity=occurrence&entityId=${occurrence._id.toHexString()}`);
+    expect(items[0]!.meta?.occurrence).toMatchObject({
+      taskNameSnapshot: occurrence.taskNameSnapshot,
+      roomNameSnapshot: occurrence.roomNameSnapshot,
+      date: occurrence.date.toISOString(),
+    });
   });
 
   it('requires a profile and clears the complete history', async () => {
