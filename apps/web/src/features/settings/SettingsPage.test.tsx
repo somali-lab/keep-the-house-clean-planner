@@ -41,7 +41,7 @@ describe('SettingsPage — AI provider', () => {
     setup();
     await renderSettings();
     const tabList = screen.getAllByRole('tablist')[0]!;
-    expect(tabList).toHaveClass('flex-nowrap', 'overflow-x-auto');
+    expect(tabList).toHaveClass('flex-nowrap', 'overflow-x-auto', 'overflow-y-hidden');
     expect(within(tabList).getAllByRole('tab')).toHaveLength(6);
     expect(within(tabList).getAllByRole('tab').every((tab) => tab.classList.contains('flex-none'))).toBe(true);
   });

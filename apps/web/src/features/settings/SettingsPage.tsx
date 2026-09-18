@@ -48,7 +48,7 @@ export function SettingsPage({ initialTab = 'calendar' }: { initialTab?: 'calend
     <section>
       <PageHeader title={t('nav.settings')} />
       <Tabs defaultValue={initialTab} className="gap-6">
-        <TabsList className="flex h-auto w-full flex-nowrap justify-start gap-2 overflow-x-auto rounded-2xl border bg-card p-2 shadow-sm">
+        <TabsList className="flex h-auto w-full flex-nowrap justify-start gap-2 overflow-x-auto overflow-y-hidden rounded-2xl border bg-card p-2 shadow-sm">
           <TabsTrigger className="min-h-12 flex-none rounded-xl px-4" value="calendar"><CalendarDays />{t('settings.tab.calendar')}</TabsTrigger>
           <TabsTrigger className="min-h-12 flex-none rounded-xl px-4" value="people"><Users />{t('settings.tab.people')}</TabsTrigger>
           <TabsTrigger className="min-h-12 flex-none rounded-xl px-4" value="rooms"><LayoutPanelTop />{t('settings.tab.rooms')}</TabsTrigger>
