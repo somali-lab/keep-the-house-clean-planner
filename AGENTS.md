@@ -5,11 +5,12 @@ These instructions apply to the entire repository. More focused rules live in `.
 ## Start every task
 
 1. Read `git status` and preserve changes you did not make.
-2. Locate the implementation, its nearest tests, and the relevant entries in `docs/DECISIONS.md` before editing.
-3. Trace cross-layer changes end to end: shared contract -> server route/domain/data -> web API/UI -> tests.
-4. Prefer the smallest coherent change. Do not refactor unrelated code or update dependencies incidentally.
-5. Commit every completed coherent change with a Conventional Commit message, even when the user does not ask separately. Keep unrelated user changes out of the commit and leave no finished work uncommitted; these commits are the source for Release Please changelog and release notes.
-6. Never push, publish, deploy, restore data, or modify a real installation unless the user explicitly asks.
+2. Before editing, create and switch to a dedicated feature branch with the `codex/` prefix, unless already on a suitable non-default branch. Never implement changes directly on `main`.
+3. Locate the implementation, its nearest tests, and the relevant entries in `docs/DECISIONS.md` before editing.
+4. Trace cross-layer changes end to end: shared contract -> server route/domain/data -> web API/UI -> tests.
+5. Prefer the smallest coherent change. Do not refactor unrelated code or update dependencies incidentally.
+6. Commit every completed coherent change with a Conventional Commit message, even when the user does not ask separately. Keep unrelated user changes out of the commit and leave no finished work uncommitted; these commits are the source for Release Please changelog and release notes.
+7. Never push, publish, deploy, restore data, or modify a real installation unless the user explicitly asks.
 
 ## Sources of truth
 
