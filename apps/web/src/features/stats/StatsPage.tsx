@@ -11,13 +11,14 @@ import { cn } from '@/lib/utils';
 import { useRooms, useTasks, useUsers } from '../../api/queries.ts';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
-import { useCompletion, useDeviations, useIntervals, useResetStatistics, useWorkload } from './api.ts';
+import { useCompletion, useDeviations, useIntervals, useResetStatistics, useWorkload, type StatsPeriod } from './api.ts';
 import { statsTableClass } from './ChartFrame.tsx';
 import { FairnessBars, type FairnessRow } from './FairnessBars.tsx';
 import { formatDays, formatFactor, formatMinutes, formatNumber, formatPercent, MAX_SERIES } from './scale.ts';
 import { TrendLines, type TrendSeries } from './TrendLines.tsx';
 
-const PERIODS = [1, 2, 3];
+const WEEK_PERIODS = [1, 2, 3];
+const CYCLE_PERIODS = [1, 2, 4, 8, 13];
 const GROUP_BY: StatsGroupBy[] = ['task', 'room', 'user'];
 
 /** Deviation thresholds for the interval report ("wensdenken"). */
@@ -82,15 +83,15 @@ function KpiCard({ icon, label, value, tint }: { icon: ReactNode; label: string;
 
 export function StatsPage() {
   const idPrefix = useId();
-  const [weeks, setWeeks] = useState(1);
+  const [period, setPeriod] = useState<StatsPeriod>({ unit: 'weeks', count: 1 });
   const [groupBy, setGroupBy] = useState<StatsGroupBy>('task');
   const [confirmReset, setConfirmReset] = useState(false);
   const [resetDone, setResetDone] = useState(false);
   const { profile } = useProfile();
-  const workload = useWorkload(weeks);
-  const completion = useCompletion(weeks, groupBy);
-  const intervals = useIntervals(weeks);
-  const deviations = useDeviations(weeks);
+  const workload = useWorkload(period);
+  const completion = useCompletion(period, groupBy);
+  const intervals = useIntervals(period);
+  const deviations = useDeviations(period);
   const users = useUsers();
   const tasks = useTasks();
   const rooms = useRooms();
@@ -114,12 +115,28 @@ export function StatsPage() {
     <div className="flex flex-wrap items-end gap-3" role="group" aria-label={t('stats.filters')}>
       <div className="flex w-48 flex-col gap-2">
         <Label htmlFor={`${idPrefix}-period`}>{t('stats.period')}</Label>
-        <NativeSelect id={`${idPrefix}-period`} value={weeks} onChange={(e) => setWeeks(Number(e.target.value))}>
-          {PERIODS.map((n) => (
-            <option key={n} value={n}>
-              {n === 1 ? t('stats.period.one') : format('stats.period.many', { n })}
-            </option>
-          ))}
+        <NativeSelect
+          id={`${idPrefix}-period`}
+          value={`${period.unit}:${period.count}`}
+          onChange={(e) => {
+            const [unit, count] = e.target.value.split(':');
+            setPeriod({ unit: unit as StatsPeriod['unit'], count: Number(count) });
+          }}
+        >
+          <optgroup label={t('stats.period.weeks')}>
+            {WEEK_PERIODS.map((n) => (
+              <option key={`weeks-${n}`} value={`weeks:${n}`}>
+                {n === 1 ? t('stats.period.one') : format('stats.period.many', { n })}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label={t('stats.period.cycles')}>
+            {CYCLE_PERIODS.map((n) => (
+              <option key={`cycles-${n}`} value={`cycles:${n}`}>
+                {n === 1 ? t('stats.period.cycleOne') : format('stats.period.cycleMany', { n })}
+              </option>
+            ))}
+          </optgroup>
         </NativeSelect>
       </div>
       <div className="flex w-44 flex-col gap-2">
@@ -194,7 +211,9 @@ export function StatsPage() {
     values: cycleList.map((c) => find(c.users, id)?.doneMinutes ?? 0),
     secondary: cycleList.map((c) => find(c.users, id)?.plannedMinutes ?? 0),
   }));
-  const periodText = weeks === 1 ? t('stats.period.one') : format('stats.period.many', { n: weeks });
+  const periodText = period.unit === 'weeks'
+    ? period.count === 1 ? t('stats.period.one') : format('stats.period.many', { n: period.count })
+    : period.count === 1 ? t('stats.period.cycleOne') : format('stats.period.cycleMany', { n: period.count });
 
   // Summary figures for the KPI cards (display only).
   const totalPlanned = cycleList.reduce((sum, c) => sum + c.users.reduce((s, u) => s + u.plannedMinutes, 0), 0);

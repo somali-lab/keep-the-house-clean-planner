@@ -301,7 +301,9 @@ describe('StatsPage', () => {
   it('applies the period filter to every chart and table', async () => {
     const fetchMock = setup();
     renderWithProviders(<StatsPage />);
-    fireEvent.change(await screen.findByLabelText('Periode'), { target: { value: '3' } });
+    const period = await screen.findByLabelText('Periode');
+    expect(within(period).getByRole('option', { name: 'Laatste 13 cycli' })).toBeInTheDocument();
+    fireEvent.change(period, { target: { value: 'weeks:3' } });
     await waitFor(() =>
       expect(statsUrls(fetchMock)).toEqual(
         expect.arrayContaining([
@@ -309,6 +311,18 @@ describe('StatsPage', () => {
           '/api/stats/completion?weeks=3&groupBy=task',
           '/api/stats/intervals?weeks=3',
           '/api/stats/deviations?weeks=3',
+        ]),
+      ),
+    );
+
+    fireEvent.change(period, { target: { value: 'cycles:4' } });
+    await waitFor(() =>
+      expect(statsUrls(fetchMock)).toEqual(
+        expect.arrayContaining([
+          '/api/stats/workload?cycles=4',
+          '/api/stats/completion?cycles=4&groupBy=task',
+          '/api/stats/intervals?cycles=4',
+          '/api/stats/deviations?cycles=4',
         ]),
       ),
     );

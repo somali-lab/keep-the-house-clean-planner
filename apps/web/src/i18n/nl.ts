@@ -660,8 +660,12 @@ export const nl = {
 
   'stats.filters': 'Filters',
   'stats.period': 'Periode',
+  'stats.period.weeks': 'Weken',
+  'stats.period.cycles': 'Cycli',
   'stats.period.one': 'Deze week',
   'stats.period.many': 'Laatste {n} weken',
+  'stats.period.cycleOne': 'Laatste cyclus',
+  'stats.period.cycleMany': 'Laatste {n} cycli',
   'stats.empty': 'Nog geen gegevens: statistiek verschijnt zodra er een cyclus is gegenereerd.',
   'stats.showTable': 'Toon als tabel',
   'stats.showChart': 'Toon als grafiek',
