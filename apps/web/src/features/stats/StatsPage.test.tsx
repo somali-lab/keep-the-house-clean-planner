@@ -197,8 +197,8 @@ describe('StatsPage', () => {
     renderWithProviders(<StatsPage />);
     const overviewTab = await screen.findByRole('tab', { name: 'Overzicht' });
     expect(overviewTab).toHaveAttribute('aria-selected', 'true');
-    expect(overviewTab).toHaveClass('min-w-0');
-    expect(screen.getByRole('tablist', { name: 'Statistiekonderdeel' })).toHaveClass('max-w-4xl', 'overflow-hidden');
+    expect(overviewTab).toHaveClass('flex-none');
+    expect(screen.getByRole('tablist', { name: 'Statistiekonderdeel' })).toHaveClass('overflow-x-auto', 'overflow-y-hidden', '[scrollbar-width:none]');
     await selectStatsTab('Eerlijkheid');
     const figure = await screen.findByRole('figure', { name: 'Gepland en gedaan per persoon' });
 

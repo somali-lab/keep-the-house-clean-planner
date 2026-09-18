@@ -253,13 +253,13 @@ export function StatsPage() {
       {resetDone && <p role="status" className="mb-6 rounded-xl bg-success/15 px-4 py-3 font-semibold text-success">{t('stats.resetDone')}</p>}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="gap-6">
-        <TabsList className={cn(panelTabsListClass, 'grid max-w-4xl grid-cols-6 gap-1 overflow-hidden p-1.5')} aria-label={t('stats.tabs')}>
-          <TabsTrigger aria-label={t('stats.tab.overview')} className={cn(panelTabsTriggerClass, 'w-full min-w-0 px-2')} value="overview"><ChartColumnBig aria-hidden="true" /><span className="hidden md:inline">{t('stats.tab.overview')}</span></TabsTrigger>
-          <TabsTrigger aria-label={t('stats.fairness')} className={cn(panelTabsTriggerClass, 'w-full min-w-0 px-2')} value="fairness"><Scale aria-hidden="true" /><span className="hidden md:inline">{t('stats.tab.fairness')}</span></TabsTrigger>
-          <TabsTrigger aria-label={t('stats.trend')} className={cn(panelTabsTriggerClass, 'w-full min-w-0 px-2')} value="trend"><TrendingUp aria-hidden="true" /><span className="hidden md:inline">{t('stats.tab.trend')}</span></TabsTrigger>
-          <TabsTrigger aria-label={t('stats.completion')} className={cn(panelTabsTriggerClass, 'w-full min-w-0 px-2')} value="completion"><CircleCheck aria-hidden="true" /><span className="hidden md:inline">{t('stats.tab.completion')}</span></TabsTrigger>
-          <TabsTrigger aria-label={t('stats.intervals')} className={cn(panelTabsTriggerClass, 'w-full min-w-0 px-2')} value="intervals"><CalendarClock aria-hidden="true" /><span className="hidden md:inline">{t('stats.tab.intervals')}</span></TabsTrigger>
-          <TabsTrigger aria-label={t('stats.deviations')} className={cn(panelTabsTriggerClass, 'w-full min-w-0 px-2')} value="deviations"><Clock aria-hidden="true" /><span className="hidden md:inline">{t('stats.tab.deviations')}</span></TabsTrigger>
+        <TabsList className={panelTabsListClass} aria-label={t('stats.tabs')}>
+          <TabsTrigger aria-label={t('stats.tab.overview')} className={panelTabsTriggerClass} value="overview"><ChartColumnBig aria-hidden="true" />{t('stats.tab.overview')}</TabsTrigger>
+          <TabsTrigger aria-label={t('stats.fairness')} className={panelTabsTriggerClass} value="fairness"><Scale aria-hidden="true" />{t('stats.tab.fairness')}</TabsTrigger>
+          <TabsTrigger aria-label={t('stats.trend')} className={panelTabsTriggerClass} value="trend"><TrendingUp aria-hidden="true" />{t('stats.tab.trend')}</TabsTrigger>
+          <TabsTrigger aria-label={t('stats.completion')} className={panelTabsTriggerClass} value="completion"><CircleCheck aria-hidden="true" />{t('stats.tab.completion')}</TabsTrigger>
+          <TabsTrigger aria-label={t('stats.intervals')} className={panelTabsTriggerClass} value="intervals"><CalendarClock aria-hidden="true" />{t('stats.tab.intervals')}</TabsTrigger>
+          <TabsTrigger aria-label={t('stats.deviations')} className={panelTabsTriggerClass} value="deviations"><Clock aria-hidden="true" />{t('stats.tab.deviations')}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">
