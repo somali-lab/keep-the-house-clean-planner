@@ -104,28 +104,21 @@ describe('AiPage', () => {
     renderWithProviders(<AiPage />);
     expect(await screen.findByText(/De AI-assistent staat uit/)).toBeInTheDocument();
     expect(screen.getByText(/AI_API_KEY/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Naar Instellingen' })).toHaveAttribute('href', '/settings');
+    expect(screen.getByRole('link', { name: 'Naar Instellingen' })).toHaveAttribute('href', '/manage/settings');
     expect(screen.queryByRole('button', { name: 'Voorstel maken' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Herbalanceer actief plan' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Taken voorstellen' })).not.toBeInTheDocument();
   });
 
-  it('proposes a plan with the constraints and shows the diff in the grid with icons and text', async () => {
+  it('creates a draft plan with the constraints and leaves review to plan management', async () => {
     const fetchMock = setup('mock');
     renderWithProviders(<AiPage />);
     fireEvent.change(await screen.findByLabelText('Wensen en beperkingen'), { target: { value: 'geen nat werk doordeweeks' } });
     fireEvent.click(screen.getByRole('button', { name: 'Voorstel maken' }));
 
     await waitFor(() => expect(postBody(fetchMock, '/api/ai/propose-plan')).toEqual({ constraints: 'geen nat werk doordeweeks' }));
-    const review = await screen.findByRole('region', { name: 'Voorstel bekijken' });
-
-    expect(within(review).getByTestId('diff-2-5')).toHaveTextContent('Toegevoegd: Ramen lappen (wie dan ook)');
-    expect(within(review).getByTestId('diff-2-5')).toHaveTextContent('Woonkamer');
-    expect(within(review).getByTestId('diff-2-6')).toHaveTextContent('Verwijderd: Wastafel (Bram de Vries)');
-    expect(within(review).getByTestId('diff-1-2')).toHaveTextContent('Verplaatst: Badkamer, van week 2 maandag (Bram de Vries)');
-    expect(within(review).getByTestId('diff-1-1')).toHaveTextContent('Badkamer gaat naar week 2 dinsdag');
-    expect(within(review).getByTestId('diff-0-3')).toHaveTextContent('Wastafel: Bram de Vries → Anna');
-    expect(within(review).getByText('1 toegevoegd, 1 verwijderd, 2 verplaatst, 1 ongewijzigd')).toBeInTheDocument();
+    expect(await screen.findByText('Plan aangemaakt. Bekijk, activeer of verwijder het via Plannen beheren.')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Voorstel bekijken' })).not.toBeInTheDocument();
   });
 
   it('shows an elapsed-seconds counter while Ollama is thinking', async () => {
@@ -163,32 +156,6 @@ describe('AiPage', () => {
     expect(screen.getByRole('status')).toHaveTextContent(/De AI denkt na… \d+ sec/);
   });
 
-  it('shows the rationale per week, warnings and minutes before and after', async () => {
-    setup('mock');
-    renderWithProviders(<AiPage />);
-    fireEvent.change(await screen.findByLabelText('Openstaande voorstellen'), { target: { value: 'p-draft' } });
-    const review = await screen.findByRole('region', { name: 'Voorstel bekijken' });
-
-    expect(within(review).getByText('Week 2: meer badkamer.')).toBeInTheDocument();
-    expect(within(review).getByText('1 van 8 keer gepland.')).toBeInTheDocument();
-
-    const minutesTable = within(review).getByRole('columnheader', { name: 'Persoon' }).closest('table')!;
-    const annaRow = within(minutesTable).getByRole('row', { name: /^Anna/ });
-    expect(within(annaRow).getAllByRole('cell').map((c) => c.textContent)).toEqual([
-      '30 → 40 min',
-      '30 → 0 min',
-      '0 → 0 min',
-      '0 → 0 min',
-    ]);
-  });
-
-  it('shows the creation date and time down to seconds for open proposals', async () => {
-    setup('mock');
-    renderWithProviders(<AiPage />);
-    const select = await screen.findByLabelText('Openstaande voorstellen');
-    expect(within(select).getByRole('option', { name: 'AI-voorstel · 14-09-2026 10:00:00' })).toBeInTheDocument();
-  });
-
   it('confirms when the active-plan explanation is ready and shows it directly below', async () => {
     setup('mock');
     renderWithProviders(<AiPage />);
@@ -197,25 +164,6 @@ describe('AiPage', () => {
     expect(await screen.findByText('Uitleg is klaar en staat hieronder.')).toBeInTheDocument();
     const explanation = await screen.findByRole('region', { name: 'Uitleg per week' });
     expect(within(explanation).getByText('Week 1 rustig.')).toBeInTheDocument();
-  });
-
-  it('applies the proposal', async () => {
-    const fetchMock = setup('mock');
-    renderWithProviders(<AiPage />);
-    fireEvent.change(await screen.findByLabelText('Openstaande voorstellen'), { target: { value: 'p-draft' } });
-    fireEvent.click(await screen.findByRole('button', { name: 'Toepassen' }));
-    await waitFor(() => expect(fetchMock.mock.calls.some(([u]) => u === '/api/cycle-plans/p-draft/apply-proposal')).toBe(true));
-    expect(await screen.findByText('Voorstel toegepast. Het plan is actief.')).toBeInTheDocument();
-    await waitFor(() => expect(screen.queryByRole('region', { name: 'Voorstel bekijken' })).not.toBeInTheDocument());
-  });
-
-  it('discards the proposal', async () => {
-    const fetchMock = setup('mock');
-    renderWithProviders(<AiPage />);
-    fireEvent.change(await screen.findByLabelText('Openstaande voorstellen'), { target: { value: 'p-draft' } });
-    fireEvent.click(await screen.findByRole('button', { name: 'Weggooien' }));
-    await waitFor(() => expect(fetchMock.mock.calls.some(([u]) => u === '/api/cycle-plans/p-draft/discard')).toBe(true));
-    expect(await screen.findByText('Voorstel weggegooid.')).toBeInTheDocument();
   });
 
   it('explains a plan that failed validation twice in plain language', async () => {

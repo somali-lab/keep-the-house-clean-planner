@@ -71,6 +71,30 @@ describe('describeEntry', () => {
     expect(describeEntry(own, names)).toEqual(['Anna vinkte Wastafel af']);
   });
 
+  it('includes task, room and day for every occurrence action', () => {
+    const occurrence = {
+      taskNameSnapshot: 'Douche schoonmaken',
+      roomNameSnapshot: 'Badkamer',
+      date: '2026-09-18T22:00:00.000Z',
+    };
+    const contextual = (action: AuditEntry['action'], overrides: Partial<AuditEntry> = {}) =>
+      entry({
+        entity: 'occurrence',
+        entityId: 'not-in-current-page',
+        action,
+        meta: { occurrence },
+        ...overrides,
+      });
+    const entity = 'Douche schoonmaken in Badkamer op 19-09-2026';
+
+    expect(describeEntry(contextual('complete'), names)).toEqual([`Anna vinkte ${entity} af`]);
+    expect(describeEntry(contextual('uncomplete'), names)).toEqual([`Anna maakte het afvinken van ${entity} ongedaan`]);
+    expect(describeEntry(contextual('skip'), names)).toEqual([`Anna sloeg ${entity} over`]);
+    expect(describeEntry(contextual('assign', { after: { assigneeId: BRAM } }), names)).toEqual([
+      `Anna wees ${entity} toe aan Bram`,
+    ]);
+  });
+
   it('describes skip reasons, claims, default assignees, activation and deletions', () => {
     expect(describeEntry(entry({ entity: 'occurrence', entityId: 'o1', action: 'skip', after: { status: 'skipped', skipReason: 'ziek' } }), names)).toEqual([
       'Anna sloeg Wastafel over: "ziek"',
@@ -104,7 +128,7 @@ describe('describeEntry', () => {
         entry({ entity: 'occurrence', entityId: 'o1', action: 'reschedule', before: { date: '2026-09-07T22:00:00.000Z' }, after: { date: '2026-09-08T22:00:00.000Z' } }),
         names,
       ),
-    ).toEqual(['Anna verplaatste Wastafel van 08-09-2026 naar 09-09-2026']);
+    ).toEqual(['Anna verplaatste Wastafel op 09-09-2026 van 08-09-2026 naar 09-09-2026']);
   });
 });
 

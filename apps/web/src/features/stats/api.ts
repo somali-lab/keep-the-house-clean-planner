@@ -4,35 +4,42 @@ import { api } from '../../api/index.ts';
 
 // keepPreviousData: a refetch holds the previous render instead of flashing a loader.
 
-export function useWorkload(cycles: number) {
+export interface StatsPeriod {
+  unit: 'weeks' | 'cycles';
+  count: number;
+}
+
+const periodQuery = ({ unit, count }: StatsPeriod) => `${unit}=${count}`;
+
+export function useWorkload(period: StatsPeriod) {
   return useQuery({
-    queryKey: ['stats', 'workload', cycles],
-    queryFn: async () => (await api.get<WorkloadResponse>(`/api/stats/workload?cycles=${cycles}`)).data,
+    queryKey: ['stats', 'workload', period.unit, period.count],
+    queryFn: async () => (await api.get<WorkloadResponse>(`/api/stats/workload?${periodQuery(period)}`)).data,
     placeholderData: keepPreviousData,
   });
 }
 
-export function useCompletion(cycles: number, groupBy: StatsGroupBy) {
+export function useCompletion(period: StatsPeriod, groupBy: StatsGroupBy) {
   return useQuery({
-    queryKey: ['stats', 'completion', cycles, groupBy],
+    queryKey: ['stats', 'completion', period.unit, period.count, groupBy],
     queryFn: async () =>
-      (await api.get<CompletionResponse>(`/api/stats/completion?cycles=${cycles}&groupBy=${groupBy}`)).data,
+      (await api.get<CompletionResponse>(`/api/stats/completion?${periodQuery(period)}&groupBy=${groupBy}`)).data,
     placeholderData: keepPreviousData,
   });
 }
 
-export function useIntervals(cycles: number) {
+export function useIntervals(period: StatsPeriod) {
   return useQuery({
-    queryKey: ['stats', 'intervals', cycles],
-    queryFn: async () => (await api.get<IntervalsResponse>(`/api/stats/intervals?cycles=${cycles}`)).data,
+    queryKey: ['stats', 'intervals', period.unit, period.count],
+    queryFn: async () => (await api.get<IntervalsResponse>(`/api/stats/intervals?${periodQuery(period)}`)).data,
     placeholderData: keepPreviousData,
   });
 }
 
-export function useDeviations(cycles: number) {
+export function useDeviations(period: StatsPeriod) {
   return useQuery({
-    queryKey: ['stats', 'deviations', cycles],
-    queryFn: async () => (await api.get<DeviationsResponse>(`/api/stats/deviations?cycles=${cycles}`)).data,
+    queryKey: ['stats', 'deviations', period.unit, period.count],
+    queryFn: async () => (await api.get<DeviationsResponse>(`/api/stats/deviations?${periodQuery(period)}`)).data,
     placeholderData: keepPreviousData,
   });
 }

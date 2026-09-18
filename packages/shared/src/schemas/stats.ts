@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 export const statsCyclesQuerySchema = z.object({
   cycles: z.coerce.number().int().min(1).max(26).default(4),
+  weeks: z.coerce.number().int().min(1).max(3).optional(),
 });
 
 export const statsGroupBySchema = z.enum(['task', 'room', 'user']);

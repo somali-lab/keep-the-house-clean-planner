@@ -30,6 +30,10 @@ function bodyOf(fetchMock: ReturnType<typeof mockApi>, method: string, url: stri
   return call ? JSON.parse(String((call[1] as RequestInit).body)) : undefined;
 }
 
+async function expandAllRooms() {
+  fireEvent.click(await screen.findByRole('button', { name: 'Alles uitklappen' }));
+}
+
 describe('TasksPage — grouping', () => {
   beforeEach(() => {
     setup();
@@ -41,8 +45,10 @@ describe('TasksPage — grouping', () => {
       'href',
       '/api/export/pdf/tasks',
     );
+    expect(screen.getByRole('complementary', { name: 'AI-assistent' })).toBeInTheDocument();
     const sections = await screen.findAllByRole('region');
     expect(sections.map((s) => within(s).getByRole('heading', { level: 2 }).textContent)).toEqual(['Keuken', 'Badkamer']);
+    await expandAllRooms();
 
     const keukenItems = within(sections[0]!).getAllByRole('listitem').map((li) => li.textContent);
     expect(keukenItems[0]).toContain('Aanrecht');
@@ -56,6 +62,7 @@ describe('TasksPage — grouping', () => {
   it('shows inactive tasks when asked', async () => {
     renderWithProviders(<TasksPage />);
     fireEvent.click(await screen.findByRole('checkbox', { name: 'Toon inactieve taken' }));
+    await expandAllRooms();
     const row = (await screen.findByText('Oude klus')).closest('li')!;
     expect(row).toHaveTextContent('Inactief');
     expect(within(row).getByRole('button', { name: 'Oude klus activeren' })).toBeInTheDocument();
@@ -63,10 +70,11 @@ describe('TasksPage — grouping', () => {
 
   it('links each task to its history', async () => {
     renderWithProviders(<TasksPage />);
+    await expandAllRooms();
     const row = (await screen.findByText('Douche')).closest('li')!;
     expect(within(row).getByRole('link', { name: 'Geschiedenis' })).toHaveAttribute(
       'href',
-      '/history?entity=task&entityId=t3',
+      '/manage/history?entity=task&entityId=t3',
     );
   });
 
@@ -77,6 +85,23 @@ describe('TasksPage — grouping', () => {
     expect(sections).toHaveLength(1);
     expect(within(sections[0]!).getByRole('heading', { level: 2 })).toHaveTextContent('Badkamer');
     expect(screen.queryByText('Aanrecht')).not.toBeInTheDocument();
+  });
+
+  it('starts with every room collapsed and can expand one room or all rooms', async () => {
+    renderWithProviders(<TasksPage />);
+    const kitchenToggle = await screen.findByRole('button', { name: 'Keuken uitklappen' });
+    expect(screen.queryByText('Aanrecht')).not.toBeInTheDocument();
+    expect(screen.queryByText('Douche')).not.toBeInTheDocument();
+
+    fireEvent.click(kitchenToggle);
+    expect(await screen.findByText('Aanrecht')).toBeInTheDocument();
+    expect(screen.queryByText('Douche')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Alles inklappen' }));
+    expect(screen.queryByText('Aanrecht')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Alles uitklappen' }));
+    expect(await screen.findByText('Aanrecht')).toBeInTheDocument();
+    expect(screen.getByText('Douche')).toBeInTheDocument();
   });
 });
 
@@ -137,6 +162,7 @@ describe('TasksPage — form validation', () => {
     expect(within(screen.getByRole('form')).getByLabelText('Ruimte')).toHaveValue('r2');
     fireEvent.click(within(screen.getByRole('form')).getByRole('button', { name: 'Annuleren' }));
 
+    await expandAllRooms();
     fireEvent.click(screen.getByRole('button', { name: 'Douche bewerken' }));
     const form = screen.getByRole('form', { name: 'Douche bewerken' });
     expect(within(form).getByLabelText('Duur (minuten)')).toHaveValue(30);
@@ -156,6 +182,7 @@ describe('TasksPage — actions', () => {
     });
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     renderWithProviders(<TasksPage />);
+    await expandAllRooms();
 
     fireEvent.click(await screen.findByRole('button', { name: 'Vloer dweilen deactiveren' }));
     await waitFor(() => expect(bodyOf(fetchMock, 'PATCH', '/api/tasks/t1')).toEqual({ active: false }));
@@ -178,6 +205,7 @@ describe('TasksPage — actions', () => {
   it('permanently deletes a task after confirmation', async () => {
     const fetchMock = setup({ 'DELETE /api/tasks/t3': { deleted: true } });
     renderWithProviders(<TasksPage />);
+    await expandAllRooms();
     fireEvent.click(await screen.findByRole('button', { name: 'Douche verwijderen' }));
     expect(screen.getByRole('heading', { name: 'Douche definitief verwijderen?' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Taak verwijderen' }));

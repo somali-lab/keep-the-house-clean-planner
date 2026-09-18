@@ -15,6 +15,7 @@ import {
   CalendarDays,
   Check,
   CheckCircle2,
+  Circle,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -22,10 +23,10 @@ import {
   GripVertical,
   SkipForward,
   TriangleAlert,
-  Undo2,
+  ThumbsUp,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
-import { PageHeader } from '@/components/PageHeader';
+import { useEffect, useMemo, useState } from 'react';
+import { NativeSelect } from '@/components/NativeSelect';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -76,6 +77,10 @@ export function WeekPage({ now }: { now?: Date }) {
   const todayKey = dayKeyInZone(now ?? new Date(), settings.data?.timezone ?? 'Europe/Amsterdam');
   const [periodOffset, setPeriodOffset] = useState(0);
   const [pastExpanded, setPastExpanded] = useState(false);
+  const [personFilter, setPersonFilter] = useState(profile?._id ?? 'all');
+  useEffect(() => {
+    if (profile?._id) setPersonFilter(profile._id);
+  }, [profile?._id]);
   const days = overviewDays(addDaysKey(todayKey, periodOffset * 7));
   const visibleDays = pastExpanded ? days : days.slice(3);
   const from = days[0]!;
@@ -147,64 +152,75 @@ export function WeekPage({ now }: { now?: Date }) {
       </p>
     );
 
-  const openCount = occurrences.data.filter((occurrence) => occurrence.status === 'open').length;
-  const finishedCount = occurrences.data.length - openCount;
+  const filteredOccurrences = occurrences.data.filter((occurrence) =>
+    personFilter === 'all'
+      ? true
+      : personFilter === 'unassigned'
+        ? occurrence.assigneeId === null
+        : occurrence.assigneeId === personFilter,
+  );
+  const openCount = filteredOccurrences.filter((occurrence) => occurrence.status === 'open').length;
+  const finishedCount = filteredOccurrences.length - openCount;
 
   return (
-    <section className="flex flex-col gap-5">
-      <PageHeader
-        title={t('week.overviewTitle')}
-        description={weekRangeLabel(from, to)}
-        className="mb-0"
-        actions={
-          <div
-            className="inline-flex items-center gap-1 rounded-full border bg-card p-1 shadow-sm"
-            role="group"
-            aria-label={t('week.navigation')}
-          >
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="rounded-full"
-              aria-label={t('week.previous')}
-              onClick={() => setPeriodOffset((offset) => offset - 1)}
-            >
-              <ChevronLeft aria-hidden="true" />
-            </Button>
-            <Button
-              type="button"
-              variant={periodOffset === 0 ? 'default' : 'ghost'}
-              className="h-10 rounded-full px-4"
-              onClick={() => setPeriodOffset(0)}
-            >
-              {t('week.aroundToday')}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="rounded-full"
-              aria-label={t('week.next')}
-              onClick={() => setPeriodOffset((offset) => offset + 1)}
-            >
-              <ChevronRight aria-hidden="true" />
-            </Button>
-          </div>
-        }
-      />
-      <div className="flex flex-wrap items-center gap-2 rounded-2xl border bg-card px-4 py-3 shadow-sm">
-        <span className="flex items-center gap-2 font-extrabold">
-          <CalendarDays className="size-5 text-primary" aria-hidden="true" />
-          {format('week.total', { count: occurrences.data.length })}
+    <section className="flex flex-col gap-3">
+      <h1 className="sr-only">{t('week.title')}</h1>
+      <div data-testid="week-summary" className="flex min-h-12 flex-wrap items-center gap-2 rounded-xl border bg-card px-3 py-2 shadow-sm">
+        <span className="flex items-center gap-2 text-sm font-extrabold">
+          <CalendarDays className="size-4 text-primary" aria-hidden="true" />
+          {format('week.total', { count: filteredOccurrences.length })}
         </span>
-        <Badge className="ml-auto rounded-full px-3 py-1">
+        <NativeSelect
+          className="ml-auto h-9 w-40 sm:w-44"
+          aria-label={t('week.filterPerson')}
+          value={personFilter}
+          onChange={(event) => setPersonFilter(event.target.value)}
+        >
+          <option value="all">{t('week.allPeople')}</option>
+          {activeUsers.map((user) => <option key={user._id} value={user._id}>{user.name}</option>)}
+          <option value="unassigned">{t('planner.anyone')}</option>
+        </NativeSelect>
+        <Badge className="rounded-full px-2.5 py-1 text-xs">
           {format('week.open', { count: openCount })}
         </Badge>
-        <Badge variant="secondary" className="rounded-full px-3 py-1">
+        <Badge variant="secondary" className="rounded-full px-2.5 py-1 text-xs">
           <CheckCircle2 aria-hidden="true" />
           {format('week.finished', { count: finishedCount })}
         </Badge>
+        <div
+          className="inline-flex items-center gap-0.5 rounded-full bg-muted/60 p-0.5"
+          role="group"
+          aria-label={t('week.navigation')}
+        >
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-9 rounded-full"
+            aria-label={t('week.previous')}
+            onClick={() => setPeriodOffset((offset) => offset - 1)}
+          >
+            <ChevronLeft aria-hidden="true" />
+          </Button>
+          <Button
+            type="button"
+            variant={periodOffset === 0 ? 'default' : 'ghost'}
+            className="h-9 rounded-full px-3"
+            onClick={() => setPeriodOffset(0)}
+          >
+            {t('week.aroundToday')}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-9 rounded-full"
+            aria-label={t('week.next')}
+            onClick={() => setPeriodOffset((offset) => offset + 1)}
+          >
+            <ChevronRight aria-hidden="true" />
+          </Button>
+        </div>
       </div>
       <PromoteBanner />
 
@@ -234,23 +250,23 @@ export function WeekPage({ now }: { now?: Date }) {
       <DndContext sensors={sensors} onDragEnd={onDragEnd}>
         <button
           type="button"
-          className="mb-4 flex w-full items-center gap-3 rounded-2xl border bg-card px-4 py-3 text-left shadow-sm transition-colors hover:bg-accent/40 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+          className="flex min-h-11 w-full items-center gap-2 rounded-xl border bg-card px-3 py-2 text-left shadow-sm transition-colors hover:bg-accent/40 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
           aria-expanded={pastExpanded}
           onClick={() => setPastExpanded((expanded) => !expanded)}
         >
-          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-secondary text-secondary-foreground">
+          <span className="grid size-7 shrink-0 place-items-center rounded-full bg-secondary text-secondary-foreground [&_svg]:size-4">
             {pastExpanded ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
           </span>
-          <span className="min-w-0 flex-1">
-            <strong className="block">{t('week.pastDays')}</strong>
-            <span className="text-sm text-muted-foreground">{weekRangeLabel(days[0]!, days[2]!)}</span>
+          <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
+            <strong>{t('week.pastDays')}</strong>
+            <span className="text-xs text-muted-foreground sm:text-sm">{weekRangeLabel(days[0]!, days[2]!)}</span>
           </span>
           <Badge variant="secondary" className="rounded-full">
             3
           </Badge>
         </button>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {groupByDay(occurrences.data, visibleDays).map((day) => (
+          {groupByDay(filteredOccurrences, visibleDays).map((day) => (
             <DayColumn
               key={day.dayKey}
               dayKey={day.dayKey}
@@ -259,6 +275,7 @@ export function WeekPage({ now }: { now?: Date }) {
               items={day.items}
               users={activeUsers}
               roomByTask={roomByTask}
+              completionControl={settings.data.completionControl ?? 'circle'}
               onComplete={(id) => occurrenceAction.mutate({ id, kind: 'complete' }, { onError: () => setFailed(true) })}
               onUncomplete={(id) => occurrenceAction.mutate({ id, kind: 'uncomplete' }, { onError: () => setFailed(true) })}
             />
@@ -276,11 +293,12 @@ interface DayColumnProps {
   items: OccurrenceView[];
   users: User[];
   roomByTask: Map<string, string>;
+  completionControl: 'circle' | 'thumb';
   onComplete(id: string): void;
   onUncomplete(id: string): void;
 }
 
-function DayColumn({ dayKey, isToday, period, items, users, roomByTask, onComplete, onUncomplete }: DayColumnProps) {
+function DayColumn({ dayKey, isToday, period, items, users, roomByTask, completionControl, onComplete, onUncomplete }: DayColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: dayDropId(dayKey) });
   const headingId = `day-${dayKey}`;
   return (
@@ -325,6 +343,7 @@ function DayColumn({ dayKey, isToday, period, items, users, roomByTask, onComple
               occ={occ}
               users={users}
               roomName={occ.roomNameSnapshot ?? roomByTask.get(occ.taskId) ?? t('tasks.unknownRoom')}
+              completionControl={completionControl}
               onComplete={onComplete}
               onUncomplete={onUncomplete}
             />
@@ -339,12 +358,14 @@ function WeekItem({
   occ,
   users,
   roomName,
+  completionControl,
   onComplete,
   onUncomplete,
 }: {
   occ: OccurrenceView;
   users: User[];
   roomName: string;
+  completionControl: 'circle' | 'thumb';
   onComplete(id: string): void;
   onUncomplete(id: string): void;
 }) {
@@ -453,19 +474,19 @@ function WeekItem({
             aria-label={format('today.completeNamed', { task })}
             onClick={() => onComplete(occ._id)}
           >
-            <Check aria-hidden="true" />
+            {completionControl === 'thumb' ? <ThumbsUp aria-hidden="true" /> : <Circle aria-hidden="true" />}
           </Button>
         )}
         {occ.status === 'done' && (
           <Button
             type="button"
-            variant="ghost"
+            variant="default"
             size="icon"
-            className="size-9 shrink-0 rounded-full text-muted-foreground"
+            className="size-9 shrink-0 rounded-full bg-success text-success-foreground hover:bg-success/90"
             aria-label={format('today.undoNamed', { task })}
             onClick={() => onUncomplete(occ._id)}
           >
-            <Undo2 aria-hidden="true" />
+            <Check aria-hidden="true" />
           </Button>
         )}
       </div>

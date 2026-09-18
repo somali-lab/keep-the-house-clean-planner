@@ -162,12 +162,17 @@ export async function updateOccurrence(
     { returnDocument: 'after' },
   );
   if (!after) return null;
+  const occurrence = {
+    taskNameSnapshot: before.taskNameSnapshot,
+    roomNameSnapshot: before.roomNameSnapshot ?? null,
+    date: before.date,
+  };
   await record(ctx, {
     entity: 'occurrence',
     entityId: id,
     action: audit.action,
     ...diff,
-    ...(audit.meta ? { meta: audit.meta } : {}),
+    meta: { ...audit.meta, occurrence },
   });
   return { before, after };
 }

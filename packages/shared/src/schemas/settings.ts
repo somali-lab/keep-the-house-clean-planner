@@ -62,6 +62,9 @@ export const aiPromptTemplatesSchema = z.object({
 });
 export type AiPromptTemplates = z.infer<typeof aiPromptTemplatesSchema>;
 
+export const completionControlSchema = z.enum(['circle', 'thumb']);
+export type CompletionControl = z.infer<typeof completionControlSchema>;
+
 export const dismissedPromotionSchema = z.object({
   planId: objectIdSchema,
   taskId: objectIdSchema,
@@ -87,6 +90,7 @@ export const settingsSchema = z
     aiProvider: aiProviderSettingsSchema,
     aiPrompts: aiPromptsSchema.optional(),
     aiPromptTemplates: aiPromptTemplatesSchema.optional(),
+    completionControl: completionControlSchema.optional(),
     promoteThreshold: z.number().int().min(2),
     dismissedPromotions: z.array(dismissedPromotionSchema),
   })
@@ -101,6 +105,7 @@ export const updateSettingsInputSchema = z
     aiProvider: aiProviderSettingsSchema,
     aiPrompts: aiPromptsSchema,
     aiPromptTemplates: aiPromptTemplatesSchema,
+    completionControl: completionControlSchema,
     promoteThreshold: z.number().int().min(2),
   })
   .partial();

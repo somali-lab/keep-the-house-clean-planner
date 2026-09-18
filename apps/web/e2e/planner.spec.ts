@@ -12,7 +12,7 @@ test('create a task, place it by dragging, get refused on an unavailable day, an
   // Bram cannot do Tuesdays (0 = Sunday … 6 = Saturday).
   await app.api('PATCH', `/api/users/${bram._id}`, { as: anna, body: { unavailableWeekdays: [2] } });
 
-  await openAs(page, app, anna, '/tasks');
+  await openAs(page, app, anna, '/manage/tasks');
   await page.getByRole('button', { name: 'Nieuwe taak' }).click();
   const form = page.getByRole('form', { name: 'Nieuwe taak' });
   await form.getByLabel('Naam').fill('Ramen zemen');
@@ -25,6 +25,7 @@ test('create a task, place it by dragging, get refused on an unavailable day, an
   await form.getByLabel('Duur (minuten)').fill('20');
   await form.getByRole('button', { name: 'Opslaan' }).click();
   await expect(form).toBeHidden();
+  await page.getByRole('button', { name: 'Woonkamer uitklappen' }).click();
   await expect(page.getByRole('region', { name: 'Woonkamer' })).toContainText('Ramen zemen');
 
   const task = (await app.api<{ _id: string; name: string }[]>('GET', '/api/tasks')).find((t) => t.name === 'Ramen zemen')!;

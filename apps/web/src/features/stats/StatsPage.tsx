@@ -7,17 +7,19 @@ import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { panelTabsListClass, panelTabsTriggerClass, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { useRooms, useTasks, useUsers } from '../../api/queries.ts';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
-import { useCompletion, useDeviations, useIntervals, useResetStatistics, useWorkload } from './api.ts';
+import { useCompletion, useDeviations, useIntervals, useResetStatistics, useWorkload, type StatsPeriod } from './api.ts';
 import { statsTableClass } from './ChartFrame.tsx';
 import { FairnessBars, type FairnessRow } from './FairnessBars.tsx';
 import { formatDays, formatFactor, formatMinutes, formatNumber, formatPercent, MAX_SERIES } from './scale.ts';
 import { TrendLines, type TrendSeries } from './TrendLines.tsx';
 
-const PERIODS = [1, 2, 4, 8, 13];
+const WEEK_PERIODS = [1, 2, 3];
+const CYCLE_PERIODS = [1, 2, 4, 8, 13];
 const GROUP_BY: StatsGroupBy[] = ['task', 'room', 'user'];
 
 /** Deviation thresholds for the interval report ("wensdenken"). */
@@ -82,15 +84,16 @@ function KpiCard({ icon, label, value, tint }: { icon: ReactNode; label: string;
 
 export function StatsPage() {
   const idPrefix = useId();
-  const [cycles, setCycles] = useState(4);
+  const [activeTab, setActiveTab] = useState('overview');
+  const [period, setPeriod] = useState<StatsPeriod>({ unit: 'weeks', count: 1 });
   const [groupBy, setGroupBy] = useState<StatsGroupBy>('task');
   const [confirmReset, setConfirmReset] = useState(false);
   const [resetDone, setResetDone] = useState(false);
   const { profile } = useProfile();
-  const workload = useWorkload(cycles);
-  const completion = useCompletion(cycles, groupBy);
-  const intervals = useIntervals(cycles);
-  const deviations = useDeviations(cycles);
+  const workload = useWorkload(period);
+  const completion = useCompletion(period, groupBy);
+  const intervals = useIntervals(period);
+  const deviations = useDeviations(period);
   const users = useUsers();
   const tasks = useTasks();
   const rooms = useRooms();
@@ -114,22 +117,28 @@ export function StatsPage() {
     <div className="flex flex-wrap items-end gap-3" role="group" aria-label={t('stats.filters')}>
       <div className="flex w-48 flex-col gap-2">
         <Label htmlFor={`${idPrefix}-period`}>{t('stats.period')}</Label>
-        <NativeSelect id={`${idPrefix}-period`} value={cycles} onChange={(e) => setCycles(Number(e.target.value))}>
-          {PERIODS.map((n) => (
-            <option key={n} value={n}>
-              {n === 1 ? t('stats.period.one') : format('stats.period.many', { n })}
-            </option>
-          ))}
-        </NativeSelect>
-      </div>
-      <div className="flex w-44 flex-col gap-2">
-        <Label htmlFor={`${idPrefix}-group`}>{t('stats.completion.groupBy')}</Label>
-        <NativeSelect id={`${idPrefix}-group`} value={groupBy} onChange={(e) => setGroupBy(e.target.value as StatsGroupBy)}>
-          {GROUP_BY.map((g) => (
-            <option key={g} value={g}>
-              {t(`stats.groupBy.${g}` as MessageKey)}
-            </option>
-          ))}
+        <NativeSelect
+          id={`${idPrefix}-period`}
+          value={`${period.unit}:${period.count}`}
+          onChange={(e) => {
+            const [unit, count] = e.target.value.split(':');
+            setPeriod({ unit: unit as StatsPeriod['unit'], count: Number(count) });
+          }}
+        >
+          <optgroup label={t('stats.period.weeks')}>
+            {WEEK_PERIODS.map((n) => (
+              <option key={`weeks-${n}`} value={`weeks:${n}`}>
+                {n === 1 ? t('stats.period.one') : format('stats.period.many', { n })}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label={t('stats.period.cycles')}>
+            {CYCLE_PERIODS.map((n) => (
+              <option key={`cycles-${n}`} value={`cycles:${n}`}>
+                {n === 1 ? t('stats.period.cycleOne') : format('stats.period.cycleMany', { n })}
+              </option>
+            ))}
+          </optgroup>
         </NativeSelect>
       </div>
       {profile?.role === 'admin' && (
@@ -194,7 +203,9 @@ export function StatsPage() {
     values: cycleList.map((c) => find(c.users, id)?.doneMinutes ?? 0),
     secondary: cycleList.map((c) => find(c.users, id)?.plannedMinutes ?? 0),
   }));
-  const periodText = cycles === 1 ? t('stats.period.one') : format('stats.period.many', { n: cycles });
+  const periodText = period.unit === 'weeks'
+    ? period.count === 1 ? t('stats.period.one') : format('stats.period.many', { n: period.count })
+    : period.count === 1 ? t('stats.period.cycleOne') : format('stats.period.cycleMany', { n: period.count });
 
   // Summary figures for the KPI cards (display only).
   const totalPlanned = cycleList.reduce((sum, c) => sum + c.users.reduce((s, u) => s + u.plannedMinutes, 0), 0);
@@ -241,33 +252,51 @@ export function StatsPage() {
 
       {resetDone && <p role="status" className="mb-6 rounded-xl bg-success/15 px-4 py-3 font-semibold text-success">{t('stats.resetDone')}</p>}
 
-      {cycleList.length === 0 ? (
-        <EmptyState icon={<ChartColumnBig className="size-6" aria-hidden="true" />} className="mb-6">
-          {t('stats.empty')}
-        </EmptyState>
-      ) : (
-        <div className="mb-6 flex flex-col gap-6">
-          <div className="grid gap-4 sm:grid-cols-3">
-            <KpiCard
-              icon={<ListChecks aria-hidden="true" />}
-              label={t('stats.planned')}
-              value={formatMinutes(totalPlanned)}
-              tint="bg-primary/10 text-primary"
-            />
-            <KpiCard
-              icon={<CircleCheck aria-hidden="true" />}
-              label={t('stats.done')}
-              value={formatMinutes(totalDone)}
-              tint="bg-accent text-accent-foreground"
-            />
-            <KpiCard
-              icon={<Hourglass aria-hidden="true" />}
-              label={t('stats.unassigned')}
-              value={formatMinutes(totalUnassigned)}
-              tint="bg-warning/25 text-warning-foreground"
-            />
-          </div>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="gap-6">
+        <TabsList className={panelTabsListClass} aria-label={t('stats.tabs')}>
+          <TabsTrigger aria-label={t('stats.tab.overview')} className={panelTabsTriggerClass} value="overview"><ChartColumnBig aria-hidden="true" />{t('stats.tab.overview')}</TabsTrigger>
+          <TabsTrigger aria-label={t('stats.fairness')} className={panelTabsTriggerClass} value="fairness"><Scale aria-hidden="true" />{t('stats.tab.fairness')}</TabsTrigger>
+          <TabsTrigger aria-label={t('stats.trend')} className={panelTabsTriggerClass} value="trend"><TrendingUp aria-hidden="true" />{t('stats.tab.trend')}</TabsTrigger>
+          <TabsTrigger aria-label={t('stats.completion')} className={panelTabsTriggerClass} value="completion"><CircleCheck aria-hidden="true" />{t('stats.tab.completion')}</TabsTrigger>
+          <TabsTrigger aria-label={t('stats.intervals')} className={panelTabsTriggerClass} value="intervals"><CalendarClock aria-hidden="true" />{t('stats.tab.intervals')}</TabsTrigger>
+          <TabsTrigger aria-label={t('stats.deviations')} className={panelTabsTriggerClass} value="deviations"><Clock aria-hidden="true" />{t('stats.tab.deviations')}</TabsTrigger>
+        </TabsList>
 
+        <TabsContent value="overview">
+          {cycleList.length === 0 ? (
+            <EmptyState icon={<ChartColumnBig className="size-6" aria-hidden="true" />}>
+              {t('stats.empty')}
+            </EmptyState>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-3">
+              <KpiCard
+                icon={<ListChecks aria-hidden="true" />}
+                label={t('stats.planned')}
+                value={formatMinutes(totalPlanned)}
+                tint="bg-primary/10 text-primary"
+              />
+              <KpiCard
+                icon={<CircleCheck aria-hidden="true" />}
+                label={t('stats.done')}
+                value={formatMinutes(totalDone)}
+                tint="bg-accent text-accent-foreground"
+              />
+              <KpiCard
+                icon={<Hourglass aria-hidden="true" />}
+                label={t('stats.unassigned')}
+                value={formatMinutes(totalUnassigned)}
+                tint="bg-warning/25 text-warning-foreground"
+              />
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="fairness">
+          {cycleList.length === 0 ? (
+            <EmptyState icon={<Scale className="size-6" aria-hidden="true" />}>
+              {t('stats.empty')}
+            </EmptyState>
+          ) : (
           <section className={sectionCardClass} aria-labelledby={`${idPrefix}-fair`}>
             <SectionHeader
               id={`${idPrefix}-fair`}
@@ -316,7 +345,15 @@ export function StatsPage() {
               </table>
             </div>
           </section>
+          )}
+        </TabsContent>
 
+        <TabsContent value="trend">
+          {cycleList.length === 0 ? (
+            <EmptyState icon={<TrendingUp className="size-6" aria-hidden="true" />}>
+              {t('stats.empty')}
+            </EmptyState>
+          ) : (
           <section className={sectionCardClass} aria-labelledby={`${idPrefix}-trend`}>
             <SectionHeader id={`${idPrefix}-trend`} icon={<TrendingUp aria-hidden="true" />} title={t('stats.trend')} />
             <TrendLines
@@ -327,10 +364,10 @@ export function StatsPage() {
               secondaryLabel={t('stats.planned')}
             />
           </section>
-        </div>
-      )}
+          )}
+        </TabsContent>
 
-      <div className="grid items-start gap-6 xl:grid-cols-2">
+        <TabsContent value="completion">
         <section className={sectionCardClass} aria-labelledby={`${idPrefix}-completion`}>
           <SectionHeader
             id={`${idPrefix}-completion`}
@@ -338,6 +375,16 @@ export function StatsPage() {
             title={t('stats.completion')}
             explainer={t('stats.completion.explainer')}
           />
+          <div className="flex w-44 flex-col gap-2">
+            <Label htmlFor={`${idPrefix}-group`}>{t('stats.completion.groupBy')}</Label>
+            <NativeSelect id={`${idPrefix}-group`} value={groupBy} onChange={(e) => setGroupBy(e.target.value as StatsGroupBy)}>
+              {GROUP_BY.map((g) => (
+                <option key={g} value={g}>
+                  {t(`stats.groupBy.${g}` as MessageKey)}
+                </option>
+              ))}
+            </NativeSelect>
+          </div>
           {completion.data && completion.data.rows.length > 0 ? (
             <div className="overflow-x-auto">
               <table className={statsTableClass}>
@@ -375,7 +422,9 @@ export function StatsPage() {
             </p>
           )}
         </section>
+        </TabsContent>
 
+        <TabsContent value="intervals">
         <section className={sectionCardClass} aria-labelledby={`${idPrefix}-intervals`}>
           <SectionHeader
             id={`${idPrefix}-intervals`}
@@ -420,7 +469,9 @@ export function StatsPage() {
             </p>
           )}
         </section>
+        </TabsContent>
 
+        <TabsContent value="deviations">
         <section className={sectionCardClass} aria-labelledby={`${idPrefix}-deviations`}>
           <SectionHeader
             id={`${idPrefix}-deviations`}
@@ -459,7 +510,8 @@ export function StatsPage() {
             </p>
           )}
         </section>
-      </div>
+        </TabsContent>
+      </Tabs>
     </section>
   );
 }

@@ -11,7 +11,7 @@ test('a task not done for 1.5 times its interval is "Flink achter" and can be pl
   await app.restart(NOW);
   await generateCycles(app, anna);
 
-  await openAs(page, app, anna, '/mobile/due');
+  await openAs(page, app, anna, '/due');
   const row = page.locator('.due-item', { hasText: 'Oven schoonmaken' });
   await expect(row).toContainText('Flink achter');
   await expect(row).toContainText('21 dagen geleden');

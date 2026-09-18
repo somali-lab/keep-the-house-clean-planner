@@ -5,10 +5,20 @@ These instructions apply to the entire repository. More focused rules live in `.
 ## Start every task
 
 1. Read `git status` and preserve changes you did not make.
-2. Locate the implementation, its nearest tests, and the relevant entries in `docs/DECISIONS.md` before editing.
-3. Trace cross-layer changes end to end: shared contract -> server route/domain/data -> web API/UI -> tests.
-4. Prefer the smallest coherent change. Do not refactor unrelated code or update dependencies incidentally.
-5. Never commit, push, publish, deploy, restore data, or modify a real installation unless the user explicitly asks.
+2. Before editing, create and switch to a dedicated feature branch with the `codex/` prefix, unless already on a suitable non-default branch. Never implement changes directly on `main`.
+3. Locate the implementation, its nearest tests, and the relevant entries in `docs/DECISIONS.md` before editing.
+4. Trace cross-layer changes end to end: shared contract -> server route/domain/data -> web API/UI -> tests.
+5. Prefer the smallest coherent change. Do not refactor unrelated code or update dependencies incidentally.
+6. Commit every completed coherent change with a Conventional Commit message, even when the user does not ask separately. Keep unrelated user changes out of the commit and leave no finished work uncommitted; these commits are the source for Release Please changelog and release notes.
+7. Never push, publish, deploy, restore data, or modify a real installation unless the user explicitly asks.
+
+## Pull requests and release notes
+
+1. Before creating or updating a pull request, compare the branch with its target and identify every distinct release-worthy change.
+2. Use a Conventional Commit pull-request title.
+3. For a squash-merged pull request with multiple release-note entries, automatically add the documented `BEGIN_COMMIT_OVERRIDE` block to the pull-request description. Include one valid Conventional Commit line per logical change. Consolidate fixup and iteration commits, but never collapse unrelated changes into one vague entry.
+4. After publishing or updating the pull request, read its description back and verify that both override markers and all intended entries are present before reporting the pull request as complete.
+5. Do not manually edit `version.txt`, `.release-please-manifest.json`, or `CHANGELOG.md`; Release Please owns those files in its release pull request.
 
 ## Sources of truth
 

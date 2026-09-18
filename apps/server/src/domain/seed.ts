@@ -39,6 +39,7 @@ export async function seed(ctx: AuditContext, options: SeedOptions): Promise<See
     vacationRanges: [],
     intervals: DEFAULT_INTERVALS,
     aiProvider: { type: 'none' },
+    completionControl: 'circle',
     aiPrompts: DEFAULT_AI_PROMPTS,
     promoteThreshold: 2,
     dismissedPromotions: [],

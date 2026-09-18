@@ -2,6 +2,7 @@ import { listAuditQuerySchema } from '@huishoudplanner/shared';
 import type { FastifyPluginAsync } from 'fastify';
 import { ObjectId } from 'mongodb';
 import { clearAuditEntries, findAuditEntries, type AuditEntryDoc } from '../data/auditLog.ts';
+import { findOccurrences } from '../data/occurrences.ts';
 import { HttpError, parseOrThrow } from '../http/errors.ts';
 import { toApi } from '../http/serialize.ts';
 import { requireAdmin } from '../identity/index.ts';
@@ -42,8 +43,31 @@ export const auditRoutes: FastifyPluginAsync = async (app) => {
 
     const page = docs.slice(0, query.limit);
     const last = page.at(-1);
+    const occurrenceIds = page
+      .filter((entry) => entry.entity === 'occurrence' && !entry.meta?.occurrence)
+      .map((entry) => entry.entityId);
+    const occurrences = occurrenceIds.length > 0
+      ? await findOccurrences(app.deps.db, { _id: { $in: occurrenceIds } })
+      : [];
+    const occurrenceById = new Map(occurrences.map((occurrence) => [occurrence._id.toHexString(), occurrence]));
+    const enrichedPage = page.map((entry) => {
+      if (entry.entity !== 'occurrence' || entry.meta?.occurrence) return entry;
+      const occurrence = occurrenceById.get(entry.entityId.toHexString());
+      if (!occurrence) return entry;
+      return {
+        ...entry,
+        meta: {
+          ...entry.meta,
+          occurrence: {
+            taskNameSnapshot: occurrence.taskNameSnapshot,
+            roomNameSnapshot: occurrence.roomNameSnapshot ?? null,
+            date: occurrence.date,
+          },
+        },
+      };
+    });
     return {
-      items: toApi(page),
+      items: toApi(enrichedPage),
       nextCursor: docs.length > query.limit && last ? encodeCursor(last) : null,
     };
   });

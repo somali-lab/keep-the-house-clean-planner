@@ -5,7 +5,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { NativeSelect } from '@/components/NativeSelect';
 import { PageHeader } from '@/components/PageHeader';
 import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { panelTabsListClass, panelTabsTriggerClass, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useRooms, useSettings, useTasks } from '../../api/queries.ts';
 import { t } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
@@ -80,9 +80,9 @@ export function DistributionPage() {
           }}
           className="gap-4"
         >
-          <TabsList className="h-auto max-w-full flex-wrap" aria-label={t('distribution.tabs')}>
-            <TabsTrigger value="workload">{t('planner.distribution')}</TabsTrigger>
-            <TabsTrigger value="spacing">{t('planner.spacing')}</TabsTrigger>
+          <TabsList className={panelTabsListClass} aria-label={t('distribution.tabs')}>
+            <TabsTrigger className={panelTabsTriggerClass} value="workload">{t('planner.distribution')}</TabsTrigger>
+            <TabsTrigger className={panelTabsTriggerClass} value="spacing">{t('planner.spacing')}</TabsTrigger>
           </TabsList>
           <TabsContent value="workload" className="grid gap-4">
             <AllocationOverview

@@ -30,11 +30,25 @@ const patchBody = (fetchMock: ReturnType<typeof mockApi>) => {
 
 /** The page has several forms with a save button. */
 const aiForm = () => screen.getByRole('form', { name: 'AI-assistent' });
+const renderSettings = async () => {
+  const result = renderWithProviders(<SettingsPage initialTab="ai" />);
+  await screen.findByLabelText('AI-provider');
+  return result;
+};
 
 describe('SettingsPage — AI provider', () => {
+  it('keeps every main settings tab on one horizontally scrollable row', async () => {
+    setup();
+    await renderSettings();
+    const tabList = screen.getAllByRole('tablist')[0]!;
+    expect(tabList).toHaveClass('flex-nowrap', 'overflow-x-auto', 'overflow-y-hidden');
+    expect(within(tabList).getAllByRole('tab')).toHaveLength(6);
+    expect(within(tabList).getAllByRole('tab').every((tab) => tab.classList.contains('flex-none'))).toBe(true);
+  });
+
   it('has no field for the API key and explains it comes from the environment', async () => {
     setup();
-    const { container } = renderWithProviders(<SettingsPage />);
+    const { container } = await renderSettings();
     expect(await screen.findByText(/AI_API_KEY/)).toBeInTheDocument();
     expect(container.querySelector('input[type="password"]')).toBeNull();
     expect(screen.queryByLabelText(/sleutel/i)).not.toBeInTheDocument();
@@ -42,7 +56,7 @@ describe('SettingsPage — AI provider', () => {
 
   it('asks only for the fields the chosen provider needs, and saves them', async () => {
     const fetchMock = setup();
-    renderWithProviders(<SettingsPage />);
+    await renderSettings();
     const provider = await screen.findByLabelText('AI-provider');
     expect(screen.queryByLabelText('Endpoint')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Model')).not.toBeInTheDocument();
@@ -65,7 +79,7 @@ describe('SettingsPage — AI provider', () => {
 
   it('turns AI off without sending endpoint or model', async () => {
     const fetchMock = setup();
-    renderWithProviders(<SettingsPage />);
+    await renderSettings();
     fireEvent.change(await screen.findByLabelText('AI-provider'), { target: { value: 'ollama' } });
     fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'llama3.2' } });
     fireEvent.change(screen.getByLabelText('AI-provider'), { target: { value: 'none' } });
@@ -75,7 +89,7 @@ describe('SettingsPage — AI provider', () => {
 
   it('shows and saves a configurable Ollama timeout', async () => {
     const fetchMock = setup();
-    renderWithProviders(<SettingsPage />);
+    await renderSettings();
     fireEvent.change(await screen.findByLabelText('AI-provider'), { target: { value: 'ollama' } });
     fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'qwen3:8b' } });
     const timeout = screen.getByLabelText('Time-out (seconden)');
@@ -92,7 +106,7 @@ describe('SettingsPage — AI provider', () => {
 
   it('does not save an invalid Ollama timeout', async () => {
     const fetchMock = setup();
-    renderWithProviders(<SettingsPage />);
+    await renderSettings();
     fireEvent.change(await screen.findByLabelText('AI-provider'), { target: { value: 'ollama' } });
     fireEvent.change(screen.getByLabelText('Time-out (seconden)'), { target: { value: '9' } });
     fireEvent.click(within(aiForm()).getByRole('button', { name: 'Opslaan' }));
@@ -103,7 +117,7 @@ describe('SettingsPage — AI provider', () => {
 
   it('tests the current form settings without saving them first', async () => {
     const fetchMock = setup();
-    renderWithProviders(<SettingsPage />);
+    await renderSettings();
     fireEvent.change(await screen.findByLabelText('AI-provider'), { target: { value: 'ollama' } });
     fireEvent.change(screen.getByLabelText('Endpoint'), { target: { value: 'http://host.docker.internal:11434' } });
     fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'qwen3:8b' } });
@@ -125,5 +139,15 @@ describe('SettingsPage — AI provider', () => {
     });
     expect(await screen.findByRole('status')).toHaveTextContent('AI-verbinding gelukt');
     expect(patchBody(fetchMock)).toBeUndefined();
+  });
+});
+
+describe('SettingsPage — interface', () => {
+  it('saves whether an open circle or thumb completes a task', async () => {
+    const fetchMock = setup();
+    renderWithProviders(<SettingsPage initialTab="interface" />);
+    fireEvent.click(await screen.findByLabelText('Duimpje omhoog'));
+    fireEvent.click(screen.getByRole('button', { name: 'Opslaan' }));
+    await waitFor(() => expect(patchBody(fetchMock)).toEqual({ completionControl: 'thumb' }));
   });
 });

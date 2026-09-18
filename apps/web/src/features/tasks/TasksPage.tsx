@@ -5,6 +5,10 @@ import { Link } from 'react-router';
 import {
   Archive,
   ArchiveRestore,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  ChevronDown,
+  ChevronRight,
   FileDown,
   History,
   House,
@@ -33,6 +37,7 @@ import { format, t } from '../../i18n/nl.ts';
 import { getLanguage } from '../../i18n/runtime.ts';
 import { Avatar } from '../../identity/Avatar.tsx';
 import { useProfile } from '../../identity/index.ts';
+import { AiPage } from '../ai/AiPage.tsx';
 import { groupTasksByRoom, type RoomGroup } from './groupTasks.ts';
 import { TaskForm } from './TaskForm.tsx';
 import {
@@ -79,6 +84,7 @@ export function TasksPage() {
   const [roomFilter, setRoomFilter] = useState('all');
   const [editing, setEditing] = useState<Editing>(null);
   const [deleting, setDeleting] = useState<Task | null>(null);
+  const [collapsedRooms, setCollapsedRooms] = useState<Set<string> | null>(null);
 
   const invalidateTasks = () => queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
 
@@ -162,6 +168,18 @@ export function TasksPage() {
         title={t('nav.tasks')}
         actions={
           <>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCollapsedRooms(new Set(groups.map((group) => group.roomId)))}
+            >
+              <ChevronsDownUp aria-hidden="true" />
+              {t('tasks.collapseAll')}
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setCollapsedRooms(new Set())}>
+              <ChevronsUpDown aria-hidden="true" />
+              {t('tasks.expandAll')}
+            </Button>
             <NativeSelect
               className="w-48"
               value={roomFilter}
@@ -263,46 +281,69 @@ export function TasksPage() {
           </p>
         )}
 
-      {groups.map((group) => (
-        <RoomSection
-          key={group.roomId}
-          group={group}
-          users={activeUsers}
-          intervalLabel={intervalLabel}
-          userName={userName}
-          onAdd={() => {
-            saveTask.reset();
-            setEditing({ mode: 'new', roomId: group.room?.active ? group.roomId : undefined });
-          }}
-          onEdit={(task) => {
-            saveTask.reset();
-            setEditing({ mode: 'edit', task });
-          }}
-          onToggleActive={(task) => setActive.mutate({ id: task._id, active: !task.active })}
-          onDelete={setDeleting}
-          onBulkDeactivate={() => {
-            if (
-              window.confirm(
-                format('tasks.bulk.confirmDeactivate', { room: group.room?.name ?? '' }),
-              )
-            ) {
-              bulk.mutate({ roomId: group.roomId, body: { op: 'deactivate' } });
-            }
-          }}
-          onBulkReassign={(assigneeId) =>
-            bulk.mutate({
-              roomId: group.roomId,
-              body: { op: 'reassign', defaultAssigneeId: assigneeId },
-            })
-          }
-        />
-      ))}
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="flex min-w-0 flex-col gap-6">
+          {groups.map((group) => (
+            <RoomSection
+              key={group.roomId}
+              group={group}
+              collapsed={collapsedRooms === null || collapsedRooms.has(group.roomId)}
+              onCollapsedChange={(collapsed) =>
+                setCollapsedRooms((current) => {
+                  const next = current
+                    ? new Set(current)
+                    : new Set(groups.map((item) => item.roomId));
+                  if (collapsed) next.add(group.roomId);
+                  else next.delete(group.roomId);
+                  return next;
+                })
+              }
+              users={activeUsers}
+              intervalLabel={intervalLabel}
+              userName={userName}
+              onAdd={() => {
+                saveTask.reset();
+                setEditing({ mode: 'new', roomId: group.room?.active ? group.roomId : undefined });
+              }}
+              onEdit={(task) => {
+                saveTask.reset();
+                setEditing({ mode: 'edit', task });
+              }}
+              onToggleActive={(task) => setActive.mutate({ id: task._id, active: !task.active })}
+              onDelete={setDeleting}
+              onBulkDeactivate={() => {
+                if (
+                  window.confirm(
+                    format('tasks.bulk.confirmDeactivate', { room: group.room?.name ?? '' }),
+                  )
+                ) {
+                  bulk.mutate({ roomId: group.roomId, body: { op: 'deactivate' } });
+                }
+              }}
+              onBulkReassign={(assigneeId) =>
+                bulk.mutate({
+                  roomId: group.roomId,
+                  body: { op: 'reassign', defaultAssigneeId: assigneeId },
+                })
+              }
+            />
+          ))}
+        </div>
+        <aside
+          aria-label={t('settings.ai.title')}
+          className="min-w-0 xl:sticky xl:top-6"
+        >
+          <AiPage section="tasks" embedded />
+        </aside>
+      </div>
     </section>
   );
 }
 
 interface RoomSectionProps {
   group: RoomGroup;
+  collapsed: boolean;
+  onCollapsedChange(collapsed: boolean): void;
   users: User[];
   intervalLabel(key: string): string;
   userName(id: string | null): string;
@@ -316,6 +357,8 @@ interface RoomSectionProps {
 
 function RoomSection({
   group,
+  collapsed,
+  onCollapsedChange,
   users,
   intervalLabel,
   userName,
@@ -337,6 +380,16 @@ function RoomSection({
       aria-labelledby={headingId}
     >
       <div className="flex flex-wrap items-center gap-3 px-6 pt-5 pb-4">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label={format(collapsed ? 'tasks.expandRoom' : 'tasks.collapseRoom', { room: roomName })}
+          aria-expanded={!collapsed}
+          onClick={() => onCollapsedChange(!collapsed)}
+        >
+          {collapsed ? <ChevronRight aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
+        </Button>
         <span className="grid size-9 place-items-center rounded-xl bg-accent text-accent-foreground">
           <House className="size-5" aria-hidden="true" />
         </span>
@@ -360,7 +413,7 @@ function RoomSection({
         )}
       </div>
 
-      {hasActiveTasks && group.room && (
+      {!collapsed && hasActiveTasks && group.room && (
         <div
           className="flex flex-wrap items-center gap-2 border-y bg-secondary/40 px-6 py-2"
           role="group"
@@ -397,7 +450,7 @@ function RoomSection({
         </div>
       )}
 
-      {group.tasks.length === 0 ? (
+      {!collapsed && (group.tasks.length === 0 ? (
         <p className="px-6 pb-5 text-sm text-muted-foreground">{t('tasks.emptyRoom')}</p>
       ) : (
         <ul className={cn('divide-y', !(hasActiveTasks && group.room) && 'border-t')}>
@@ -476,7 +529,7 @@ function RoomSection({
                     {task.active ? t('tasks.deactivate') : t('tasks.activate')}
                   </Button>
                   <Button asChild variant="link" size="sm" className="text-muted-foreground">
-                    <Link to={`/history?entity=task&entityId=${task._id}`}>
+                    <Link to={`/manage/history?entity=task&entityId=${task._id}`}>
                       <History aria-hidden="true" />
                       {t('tasks.history')}
                     </Link>
@@ -496,7 +549,7 @@ function RoomSection({
             );
           })}
         </ul>
-      )}
+      ))}
     </section>
   );
 }

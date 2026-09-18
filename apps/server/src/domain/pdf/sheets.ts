@@ -8,7 +8,7 @@ import {
   weekdaySun0,
   weekIndexFor,
 } from '@huishoudplanner/shared';
-import type { Db, ObjectId } from 'mongodb';
+import type { Db } from 'mongodb';
 import { findPlanById } from '../../data/cyclePlans.ts';
 import { findCycleByIndex } from '../../data/cycles.ts';
 import { findOccurrences } from '../../data/occurrences.ts';
@@ -26,7 +26,7 @@ export interface SheetLine {
 }
 
 export interface SheetColumn {
-  /** null = "wie dan ook" */
+  /** `all` means one scalable task column; people are groups inside it. */
   id: string | null;
   name: string;
 }
@@ -93,18 +93,8 @@ export async function buildWeekSheets(db: Db, fromWeek: string, weeks: number): 
   const roomName = new Map(rooms.map((r) => [r._id.toHexString(), r.name]));
   const taskRoom = new Map(tasks.map((t) => [t._id.toHexString(), roomName.get(t.roomId.toHexString()) ?? null]));
 
-  // Columns: active users, plus anyone else who still has occurrences here, then "wie dan ook".
-  const referenced = new Set(occurrences.flatMap((o) => (o.assigneeId ? [o.assigneeId.toHexString()] : [])));
-  const columns: SheetColumn[] = users
-    .filter((u) => u.active || referenced.has(u._id.toHexString()))
-    .map((u) => ({ id: u._id.toHexString(), name: u.name }));
-  const knownIds = new Set(columns.map((c) => c.id));
-  for (const id of referenced) {
-    if (!knownIds.has(id)) columns.push({ id, name: '?' });
-  }
-  columns.push({ id: null, name: ANYONE_COLUMN_NAME });
-  const columnIndex = (assigneeId: ObjectId | null) =>
-    assigneeId === null ? columns.length - 1 : columns.findIndex((c) => c.id === assigneeId.toHexString());
+  const userNames = new Map(users.map((user) => [user._id.toHexString(), user.name]));
+  const columns: SheetColumn[] = [{ id: 'all', name: '' }];
 
   const planThemes = new Map<string, string[]>();
   for (const cycle of cycles) {
@@ -125,16 +115,15 @@ export async function buildWeekSheets(db: Db, fromWeek: string, weeks: number): 
       const dayKey = toDayKey(occ.date, tz);
       const day = days.find((d) => d.dayKey === dayKey);
       if (!day) continue;
-      const assignedColumn = columnIndex(occ.assigneeId);
-      day.cells[assignedColumn]!.push({
+      day.cells[0]!.push({
         name: occ.taskNameSnapshot,
         room: occ.roomNameSnapshot ?? taskRoom.get(occ.taskId.toHexString()) ?? null,
-        assignee: columns[assignedColumn]?.name ?? ANYONE_COLUMN_NAME,
+        assignee: occ.assigneeId ? (userNames.get(occ.assigneeId.toHexString()) ?? '?') : ANYONE_COLUMN_NAME,
         minutes: occ.durationMinutesSnapshot,
       });
     }
     for (const day of days) {
-      for (const cell of day.cells) cell.sort((a, b) => a.name.localeCompare(b.name, 'nl'));
+      for (const cell of day.cells) cell.sort((a, b) => a.assignee.localeCompare(b.assignee, 'nl') || a.name.localeCompare(b.name, 'nl'));
     }
     return {
       isoWeek: isoWeekLabel(weekMonday),

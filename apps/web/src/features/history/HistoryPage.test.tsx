@@ -46,7 +46,7 @@ const auditUrls = (fetchMock: ReturnType<typeof mockApi>) =>
 describe('HistoryPage', () => {
   it('shows readable before/after text, actor names and the AI label', async () => {
     setup(() => ({ items: PAGE_1, nextCursor: null }));
-    renderWithProviders(<HistoryPage />, { route: '/history' });
+    renderWithProviders(<HistoryPage />, { route: '/manage/history' });
 
     const items = await screen.findAllByRole('listitem');
     await waitFor(() => expect(items[2]).toHaveTextContent('Anna wijzigde duur van Badkamer schoonmaken: 30 → 45 min'));
@@ -60,17 +60,17 @@ describe('HistoryPage', () => {
 
   it('works as a history panel for one entity', async () => {
     const fetchMock = setup(() => ({ items: [PAGE_1[2]], nextCursor: null }));
-    renderWithProviders(<HistoryPage />, { route: '/history?entity=task&entityId=t1' });
+    renderWithProviders(<HistoryPage />, { route: '/manage/history?entity=task&entityId=t1' });
 
     expect(await screen.findByRole('heading', { name: 'Geschiedenis van Badkamer schoonmaken' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Alle geschiedenis' })).toHaveAttribute('href', '/history');
+    expect(screen.getByRole('link', { name: 'Alle geschiedenis' })).toHaveAttribute('href', '/manage/history');
     expect(screen.queryByRole('search')).not.toBeInTheDocument();
     expect(auditUrls(fetchMock)[0]).toBe('/api/audit?entity=task&entityId=t1&limit=50');
   });
 
   it('filters by actor, entity type and date range', async () => {
     const fetchMock = setup(() => ({ items: PAGE_1, nextCursor: null }));
-    renderWithProviders(<HistoryPage />, { route: '/history' });
+    renderWithProviders(<HistoryPage />, { route: '/manage/history' });
     await screen.findAllByRole('listitem');
 
     fireEvent.change(screen.getByLabelText('Wie'), { target: { value: BRAM._id } });
@@ -95,7 +95,7 @@ describe('HistoryPage', () => {
     const fetchMock = setup((_init, url) =>
       url.includes('cursor=c1') ? { items: PAGE_2, nextCursor: null } : { items: PAGE_1, nextCursor: 'c1' },
     );
-    renderWithProviders(<HistoryPage />, { route: '/history' });
+    renderWithProviders(<HistoryPage />, { route: '/manage/history' });
     expect(await screen.findAllByRole('listitem')).toHaveLength(4);
 
     fireEvent.click(screen.getByRole('button', { name: 'Meer laden' }));
@@ -106,7 +106,7 @@ describe('HistoryPage', () => {
 
   it('says when there is nothing to show', async () => {
     setup(() => ({ items: [], nextCursor: null }));
-    renderWithProviders(<HistoryPage />, { route: '/history' });
+    renderWithProviders(<HistoryPage />, { route: '/manage/history' });
     expect(await screen.findByText('Geen wijzigingen gevonden.')).toBeInTheDocument();
   });
 
@@ -116,7 +116,7 @@ describe('HistoryPage', () => {
       () => ({ items: cleared ? [] : PAGE_1, nextCursor: null }),
       { 'DELETE /api/audit': () => { cleared = true; return { deleted: PAGE_1.length }; } },
     );
-    renderWithProviders(<HistoryPage />, { route: '/history' });
+    renderWithProviders(<HistoryPage />, { route: '/manage/history' });
     await screen.findAllByRole('listitem');
 
     fireEvent.click(screen.getByRole('button', { name: 'Geschiedenis wissen' }));

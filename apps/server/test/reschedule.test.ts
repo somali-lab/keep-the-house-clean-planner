@@ -78,7 +78,15 @@ describe('PATCH reschedule', () => {
       movedFrom: '2026-09-14',
       warnings: [],
     });
-    expect(entries[0]!.meta).toEqual({ from: '2026-09-14', to: '2026-09-16' });
+    expect(entries[0]!.meta).toMatchObject({
+      from: '2026-09-14',
+      to: '2026-09-16',
+      occurrence: {
+        taskNameSnapshot: 'Badkamer schoonmaken',
+        roomNameSnapshot: 'Badkamer',
+        date: expect.any(Date),
+      },
+    });
     expect(entries[0]!.before.date).toEqual(new Date('2026-09-13T22:00:00Z'));
     expect(entries[0]!.after.date).toEqual(new Date('2026-09-15T22:00:00Z'));
   });

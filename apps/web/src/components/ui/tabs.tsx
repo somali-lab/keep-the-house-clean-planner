@@ -5,6 +5,10 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 import { Tabs as TabsPrimitive } from 'radix-ui';
 
+const panelTabsListClass =
+  'flex h-auto w-full flex-nowrap justify-start gap-2 overflow-x-auto overflow-y-hidden rounded-2xl border bg-card p-2 shadow-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
+const panelTabsTriggerClass = 'min-h-12 flex-none rounded-xl px-4';
+
 function Tabs({
   className,
   orientation = 'horizontal',
@@ -77,4 +81,12 @@ function TabsContent({ className, ...props }: React.ComponentProps<typeof TabsPr
   );
 }
 
-export { Tabs, TabsList, TabsTrigger, TabsContent, tabsListVariants };
+export {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+  panelTabsListClass,
+  panelTabsTriggerClass,
+  tabsListVariants,
+};

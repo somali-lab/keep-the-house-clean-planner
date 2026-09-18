@@ -112,24 +112,13 @@ describe('PlannerPage — drops', () => {
     dnd.onDragStart = undefined;
   });
 
-  it('shows weekday shortcuts only while a task is being dragged', async () => {
-    setup([makePlan({ _id: 'p1', name: 'Standaard', active: true })]);
-    renderWithProviders(<PlannerPage />);
-    await screen.findByRole('group', { name: 'Kies een week' });
-
-    expect(screen.queryByText('Laat los op een dag om snel in te plannen:')).not.toBeInTheDocument();
-    act(() => dnd.onDragStart!({ active: { id: 'task:t1' } }));
-    expect(screen.getByText('Laat los op een dag om snel in te plannen:')).toBeInTheDocument();
-    expect(screen.getByTestId('day:0:1')).toBeInTheDocument();
-
-    drop('task:t1', `cell:0:1:${BRAM._id}`);
-    expect(screen.queryByText('Laat los op een dag om snel in te plannen:')).not.toBeInTheDocument();
-  });
-
   it('refuses a drop on a day the assignee is unavailable and explains why', async () => {
     const fetchMock = setup([makePlan({ _id: 'p1', name: 'Standaard', active: true })]);
     renderWithProviders(<PlannerPage />);
     expect(await screen.findByRole('group', { name: 'Kies een week' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'AI-assistent' })).not.toBeInTheDocument();
+    await openPlanManagement();
+    expect(screen.getByRole('region', { name: 'AI-assistent' })).toBeInTheDocument();
     expect(
       within(screen.getByTestId(`cell:0:2:${ANNA._id}`)).getByText('Anna niet beschikbaar'),
     ).toBeInTheDocument();

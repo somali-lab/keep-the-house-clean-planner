@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { findActivePlan } from '../src/data/cyclePlans.ts';
 import { findOccurrences, updateOccurrence } from '../src/data/occurrences.ts';
 import type { UserDoc } from '../src/data/users.ts';
-import { escapeHtml } from '../src/domain/pdf/html.ts';
+import { escapeHtml, scheduleDocument } from '../src/domain/pdf/html.ts';
 import { scheduleFilename } from '../src/routes/export.ts';
 import { asProfile, seededRoom, seededUsers } from './helpers/http.ts';
 import { createTestApp, type TestApp } from './helpers/testApp.ts';
@@ -137,7 +137,7 @@ describe('GET /api/export/pdf', { timeout: 60_000 }, () => {
     expect(text).toContain('Thema: Keuken');
     expect(text).toContain('Keuken'); // room of "Ramen lappen"
     expect(text).toContain('Persoon 1');
-    expect(text.match(/Persoon 1/g)?.length).toBeGreaterThan(1);
+    expect(text.match(/Persoon 1/g)?.length).toBe(1);
     expect(text).toContain('Wie dan ook');
     expect(text).toContain('Gegenereerd op 14-09-2026 08:00');
     expect(text).toContain('Afvinken op papier wordt niet automatisch in de app verwerkt.');
@@ -221,6 +221,32 @@ describe('GET /api/export/pdf/tasks', { timeout: 60_000 }, () => {
 });
 
 describe('helpers', () => {
+  it('gives the day column 18% and lays person groups out in two columns', () => {
+    const html = scheduleDocument([
+      {
+        isoWeek: '2026-W38',
+        weekNumberInCycle: 1,
+        theme: '',
+        from: '2026-09-14',
+        to: '2026-09-20',
+        columns: [{ id: 'all', name: '' }],
+        days: [{
+          dayKey: '2026-09-14',
+          weekday: 1,
+          cells: [[
+            { name: 'Badkamer', room: 'Boven', assignee: 'Persoon 1', minutes: 30 },
+            { name: 'Keuken', room: 'Beneden', assignee: 'Persoon 2', minutes: 20 },
+          ]],
+        }],
+      },
+    ], { orientation: 'portrait', totals: true, generatedAt: '14-09-2026 08:00' });
+
+    expect(html).toContain('<col class="day-column"><col class="task-column">');
+    expect(html).toContain('.week col.day-column { width: 18%; }');
+    expect(html).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))');
+    expect(html.match(/class="person-group"/g)).toHaveLength(2);
+  });
+
   it('builds file names, also across a year boundary', () => {
     expect(scheduleFilename(['2026-W38'])).toBe('huishoudschema-2026-w38.pdf');
     expect(scheduleFilename(['2026-W38', '2026-W41'])).toBe('huishoudschema-2026-w38-w41.pdf');

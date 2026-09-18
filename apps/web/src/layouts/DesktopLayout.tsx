@@ -8,11 +8,8 @@ import {
   ListChecks,
   type LucideIcon,
   CalendarDays,
-  CalendarRange,
+  House,
   Settings,
-  Smartphone,
-  Sparkles,
-  MessageSquareCode,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
@@ -23,47 +20,38 @@ import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { ThemeSwitcher } from '@/components/ThemeSwitcher';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { AiPage } from '../features/ai/AiPage.tsx';
-import { AiPromptsPage } from '../features/ai-prompts/AiPromptsPage.tsx';
 import { DistributionPage } from '../features/distribution/DistributionPage.tsx';
 import { HistoryPage } from '../features/history/HistoryPage.tsx';
 import { PlannerPage } from '../features/planner/PlannerPage.tsx';
 import { SettingsPage } from '../features/settings/SettingsPage.tsx';
 import { StatsPage } from '../features/stats/StatsPage.tsx';
 import { TasksPage } from '../features/tasks/TasksPage.tsx';
-import { WeekPage } from '../features/week/WeekPage.tsx';
 import { t, type MessageKey } from '../i18n/nl.ts';
 import { ProfileSwitcher, useProfile } from '../identity/index.ts';
 import { PlaceholderPage } from './PlaceholderPage.tsx';
 
 /** Implemented pages; other sections show a placeholder until their task is done. */
 const PAGES: Partial<Record<string, ReactElement>> = {
-  '/week': <WeekPage />,
-  '/planner': <PlannerPage />,
-  '/tasks': <TasksPage />,
-  '/distribution': <DistributionPage />,
-  '/statistics': <StatsPage />,
-  '/history': <HistoryPage />,
-  '/ai': <AiPage />,
-  '/ai-prompts': <AiPromptsPage />,
-  '/settings': <SettingsPage />,
+  '/manage/planner': <PlannerPage />,
+  '/manage/tasks': <TasksPage />,
+  '/manage/distribution': <DistributionPage />,
+  '/manage/statistics': <StatsPage />,
+  '/manage/history': <HistoryPage />,
+  '/manage/settings': <SettingsPage />,
 };
 
 const SECTIONS: { path: string; label: MessageKey; icon: LucideIcon; minimumRole: UserRole }[] = [
-  { path: '/week', label: 'nav.week', icon: CalendarRange, minimumRole: 'member' },
-  { path: '/planner', label: 'nav.planner', icon: CalendarDays, minimumRole: 'planner' },
-  { path: '/tasks', label: 'nav.tasks', icon: ListChecks, minimumRole: 'planner' },
-  { path: '/distribution', label: 'nav.distribution', icon: Scale, minimumRole: 'member' },
-  { path: '/statistics', label: 'nav.stats', icon: ChartColumnBig, minimumRole: 'member' },
-  { path: '/history', label: 'nav.history', icon: History, minimumRole: 'member' },
-  { path: '/ai', label: 'nav.ai', icon: Sparkles, minimumRole: 'planner' },
-  { path: '/ai-prompts', label: 'nav.aiPrompts', icon: MessageSquareCode, minimumRole: 'planner' },
-  { path: '/settings', label: 'nav.settings', icon: Settings, minimumRole: 'admin' },
+  { path: '/manage/planner', label: 'nav.planner', icon: CalendarDays, minimumRole: 'planner' },
+  { path: '/manage/tasks', label: 'nav.tasks', icon: ListChecks, minimumRole: 'planner' },
+  { path: '/manage/distribution', label: 'nav.distribution', icon: Scale, minimumRole: 'member' },
+  { path: '/manage/statistics', label: 'nav.stats', icon: ChartColumnBig, minimumRole: 'member' },
+  { path: '/manage/history', label: 'nav.history', icon: History, minimumRole: 'member' },
+  { path: '/manage/settings', label: 'nav.settings', icon: Settings, minimumRole: 'admin' },
 ];
 
 const ROLE_LEVEL: Record<UserRole, number> = { member: 0, planner: 1, admin: 2 };
 
-export function DesktopLayout({ onSwitchLayout }: { onSwitchLayout: () => void }) {
+export function DesktopLayout({ onOpenOverview }: { onOpenOverview: () => void }) {
   const [collapsed, setCollapsed] = useState(false);
   const { profile } = useProfile();
   const sections = SECTIONS.filter((section) => profile && ROLE_LEVEL[profile.role] >= ROLE_LEVEL[section.minimumRole]);
@@ -129,11 +117,11 @@ export function DesktopLayout({ onSwitchLayout }: { onSwitchLayout: () => void }
             variant="ghost"
             size="icon-lg"
             className="rounded-full text-muted-foreground"
-            aria-label={t('layout.switchToMobile')}
-            title={t('layout.switchToMobile')}
-            onClick={onSwitchLayout}
+            aria-label={t('layout.openOverview')}
+            title={t('layout.openOverview')}
+            onClick={onOpenOverview}
           >
-            <Smartphone aria-hidden="true" />
+            <House aria-hidden="true" />
           </Button>
         </header>
         <main className="mx-auto w-full max-w-[96rem] flex-1 px-6 py-7">
@@ -145,9 +133,7 @@ export function DesktopLayout({ onSwitchLayout }: { onSwitchLayout: () => void }
                 element={PAGES[section.path] ?? <PlaceholderPage titleKey={section.label} />}
               />
             ))}
-            {/* Week overview with drag-to-reschedule, reachable from the planner. */}
-            <Route path="/week-overview" element={<Navigate to="/week" replace />} />
-            <Route path="*" element={<Navigate to="/week" replace />} />
+            <Route path="*" element={<Navigate to={sections[0]?.path ?? '/manage/distribution'} replace />} />
           </Routes>
         </main>
       </div>

@@ -2,6 +2,7 @@ import {
   addDays,
   cycleIndexFor,
   fromDayKey,
+  mondayOf,
   today,
   type CompletionResponse,
   type CompletionRow,
@@ -42,31 +43,50 @@ export async function resetStatistics(ctx: AuditContext): Promise<ResetStatistic
 interface Scope {
   settings: SettingsDoc;
   cycles: CycleDoc[];
+  from: Date | null;
+  to: Date | null;
+  fromKey: string | null;
+  toKey: string | null;
 }
 
 /** The last N cycles up to and including the current one, oldest first. */
-async function scope(db: Db, now: Date, count: number): Promise<Scope> {
+async function scope(db: Db, now: Date, count: number, weeks?: number): Promise<Scope> {
   const settings = await getSettings(db);
   if (!settings) throw new HttpError(500, 'settings_missing');
-  const current = cycleIndexFor(today(settings.timezone, now), settings.cycleAnchorDate);
+  const todayKey = today(settings.timezone, now);
+  const current = cycleIndexFor(todayKey, settings.cycleAnchorDate);
+  const currentMonday = mondayOf(todayKey);
+  const fromKey = weeks ? addDays(currentMonday, -(weeks - 1) * 7) : null;
+  const toKey = weeks ? addDays(currentMonday, 7) : null;
   const cycles = (await listCycles(db))
-    .filter((c) => c.index <= current)
+    .filter((c) => c.index <= current && (!fromKey || c.endDate >= fromKey) && (!toKey || c.startDate < toKey))
     .sort((a, b) => b.index - a.index)
-    .slice(0, count)
+    .slice(0, weeks ? undefined : count)
     .reverse();
-  return { settings, cycles };
+  return {
+    settings,
+    cycles,
+    from: fromKey ? fromDayKey(fromKey, settings.timezone) : null,
+    to: toKey ? fromDayKey(toKey, settings.timezone) : null,
+    fromKey,
+    toKey,
+  };
 }
+
+const periodDateMatch = (period: Scope) =>
+  period.from && period.to ? { date: { $gte: period.from, $lt: period.to } } : {};
 
 const hex = (id: ObjectId | null | undefined) => (id ? id.toHexString() : null);
 
-export async function workloadStats(db: Db, now: Date, count: number): Promise<WorkloadResponse> {
-  const { settings, cycles } = await scope(db, now, count);
+export async function workloadStats(db: Db, now: Date, count: number, weeks?: number): Promise<WorkloadResponse> {
+  const period = await scope(db, now, count, weeks);
+  const { settings, cycles } = period;
   if (cycles.length === 0) return { cycles: [] };
   const tz = settings.timezone;
 
   const [facets] = await occurrencesCollection(db)
     .aggregate<{ planned: GroupRow[]; done: GroupRow[] }>([
-      { $match: { cycleId: { $in: cycles.map((c) => c._id) } } },
+      { $match: { cycleId: { $in: cycles.map((c) => c._id) }, ...periodDateMatch(period) } },
       { $lookup: { from: COLLECTIONS.cycles, localField: 'cycleId', foreignField: '_id', as: 'cycle' } },
       { $set: { cycle: { $first: '$cycle' } } },
       {
@@ -141,7 +161,10 @@ export async function workloadStats(db: Db, now: Date, count: number): Promise<W
       endDate: cycle.endDate,
       users: usersFor(cycle._id),
       unassignedPlannedMinutes: sum(facets!.planned, cycle._id, null),
-      weeks: [0, 1, 2, 3].map((weekIndex) => ({
+      weeks: [0, 1, 2, 3].filter((weekIndex) => {
+        const start = addDays(cycle.startDate, weekIndex * 7);
+        return (!period.fromKey || start >= period.fromKey) && (!period.toKey || start < period.toKey);
+      }).map((weekIndex) => ({
         weekIndex,
         startDate: addDays(cycle.startDate, weekIndex * 7),
         users: usersFor(cycle._id, weekIndex),
@@ -156,8 +179,9 @@ interface GroupRow {
   minutes: number;
 }
 
-export async function completionStats(db: Db, now: Date, count: number, groupBy: StatsGroupBy): Promise<CompletionResponse> {
-  const { settings, cycles } = await scope(db, now, count);
+export async function completionStats(db: Db, now: Date, count: number, groupBy: StatsGroupBy, weeks?: number): Promise<CompletionResponse> {
+  const period = await scope(db, now, count, weeks);
+  const { settings, cycles } = period;
   if (cycles.length === 0) return { groupBy, rows: [] };
   const startOfToday = fromDayKey(today(settings.timezone, now), settings.timezone);
 
@@ -166,6 +190,7 @@ export async function completionStats(db: Db, now: Date, count: number, groupBy:
     {
       $match: {
         cycleId: { $in: cycles.map((c) => c._id) },
+        ...periodDateMatch(period),
         $or: [{ status: 'done' }, { status: 'skipped' }, { status: 'open', date: { $lt: startOfToday } }],
       },
     },
@@ -212,8 +237,9 @@ export async function completionStats(db: Db, now: Date, count: number, groupBy:
   return { groupBy, rows };
 }
 
-export async function intervalStats(db: Db, now: Date, count: number): Promise<IntervalsResponse> {
-  const { settings, cycles } = await scope(db, now, count);
+export async function intervalStats(db: Db, now: Date, count: number, weeks?: number): Promise<IntervalsResponse> {
+  const period = await scope(db, now, count, weeks);
+  const { settings, cycles } = period;
   const tz = settings.timezone;
 
   const gaps =
@@ -221,7 +247,7 @@ export async function intervalStats(db: Db, now: Date, count: number): Promise<I
       ? []
       : await occurrencesCollection(db)
           .aggregate<{ _id: ObjectId; completions: number; averageDays: number | null }>([
-            { $match: { cycleId: { $in: cycles.map((c) => c._id) }, status: 'done', completedAt: { $ne: null } } },
+            { $match: { cycleId: { $in: cycles.map((c) => c._id) }, ...periodDateMatch(period), status: 'done', completedAt: { $ne: null } } },
             {
               $setWindowFields: {
                 partitionBy: '$taskId',
@@ -272,8 +298,9 @@ export async function intervalStats(db: Db, now: Date, count: number): Promise<I
   return { rows };
 }
 
-export async function deviationStats(db: Db, now: Date, count: number): Promise<DeviationsResponse> {
-  const { settings, cycles } = await scope(db, now, count);
+export async function deviationStats(db: Db, now: Date, count: number, weeks?: number): Promise<DeviationsResponse> {
+  const period = await scope(db, now, count, weeks);
+  const { settings, cycles } = period;
   if (cycles.length === 0) return { rows: [] };
 
   const grouped = await occurrencesCollection(db)
@@ -290,6 +317,7 @@ export async function deviationStats(db: Db, now: Date, count: number): Promise<
       {
         $match: {
           cycleId: { $in: cycles.map((cycle) => cycle._id) },
+          ...periodDateMatch(period),
           status: 'done',
           completedAt: { $ne: null },
         },

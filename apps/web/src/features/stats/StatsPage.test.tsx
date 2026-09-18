@@ -184,10 +184,22 @@ function setup(workload: WorkloadResponse = WORKLOAD) {
 const statsUrls = (fetchMock: ReturnType<typeof mockApi>) =>
   fetchMock.mock.calls.map(([u]) => String(u)).filter((u) => u.startsWith('/api/stats/'));
 
+async function selectStatsTab(name: string) {
+  const tab = await screen.findByRole('tab', { name });
+  fireEvent.mouseDown(tab, { button: 0, ctrlKey: false });
+  fireEvent.click(tab);
+  await waitFor(() => expect(tab).toHaveAttribute('aria-selected', 'true'));
+}
+
 describe('StatsPage', () => {
   it('shows planned vs done per person for the period, with legend and a table view', async () => {
     setup();
     renderWithProviders(<StatsPage />);
+    const overviewTab = await screen.findByRole('tab', { name: 'Overzicht' });
+    expect(overviewTab).toHaveAttribute('aria-selected', 'true');
+    expect(overviewTab).toHaveClass('flex-none');
+    expect(screen.getByRole('tablist', { name: 'Statistiekonderdeel' })).toHaveClass('overflow-x-auto', 'overflow-y-hidden', '[scrollbar-width:none]');
+    await selectStatsTab('Eerlijkheid');
     const figure = await screen.findByRole('figure', { name: 'Gepland en gedaan per persoon' });
 
     const legend = within(figure).getByRole('list', { name: 'Legenda' });
@@ -217,6 +229,7 @@ describe('StatsPage', () => {
   it('shows the value in a tooltip when a bar gets keyboard focus', async () => {
     setup();
     renderWithProviders(<StatsPage />);
+    await selectStatsTab('Eerlijkheid');
     const figure = await screen.findByRole('figure', { name: 'Gepland en gedaan per persoon' });
     fireEvent.focus(within(figure).getByLabelText('Bram de Vries, gedaan: 70 min'));
     const tip = within(figure).getByRole('status');
@@ -227,6 +240,7 @@ describe('StatsPage', () => {
   it('lists planned / done per week and the unassigned minutes', async () => {
     setup();
     renderWithProviders(<StatsPage />);
+    await selectStatsTab('Eerlijkheid');
     const table = await screen.findByRole('table', {
       name: 'Per week (gepland / gedaan, in minuten)',
     });
@@ -238,6 +252,7 @@ describe('StatsPage', () => {
   it('shows the workload trend per person with a crosshair tooltip listing every series', async () => {
     setup();
     renderWithProviders(<StatsPage />);
+    await selectStatsTab('Werkbelasting door de tijd');
     const figure = await screen.findByRole('figure', { name: 'Gedaan per persoon per cyclus' });
     const chart = within(figure).getByRole('img', { name: 'Gedaan per persoon per cyclus' });
     expect(chart.parentElement).toHaveClass('max-w-4xl');
@@ -264,6 +279,7 @@ describe('StatsPage', () => {
   it('shows completion rates and regroups on request', async () => {
     const fetchMock = setup();
     renderWithProviders(<StatsPage />);
+    await selectStatsTab('Voltooiing');
     const heading = await screen.findByRole('heading', { name: 'Voltooiing' });
     const section = heading.closest('section')!;
     await waitFor(() =>
@@ -274,7 +290,7 @@ describe('StatsPage', () => {
 
     fireEvent.change(screen.getByLabelText('Voltooiing per'), { target: { value: 'room' } });
     await waitFor(() =>
-      expect(statsUrls(fetchMock)).toContain('/api/stats/completion?cycles=4&groupBy=room'),
+      expect(statsUrls(fetchMock)).toContain('/api/stats/completion?weeks=1&groupBy=room'),
     );
     expect(
       await within(section).findByRole('columnheader', { name: 'Ruimte' }),
@@ -284,6 +300,7 @@ describe('StatsPage', () => {
   it('flags intervals that are wishful thinking with an icon and words, not colour', async () => {
     setup();
     renderWithProviders(<StatsPage />);
+    await selectStatsTab('Intervallen: bedoeld en werkelijk');
     const heading = await screen.findByRole('heading', {
       name: 'Intervallen: bedoeld en werkelijk',
     });
@@ -301,14 +318,28 @@ describe('StatsPage', () => {
   it('applies the period filter to every chart and table', async () => {
     const fetchMock = setup();
     renderWithProviders(<StatsPage />);
-    fireEvent.change(await screen.findByLabelText('Periode'), { target: { value: '8' } });
+    const period = await screen.findByLabelText('Periode');
+    expect(within(period).getByRole('option', { name: 'Laatste 13 cycli' })).toBeInTheDocument();
+    fireEvent.change(period, { target: { value: 'weeks:3' } });
     await waitFor(() =>
       expect(statsUrls(fetchMock)).toEqual(
         expect.arrayContaining([
-          '/api/stats/workload?cycles=8',
-          '/api/stats/completion?cycles=8&groupBy=task',
-          '/api/stats/intervals?cycles=8',
-          '/api/stats/deviations?cycles=8',
+          '/api/stats/workload?weeks=3',
+          '/api/stats/completion?weeks=3&groupBy=task',
+          '/api/stats/intervals?weeks=3',
+          '/api/stats/deviations?weeks=3',
+        ]),
+      ),
+    );
+
+    fireEvent.change(period, { target: { value: 'cycles:4' } });
+    await waitFor(() =>
+      expect(statsUrls(fetchMock)).toEqual(
+        expect.arrayContaining([
+          '/api/stats/workload?cycles=4',
+          '/api/stats/completion?cycles=4&groupBy=task',
+          '/api/stats/intervals?cycles=4',
+          '/api/stats/deviations?cycles=4',
         ]),
       ),
     );
@@ -317,6 +348,7 @@ describe('StatsPage', () => {
   it('shows planning shifts separately from completion delays and suggests improvements', async () => {
     setup();
     renderWithProviders(<StatsPage />);
+    await selectStatsTab('Afwijking tussen planning en uitvoering');
     const heading = await screen.findByRole('heading', { name: 'Afwijking tussen planning en uitvoering' });
     const rows = within(heading.closest('section')!).getAllByRole('row').slice(1);
     expect(rows.map((row) => row.textContent)).toEqual([
@@ -331,6 +363,8 @@ describe('StatsPage', () => {
     renderWithProviders(<StatsPage />);
     expect(await screen.findByText(/Nog geen gegevens/)).toBeInTheDocument();
     expect(screen.queryByRole('figure')).not.toBeInTheDocument();
+    await selectStatsTab('Eerlijkheid');
+    expect(await screen.findByText(/Nog geen gegevens/)).toBeInTheDocument();
   });
 
   it('clears statistics only after explicit confirmation', async () => {

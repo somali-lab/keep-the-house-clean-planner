@@ -33,7 +33,7 @@ const ACTION_TABS: Record<PromptAction, string> = {
   planExplanation: 'explanation',
 };
 
-export function AiPromptsPage() {
+export function AiPromptsPage({ embedded = false }: { embedded?: boolean }) {
   const settings = useSettings();
   const promptInfo = useQuery({
     queryKey: ['ai-prompt-info'],
@@ -53,6 +53,7 @@ export function AiPromptsPage() {
 
   return (
     <PromptEditor
+      embedded={embedded}
       key={settings.data.updatedAt}
       initial={settings.data.aiPromptTemplates ?? effective}
       defaults={promptInfo.data.defaults}
@@ -61,7 +62,7 @@ export function AiPromptsPage() {
   );
 }
 
-function PromptEditor({ initial, defaults, info }: { initial: AiPromptTemplates; defaults: AiPromptTemplates; info: PromptInfo }) {
+function PromptEditor({ initial, defaults, info, embedded }: { initial: AiPromptTemplates; defaults: AiPromptTemplates; info: PromptInfo; embedded: boolean }) {
   const id = useId();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -100,7 +101,7 @@ function PromptEditor({ initial, defaults, info }: { initial: AiPromptTemplates;
 
   return (
     <section className="flex flex-col gap-6">
-      <PageHeader title={t('nav.aiPrompts')} description={t('aiPrompts.intro')} />
+      {!embedded && <PageHeader title={t('nav.aiPrompts')} description={t('aiPrompts.intro')} />}
       <form onSubmit={submit} className="overflow-hidden rounded-2xl border bg-card shadow-sm" aria-label={t('nav.aiPrompts')}>
         <div className="flex flex-wrap items-center gap-2 border-b bg-secondary/20 p-3" role="tablist" aria-label={t('aiPrompts.chooseAction')}>
           {ACTIONS.map(({ key, label }) => (

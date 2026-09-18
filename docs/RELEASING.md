@@ -18,6 +18,8 @@ No repository secret is needed. The workflows publish with GitHub's short-lived 
 
 Release Please derives the next semantic version from Conventional Commit messages. When pull requests are squash-merged, use a Conventional Commit title for the pull request:
 
+Repository agents first create a dedicated `codex/` feature branch and commit every completed coherent change using this format, without requiring a separate branch or commit request. This keeps `main` protected and the unreleased history usable as the input for generated changelog and release-note entries. Agents still never push, publish, merge, or deploy without explicit permission.
+
 - `fix: correct overdue task calculation` creates a patch release.
 - `feat: add a monthly planning view` creates a minor release.
 - `refactor: simplify route handling` creates a patch release.
@@ -40,6 +42,8 @@ END_COMMIT_OVERRIDE
 ```
 
 List every intended changelog entry as a valid Conventional Commit line. Release Please then uses those lines instead of reducing the pull request to only its squash title. Review the generated release pull request and confirm that each line appears under the configured section in `CHANGELOG.md`.
+
+Repository agents add this override automatically whenever a squash-merged pull request contains multiple release-worthy changes. They derive the logical entries from the complete branch diff and commit history, consolidate fixup or iteration commits, and keep distinct changes separate. After creating or updating the pull request, they read the published description back to verify the exact markers and entries.
 
 Commit overrides only work for squash merges. Do not use a plain merge for a pull request that depends on this block. If the pull request has one release-note entry, a Conventional Commit pull-request title is sufficient.
 

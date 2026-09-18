@@ -89,6 +89,7 @@ describe('WeekPage', () => {
     setup();
     renderWithProviders(<WeekPage now={NOW} />);
     expect(await screen.findByRole('button', { name: /Afgelopen 3 dagen/ })).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.change(screen.getByLabelText('Filter op persoon'), { target: { value: 'all' } });
     expect(screen.queryByRole('heading', { name: /^zondag 13 sep/ })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Afgelopen 3 dagen/ }));
     await screen.findByRole('heading', { name: /^zondag 13 sep/ });
@@ -119,23 +120,46 @@ describe('WeekPage', () => {
   it('browses between periods and can return to the days around today', async () => {
     setup();
     renderWithProviders(<WeekPage now={NOW} />);
-    await screen.findByText('13 – 24 sep 2026');
+    expect(await screen.findByRole('heading', { name: 'Weekoverzicht' })).toHaveClass('sr-only');
+    expect(screen.queryByRole('heading', { name: '12-daags overzicht' })).not.toBeInTheDocument();
+    await screen.findByRole('heading', { name: 'woensdag 16 sep Vandaag' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Volgende periode' }));
-    expect(await screen.findByText('20 sep – 1 okt 2026')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'woensdag 23 sep' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Volgende periode' }));
-    expect(await screen.findByText('27 sep – 8 okt 2026')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'woensdag 30 sep' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Rond vandaag' }));
-    expect(await screen.findByText('13 – 24 sep 2026')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'woensdag 16 sep Vandaag' })).toBeInTheDocument();
   });
 
   it('keeps the overview compact without separate move buttons', async () => {
     setup();
     renderWithProviders(<WeekPage now={NOW} />);
-    fireEvent.click(await screen.findByRole('button', { name: /Afgelopen 3 dagen/ }));
+    const pastDays = await screen.findByRole('button', { name: /Afgelopen 3 dagen/ });
+    expect(screen.getByTestId('week-summary')).toHaveClass('min-h-12', 'py-2');
+    expect(pastDays).toHaveClass('min-h-11', 'py-2');
+    expect(pastDays).not.toHaveClass('mb-4');
+    fireEvent.click(pastDays);
     await screen.findByText('Badkamer');
     expect(screen.queryByRole('button', { name: /Verplaats/ })).not.toBeInTheDocument();
+  });
+
+  it('filters the overview by person and by unassigned tasks', async () => {
+    setup();
+    renderWithProviders(<WeekPage now={NOW} />);
+    fireEvent.click(await screen.findByRole('button', { name: /Afgelopen 3 dagen/ }));
+
+    const filter = screen.getByLabelText('Filter op persoon');
+    expect(filter).toHaveValue(ANNA._id);
+    expect(screen.queryByText('Stofzuigen')).not.toBeInTheDocument();
+    fireEvent.change(filter, { target: { value: BRAM._id } });
+    expect(await screen.findByText('Stofzuigen')).toBeInTheDocument();
+    expect(screen.queryByText('Badkamer')).not.toBeInTheDocument();
+
+    fireEvent.change(filter, { target: { value: 'unassigned' } });
+    await waitFor(() => expect(screen.queryByText('Stofzuigen')).not.toBeInTheDocument());
+    expect(screen.getAllByText('Niets gepland.').length).toBeGreaterThan(0);
   });
 
   it('can complete a task and undo it from the overview', async () => {
@@ -149,9 +173,26 @@ describe('WeekPage', () => {
     expect(patchBodies(fetchMock, 'o1')).toEqual([{ action: 'complete' }, { action: 'uncomplete' }]);
   });
 
+  it('uses the configured completion control and always shows a green check when done', async () => {
+    mockApi({
+      '/api/users': [ANNA, BRAM],
+      '/api/settings': makeSettings({ completionControl: 'thumb' }),
+      '/api/rooms': [makeRoom({ _id: 'r1', name: 'Woonkamer' })],
+      '/api/tasks': [makeTask({ _id: 't1', name: 'Huishoudtaak', roomId: 'r1' })],
+      '/api/occurrences': () => db,
+    });
+    storeProfile(ANNA._id);
+    db = [makeOccurrence({ _id: 'o3', taskNameSnapshot: 'Afwas', date: '2026-09-15', status: 'done', assigneeId: ANNA._id })];
+    renderWithProviders(<WeekPage now={NOW} />);
+    fireEvent.click(await screen.findByRole('button', { name: /Afgelopen 3 dagen/ }));
+    const done = await screen.findByRole('button', { name: 'Afwas ongedaan maken' });
+    expect(done).toHaveClass('bg-success');
+  });
+
   it('moves an item when it is dropped on another day', async () => {
     const fetchMock = setup();
     renderWithProviders(<WeekPage now={NOW} />);
+    fireEvent.change(await screen.findByLabelText('Filter op persoon'), { target: { value: 'all' } });
     await screen.findByRole('heading', { name: /^woensdag 16 sep/ });
     act(() => {
       dnd.onDragEnd!({ active: { id: 'occ:o2' }, over: { id: 'day:2026-09-16' } });

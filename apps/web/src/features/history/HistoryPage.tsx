@@ -128,7 +128,7 @@ export function HistoryPage() {
         actions={
           panelMode ? (
             <Button asChild variant="outline">
-              <Link to="/history">
+              <Link to="/manage/history">
                 <ArrowLeft aria-hidden="true" />
                 {t('history.all')}
               </Link>

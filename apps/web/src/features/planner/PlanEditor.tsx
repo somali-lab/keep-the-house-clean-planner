@@ -59,7 +59,6 @@ export function PlanEditor({ plan, tasks, rooms, users, intervals, debounceMs = 
   const [assigneeFilter, setAssigneeFilter] = useState('all');
   const [poolCollapsed, setPoolCollapsed] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const putSlots = usePutSlots();
   const updatePlan = useUpdatePlan();
@@ -134,7 +133,6 @@ export function PlanEditor({ plan, tasks, rooms, users, intervals, debounceMs = 
   };
 
   const onDragEnd = ({ active, over }: DragEndEvent) => {
-    setIsDragging(false);
     if (!over) return;
     const source = parseDragId(String(active.id));
     const target = parseDropId(String(over.id));
@@ -150,8 +148,6 @@ export function PlanEditor({ plan, tasks, rooms, users, intervals, debounceMs = 
     <DndContext
       sensors={sensors}
       measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
-      onDragStart={() => setIsDragging(true)}
-      onDragCancel={() => setIsDragging(false)}
       onDragEnd={onDragEnd}
     >
       {message && (
@@ -261,7 +257,6 @@ export function PlanEditor({ plan, tasks, rooms, users, intervals, debounceMs = 
                   : users.filter((user) => user._id === assigneeFilter)
               }
               showUnassigned={assigneeFilter === 'all' || assigneeFilter === 'unassigned'}
-              showQuickDays={isDragging}
               summary={validation.summary}
               onRemoveSlot={(index) => handleDrop({ kind: 'slot', index }, { kind: 'pool' })}
             />
