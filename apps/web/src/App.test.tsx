@@ -20,7 +20,7 @@ describe('app shell', () => {
     storeProfile(ANNA._id);
   });
 
-  it('renders the mobile layout on narrow screens', async () => {
+  it('renders the standard overview on narrow screens', async () => {
     setViewportWidth(375);
     render(<App queryClient={testQueryClient()} />);
     const nav = await screen.findByRole('navigation', { name: 'Hoofdmenu' });
@@ -30,12 +30,13 @@ describe('app shell', () => {
     expect(nav).not.toHaveTextContent('Planner');
     expect(screen.getByRole('group', { name: 'Kleurthema' })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'Taal' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Instellingen en beheer openen' })).toBeInTheDocument();
     expect(screen.getByLabelText(`Versie ${APP_VERSION}`)).toHaveTextContent(`v${APP_VERSION}`);
     expect(await screen.findByRole('heading', { name: '12-daags overzicht' })).toBeInTheDocument();
     expect(window.location.pathname).toBe('/mobile/week');
   });
 
-  it('makes the focused mobile view directly accessible on wide screens', async () => {
+  it('makes the focused standard view directly accessible on wide screens', async () => {
     setViewportWidth(1280);
     window.history.replaceState(null, '', '/mobile/today');
     render(<App queryClient={testQueryClient()} />);
@@ -53,21 +54,24 @@ describe('app shell', () => {
     );
   });
 
-  it('renders the desktop layout on wide screens', async () => {
+  it('renders the management view when its route is opened', async () => {
     setViewportWidth(1280);
+    window.history.replaceState(null, '', '/planner');
     render(<App queryClient={testQueryClient()} />);
     const nav = await screen.findByRole('navigation', { name: 'Hoofdmenu' });
     expect(nav).toHaveTextContent('Planner');
     expect(nav).toHaveTextContent('Verdeling');
     expect(nav).not.toHaveTextContent('AI-assistent');
     expect(nav).not.toHaveTextContent('AI-prompts');
+    expect(nav).not.toHaveTextContent('Week');
     expect(nav).toHaveTextContent('Instellingen');
+    expect(screen.getByRole('button', { name: 'Terug naar overzicht' })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'Kleurthema' })).toBeInTheDocument();
     const version = screen.getByLabelText(`Versie ${APP_VERSION}`);
     expect(version).toHaveTextContent(`v${APP_VERSION}`);
     fireEvent.click(screen.getByRole('button', { name: 'Menu inklappen' }));
     expect(version.closest('.visually-hidden')).toBeNull();
-    expect(await screen.findByRole('heading', { name: '12-daags overzicht' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Planner' })).toHaveAttribute('aria-current', 'page');
   });
 
   it('shows household members only the read and execution sections', async () => {
@@ -82,10 +86,11 @@ describe('app shell', () => {
       '/api/occurrences': [],
     });
     storeProfile(member._id);
+    window.history.replaceState(null, '', '/distribution');
     render(<App queryClient={testQueryClient()} />);
 
     const nav = await screen.findByRole('navigation', { name: 'Hoofdmenu' });
-    expect(nav).toHaveTextContent('Week');
+    expect(nav).not.toHaveTextContent('Week');
     expect(nav).toHaveTextContent('Verdeling');
     expect(nav).toHaveTextContent('Statistiek');
     expect(nav).not.toHaveTextContent('Planner');
@@ -93,12 +98,16 @@ describe('app shell', () => {
     expect(nav).not.toHaveTextContent('Instellingen');
   });
 
-  it('can switch to the other layout via the menu', async () => {
+  it('opens management with the gear and returns to the standard overview', async () => {
     setViewportWidth(375);
     render(<App queryClient={testQueryClient()} />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Naar planweergave (desktop)' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Instellingen en beheer openen' }));
+    await waitFor(() => expect(window.location.pathname).toBe('/planner'));
+    expect(screen.getByRole('link', { name: 'Planner' })).toHaveAttribute('aria-current', 'page');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Terug naar overzicht' }));
     expect(await screen.findByRole('heading', { name: '12-daags overzicht' })).toBeInTheDocument();
-    expect(window.location.pathname).toBe('/week');
+    expect(window.location.pathname).toBe('/mobile/week');
   });
 
   it('redirects old Dutch URLs to their English replacements', async () => {
@@ -113,6 +122,7 @@ describe('app shell', () => {
 
   it('switches the interface to English immediately and remembers that choice', async () => {
     setViewportWidth(1280);
+    window.history.replaceState(null, '', '/planner');
     render(<App queryClient={testQueryClient()} />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Engels' }));

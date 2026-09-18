@@ -23,8 +23,8 @@ export const nl = {
   'nav.settings': 'Instellingen',
   'nav.main': 'Hoofdmenu',
 
-  'layout.switchToDesktop': 'Naar planweergave (desktop)',
-  'layout.switchToMobile': 'Naar dagweergave (mobiel)',
+  'layout.openManagement': 'Instellingen en beheer openen',
+  'layout.openOverview': 'Terug naar overzicht',
   'layout.dayView': 'Dagweergave',
   'layout.collapseMenu': 'Menu inklappen',
   'layout.expandMenu': 'Menu uitklappen',
@@ -659,6 +659,7 @@ export const nl = {
   'settings.data.imported': 'Import voltooid: alle gegevens zijn vervangen.',
 
   'stats.filters': 'Filters',
+  'stats.tabs': 'Statistiekonderdeel',
   'stats.period': 'Periode',
   'stats.period.weeks': 'Weken',
   'stats.period.cycles': 'Cycli',

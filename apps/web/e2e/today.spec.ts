@@ -42,10 +42,10 @@ test('check off, undo, skip with a reason, check off for someone else, and see b
   await expect(finished).toContainText('Gedaan door Bram');
   await expect.poll(async () => (await statusOf(tasks.planten._id))?.completedBy).toBe(bram._id);
 
-  await page.getByRole('button', { name: 'Naar planweergave (desktop)' }).click();
+  await page.getByRole('button', { name: 'Instellingen en beheer openen' }).click();
   await page.getByRole('navigation', { name: 'Hoofdmenu' }).getByRole('link', { name: 'Geschiedenis' }).click();
   const history = page.locator('.history-list');
-  await expect(history).toContainText('Anna vinkte Planten water geven af, gedaan door Bram');
-  await expect(history).toContainText('Anna sloeg Stofzuigen over: "geen tijd"');
-  await expect(history).toContainText('Anna maakte het afvinken van Afwassen ongedaan');
+  await expect(history).toContainText('Anna vinkte Planten water geven in Woonkamer op 16-09-2026 af, gedaan door Bram');
+  await expect(history).toContainText('Anna sloeg Stofzuigen in Woonkamer op 16-09-2026 over: "geen tijd"');
+  await expect(history).toContainText('Anna maakte het afvinken van Afwassen in Keuken op 16-09-2026 ongedaan');
 });

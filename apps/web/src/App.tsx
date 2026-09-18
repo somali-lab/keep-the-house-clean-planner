@@ -6,11 +6,8 @@ import { LanguageProvider } from './i18n/LanguageProvider.tsx';
 import { ProfilePicker, ProfileProvider, useProfile } from './identity/index.ts';
 import { DesktopLayout } from './layouts/DesktopLayout.tsx';
 import { MobileLayout } from './layouts/MobileLayout.tsx';
-import { useIsDesktop } from './layouts/useIsDesktop.ts';
 import { OfflineSyncProvider } from './offline/OfflineSyncProvider.tsx';
 import { ThemeProvider } from './theme/ThemeProvider.tsx';
-
-type LayoutChoice = 'auto' | 'desktop' | 'mobile';
 
 const LEGACY_ROUTES: Record<string, string> = {
   '/vandaag': '/mobile/today',
@@ -20,15 +17,15 @@ const LEGACY_ROUTES: Record<string, string> = {
   '/statistiek': '/statistics',
   '/geschiedenis': '/history',
   '/instellingen': '/settings',
-  '/weekoverzicht': '/week',
+  '/weekoverzicht': '/mobile/week',
+  '/week': '/mobile/week',
+  '/week-overview': '/mobile/week',
 };
 
 export function AppShell() {
   const { status, profile } = useProfile();
-  const isDesktop = useIsDesktop();
   const location = useLocation();
   const navigate = useNavigate();
-  const [choice, setChoice] = useState<LayoutChoice>('auto');
 
   const legacyTarget = LEGACY_ROUTES[location.pathname];
   if (legacyTarget) {
@@ -39,7 +36,7 @@ export function AppShell() {
       />
     );
   }
-  if (location.pathname === '/mobile') return <Navigate to="/mobile/week" replace />;
+  if (location.pathname === '/' || location.pathname === '/mobile') return <Navigate to="/mobile/week" replace />;
 
   if (status === 'loading')
     return (
@@ -58,21 +55,16 @@ export function AppShell() {
     );
   if (!profile) return <ProfilePicker />;
 
-  const mobileUrl = location.pathname.startsWith('/mobile/');
-  const desktop = mobileUrl ? false : choice === 'auto' ? isDesktop : choice === 'desktop';
-  return desktop ? (
-    <DesktopLayout
-      onSwitchLayout={() => {
-        setChoice('mobile');
-        navigate('/mobile/week');
-      }}
+  const standardView = location.pathname.startsWith('/mobile/');
+  return standardView ? (
+    <MobileLayout
+      onOpenManagement={() =>
+        navigate(profile.role === 'member' ? '/distribution' : '/planner')
+      }
     />
   ) : (
-    <MobileLayout
-      onSwitchLayout={() => {
-        setChoice('desktop');
-        navigate('/week');
-      }}
+    <DesktopLayout
+      onOpenOverview={() => navigate('/mobile/week')}
     />
   );
 }

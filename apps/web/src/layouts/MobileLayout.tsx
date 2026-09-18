@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react';
-import { CalendarRange, Hourglass, ListChecks, Monitor, Sun, type LucideIcon } from 'lucide-react';
+import { CalendarRange, Hourglass, ListChecks, Settings, Sun, type LucideIcon } from 'lucide-react';
 import { NavLink, Navigate, Route, Routes } from 'react-router';
 import { Button } from '@/components/ui/button';
 import { AppVersion } from '@/components/AppVersion';
@@ -29,7 +29,7 @@ const TABS: { path: string; label: MessageKey; icon: LucideIcon }[] = [
   { path: '/mobile/due', label: 'nav.due', icon: Hourglass },
 ];
 
-export function MobileLayout({ onSwitchLayout }: { onSwitchLayout: () => void }) {
+export function MobileLayout({ onOpenManagement }: { onOpenManagement: () => void }) {
   return (
     <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-2 border-b bg-background/85 px-4 backdrop-blur">
@@ -44,11 +44,11 @@ export function MobileLayout({ onSwitchLayout }: { onSwitchLayout: () => void })
             variant="ghost"
             size="icon-lg"
             className="rounded-full text-muted-foreground"
-            aria-label={t('layout.switchToDesktop')}
-            title={t('layout.switchToDesktop')}
-            onClick={onSwitchLayout}
+            aria-label={t('layout.openManagement')}
+            title={t('layout.openManagement')}
+            onClick={onOpenManagement}
           >
-            <Monitor aria-hidden="true" />
+            <Settings aria-hidden="true" />
           </Button>
         </div>
       </header>
