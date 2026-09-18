@@ -1,5 +1,49 @@
 # Changelog
 
+## [1.3.0](https://github.com/somali-lab/keep-the-house-clean-planner/compare/v1.2.0...v1.3.0) (2026-09-18)
+
+
+### Features
+
+* **ai:** place plan and task assistants in their related workflows ([fe0582c](https://github.com/somali-lab/keep-the-house-clean-planner/commit/fe0582ca8f06481e9afd9a64fca12fdfc30aca23))
+* **navigation:** make week overview the root route and namespace management ([fe0582c](https://github.com/somali-lab/keep-the-house-clean-planner/commit/fe0582ca8f06481e9afd9a64fca12fdfc30aca23))
+* **planner:** simplify planning controls and remove redundant drag targets ([fe0582c](https://github.com/somali-lab/keep-the-house-clean-planner/commit/fe0582ca8f06481e9afd9a64fca12fdfc30aca23))
+* **settings:** organize settings and AI prompts in tabs ([fe0582c](https://github.com/somali-lab/keep-the-house-clean-planner/commit/fe0582ca8f06481e9afd9a64fca12fdfc30aca23))
+* **stats:** add recent-week and cycle period filters ([fe0582c](https://github.com/somali-lab/keep-the-house-clean-planner/commit/fe0582ca8f06481e9afd9a64fca12fdfc30aca23))
+* **stats:** organize every report in compact tabs ([fe0582c](https://github.com/somali-lab/keep-the-house-clean-planner/commit/fe0582ca8f06481e9afd9a64fca12fdfc30aca23))
+* **tasks:** add configurable task completion controls ([fe0582c](https://github.com/somali-lab/keep-the-house-clean-planner/commit/fe0582ca8f06481e9afd9a64fca12fdfc30aca23))
+* **tasks:** collapse rooms and add expand-all controls ([fe0582c](https://github.com/somali-lab/keep-the-house-clean-planner/commit/fe0582ca8f06481e9afd9a64fca12fdfc30aca23))
+
+
+### Bug fixes
+
+* **history:** describe task actions with task room and date context ([fe0582c](https://github.com/somali-lab/keep-the-house-clean-planner/commit/fe0582ca8f06481e9afd9a64fca12fdfc30aca23))
+* **logging:** silence successful health checks ([fe0582c](https://github.com/somali-lab/keep-the-house-clean-planner/commit/fe0582ca8f06481e9afd9a64fca12fdfc30aca23))
+* **pdf:** group planner tasks by person and widen the task area ([fe0582c](https://github.com/somali-lab/keep-the-house-clean-planner/commit/fe0582ca8f06481e9afd9a64fca12fdfc30aca23))
+* **stats:** show useful empty states and working completion grouping ([fe0582c](https://github.com/somali-lab/keep-the-house-clean-planner/commit/fe0582ca8f06481e9afd9a64fca12fdfc30aca23))
+* **week:** filter by the selected person and compact overview controls ([fe0582c](https://github.com/somali-lab/keep-the-house-clean-planner/commit/fe0582ca8f06481e9afd9a64fca12fdfc30aca23))
+
+
+### Code refactoring
+
+* **container:** slim runtime and isolate backups ([#16](https://github.com/somali-lab/keep-the-house-clean-planner/issues/16)) ([4adbb6c](https://github.com/somali-lab/keep-the-house-clean-planner/commit/4adbb6c06efb8a3b80154fb91c1d4164af8b328b))
+
+
+### Continuous integration
+
+* run workspace tests in parallel ([fe0582c](https://github.com/somali-lab/keep-the-house-clean-planner/commit/fe0582ca8f06481e9afd9a64fca12fdfc30aca23))
+
+
+### Documentation
+
+* **release:** require verified overrides for multi-change pull requests ([fe0582c](https://github.com/somali-lab/keep-the-house-clean-planner/commit/fe0582ca8f06481e9afd9a64fca12fdfc30aca23))
+* **workflow:** require feature branches and coherent commits ([fe0582c](https://github.com/somali-lab/keep-the-house-clean-planner/commit/fe0582ca8f06481e9afd9a64fca12fdfc30aca23))
+
+
+### Maintenance
+
+* **agent:** add repository guidance and skills ([#14](https://github.com/somali-lab/keep-the-house-clean-planner/issues/14)) ([2507b74](https://github.com/somali-lab/keep-the-house-clean-planner/commit/2507b743fba41b8e201d76b2d2f03cf682fa052d))
+
 ## [1.2.0](https://github.com/somali-lab/keep-the-house-clean-planner/compare/v1.1.0...v1.2.0) (2026-09-17)
 
 
