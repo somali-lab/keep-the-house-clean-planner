@@ -17,7 +17,7 @@ import { FairnessBars, type FairnessRow } from './FairnessBars.tsx';
 import { formatDays, formatFactor, formatMinutes, formatNumber, formatPercent, MAX_SERIES } from './scale.ts';
 import { TrendLines, type TrendSeries } from './TrendLines.tsx';
 
-const PERIODS = [1, 2, 4, 8, 13];
+const PERIODS = [1, 2, 3];
 const GROUP_BY: StatsGroupBy[] = ['task', 'room', 'user'];
 
 /** Deviation thresholds for the interval report ("wensdenken"). */
@@ -82,15 +82,15 @@ function KpiCard({ icon, label, value, tint }: { icon: ReactNode; label: string;
 
 export function StatsPage() {
   const idPrefix = useId();
-  const [cycles, setCycles] = useState(4);
+  const [weeks, setWeeks] = useState(1);
   const [groupBy, setGroupBy] = useState<StatsGroupBy>('task');
   const [confirmReset, setConfirmReset] = useState(false);
   const [resetDone, setResetDone] = useState(false);
   const { profile } = useProfile();
-  const workload = useWorkload(cycles);
-  const completion = useCompletion(cycles, groupBy);
-  const intervals = useIntervals(cycles);
-  const deviations = useDeviations(cycles);
+  const workload = useWorkload(weeks);
+  const completion = useCompletion(weeks, groupBy);
+  const intervals = useIntervals(weeks);
+  const deviations = useDeviations(weeks);
   const users = useUsers();
   const tasks = useTasks();
   const rooms = useRooms();
@@ -114,7 +114,7 @@ export function StatsPage() {
     <div className="flex flex-wrap items-end gap-3" role="group" aria-label={t('stats.filters')}>
       <div className="flex w-48 flex-col gap-2">
         <Label htmlFor={`${idPrefix}-period`}>{t('stats.period')}</Label>
-        <NativeSelect id={`${idPrefix}-period`} value={cycles} onChange={(e) => setCycles(Number(e.target.value))}>
+        <NativeSelect id={`${idPrefix}-period`} value={weeks} onChange={(e) => setWeeks(Number(e.target.value))}>
           {PERIODS.map((n) => (
             <option key={n} value={n}>
               {n === 1 ? t('stats.period.one') : format('stats.period.many', { n })}
@@ -194,7 +194,7 @@ export function StatsPage() {
     values: cycleList.map((c) => find(c.users, id)?.doneMinutes ?? 0),
     secondary: cycleList.map((c) => find(c.users, id)?.plannedMinutes ?? 0),
   }));
-  const periodText = cycles === 1 ? t('stats.period.one') : format('stats.period.many', { n: cycles });
+  const periodText = weeks === 1 ? t('stats.period.one') : format('stats.period.many', { n: weeks });
 
   // Summary figures for the KPI cards (display only).
   const totalPlanned = cycleList.reduce((sum, c) => sum + c.users.reduce((s, u) => s + u.plannedMinutes, 0), 0);

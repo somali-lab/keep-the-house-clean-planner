@@ -149,6 +149,19 @@ describe('GET /api/stats/workload', () => {
     expect(cycles.map((c) => c.index)).toEqual([1]);
   });
 
+  it('limits workload to this week or the last three calendar weeks', async () => {
+    const current = await get<WorkloadResponse>('/api/stats/workload?weeks=1');
+    expect(current.cycles).toHaveLength(1);
+    expect(current.cycles[0]!.weeks.map((week) => week.startDate)).toEqual(['2026-10-12']);
+
+    const recent = await get<WorkloadResponse>('/api/stats/workload?weeks=3');
+    expect(recent.cycles.flatMap((cycle) => cycle.weeks.map((week) => week.startDate))).toEqual([
+      '2026-09-28',
+      '2026-10-05',
+      '2026-10-12',
+    ]);
+  });
+
   it('does not change history when a task duration is halved', async () => {
     const before = await get<WorkloadResponse>('/api/stats/workload?cycles=2');
     const res = await t.app.inject({ method: 'PATCH', url: `/api/tasks/${task.A}`, headers: asProfile(p1), payload: { durationMinutes: 15 } });
@@ -189,6 +202,14 @@ describe('GET /api/stats/completion', () => {
     expect((await t.app.inject({ method: 'GET', url: '/api/stats/completion?cycles=2' })).statusCode).toBe(400);
     expect((await t.app.inject({ method: 'GET', url: '/api/stats/completion?groupBy=planet' })).statusCode).toBe(400);
     expect((await t.app.inject({ method: 'GET', url: '/api/stats/workload?cycles=0' })).statusCode).toBe(400);
+    expect((await t.app.inject({ method: 'GET', url: '/api/stats/workload?weeks=4' })).statusCode).toBe(400);
+  });
+
+  it('applies the week period to completion-by results', async () => {
+    const { rows } = await get<CompletionResponse>('/api/stats/completion?weeks=1&groupBy=task');
+    expect(rows).toEqual([
+      { key: task.A, name: 'Badkamer schoonmaken', done: 1, skipped: 0, missed: 0, rate: 1 },
+    ]);
   });
 });
 

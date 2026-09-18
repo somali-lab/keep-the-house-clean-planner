@@ -274,7 +274,7 @@ describe('StatsPage', () => {
 
     fireEvent.change(screen.getByLabelText('Voltooiing per'), { target: { value: 'room' } });
     await waitFor(() =>
-      expect(statsUrls(fetchMock)).toContain('/api/stats/completion?cycles=4&groupBy=room'),
+      expect(statsUrls(fetchMock)).toContain('/api/stats/completion?weeks=1&groupBy=room'),
     );
     expect(
       await within(section).findByRole('columnheader', { name: 'Ruimte' }),
@@ -301,14 +301,14 @@ describe('StatsPage', () => {
   it('applies the period filter to every chart and table', async () => {
     const fetchMock = setup();
     renderWithProviders(<StatsPage />);
-    fireEvent.change(await screen.findByLabelText('Periode'), { target: { value: '8' } });
+    fireEvent.change(await screen.findByLabelText('Periode'), { target: { value: '3' } });
     await waitFor(() =>
       expect(statsUrls(fetchMock)).toEqual(
         expect.arrayContaining([
-          '/api/stats/workload?cycles=8',
-          '/api/stats/completion?cycles=8&groupBy=task',
-          '/api/stats/intervals?cycles=8',
-          '/api/stats/deviations?cycles=8',
+          '/api/stats/workload?weeks=3',
+          '/api/stats/completion?weeks=3&groupBy=task',
+          '/api/stats/intervals?weeks=3',
+          '/api/stats/deviations?weeks=3',
         ]),
       ),
     );

@@ -4,35 +4,35 @@ import { api } from '../../api/index.ts';
 
 // keepPreviousData: a refetch holds the previous render instead of flashing a loader.
 
-export function useWorkload(cycles: number) {
+export function useWorkload(weeks: number) {
   return useQuery({
-    queryKey: ['stats', 'workload', cycles],
-    queryFn: async () => (await api.get<WorkloadResponse>(`/api/stats/workload?cycles=${cycles}`)).data,
+    queryKey: ['stats', 'workload', 'weeks', weeks],
+    queryFn: async () => (await api.get<WorkloadResponse>(`/api/stats/workload?weeks=${weeks}`)).data,
     placeholderData: keepPreviousData,
   });
 }
 
-export function useCompletion(cycles: number, groupBy: StatsGroupBy) {
+export function useCompletion(weeks: number, groupBy: StatsGroupBy) {
   return useQuery({
-    queryKey: ['stats', 'completion', cycles, groupBy],
+    queryKey: ['stats', 'completion', 'weeks', weeks, groupBy],
     queryFn: async () =>
-      (await api.get<CompletionResponse>(`/api/stats/completion?cycles=${cycles}&groupBy=${groupBy}`)).data,
+      (await api.get<CompletionResponse>(`/api/stats/completion?weeks=${weeks}&groupBy=${groupBy}`)).data,
     placeholderData: keepPreviousData,
   });
 }
 
-export function useIntervals(cycles: number) {
+export function useIntervals(weeks: number) {
   return useQuery({
-    queryKey: ['stats', 'intervals', cycles],
-    queryFn: async () => (await api.get<IntervalsResponse>(`/api/stats/intervals?cycles=${cycles}`)).data,
+    queryKey: ['stats', 'intervals', 'weeks', weeks],
+    queryFn: async () => (await api.get<IntervalsResponse>(`/api/stats/intervals?weeks=${weeks}`)).data,
     placeholderData: keepPreviousData,
   });
 }
 
-export function useDeviations(cycles: number) {
+export function useDeviations(weeks: number) {
   return useQuery({
-    queryKey: ['stats', 'deviations', cycles],
-    queryFn: async () => (await api.get<DeviationsResponse>(`/api/stats/deviations?cycles=${cycles}`)).data,
+    queryKey: ['stats', 'deviations', 'weeks', weeks],
+    queryFn: async () => (await api.get<DeviationsResponse>(`/api/stats/deviations?weeks=${weeks}`)).data,
     placeholderData: keepPreviousData,
   });
 }
