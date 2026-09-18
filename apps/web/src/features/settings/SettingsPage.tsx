@@ -15,7 +15,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { panelTabsListClass, panelTabsTriggerClass, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { api, ApiRequestError } from '../../api/index.ts';
 import { queryKeys, useSettings } from '../../api/queries.ts';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
@@ -48,13 +48,13 @@ export function SettingsPage({ initialTab = 'calendar' }: { initialTab?: 'calend
     <section>
       <PageHeader title={t('nav.settings')} />
       <Tabs defaultValue={initialTab} className="gap-6">
-        <TabsList className="flex h-auto w-full flex-nowrap justify-start gap-2 overflow-x-auto overflow-y-hidden rounded-2xl border bg-card p-2 shadow-sm">
-          <TabsTrigger className="min-h-12 flex-none rounded-xl px-4" value="calendar"><CalendarDays />{t('settings.tab.calendar')}</TabsTrigger>
-          <TabsTrigger className="min-h-12 flex-none rounded-xl px-4" value="people"><Users />{t('settings.tab.people')}</TabsTrigger>
-          <TabsTrigger className="min-h-12 flex-none rounded-xl px-4" value="rooms"><LayoutPanelTop />{t('settings.tab.rooms')}</TabsTrigger>
-          <TabsTrigger className="min-h-12 flex-none rounded-xl px-4" value="interface"><LayoutPanelTop />{t('settings.tab.interface')}</TabsTrigger>
-          <TabsTrigger className="min-h-12 flex-none rounded-xl px-4" value="ai"><Bot />{t('settings.tab.ai')}</TabsTrigger>
-          <TabsTrigger className="min-h-12 flex-none rounded-xl px-4" value="data"><Database />{t('settings.tab.data')}</TabsTrigger>
+        <TabsList className={panelTabsListClass}>
+          <TabsTrigger className={panelTabsTriggerClass} value="calendar"><CalendarDays />{t('settings.tab.calendar')}</TabsTrigger>
+          <TabsTrigger className={panelTabsTriggerClass} value="people"><Users />{t('settings.tab.people')}</TabsTrigger>
+          <TabsTrigger className={panelTabsTriggerClass} value="rooms"><LayoutPanelTop />{t('settings.tab.rooms')}</TabsTrigger>
+          <TabsTrigger className={panelTabsTriggerClass} value="interface"><LayoutPanelTop />{t('settings.tab.interface')}</TabsTrigger>
+          <TabsTrigger className={panelTabsTriggerClass} value="ai"><Bot />{t('settings.tab.ai')}</TabsTrigger>
+          <TabsTrigger className={panelTabsTriggerClass} value="data"><Database />{t('settings.tab.data')}</TabsTrigger>
         </TabsList>
         <TabsContent value="calendar"><CalendarSection settings={settings.data} /></TabsContent>
         <TabsContent value="people"><UsersSection /></TabsContent>

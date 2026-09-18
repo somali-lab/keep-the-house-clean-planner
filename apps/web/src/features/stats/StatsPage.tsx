@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { panelTabsListClass, panelTabsTriggerClass, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { useRooms, useTasks, useUsers } from '../../api/queries.ts';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
@@ -83,6 +84,7 @@ function KpiCard({ icon, label, value, tint }: { icon: ReactNode; label: string;
 
 export function StatsPage() {
   const idPrefix = useId();
+  const [activeTab, setActiveTab] = useState('fairness');
   const [period, setPeriod] = useState<StatsPeriod>({ unit: 'weeks', count: 1 });
   const [groupBy, setGroupBy] = useState<StatsGroupBy>('task');
   const [confirmReset, setConfirmReset] = useState(false);
@@ -265,28 +267,39 @@ export function StatsPage() {
           {t('stats.empty')}
         </EmptyState>
       ) : (
-        <div className="mb-6 flex flex-col gap-6">
-          <div className="grid gap-4 sm:grid-cols-3">
-            <KpiCard
-              icon={<ListChecks aria-hidden="true" />}
-              label={t('stats.planned')}
-              value={formatMinutes(totalPlanned)}
-              tint="bg-primary/10 text-primary"
-            />
-            <KpiCard
-              icon={<CircleCheck aria-hidden="true" />}
-              label={t('stats.done')}
-              value={formatMinutes(totalDone)}
-              tint="bg-accent text-accent-foreground"
-            />
-            <KpiCard
-              icon={<Hourglass aria-hidden="true" />}
-              label={t('stats.unassigned')}
-              value={formatMinutes(totalUnassigned)}
-              tint="bg-warning/25 text-warning-foreground"
-            />
-          </div>
+        <div className="mb-6 grid gap-4 sm:grid-cols-3">
+          <KpiCard
+            icon={<ListChecks aria-hidden="true" />}
+            label={t('stats.planned')}
+            value={formatMinutes(totalPlanned)}
+            tint="bg-primary/10 text-primary"
+          />
+          <KpiCard
+            icon={<CircleCheck aria-hidden="true" />}
+            label={t('stats.done')}
+            value={formatMinutes(totalDone)}
+            tint="bg-accent text-accent-foreground"
+          />
+          <KpiCard
+            icon={<Hourglass aria-hidden="true" />}
+            label={t('stats.unassigned')}
+            value={formatMinutes(totalUnassigned)}
+            tint="bg-warning/25 text-warning-foreground"
+          />
+        </div>
+      )}
 
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="gap-6">
+        <TabsList className={panelTabsListClass} aria-label={t('stats.tabs')}>
+          <TabsTrigger className={panelTabsTriggerClass} value="fairness"><Scale />{t('stats.fairness')}</TabsTrigger>
+          <TabsTrigger className={panelTabsTriggerClass} value="trend"><TrendingUp />{t('stats.trend')}</TabsTrigger>
+          <TabsTrigger className={panelTabsTriggerClass} value="completion"><CircleCheck />{t('stats.completion')}</TabsTrigger>
+          <TabsTrigger className={panelTabsTriggerClass} value="intervals"><Clock />{t('stats.intervals')}</TabsTrigger>
+          <TabsTrigger className={panelTabsTriggerClass} value="deviations"><CalendarClock />{t('stats.deviations')}</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="fairness">
+          {cycleList.length > 0 && (
           <section className={sectionCardClass} aria-labelledby={`${idPrefix}-fair`}>
             <SectionHeader
               id={`${idPrefix}-fair`}
@@ -335,7 +348,11 @@ export function StatsPage() {
               </table>
             </div>
           </section>
+          )}
+        </TabsContent>
 
+        <TabsContent value="trend">
+          {cycleList.length > 0 && (
           <section className={sectionCardClass} aria-labelledby={`${idPrefix}-trend`}>
             <SectionHeader id={`${idPrefix}-trend`} icon={<TrendingUp aria-hidden="true" />} title={t('stats.trend')} />
             <TrendLines
@@ -346,10 +363,10 @@ export function StatsPage() {
               secondaryLabel={t('stats.planned')}
             />
           </section>
-        </div>
-      )}
+          )}
+        </TabsContent>
 
-      <div className="grid items-start gap-6 xl:grid-cols-2">
+        <TabsContent value="completion">
         <section className={sectionCardClass} aria-labelledby={`${idPrefix}-completion`}>
           <SectionHeader
             id={`${idPrefix}-completion`}
@@ -394,7 +411,9 @@ export function StatsPage() {
             </p>
           )}
         </section>
+        </TabsContent>
 
+        <TabsContent value="intervals">
         <section className={sectionCardClass} aria-labelledby={`${idPrefix}-intervals`}>
           <SectionHeader
             id={`${idPrefix}-intervals`}
@@ -439,7 +458,9 @@ export function StatsPage() {
             </p>
           )}
         </section>
+        </TabsContent>
 
+        <TabsContent value="deviations">
         <section className={sectionCardClass} aria-labelledby={`${idPrefix}-deviations`}>
           <SectionHeader
             id={`${idPrefix}-deviations`}
@@ -478,7 +499,8 @@ export function StatsPage() {
             </p>
           )}
         </section>
-      </div>
+        </TabsContent>
+      </Tabs>
     </section>
   );
 }

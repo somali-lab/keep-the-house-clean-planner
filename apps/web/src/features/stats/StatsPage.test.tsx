@@ -184,6 +184,13 @@ function setup(workload: WorkloadResponse = WORKLOAD) {
 const statsUrls = (fetchMock: ReturnType<typeof mockApi>) =>
   fetchMock.mock.calls.map(([u]) => String(u)).filter((u) => u.startsWith('/api/stats/'));
 
+async function selectStatsTab(name: string) {
+  const tab = await screen.findByRole('tab', { name });
+  fireEvent.mouseDown(tab, { button: 0, ctrlKey: false });
+  fireEvent.click(tab);
+  await waitFor(() => expect(tab).toHaveAttribute('aria-selected', 'true'));
+}
+
 describe('StatsPage', () => {
   it('shows planned vs done per person for the period, with legend and a table view', async () => {
     setup();
@@ -238,6 +245,7 @@ describe('StatsPage', () => {
   it('shows the workload trend per person with a crosshair tooltip listing every series', async () => {
     setup();
     renderWithProviders(<StatsPage />);
+    await selectStatsTab('Werkbelasting door de tijd');
     const figure = await screen.findByRole('figure', { name: 'Gedaan per persoon per cyclus' });
     const chart = within(figure).getByRole('img', { name: 'Gedaan per persoon per cyclus' });
     expect(chart.parentElement).toHaveClass('max-w-4xl');
@@ -264,6 +272,7 @@ describe('StatsPage', () => {
   it('shows completion rates and regroups on request', async () => {
     const fetchMock = setup();
     renderWithProviders(<StatsPage />);
+    await selectStatsTab('Voltooiing');
     const heading = await screen.findByRole('heading', { name: 'Voltooiing' });
     const section = heading.closest('section')!;
     await waitFor(() =>
@@ -284,6 +293,7 @@ describe('StatsPage', () => {
   it('flags intervals that are wishful thinking with an icon and words, not colour', async () => {
     setup();
     renderWithProviders(<StatsPage />);
+    await selectStatsTab('Intervallen: bedoeld en werkelijk');
     const heading = await screen.findByRole('heading', {
       name: 'Intervallen: bedoeld en werkelijk',
     });
@@ -331,6 +341,7 @@ describe('StatsPage', () => {
   it('shows planning shifts separately from completion delays and suggests improvements', async () => {
     setup();
     renderWithProviders(<StatsPage />);
+    await selectStatsTab('Afwijking tussen planning en uitvoering');
     const heading = await screen.findByRole('heading', { name: 'Afwijking tussen planning en uitvoering' });
     const rows = within(heading.closest('section')!).getAllByRole('row').slice(1);
     expect(rows.map((row) => row.textContent)).toEqual([
