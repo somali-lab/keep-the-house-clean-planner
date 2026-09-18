@@ -164,11 +164,11 @@ export function WeekPage({ now }: { now?: Date }) {
   const finishedCount = filteredOccurrences.length - openCount;
 
   return (
-    <section className="flex flex-col gap-5">
+    <section className="flex flex-col gap-3">
       <PageHeader
         title={t('week.overviewTitle')}
         description={weekRangeLabel(from, to)}
-        className="mb-0"
+        className="mb-0 gap-3"
         actions={
           <div
             className="inline-flex items-center gap-1 rounded-full border bg-card p-1 shadow-sm"
@@ -206,13 +206,13 @@ export function WeekPage({ now }: { now?: Date }) {
           </div>
         }
       />
-      <div className="flex flex-wrap items-center gap-2 rounded-2xl border bg-card px-4 py-3 shadow-sm">
-        <span className="flex items-center gap-2 font-extrabold">
-          <CalendarDays className="size-5 text-primary" aria-hidden="true" />
+      <div data-testid="week-summary" className="flex min-h-12 flex-wrap items-center gap-2 rounded-xl border bg-card px-3 py-2 shadow-sm">
+        <span className="flex items-center gap-2 text-sm font-extrabold">
+          <CalendarDays className="size-4 text-primary" aria-hidden="true" />
           {format('week.total', { count: filteredOccurrences.length })}
         </span>
         <NativeSelect
-          className="ml-auto w-48"
+          className="ml-auto h-9 w-40 sm:w-44"
           aria-label={t('week.filterPerson')}
           value={personFilter}
           onChange={(event) => setPersonFilter(event.target.value)}
@@ -221,10 +221,10 @@ export function WeekPage({ now }: { now?: Date }) {
           {activeUsers.map((user) => <option key={user._id} value={user._id}>{user.name}</option>)}
           <option value="unassigned">{t('planner.anyone')}</option>
         </NativeSelect>
-        <Badge className="rounded-full px-3 py-1">
+        <Badge className="rounded-full px-2.5 py-1 text-xs">
           {format('week.open', { count: openCount })}
         </Badge>
-        <Badge variant="secondary" className="rounded-full px-3 py-1">
+        <Badge variant="secondary" className="rounded-full px-2.5 py-1 text-xs">
           <CheckCircle2 aria-hidden="true" />
           {format('week.finished', { count: finishedCount })}
         </Badge>
@@ -257,16 +257,16 @@ export function WeekPage({ now }: { now?: Date }) {
       <DndContext sensors={sensors} onDragEnd={onDragEnd}>
         <button
           type="button"
-          className="mb-4 flex w-full items-center gap-3 rounded-2xl border bg-card px-4 py-3 text-left shadow-sm transition-colors hover:bg-accent/40 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+          className="flex min-h-11 w-full items-center gap-2 rounded-xl border bg-card px-3 py-2 text-left shadow-sm transition-colors hover:bg-accent/40 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
           aria-expanded={pastExpanded}
           onClick={() => setPastExpanded((expanded) => !expanded)}
         >
-          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-secondary text-secondary-foreground">
+          <span className="grid size-7 shrink-0 place-items-center rounded-full bg-secondary text-secondary-foreground [&_svg]:size-4">
             {pastExpanded ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
           </span>
-          <span className="min-w-0 flex-1">
-            <strong className="block">{t('week.pastDays')}</strong>
-            <span className="text-sm text-muted-foreground">{weekRangeLabel(days[0]!, days[2]!)}</span>
+          <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
+            <strong>{t('week.pastDays')}</strong>
+            <span className="text-xs text-muted-foreground sm:text-sm">{weekRangeLabel(days[0]!, days[2]!)}</span>
           </span>
           <Badge variant="secondary" className="rounded-full">
             3

@@ -134,7 +134,11 @@ describe('WeekPage', () => {
   it('keeps the overview compact without separate move buttons', async () => {
     setup();
     renderWithProviders(<WeekPage now={NOW} />);
-    fireEvent.click(await screen.findByRole('button', { name: /Afgelopen 3 dagen/ }));
+    const pastDays = await screen.findByRole('button', { name: /Afgelopen 3 dagen/ });
+    expect(screen.getByTestId('week-summary')).toHaveClass('min-h-12', 'py-2');
+    expect(pastDays).toHaveClass('min-h-11', 'py-2');
+    expect(pastDays).not.toHaveClass('mb-4');
+    fireEvent.click(pastDays);
     await screen.findByText('Badkamer');
     expect(screen.queryByRole('button', { name: /Verplaats/ })).not.toBeInTheDocument();
   });
