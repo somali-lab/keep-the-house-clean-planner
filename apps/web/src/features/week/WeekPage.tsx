@@ -25,7 +25,7 @@ import {
   TriangleAlert,
   ThumbsUp,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '@/components/PageHeader';
 import { NativeSelect } from '@/components/NativeSelect';
 import { Badge } from '@/components/ui/badge';
@@ -78,7 +78,10 @@ export function WeekPage({ now }: { now?: Date }) {
   const todayKey = dayKeyInZone(now ?? new Date(), settings.data?.timezone ?? 'Europe/Amsterdam');
   const [periodOffset, setPeriodOffset] = useState(0);
   const [pastExpanded, setPastExpanded] = useState(false);
-  const [personFilter, setPersonFilter] = useState('all');
+  const [personFilter, setPersonFilter] = useState(profile?._id ?? 'all');
+  useEffect(() => {
+    if (profile?._id) setPersonFilter(profile._id);
+  }, [profile?._id]);
   const days = overviewDays(addDaysKey(todayKey, periodOffset * 7));
   const visibleDays = pastExpanded ? days : days.slice(3);
   const from = days[0]!;

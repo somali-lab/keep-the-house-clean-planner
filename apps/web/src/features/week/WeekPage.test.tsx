@@ -89,6 +89,7 @@ describe('WeekPage', () => {
     setup();
     renderWithProviders(<WeekPage now={NOW} />);
     expect(await screen.findByRole('button', { name: /Afgelopen 3 dagen/ })).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.change(screen.getByLabelText('Filter op persoon'), { target: { value: 'all' } });
     expect(screen.queryByRole('heading', { name: /^zondag 13 sep/ })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Afgelopen 3 dagen/ }));
     await screen.findByRole('heading', { name: /^zondag 13 sep/ });
@@ -144,6 +145,8 @@ describe('WeekPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Afgelopen 3 dagen/ }));
 
     const filter = screen.getByLabelText('Filter op persoon');
+    expect(filter).toHaveValue(ANNA._id);
+    expect(screen.queryByText('Stofzuigen')).not.toBeInTheDocument();
     fireEvent.change(filter, { target: { value: BRAM._id } });
     expect(await screen.findByText('Stofzuigen')).toBeInTheDocument();
     expect(screen.queryByText('Badkamer')).not.toBeInTheDocument();
@@ -183,6 +186,7 @@ describe('WeekPage', () => {
   it('moves an item when it is dropped on another day', async () => {
     const fetchMock = setup();
     renderWithProviders(<WeekPage now={NOW} />);
+    fireEvent.change(await screen.findByLabelText('Filter op persoon'), { target: { value: 'all' } });
     await screen.findByRole('heading', { name: /^woensdag 16 sep/ });
     act(() => {
       dnd.onDragEnd!({ active: { id: 'occ:o2' }, over: { id: 'day:2026-09-16' } });
