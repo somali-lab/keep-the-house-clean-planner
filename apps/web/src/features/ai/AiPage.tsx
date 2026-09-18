@@ -93,7 +93,7 @@ export function AiPage({ section = 'all', embedded = false }: { section?: 'all' 
             <p className="text-muted-foreground">{t('ai.off')}</p>
             <p>
               <Button asChild variant="outline">
-                <Link to="/settings">
+                <Link to="/manage/settings">
                   <Settings aria-hidden="true" />
                   {t('ai.off.settingsLink')}
                 </Link>

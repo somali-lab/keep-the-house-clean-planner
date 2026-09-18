@@ -6,11 +6,11 @@ test('AI with the mock provider: create a plan and activate it through plan mana
   await createTask(app, anna, { name: 'Afwassen', room: 'Keuken', intervalKey: '1w', durationMinutes: 15 });
   await createTask(app, anna, { name: 'Stofzuigen', room: 'Woonkamer', intervalKey: '1w', durationMinutes: 20 });
 
-  await openAs(page, app, anna, '/planner');
+  await openAs(page, app, anna, '/manage/planner');
+  await page.getByRole('button', { name: 'Plannen beheren' }).click();
   await page.getByRole('button', { name: 'Voorstel maken' }).click();
   await expect(page.getByText('Plan aangemaakt. Bekijk, activeer of verwijder het via Plannen beheren.')).toBeVisible();
 
-  await page.getByRole('button', { name: 'Plannen beheren' }).click();
   const planSelect = page.getByLabel('Plan', { exact: true });
   const aiPlanId = await planSelect.locator('option').filter({ hasText: 'AI-voorstel' }).getAttribute('value');
   await planSelect.selectOption(aiPlanId!);

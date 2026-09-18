@@ -529,7 +529,7 @@ function RoomSection({
                     {task.active ? t('tasks.deactivate') : t('tasks.activate')}
                   </Button>
                   <Button asChild variant="link" size="sm" className="text-muted-foreground">
-                    <Link to={`/history?entity=task&entityId=${task._id}`}>
+                    <Link to={`/manage/history?entity=task&entityId=${task._id}`}>
                       <History aria-hidden="true" />
                       {t('tasks.history')}
                     </Link>

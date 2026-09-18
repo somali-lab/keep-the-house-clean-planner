@@ -32,21 +32,21 @@ import { PlaceholderPage } from './PlaceholderPage.tsx';
 
 /** Implemented pages; other sections show a placeholder until their task is done. */
 const PAGES: Partial<Record<string, ReactElement>> = {
-  '/planner': <PlannerPage />,
-  '/tasks': <TasksPage />,
-  '/distribution': <DistributionPage />,
-  '/statistics': <StatsPage />,
-  '/history': <HistoryPage />,
-  '/settings': <SettingsPage />,
+  '/manage/planner': <PlannerPage />,
+  '/manage/tasks': <TasksPage />,
+  '/manage/distribution': <DistributionPage />,
+  '/manage/statistics': <StatsPage />,
+  '/manage/history': <HistoryPage />,
+  '/manage/settings': <SettingsPage />,
 };
 
 const SECTIONS: { path: string; label: MessageKey; icon: LucideIcon; minimumRole: UserRole }[] = [
-  { path: '/planner', label: 'nav.planner', icon: CalendarDays, minimumRole: 'planner' },
-  { path: '/tasks', label: 'nav.tasks', icon: ListChecks, minimumRole: 'planner' },
-  { path: '/distribution', label: 'nav.distribution', icon: Scale, minimumRole: 'member' },
-  { path: '/statistics', label: 'nav.stats', icon: ChartColumnBig, minimumRole: 'member' },
-  { path: '/history', label: 'nav.history', icon: History, minimumRole: 'member' },
-  { path: '/settings', label: 'nav.settings', icon: Settings, minimumRole: 'admin' },
+  { path: '/manage/planner', label: 'nav.planner', icon: CalendarDays, minimumRole: 'planner' },
+  { path: '/manage/tasks', label: 'nav.tasks', icon: ListChecks, minimumRole: 'planner' },
+  { path: '/manage/distribution', label: 'nav.distribution', icon: Scale, minimumRole: 'member' },
+  { path: '/manage/statistics', label: 'nav.stats', icon: ChartColumnBig, minimumRole: 'member' },
+  { path: '/manage/history', label: 'nav.history', icon: History, minimumRole: 'member' },
+  { path: '/manage/settings', label: 'nav.settings', icon: Settings, minimumRole: 'admin' },
 ];
 
 const ROLE_LEVEL: Record<UserRole, number> = { member: 0, planner: 1, admin: 2 };
@@ -133,9 +133,7 @@ export function DesktopLayout({ onOpenOverview }: { onOpenOverview: () => void }
                 element={PAGES[section.path] ?? <PlaceholderPage titleKey={section.label} />}
               />
             ))}
-            <Route path="/ai" element={<Navigate to="/planner" replace />} />
-            <Route path="/ai-prompts" element={<Navigate to="/settings" replace />} />
-            <Route path="*" element={<Navigate to={sections[0]?.path ?? '/distribution'} replace />} />
+            <Route path="*" element={<Navigate to={sections[0]?.path ?? '/manage/distribution'} replace />} />
           </Routes>
         </main>
       </div>

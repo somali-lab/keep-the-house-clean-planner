@@ -104,7 +104,7 @@ describe('AiPage', () => {
     renderWithProviders(<AiPage />);
     expect(await screen.findByText(/De AI-assistent staat uit/)).toBeInTheDocument();
     expect(screen.getByText(/AI_API_KEY/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Naar Instellingen' })).toHaveAttribute('href', '/settings');
+    expect(screen.getByRole('link', { name: 'Naar Instellingen' })).toHaveAttribute('href', '/manage/settings');
     expect(screen.queryByRole('button', { name: 'Voorstel maken' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Herbalanceer actief plan' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Taken voorstellen' })).not.toBeInTheDocument();

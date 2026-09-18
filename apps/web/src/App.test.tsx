@@ -33,12 +33,12 @@ describe('app shell', () => {
     expect(screen.getByRole('button', { name: 'Instellingen en beheer openen' })).toBeInTheDocument();
     expect(screen.getByLabelText(`Versie ${APP_VERSION}`)).toHaveTextContent(`v${APP_VERSION}`);
     expect(await screen.findByRole('heading', { name: 'Weekoverzicht' })).toBeInTheDocument();
-    expect(window.location.pathname).toBe('/mobile/week');
+    expect(window.location.pathname).toBe('/');
   });
 
   it('makes the focused standard view directly accessible on wide screens', async () => {
     setViewportWidth(1280);
-    window.history.replaceState(null, '', '/mobile/today');
+    window.history.replaceState(null, '', '/today');
     render(<App queryClient={testQueryClient()} />);
 
     const nav = await screen.findByRole('navigation', { name: 'Hoofdmenu' });
@@ -46,17 +46,17 @@ describe('app shell', () => {
     expect(nav).not.toHaveTextContent('Planner');
     expect(screen.getByRole('link', { name: 'Achterstand' })).toHaveAttribute(
       'href',
-      '/mobile/due',
+      '/due',
     );
     expect(screen.getByRole('link', { name: 'Taken' })).toHaveAttribute(
       'href',
-      '/mobile/tasks',
+      '/tasks',
     );
   });
 
   it('renders the management view when its route is opened', async () => {
     setViewportWidth(1280);
-    window.history.replaceState(null, '', '/planner');
+    window.history.replaceState(null, '', '/manage/planner');
     render(<App queryClient={testQueryClient()} />);
     const nav = await screen.findByRole('navigation', { name: 'Hoofdmenu' });
     expect(nav).toHaveTextContent('Planner');
@@ -65,6 +65,7 @@ describe('app shell', () => {
     expect(nav).not.toHaveTextContent('AI-prompts');
     expect(nav).not.toHaveTextContent('Week');
     expect(nav).toHaveTextContent('Instellingen');
+    expect(screen.getByRole('link', { name: 'Taken' })).toHaveAttribute('href', '/manage/tasks');
     expect(screen.getByRole('button', { name: 'Terug naar overzicht' })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'Kleurthema' })).toBeInTheDocument();
     const version = screen.getByLabelText(`Versie ${APP_VERSION}`);
@@ -86,7 +87,7 @@ describe('app shell', () => {
       '/api/occurrences': [],
     });
     storeProfile(member._id);
-    window.history.replaceState(null, '', '/distribution');
+    window.history.replaceState(null, '', '/manage/distribution');
     render(<App queryClient={testQueryClient()} />);
 
     const nav = await screen.findByRole('navigation', { name: 'Hoofdmenu' });
@@ -102,27 +103,17 @@ describe('app shell', () => {
     setViewportWidth(375);
     render(<App queryClient={testQueryClient()} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Instellingen en beheer openen' }));
-    await waitFor(() => expect(window.location.pathname).toBe('/planner'));
+    await waitFor(() => expect(window.location.pathname).toBe('/manage/planner'));
     expect(screen.getByRole('link', { name: 'Planner' })).toHaveAttribute('aria-current', 'page');
 
     fireEvent.click(screen.getByRole('button', { name: 'Terug naar overzicht' }));
     expect(await screen.findByRole('heading', { name: 'Weekoverzicht' })).toBeInTheDocument();
-    expect(window.location.pathname).toBe('/mobile/week');
-  });
-
-  it('redirects old Dutch URLs to their English replacements', async () => {
-    setViewportWidth(1280);
-    window.history.replaceState(null, '', '/taken?source=bookmark');
-    render(<App queryClient={testQueryClient()} />);
-
-    await screen.findByRole('heading', { name: 'Taken' });
-    await waitFor(() => expect(window.location.pathname).toBe('/tasks'));
-    expect(window.location.search).toBe('?source=bookmark');
+    expect(window.location.pathname).toBe('/');
   });
 
   it('switches the interface to English immediately and remembers that choice', async () => {
     setViewportWidth(1280);
-    window.history.replaceState(null, '', '/planner');
+    window.history.replaceState(null, '', '/manage/planner');
     render(<App queryClient={testQueryClient()} />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Engels' }));

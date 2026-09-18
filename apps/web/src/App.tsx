@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
-import { BrowserRouter, Navigate, useLocation, useNavigate } from 'react-router';
+import { BrowserRouter, useLocation, useNavigate } from 'react-router';
 import { t } from './i18n/nl.ts';
 import { LanguageProvider } from './i18n/LanguageProvider.tsx';
 import { ProfilePicker, ProfileProvider, useProfile } from './identity/index.ts';
@@ -9,34 +9,10 @@ import { MobileLayout } from './layouts/MobileLayout.tsx';
 import { OfflineSyncProvider } from './offline/OfflineSyncProvider.tsx';
 import { ThemeProvider } from './theme/ThemeProvider.tsx';
 
-const LEGACY_ROUTES: Record<string, string> = {
-  '/vandaag': '/mobile/today',
-  '/achterstand': '/mobile/due',
-  '/taken': '/tasks',
-  '/verdeling': '/distribution',
-  '/statistiek': '/statistics',
-  '/geschiedenis': '/history',
-  '/instellingen': '/settings',
-  '/weekoverzicht': '/mobile/week',
-  '/week': '/mobile/week',
-  '/week-overview': '/mobile/week',
-};
-
 export function AppShell() {
   const { status, profile } = useProfile();
   const location = useLocation();
   const navigate = useNavigate();
-
-  const legacyTarget = LEGACY_ROUTES[location.pathname];
-  if (legacyTarget) {
-    return (
-      <Navigate
-        to={{ pathname: legacyTarget, search: location.search, hash: location.hash }}
-        replace
-      />
-    );
-  }
-  if (location.pathname === '/' || location.pathname === '/mobile') return <Navigate to="/mobile/week" replace />;
 
   if (status === 'loading')
     return (
@@ -55,16 +31,16 @@ export function AppShell() {
     );
   if (!profile) return <ProfilePicker />;
 
-  const standardView = location.pathname.startsWith('/mobile/');
+  const standardView = !location.pathname.startsWith('/manage/');
   return standardView ? (
     <MobileLayout
       onOpenManagement={() =>
-        navigate(profile.role === 'member' ? '/distribution' : '/planner')
+        navigate(profile.role === 'member' ? '/manage/distribution' : '/manage/planner')
       }
     />
   ) : (
     <DesktopLayout
-      onOpenOverview={() => navigate('/mobile/week')}
+      onOpenOverview={() => navigate('/')}
     />
   );
 }

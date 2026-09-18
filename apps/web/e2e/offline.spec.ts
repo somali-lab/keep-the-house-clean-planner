@@ -8,7 +8,7 @@ test('check off while offline; the change reaches the server once back online (T
   await generateCycles(app, anna);
   await planOn(app, anna, task, TODAY, anna);
 
-  await openAs(page, app, anna, '/mobile/today');
+  await openAs(page, app, anna, '/today');
   await expect(page.getByRole('region', { name: 'Mijn taken vandaag' })).toContainText('Vaatwasser uitruimen');
 
   await context.setOffline(true);

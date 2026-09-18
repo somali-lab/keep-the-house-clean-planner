@@ -8,7 +8,7 @@ test('drag an occurrence to another day by touch and see where it came from', as
   await generateCycles(app, anna);
   await planOn(app, anna, task, TODAY, anna);
 
-  await openAs(page, app, anna, '/mobile/week');
+  await openAs(page, app, anna, '/');
   const wednesday = page.getByTestId(`day:${TODAY}`);
   const thursday = page.getByTestId('day:2026-09-17');
   const handle = wednesday.locator('.drag-handle', { hasText: 'Bed verschonen' });

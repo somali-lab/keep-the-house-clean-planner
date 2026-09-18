@@ -16,17 +16,17 @@ import { PlaceholderPage } from './PlaceholderPage.tsx';
 
 /** Implemented pages; other tabs show a placeholder until their task is done. */
 const PAGES: Partial<Record<string, ReactElement>> = {
-  '/mobile/today': <TodayPage />,
-  '/mobile/week': <WeekPage />,
-  '/mobile/due': <DuePage />,
-  '/mobile/tasks': <MobileTasksPage />,
+  '/today': <TodayPage />,
+  '/': <WeekPage />,
+  '/due': <DuePage />,
+  '/tasks': <MobileTasksPage />,
 };
 
 const TABS: { path: string; label: MessageKey; icon: LucideIcon }[] = [
-  { path: '/mobile/week', label: 'nav.week', icon: CalendarRange },
-  { path: '/mobile/today', label: 'nav.today', icon: Sun },
-  { path: '/mobile/tasks', label: 'nav.tasks', icon: ListChecks },
-  { path: '/mobile/due', label: 'nav.due', icon: Hourglass },
+  { path: '/', label: 'nav.week', icon: CalendarRange },
+  { path: '/today', label: 'nav.today', icon: Sun },
+  { path: '/tasks', label: 'nav.tasks', icon: ListChecks },
+  { path: '/due', label: 'nav.due', icon: Hourglass },
 ];
 
 export function MobileLayout({ onOpenManagement }: { onOpenManagement: () => void }) {
@@ -61,7 +61,7 @@ export function MobileLayout({ onOpenManagement }: { onOpenManagement: () => voi
               element={PAGES[tab.path] ?? <PlaceholderPage titleKey={tab.label} />}
             />
           ))}
-          <Route path="*" element={<Navigate to="/mobile/week" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
       <nav
