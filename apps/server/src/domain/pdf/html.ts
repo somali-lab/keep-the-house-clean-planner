@@ -81,24 +81,33 @@ const STYLES = `
   .task { font-weight: bold; }
   .room { font-style: italic; }
   .assignee { display: block; margin-top: 0.4mm; font-size: 8pt; }
+  .person-group + .person-group { margin-top: 1.5mm; padding-top: 1mm; border-top: 0.2mm solid #888; }
+  .person-heading { margin-bottom: 1mm; font-size: 8pt; font-weight: bold; }
   .minutes { margin-top: 1mm; font-size: 8pt; border-top: 0.2mm dashed #000; padding-top: 0.5mm; }
   footer { margin-top: auto; padding-top: 3mm; font-size: 8pt; display: flex; justify-content: space-between; gap: 4mm; }
 `;
 
-function lineHtml(line: SheetLine): string {
+function lineHtml(line: SheetLine, showAssignee = true): string {
   const room = line.room ? ` <span class="room">${escapeHtml(line.room)}</span>` : '';
-  return `<div class="line"><span class="box"></span><span><span class="task">${escapeHtml(line.name)}</span>${room}<span class="assignee">${escapeHtml(line.assignee)}</span></span></div>`;
+  const assignee = showAssignee ? `<span class="assignee">${escapeHtml(line.assignee)}</span>` : '';
+  return `<div class="line"><span class="box"></span><span><span class="task">${escapeHtml(line.name)}</span>${room}${assignee}</span></div>`;
 }
 
 function cellHtml(lines: SheetLine[], totals: boolean): string {
   const minutes = lines.reduce((sum, l) => sum + l.minutes, 0);
   const total = totals ? `<div class="minutes">${minutes} min</div>` : '';
-  return `<td>${lines.map(lineHtml).join('')}${total}</td>`;
+  const groups = new Map<string, SheetLine[]>();
+  for (const line of lines) groups.set(line.assignee, [...(groups.get(line.assignee) ?? []), line]);
+  const body = [...groups.entries()].map(([assignee, personLines]) => {
+    const personMinutes = personLines.reduce((sum, line) => sum + line.minutes, 0);
+    return `<div class="person-group"><div class="person-heading">${escapeHtml(assignee)} · ${personMinutes} min</div>${personLines.map((line) => lineHtml(line, false)).join('')}</div>`;
+  }).join('');
+  return `<td>${body}${total}</td>`;
 }
 
 function tableHtml(sheet: WeekSheet, totals: boolean, language: PdfLanguage = 'nl'): string {
   const text = copy(language);
-  const head = sheet.columns.map((c) => `<th>${escapeHtml(c.name)}</th>`).join('');
+  const head = sheet.columns.map((c) => `<th>${escapeHtml(c.id === 'all' ? text.task : c.name)}</th>`).join('');
   const rows = sheet.days
     .map(
       (day) =>
