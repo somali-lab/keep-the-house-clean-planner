@@ -84,7 +84,7 @@ function KpiCard({ icon, label, value, tint }: { icon: ReactNode; label: string;
 
 export function StatsPage() {
   const idPrefix = useId();
-  const [activeTab, setActiveTab] = useState('fairness');
+  const [activeTab, setActiveTab] = useState('overview');
   const [period, setPeriod] = useState<StatsPeriod>({ unit: 'weeks', count: 1 });
   const [groupBy, setGroupBy] = useState<StatsGroupBy>('task');
   const [confirmReset, setConfirmReset] = useState(false);
@@ -262,35 +262,9 @@ export function StatsPage() {
 
       {resetDone && <p role="status" className="mb-6 rounded-xl bg-success/15 px-4 py-3 font-semibold text-success">{t('stats.resetDone')}</p>}
 
-      {cycleList.length === 0 ? (
-        <EmptyState icon={<ChartColumnBig className="size-6" aria-hidden="true" />} className="mb-6">
-          {t('stats.empty')}
-        </EmptyState>
-      ) : (
-        <div className="mb-6 grid gap-4 sm:grid-cols-3">
-          <KpiCard
-            icon={<ListChecks aria-hidden="true" />}
-            label={t('stats.planned')}
-            value={formatMinutes(totalPlanned)}
-            tint="bg-primary/10 text-primary"
-          />
-          <KpiCard
-            icon={<CircleCheck aria-hidden="true" />}
-            label={t('stats.done')}
-            value={formatMinutes(totalDone)}
-            tint="bg-accent text-accent-foreground"
-          />
-          <KpiCard
-            icon={<Hourglass aria-hidden="true" />}
-            label={t('stats.unassigned')}
-            value={formatMinutes(totalUnassigned)}
-            tint="bg-warning/25 text-warning-foreground"
-          />
-        </div>
-      )}
-
       <Tabs value={activeTab} onValueChange={setActiveTab} className="gap-6">
         <TabsList className={panelTabsListClass} aria-label={t('stats.tabs')}>
+          <TabsTrigger className={panelTabsTriggerClass} value="overview"><ChartColumnBig />{t('stats.overview')}</TabsTrigger>
           <TabsTrigger className={panelTabsTriggerClass} value="fairness"><Scale />{t('stats.fairness')}</TabsTrigger>
           <TabsTrigger className={panelTabsTriggerClass} value="trend"><TrendingUp />{t('stats.trend')}</TabsTrigger>
           <TabsTrigger className={panelTabsTriggerClass} value="completion"><CircleCheck />{t('stats.completion')}</TabsTrigger>
@@ -298,8 +272,41 @@ export function StatsPage() {
           <TabsTrigger className={panelTabsTriggerClass} value="deviations"><CalendarClock />{t('stats.deviations')}</TabsTrigger>
         </TabsList>
 
+        <TabsContent value="overview">
+          {cycleList.length === 0 ? (
+            <EmptyState icon={<ChartColumnBig className="size-6" aria-hidden="true" />}>
+              {t('stats.empty')}
+            </EmptyState>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-3">
+              <KpiCard
+                icon={<ListChecks aria-hidden="true" />}
+                label={t('stats.planned')}
+                value={formatMinutes(totalPlanned)}
+                tint="bg-primary/10 text-primary"
+              />
+              <KpiCard
+                icon={<CircleCheck aria-hidden="true" />}
+                label={t('stats.done')}
+                value={formatMinutes(totalDone)}
+                tint="bg-accent text-accent-foreground"
+              />
+              <KpiCard
+                icon={<Hourglass aria-hidden="true" />}
+                label={t('stats.unassigned')}
+                value={formatMinutes(totalUnassigned)}
+                tint="bg-warning/25 text-warning-foreground"
+              />
+            </div>
+          )}
+        </TabsContent>
+
         <TabsContent value="fairness">
-          {cycleList.length > 0 && (
+          {cycleList.length === 0 ? (
+            <EmptyState icon={<Scale className="size-6" aria-hidden="true" />}>
+              {t('stats.empty')}
+            </EmptyState>
+          ) : (
           <section className={sectionCardClass} aria-labelledby={`${idPrefix}-fair`}>
             <SectionHeader
               id={`${idPrefix}-fair`}
@@ -352,7 +359,11 @@ export function StatsPage() {
         </TabsContent>
 
         <TabsContent value="trend">
-          {cycleList.length > 0 && (
+          {cycleList.length === 0 ? (
+            <EmptyState icon={<TrendingUp className="size-6" aria-hidden="true" />}>
+              {t('stats.empty')}
+            </EmptyState>
+          ) : (
           <section className={sectionCardClass} aria-labelledby={`${idPrefix}-trend`}>
             <SectionHeader id={`${idPrefix}-trend`} icon={<TrendingUp aria-hidden="true" />} title={t('stats.trend')} />
             <TrendLines

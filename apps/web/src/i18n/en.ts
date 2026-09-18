@@ -578,6 +578,7 @@ export const en = {
   "settings.data.imported": "Import complete: all data replaced.",
   "stats.filters": "Filters",
   "stats.tabs": "Statistics section",
+  "stats.overview": "Overview",
   "stats.period": "Period",
   "stats.period.weeks": "Weeks",
   "stats.period.cycles": "Cycles",

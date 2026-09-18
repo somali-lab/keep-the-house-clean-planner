@@ -195,6 +195,8 @@ describe('StatsPage', () => {
   it('shows planned vs done per person for the period, with legend and a table view', async () => {
     setup();
     renderWithProviders(<StatsPage />);
+    expect(await screen.findByRole('tab', { name: 'Overzicht' })).toHaveAttribute('aria-selected', 'true');
+    await selectStatsTab('Eerlijkheid');
     const figure = await screen.findByRole('figure', { name: 'Gepland en gedaan per persoon' });
 
     const legend = within(figure).getByRole('list', { name: 'Legenda' });
@@ -224,6 +226,7 @@ describe('StatsPage', () => {
   it('shows the value in a tooltip when a bar gets keyboard focus', async () => {
     setup();
     renderWithProviders(<StatsPage />);
+    await selectStatsTab('Eerlijkheid');
     const figure = await screen.findByRole('figure', { name: 'Gepland en gedaan per persoon' });
     fireEvent.focus(within(figure).getByLabelText('Bram de Vries, gedaan: 70 min'));
     const tip = within(figure).getByRole('status');
@@ -234,6 +237,7 @@ describe('StatsPage', () => {
   it('lists planned / done per week and the unassigned minutes', async () => {
     setup();
     renderWithProviders(<StatsPage />);
+    await selectStatsTab('Eerlijkheid');
     const table = await screen.findByRole('table', {
       name: 'Per week (gepland / gedaan, in minuten)',
     });
@@ -356,6 +360,8 @@ describe('StatsPage', () => {
     renderWithProviders(<StatsPage />);
     expect(await screen.findByText(/Nog geen gegevens/)).toBeInTheDocument();
     expect(screen.queryByRole('figure')).not.toBeInTheDocument();
+    await selectStatsTab('Eerlijkheid');
+    expect(await screen.findByText(/Nog geen gegevens/)).toBeInTheDocument();
   });
 
   it('clears statistics only after explicit confirmation', async () => {

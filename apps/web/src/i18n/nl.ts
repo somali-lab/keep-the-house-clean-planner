@@ -660,6 +660,7 @@ export const nl = {
 
   'stats.filters': 'Filters',
   'stats.tabs': 'Statistiekonderdeel',
+  'stats.overview': 'Overzicht',
   'stats.period': 'Periode',
   'stats.period.weeks': 'Weken',
   'stats.period.cycles': 'Cycli',
