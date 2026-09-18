@@ -116,7 +116,9 @@ describe('PlannerPage — drops', () => {
     const fetchMock = setup([makePlan({ _id: 'p1', name: 'Standaard', active: true })]);
     renderWithProviders(<PlannerPage />);
     expect(await screen.findByRole('group', { name: 'Kies een week' })).toBeInTheDocument();
-    expect(screen.getByRole('complementary', { name: 'AI-assistent' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'AI-assistent' })).not.toBeInTheDocument();
+    await openPlanManagement();
+    expect(screen.getByRole('region', { name: 'AI-assistent' })).toBeInTheDocument();
     expect(
       within(screen.getByTestId(`cell:0:2:${ANNA._id}`)).getByText('Anna niet beschikbaar'),
     ).toBeInTheDocument();

@@ -92,7 +92,7 @@ export function PlannerPage() {
     <section className="flex flex-col gap-5">
       {plan && (
             <Sheet open={plansOpen} onOpenChange={setPlansOpen}>
-              <SheetContent className="overflow-y-auto sm:max-w-md">
+              <SheetContent className="overflow-y-auto sm:max-w-lg">
                 <SheetHeader className="border-b pr-12">
                   <SheetTitle>{t('planner.manage')}</SheetTitle>
                   <SheetDescription>{t('planner.manageDescription')}</SheetDescription>
@@ -249,6 +249,12 @@ export function PlannerPage() {
                 <FileDown aria-hidden="true" />
                 {t('export.open')}
               </Button>
+              <section
+                aria-label={t('settings.ai.title')}
+                className="mt-3 border-t pt-6"
+              >
+                <AiPage section="plan" embedded />
+              </section>
                 </div>
               </SheetContent>
             </Sheet>
@@ -339,8 +345,7 @@ export function PlannerPage() {
         </p>
       )}
 
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="flex min-w-0 flex-col gap-5">
+      <div className="flex min-w-0 flex-col gap-5">
           {!plan ? (
             <EmptyState icon={<CalendarRange className="size-6" aria-hidden="true" />}>
               <p>{t('planner.noPlan')}</p>
@@ -409,13 +414,6 @@ export function PlannerPage() {
               />
             </>
           )}
-        </div>
-        <aside
-          aria-label={t('settings.ai.title')}
-          className="min-w-0 xl:sticky xl:top-6"
-        >
-          <AiPage section="plan" embedded />
-        </aside>
       </div>
     </section>
   );
