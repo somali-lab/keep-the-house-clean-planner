@@ -84,7 +84,7 @@ export function TasksPage() {
   const [roomFilter, setRoomFilter] = useState('all');
   const [editing, setEditing] = useState<Editing>(null);
   const [deleting, setDeleting] = useState<Task | null>(null);
-  const [collapsedRooms, setCollapsedRooms] = useState<Set<string>>(() => new Set());
+  const [collapsedRooms, setCollapsedRooms] = useState<Set<string> | null>(null);
 
   const invalidateTasks = () => queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
 
@@ -287,10 +287,12 @@ export function TasksPage() {
         <RoomSection
           key={group.roomId}
           group={group}
-          collapsed={collapsedRooms.has(group.roomId)}
+          collapsed={collapsedRooms === null || collapsedRooms.has(group.roomId)}
           onCollapsedChange={(collapsed) =>
             setCollapsedRooms((current) => {
-              const next = new Set(current);
+              const next = current
+                ? new Set(current)
+                : new Set(groups.map((item) => item.roomId));
               if (collapsed) next.add(group.roomId);
               else next.delete(group.roomId);
               return next;
