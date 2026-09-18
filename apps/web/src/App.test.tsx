@@ -32,7 +32,7 @@ describe('app shell', () => {
     expect(screen.getByRole('group', { name: 'Taal' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Instellingen en beheer openen' })).toBeInTheDocument();
     expect(screen.getByLabelText(`Versie ${APP_VERSION}`)).toHaveTextContent(`v${APP_VERSION}`);
-    expect(await screen.findByRole('heading', { name: '12-daags overzicht' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Weekoverzicht' })).toBeInTheDocument();
     expect(window.location.pathname).toBe('/mobile/week');
   });
 
@@ -106,7 +106,7 @@ describe('app shell', () => {
     expect(screen.getByRole('link', { name: 'Planner' })).toHaveAttribute('aria-current', 'page');
 
     fireEvent.click(screen.getByRole('button', { name: 'Terug naar overzicht' }));
-    expect(await screen.findByRole('heading', { name: '12-daags overzicht' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Weekoverzicht' })).toBeInTheDocument();
     expect(window.location.pathname).toBe('/mobile/week');
   });
 
