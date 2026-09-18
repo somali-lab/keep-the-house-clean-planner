@@ -104,7 +104,7 @@ describe('describeEntry', () => {
         entry({ entity: 'occurrence', entityId: 'o1', action: 'reschedule', before: { date: '2026-09-07T22:00:00.000Z' }, after: { date: '2026-09-08T22:00:00.000Z' } }),
         names,
       ),
-    ).toEqual(['Anna verplaatste Wastafel van 08-09-2026 naar 09-09-2026']);
+    ).toEqual(['Anna verplaatste Wastafel op 09-09-2026 van 08-09-2026 naar 09-09-2026']);
   });
 });
 

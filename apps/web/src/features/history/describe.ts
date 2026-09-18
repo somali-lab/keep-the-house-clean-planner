@@ -53,9 +53,14 @@ export function entityName(entry: AuditEntry, names: NameLookup): string {
     case 'cyclePlan':
       return names.plans.get(id) ?? str(after.name) ?? str(before.name) ?? unknown;
     case 'occurrence':
-      return (
-        str(after.taskNameSnapshot) ?? str(before.taskNameSnapshot) ?? names.occurrences.get(id) ?? t('history.entity.occurrence')
-      );
+      {
+        const task = str(after.taskNameSnapshot) ?? str(before.taskNameSnapshot) ?? names.occurrences.get(id) ?? t('history.entity.occurrence');
+        const room = str(after.roomNameSnapshot) ?? str(before.roomNameSnapshot);
+        const date = str(after.date) ?? str(before.date) ?? str(entry.meta?.to) ?? str(entry.meta?.from);
+        if (room && date) return format('history.occurrenceContext', { task, room, date: formatValue('date', date, names) });
+        if (date) return format('history.occurrenceDateContext', { task, date: formatValue('date', date, names) });
+        return task;
+      }
     case 'settings':
       return t('history.settingsName');
     case 'cycle':
