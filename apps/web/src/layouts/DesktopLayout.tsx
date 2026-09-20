@@ -70,7 +70,7 @@ export function DesktopLayout({ onOpenOverview }: { onOpenOverview: () => void }
       >
         <button
           type="button"
-          className="flex h-11 items-center justify-center rounded-xl outline-none transition-colors hover:bg-sidebar-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          className="flex h-11 cursor-pointer items-center justify-center rounded-xl outline-none transition-colors hover:bg-sidebar-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
           aria-label={t('layout.openOverview')}
           title={t('layout.openOverview')}
           onClick={onOpenOverview}

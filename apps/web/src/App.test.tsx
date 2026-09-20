@@ -66,7 +66,7 @@ describe('app shell', () => {
     expect(nav).not.toHaveTextContent('Week');
     expect(nav).toHaveTextContent('Instellingen');
     expect(screen.getByRole('link', { name: 'Taken' })).toHaveAttribute('href', '/manage/tasks');
-    expect(screen.getByRole('button', { name: 'Terug naar overzicht' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Terug naar overzicht' })).toHaveClass('cursor-pointer');
     expect(screen.getByRole('group', { name: 'Kleurthema' })).toBeInTheDocument();
     const version = screen.getByLabelText(`Versie ${APP_VERSION}`);
     expect(version).toHaveTextContent(`v${APP_VERSION}`);
