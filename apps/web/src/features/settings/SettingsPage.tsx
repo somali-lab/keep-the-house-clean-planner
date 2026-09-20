@@ -8,7 +8,7 @@ import {
   type Settings,
 } from '@huishoudplanner/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Bot, CalendarDays, Circle, Database, LayoutPanelTop, Save, TestTube2, Users, WandSparkles } from 'lucide-react';
+import { Bot, CalendarClock, CalendarDays, Circle, Database, LayoutPanelTop, Save, TestTube2, Users, WandSparkles } from 'lucide-react';
 import { useId, useState, type FormEvent } from 'react';
 import { NativeSelect } from '@/components/NativeSelect';
 import { PageHeader } from '@/components/PageHeader';
@@ -22,6 +22,7 @@ import { format, t, type MessageKey } from '../../i18n/nl.ts';
 import { CalendarSection } from './CalendarSection.tsx';
 import { AiPromptsPage } from '../ai-prompts/AiPromptsPage.tsx';
 import { DataSection } from './DataSection.tsx';
+import { JobsSection } from './JobsSection.tsx';
 import { RoomsSection } from './RoomsSection.tsx';
 import { Field, FormActions, FormMessage, SettingsCardHeader, settingsCardClass } from './SettingsCard.tsx';
 import { UsersSection } from './UsersSection.tsx';
@@ -30,7 +31,7 @@ const PROVIDERS: AiProviderType[] = ['none', 'mock', 'anthropic', 'openai-compat
 const NEEDS_ENDPOINT: AiProviderType[] = ['openai-compatible', 'ollama'];
 const NEEDS_MODEL: AiProviderType[] = ['anthropic', 'openai-compatible', 'ollama'];
 /** Settings screen: calendar, people, rooms, AI provider and data export/import. */
-export function SettingsPage({ initialTab = 'calendar' }: { initialTab?: 'calendar' | 'people' | 'rooms' | 'interface' | 'ai' | 'data' }) {
+export function SettingsPage({ initialTab = 'calendar' }: { initialTab?: 'calendar' | 'people' | 'rooms' | 'interface' | 'ai' | 'jobs' | 'data' }) {
   const settings = useSettings();
   if (settings.isPending)
     return (
@@ -54,6 +55,7 @@ export function SettingsPage({ initialTab = 'calendar' }: { initialTab?: 'calend
           <TabsTrigger className={panelTabsTriggerClass} value="rooms"><LayoutPanelTop />{t('settings.tab.rooms')}</TabsTrigger>
           <TabsTrigger className={panelTabsTriggerClass} value="interface"><LayoutPanelTop />{t('settings.tab.interface')}</TabsTrigger>
           <TabsTrigger className={panelTabsTriggerClass} value="ai"><Bot />{t('settings.tab.ai')}</TabsTrigger>
+          <TabsTrigger className={panelTabsTriggerClass} value="jobs"><CalendarClock />{t('settings.tab.jobs')}</TabsTrigger>
           <TabsTrigger className={panelTabsTriggerClass} value="data"><Database />{t('settings.tab.data')}</TabsTrigger>
         </TabsList>
         <TabsContent value="calendar"><CalendarSection settings={settings.data} /></TabsContent>
@@ -70,6 +72,7 @@ export function SettingsPage({ initialTab = 'calendar' }: { initialTab?: 'calend
             <TabsContent value="prompts"><AiPromptsPage embedded /></TabsContent>
           </Tabs>
         </TabsContent>
+        <TabsContent value="jobs"><JobsSection /></TabsContent>
         <TabsContent value="data"><DataSection /></TabsContent>
       </Tabs>
     </section>

@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { runAuditRetention } from '../domain/auditRetention.ts';
 import { runMorningNotify } from '../domain/notify/morning.ts';
 import { toApi } from '../http/serialize.ts';
 import { auditContext, requirePlanner } from '../identity/index.ts';
@@ -16,4 +17,14 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
     return runMorningNotify({ db, clock, log: request.log, notifier });
   });
 
+  /** Applies the configured audit retention period now. */
+  app.post('/jobs/audit-retention', { preHandler: requirePlanner }, async (request) => {
+    const { db, clock, config } = app.deps;
+    return runAuditRetention({
+      db,
+      clock,
+      log: request.log,
+      retentionDays: config.auditRetentionDays,
+    });
+  });
 };

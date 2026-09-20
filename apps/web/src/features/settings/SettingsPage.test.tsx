@@ -20,6 +20,13 @@ function setup() {
     },
     'PATCH /api/settings': (init: RequestInit) => makeSettings(JSON.parse(String(init.body))),
     'POST /api/ai/test': { ok: true },
+    'POST /api/jobs/nightly': {
+      removed: 7,
+      generated: [{ inserted: 2 }, { inserted: 3 }],
+      due: { due: 4, overdue: 1 },
+    },
+    'POST /api/jobs/audit-retention': { status: 'done', cutoff: '2026-08-17T08:00:00.000Z', deleted: 6 },
+    'POST /api/jobs/morning-notify': { status: 'done', date: '2026-09-16', sent: 2, failed: 0, quiet: 1 },
   });
 }
 
@@ -42,7 +49,7 @@ describe('SettingsPage — AI provider', () => {
     await renderSettings();
     const tabList = screen.getAllByRole('tablist')[0]!;
     expect(tabList).toHaveClass('flex-nowrap', 'overflow-x-auto', 'overflow-y-hidden');
-    expect(within(tabList).getAllByRole('tab')).toHaveLength(6);
+    expect(within(tabList).getAllByRole('tab')).toHaveLength(7);
     expect(within(tabList).getAllByRole('tab').every((tab) => tab.classList.contains('flex-none'))).toBe(true);
   });
 
@@ -149,5 +156,32 @@ describe('SettingsPage — interface', () => {
     fireEvent.click(await screen.findByLabelText('Duimpje omhoog'));
     fireEvent.click(screen.getByRole('button', { name: 'Opslaan' }));
     await waitFor(() => expect(patchBody(fetchMock)).toEqual({ completionControl: 'thumb' }));
+  });
+});
+
+describe('SettingsPage — jobs', () => {
+  it('runs every scheduled job manually and shows its result', async () => {
+    const fetchMock = setup();
+    renderWithProviders(<SettingsPage initialTab="jobs" />);
+    expect(await screen.findByRole('heading', { name: 'Geplande jobs' })).toBeInTheDocument();
+
+    const buttons = screen.getAllByRole('button', { name: 'Nu starten' });
+    fireEvent.click(buttons[0]!);
+    expect(await screen.findByText('Klaar: 7 oude taken verwijderd, 5 taken gegenereerd, 4 bijna achterstallig en 1 achterstallig.')).toBeInTheDocument();
+
+    fireEvent.click(buttons[1]!);
+    expect(await screen.findByText('Klaar: 6 oude auditregels verwijderd.')).toBeInTheDocument();
+
+    fireEvent.click(buttons[2]!);
+    expect(await screen.findByText('Klaar: 2 verstuurd, 0 mislukt en 1 zonder melding.')).toBeInTheDocument();
+
+    const posts = fetchMock.mock.calls
+      .filter(([, init]) => (init as RequestInit | undefined)?.method === 'POST')
+      .map(([url]) => url);
+    expect(posts).toEqual([
+      '/api/jobs/nightly',
+      '/api/jobs/audit-retention',
+      '/api/jobs/morning-notify',
+    ]);
   });
 });
