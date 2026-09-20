@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.1](https://github.com/somali-lab/keep-the-house-clean-planner/compare/v1.5.0...v1.5.1) (2026-09-20)
+
+
+### Bug fixes
+
+* **intervals:** backfill three-times-weekly option ([#23](https://github.com/somali-lab/keep-the-house-clean-planner/issues/23)) ([94e320f](https://github.com/somali-lab/keep-the-house-clean-planner/commit/94e320fd02c88ebee85a1bbf4b9773921afe16fb))
+
 ## [1.5.0](https://github.com/somali-lab/keep-the-house-clean-planner/compare/v1.4.0...v1.5.0) (2026-09-20)
 
 
