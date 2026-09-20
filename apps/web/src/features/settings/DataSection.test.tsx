@@ -20,6 +20,9 @@ function choose(content: string, name = 'huishoudplanner-20260916.json') {
 const importCalls = (fetchMock: ReturnType<typeof vi.fn>) =>
   fetchMock.mock.calls.filter(([u]) => u === IMPORT_URL).map(([, init]) => JSON.parse(String((init as RequestInit).body)));
 
+const resetCalls = (fetchMock: ReturnType<typeof vi.fn>) =>
+  fetchMock.mock.calls.filter(([u, init]) => u === '/api/stats' && (init as RequestInit | undefined)?.method === 'DELETE');
+
 describe('readExport', () => {
   it('counts what a file contains and rejects files that are not exports', () => {
     expect(readExport('a.json', JSON.stringify(FILE))?.counts).toEqual({ users: 2, tasks: 1, occurrences: 3 });
@@ -80,5 +83,24 @@ describe('DataSection', () => {
     fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Alles vervangen' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Dit bestand kan niet worden geïmporteerd.');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('resets completion and execution data only after confirmation', async () => {
+    storeProfile(ANNA._id);
+    const fetchMock = mockApi({ 'DELETE /api/stats': { deletedOccurrences: 4, resetOccurrences: 3 } });
+    renderWithProviders(<DataSection />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Uitvoeringsgegevens resetten' }));
+    let dialog = await screen.findByRole('dialog', { name: 'Alle gereedmeldingen en uitvoeringsgegevens resetten?' });
+    expect(dialog).toHaveTextContent('Personen, ruimtes, taken en het actieve plan blijven bestaan.');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Annuleren' }));
+    expect(resetCalls(fetchMock)).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Uitvoeringsgegevens resetten' }));
+    dialog = await screen.findByRole('dialog', { name: 'Alle gereedmeldingen en uitvoeringsgegevens resetten?' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Ja, alles resetten' }));
+
+    await waitFor(() => expect(resetCalls(fetchMock)).toHaveLength(1));
+    expect(await screen.findByRole('status')).toHaveTextContent('Gereedmeldingen en uitvoeringsgegevens zijn gereset.');
   });
 });

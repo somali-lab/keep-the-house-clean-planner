@@ -13,13 +13,15 @@ let db: OccurrenceView[];
 let failNext = false;
 
 /** Tiny in-memory server so refetches after a mutation reflect the change. */
-function setup() {
+function setup(settings = makeSettings()) {
   storeProfile(ANNA._id);
   db = [
     makeOccurrence({ _id: 'o-other', taskId: 't1', taskNameSnapshot: 'Stofzuigen', date: TODAY, assigneeId: BRAM._id }),
     makeOccurrence({ _id: 'o-mine', taskId: 't2', taskNameSnapshot: 'Badkamer', date: TODAY, assigneeId: ANNA._id, durationMinutesSnapshot: 30 }),
     makeOccurrence({ _id: 'o-late', taskId: 't3', taskNameSnapshot: 'Ramen', date: '2026-09-14', plannedDate: '2026-09-14', assigneeId: ANNA._id, isOverdue: true }),
     makeOccurrence({ _id: 'o-free', taskId: 't4', taskNameSnapshot: 'Wastafel', date: TODAY, assigneeId: null }),
+    makeOccurrence({ _id: 'o-tomorrow', taskId: 't5', taskNameSnapshot: 'Keuken morgen', date: '2026-09-17', assigneeId: ANNA._id }),
+    makeOccurrence({ _id: 'o-after-tomorrow', taskId: 't6', taskNameSnapshot: 'Was overmorgen', date: '2026-09-18', assigneeId: ANNA._id }),
   ];
   const patch = (id: string) => (init: RequestInit) => {
     if (failNext) {
@@ -38,10 +40,15 @@ function setup() {
   };
   return mockApi({
     '/api/users': [ANNA, BRAM],
-    '/api/settings': makeSettings(),
+    '/api/settings': settings,
     '/api/rooms': [makeRoom({ _id: 'r1', name: 'Badkamer-ruimte' })],
     '/api/tasks': [makeTask({ _id: 't2', name: 'Badkamer', roomId: 'r1' })],
-    '/api/occurrences': () => db,
+    '/api/occurrences': (_init: RequestInit | undefined, url: string) => {
+      const query = new URL(url, 'http://localhost').searchParams;
+      const from = query.get('from') ?? '';
+      const to = query.get('to') ?? '';
+      return db.filter((occurrence) => occurrence.date >= from && occurrence.date <= to);
+    },
     ...Object.fromEntries(db.map((o) => [`PATCH /api/occurrences/${o._id}`, patch(o._id)])),
     'POST /api/occurrences/o-free/claim': () => {
       db = db.map((o) => (o._id === 'o-free' ? { ...o, assigneeId: ANNA._id } : o));
@@ -61,21 +68,68 @@ describe('TodayPage', () => {
     failNext = false;
   });
 
-  it('orders sections: mine, unclaimed, the other person, overdue', async () => {
+  it('shows the active profile by default and can switch to another person or everyone', async () => {
     const fetchMock = setup();
     renderWithProviders(<TodayPage now={NOW} />);
-    await screen.findByRole('heading', { name: 'Mijn taken vandaag' });
+    await screen.findByRole('heading', { name: 'Mijn taken' });
 
-    expect(sectionTitles()).toEqual(['Mijn taken vandaag', 'Nog niet opgepakt', 'Van de ander', 'Achterstallig']);
-    expect(within(section('Mijn taken vandaag')).getByText('Badkamer')).toBeInTheDocument();
-    expect(within(section('Mijn taken vandaag')).getByText(/Badkamer-ruimte · 30 min · Anna/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Filter op persoon')).toHaveValue(ANNA._id);
+    expect(sectionTitles()).toEqual(['Mijn taken', 'Achterstallig']);
+    expect(within(section('Mijn taken')).getByText('Badkamer')).toBeInTheDocument();
+    expect(within(section('Mijn taken')).getByText(/Badkamer-ruimte · 30 min · Anna/)).toBeInTheDocument();
+    expect(screen.queryByText('Wastafel')).not.toBeInTheDocument();
+    expect(screen.queryByText('Stofzuigen')).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Filter op persoon'), { target: { value: BRAM._id } });
+    expect(await screen.findByRole('heading', { name: 'Taken van Bram de Vries' })).toBeInTheDocument();
+    expect(within(section('Taken van Bram de Vries')).getByText('Stofzuigen')).toBeInTheDocument();
+    expect(screen.queryByText('Badkamer')).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Filter op persoon'), { target: { value: 'all' } });
+    expect(sectionTitles()).toEqual(['Mijn taken', 'Nog niet opgepakt', 'Van anderen', 'Achterstallig']);
     expect(within(section('Nog niet opgepakt')).getByText('Wastafel')).toBeInTheDocument();
-    expect(within(section('Van de ander')).getByText('Stofzuigen')).toBeInTheDocument();
+    expect(within(section('Van anderen')).getByText('Stofzuigen')).toBeInTheDocument();
     const late = within(section('Achterstallig')).getByText('Ramen').closest('li')!;
     expect(late).toHaveTextContent('Achterstallig — gepland op ma 14-09');
 
     const url = String(fetchMock.mock.calls.find(([u]) => String(u).startsWith('/api/occurrences'))![0]);
     expect(url).toBe('/api/occurrences?from=2026-07-22&to=2026-09-16');
+  });
+
+  it('shows the cycle week and browses to tomorrow and the day after tomorrow', async () => {
+    setup();
+    renderWithProviders(<TodayPage now={NOW} />);
+
+    expect(await screen.findByText('woensdag 16 sep · Cyclusweek 1')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Vandaag' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Vorige dag' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Morgen' }));
+    expect(await screen.findByText('donderdag 17 sep · Cyclusweek 1')).toBeInTheDocument();
+    expect(await screen.findByText('Keuken morgen')).toBeInTheDocument();
+    expect(screen.queryByText('Badkamer')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Overmorgen' }));
+    expect(await screen.findByText('vrijdag 18 sep · Cyclusweek 1')).toBeInTheDocument();
+    expect(await screen.findByText('Was overmorgen')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Volgende dag' }));
+    expect(await screen.findByText('zaterdag 19 sep · Cyclusweek 1')).toBeInTheDocument();
+    expect(screen.getByText('Geen open taken voor deze dag.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Vorige dag' }));
+    expect(await screen.findByText('Was overmorgen')).toBeInTheDocument();
+  });
+
+  it('does not show pre-cycle tasks as overdue before the cycle starts', async () => {
+    setup(makeSettings({ cycleAnchorDate: '2026-09-21' }));
+    renderWithProviders(<TodayPage now={NOW} />);
+
+    expect(await screen.findByText('woensdag 16 sep · Cyclus start op ma 21-09')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Achterstallig' })).not.toBeInTheDocument();
+    expect(within(section('Mijn taken')).getByText('Badkamer')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Morgen' }));
+    expect(await screen.findByText('donderdag 17 sep · Cyclus start op ma 21-09')).toBeInTheDocument();
   });
 
   it('checks off with one tap, and undo restores the previous status', async () => {
@@ -84,15 +138,15 @@ describe('TodayPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Afvinken: Badkamer' }));
 
     // moved to finished, snackbar offers undo
-    expect(await inSection('Afgerond vandaag', 'Badkamer')).toBeInTheDocument();
+    expect(await inSection('Afgerond', 'Badkamer')).toBeInTheDocument();
     const snackbar = screen.getByRole('status');
     expect(snackbar).toHaveTextContent('"Badkamer" afgevinkt.');
     await waitFor(() => expect(db.find((o) => o._id === 'o-mine')?.status).toBe('done'));
 
     fireEvent.click(within(snackbar).getByRole('button', { name: 'Ongedaan maken' }));
-    expect(await inSection('Mijn taken vandaag', 'Badkamer')).toBeInTheDocument();
+    expect(await inSection('Mijn taken', 'Badkamer')).toBeInTheDocument();
     await waitFor(() => expect(db.find((o) => o._id === 'o-mine')?.status).toBe('open'));
-    expect(screen.queryByRole('region', { name: 'Afgerond vandaag' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Afgerond' })).not.toBeInTheDocument();
     const bodies = fetchMock.mock.calls
       .filter(([u]) => u === '/api/occurrences/o-mine')
       .map(([, init]) => JSON.parse(String((init as RequestInit).body)));
@@ -102,10 +156,11 @@ describe('TodayPage', () => {
   it("credits the task's assignee when another profile checks it off", async () => {
     setup();
     renderWithProviders(<TodayPage now={NOW} />);
+    fireEvent.change(await screen.findByLabelText('Filter op persoon'), { target: { value: BRAM._id } });
     fireEvent.click(await screen.findByRole('button', { name: 'Afvinken: Stofzuigen' }));
 
     await waitFor(() => expect(db.find((o) => o._id === 'o-other')?.completedBy).toBe(BRAM._id));
-    expect(await inSection('Afgerond vandaag', 'Gedaan door Bram de Vries')).toBeInTheDocument();
+    expect(await inSection('Afgerond', 'Gedaan door Bram de Vries')).toBeInTheDocument();
   });
 
   it('undo after skip → done restores skipped, also later via the item', async () => {
@@ -116,17 +171,17 @@ describe('TodayPage', () => {
     fireEvent.change(screen.getByLabelText('Reden (optioneel)'), { target: { value: 'geen tijd' } });
     fireEvent.click(screen.getByRole('button', { name: 'Overslaan bevestigen' }));
     await waitFor(() => expect(db.find((o) => o._id === 'o-mine')?.status).toBe('skipped'));
-    expect(await inSection('Afgerond vandaag', 'Overgeslagen: geen tijd')).toBeInTheDocument();
+    expect(await inSection('Afgerond', 'Overgeslagen: geen tijd')).toBeInTheDocument();
 
     // the skipped item gets completed elsewhere; any refetch picks that up
     db = db.map((o) => (o._id === 'o-mine' ? applyOptimistic(o, { id: o._id, kind: 'complete' }, { profileId: ANNA._id, todayKey: TODAY, now: NOW }) : o));
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Afvinken: Ramen' }));
     });
-    const doneRow = (await inSection('Afgerond vandaag', 'Gedaan door Anna')).closest('li')!;
+    const doneRow = (await inSection('Afgerond', 'Gedaan door Anna')).closest('li')!;
     fireEvent.click(within(doneRow).getByRole('button', { name: 'Badkamer ongedaan maken' }));
     await waitFor(() => expect(db.find((o) => o._id === 'o-mine')?.status).toBe('skipped'));
-    expect(await inSection('Afgerond vandaag', 'Overgeslagen: geen tijd')).toBeInTheDocument();
+    expect(await inSection('Afgerond', 'Overgeslagen: geen tijd')).toBeInTheDocument();
   });
 
   it('attributes a check-off to another profile via the menu', async () => {
@@ -139,14 +194,15 @@ describe('TodayPage', () => {
       const call = fetchMock.mock.calls.find(([u]) => u === '/api/occurrences/o-mine');
       expect(JSON.parse(String((call![1] as RequestInit).body))).toEqual({ action: 'complete', completedBy: BRAM._id });
     });
-    expect(await inSection('Afgerond vandaag', 'Gedaan door Bram de Vries')).toBeInTheDocument();
+    expect(await inSection('Afgerond', 'Gedaan door Bram de Vries')).toBeInTheDocument();
   });
 
   it('claims an unclaimed item', async () => {
     setup();
     renderWithProviders(<TodayPage now={NOW} />);
+    fireEvent.change(await screen.findByLabelText('Filter op persoon'), { target: { value: 'all' } });
     fireEvent.click(await screen.findByRole('button', { name: 'Wastafel oppakken' }));
-    expect(await inSection('Mijn taken vandaag', 'Wastafel')).toBeInTheDocument();
+    expect(await inSection('Mijn taken', 'Wastafel')).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Nog niet opgepakt' })).not.toBeInTheDocument();
   });
 
@@ -156,7 +212,7 @@ describe('TodayPage', () => {
     renderWithProviders(<TodayPage now={NOW} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Afvinken: Badkamer' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Dat lukte niet. De wijziging is teruggedraaid.');
-    expect(await inSection('Mijn taken vandaag', 'Badkamer')).toBeInTheDocument();
+    expect(await inSection('Mijn taken', 'Badkamer')).toBeInTheDocument();
     expect(db.find((o) => o._id === 'o-mine')?.status).toBe('open');
   });
 

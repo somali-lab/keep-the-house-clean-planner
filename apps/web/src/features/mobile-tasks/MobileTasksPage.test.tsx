@@ -115,31 +115,30 @@ describe('MobileTasksPage', () => {
     setup();
   });
 
-  it('shows one calm table row per task with comma-separated dates for two weeks by default', async () => {
+  it('shows one cycle week by default with one calm table row per task', async () => {
     renderWithProviders(<MobileTasksPage now={NOW} />);
 
     expect(await screen.findByRole('heading', { name: 'Mijn taken' })).toBeInTheDocument();
-    expect(screen.getByText('16 sep t/m 29 sep')).toBeInTheDocument();
+    expect(screen.getByText('16 sep t/m 22 sep · Cyclusweek 1')).toBeInTheDocument();
     const mine = screen.getByRole('region', { name: 'Aan mij toegewezen' });
     const unassigned = screen.getByRole('region', { name: 'Nog niet toegewezen' });
     const vacuumRow = within(mine).getByRole('row', { name: /Stofzuigen/ });
     expect(within(vacuumRow).getByText('Woonkamer')).toBeInTheDocument();
-    expect(within(vacuumRow).getByText('wo 16 sep, wo 23 sep')).toBeInTheDocument();
+    expect(within(vacuumRow).getByText('wo 16 sep')).toBeInTheDocument();
     expect(within(unassigned).getByRole('row', { name: /Beddengoed/ })).toBeInTheDocument();
     expect(screen.queryByText('za 19 sep')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '2 weken' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: '1 week' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('checkbox', { name: 'Woonkamer' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Slaapkamer' })).toBeChecked();
   });
 
-  it('can limit the date range and filter rows by room', async () => {
+  it('can extend the date range and filter rows by room', async () => {
     renderWithProviders(<MobileTasksPage now={NOW} />);
     await screen.findByRole('row', { name: /Stofzuigen/ });
 
-    fireEvent.click(screen.getByRole('button', { name: '1 week' }));
-    await waitFor(() => expect(screen.getByText('16 sep t/m 22 sep')).toBeInTheDocument());
-    expect(within(screen.getByRole('row', { name: /Stofzuigen/ })).getByText('wo 16 sep')).toBeInTheDocument();
-    expect(screen.queryByText('wo 23 sep')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '2 weken' }));
+    await waitFor(() => expect(screen.getByText('16 sep t/m 29 sep')).toBeInTheDocument());
+    expect(within(screen.getByRole('row', { name: /Stofzuigen/ })).getByText('wo 16 sep, wo 23 sep')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'Woonkamer' }));
     expect(screen.getByRole('row', { name: /Beddengoed/ })).toBeInTheDocument();

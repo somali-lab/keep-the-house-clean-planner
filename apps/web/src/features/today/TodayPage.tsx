@@ -1,7 +1,9 @@
 import type { OccurrenceView } from '@huishoudplanner/shared';
-import { Sun, TriangleAlert, Undo2 } from 'lucide-react';
+import { weekIndexFor } from '@huishoudplanner/shared/cycle';
+import { ChevronLeft, ChevronRight, Sun, TriangleAlert, Undo2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { EmptyState } from '@/components/EmptyState';
+import { NativeSelect } from '@/components/NativeSelect';
 import { PageHeader } from '@/components/PageHeader';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,7 +18,8 @@ import {
   useOccurrences,
   type OccurrenceAction,
 } from './api.ts';
-import { OccurrenceItem } from './OccurrenceItem.tsx';
+import { OccurrenceItem, shortDate } from './OccurrenceItem.tsx';
+import { longDay } from '../week/weekModel.ts';
 import {
   addDaysKey,
   dayKeyInZone,
@@ -42,10 +45,16 @@ export function TodayPage({ now }: { now?: Date }) {
   const { profile, activeUsers } = useProfile();
   const timezone = settings.data?.timezone ?? 'Europe/Amsterdam';
   const todayKey = dayKeyInZone(now ?? new Date(), timezone);
+  const [dayOffset, setDayOffset] = useState(0);
+  const [personFilter, setPersonFilter] = useState(profile?._id ?? 'all');
+  useEffect(() => {
+    if (profile?._id) setPersonFilter(profile._id);
+  }, [profile?._id]);
+  const selectedDay = addDaysKey(todayKey, dayOffset);
   const from = addDaysKey(todayKey, -OVERDUE_LOOKBACK_DAYS);
-  const occurrences = useOccurrences(from, todayKey, settings.isSuccess);
+  const occurrences = useOccurrences(from, selectedDay, settings.isSuccess);
   const profileId = profile?._id ?? '';
-  const action = useOccurrenceAction(occurrenceKeys.range(from, todayKey), { profileId, todayKey });
+  const action = useOccurrenceAction(occurrenceKeys.range(from, selectedDay), { profileId, todayKey });
 
   const [snackbar, setSnackbar] = useState<{ id: string; task: string } | null>(null);
   const [failed, setFailed] = useState(false);
@@ -87,14 +96,99 @@ export function TodayPage({ now }: { now?: Date }) {
     });
   };
 
-  const groups = groupToday(occurrences.data, profileId, todayKey);
+  const filteredOccurrences = occurrences.data.filter((occurrence) =>
+    personFilter === 'all'
+      ? true
+      : personFilter === 'unassigned'
+        ? occurrence.assigneeId === null
+        : occurrence.assigneeId === personFilter,
+  );
+  const visibleOccurrences = dayOffset === 0
+    ? filteredOccurrences
+    : filteredOccurrences.filter((occurrence) => occurrence.date === selectedDay);
+  const groupOwnerId = personFilter !== 'all' && personFilter !== 'unassigned'
+    ? personFilter
+    : profileId;
+  const groups = groupToday(
+    visibleOccurrences,
+    groupOwnerId,
+    selectedDay,
+    settings.data.cycleAnchorDate,
+  );
+  const selectedPerson = activeUsers.find((user) => user._id === personFilter);
+  const cycleWeek = weekIndexFor(selectedDay, settings.data.cycleAnchorDate) + 1;
+  const cycleLabel = selectedDay < settings.data.cycleAnchorDate
+    ? format('cycle.startsOn', { date: shortDate(settings.data.cycleAnchorDate) })
+    : format('cycle.week', { week: cycleWeek });
   const nothingOpen =
     groups.mine.length + groups.unclaimed.length + groups.others.length + groups.overdue.length ===
     0;
 
   return (
     <section className="flex flex-col gap-6">
-      <PageHeader title={t('nav.today')} className="mb-0" />
+      <PageHeader
+        title={t('nav.today')}
+        description={`${longDay(selectedDay)} · ${cycleLabel}`}
+        className="mb-0"
+      />
+      <div className="grid gap-3 rounded-2xl border bg-card p-3 shadow-sm sm:grid-cols-[minmax(0,1fr)_12rem] sm:items-center">
+        <div
+          className="grid grid-cols-[2.5rem_repeat(3,minmax(0,1fr))_2.5rem] gap-1 rounded-xl bg-muted p-1"
+          role="group"
+          aria-label={t('today.dayNavigation')}
+        >
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="rounded-lg"
+            aria-label={t('today.previousDay')}
+            disabled={dayOffset === 0}
+            onClick={() => setDayOffset((offset) => Math.max(0, offset - 1))}
+          >
+            <ChevronLeft aria-hidden="true" />
+          </Button>
+          {[
+            { offset: 0, label: t('nav.today') },
+            { offset: 1, label: t('today.tomorrow') },
+            { offset: 2, label: t('today.dayAfterTomorrow') },
+          ].map((day) => (
+            <Button
+              key={day.offset}
+              type="button"
+              variant="ghost"
+              size="sm"
+              className={cn(
+                'min-w-0 rounded-lg px-1 text-xs shadow-none sm:text-sm',
+                dayOffset === day.offset && 'bg-background text-foreground shadow-sm hover:bg-background',
+              )}
+              aria-pressed={dayOffset === day.offset}
+              onClick={() => setDayOffset(day.offset)}
+            >
+              {day.label}
+            </Button>
+          ))}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="rounded-lg"
+            aria-label={t('today.nextDay')}
+            onClick={() => setDayOffset((offset) => offset + 1)}
+          >
+            <ChevronRight aria-hidden="true" />
+          </Button>
+        </div>
+        <NativeSelect
+          aria-label={t('today.filterPerson')}
+          value={personFilter}
+          onChange={(event) => setPersonFilter(event.target.value)}
+        >
+          <option value="all">{t('today.allPeople')}</option>
+          {activeUsers.map((user) => <option key={user._id} value={user._id}>{user.name}</option>)}
+          <option value="unassigned">{t('today.anyone')}</option>
+        </NativeSelect>
+      </div>
       <PromoteBanner />
       {failed && (
         <p
@@ -122,7 +216,9 @@ export function TodayPage({ now }: { now?: Date }) {
                   key === 'finished' && 'text-muted-foreground',
                 )}
               >
-                {t(title)}
+                {key === 'mine' && selectedPerson && selectedPerson._id !== profileId
+                  ? format('today.personTasks', { name: selectedPerson.name })
+                  : t(title)}
               </h2>
               <Badge
                 variant="secondary"

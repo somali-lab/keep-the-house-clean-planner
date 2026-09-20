@@ -9,13 +9,13 @@ test('check off while offline; the change reaches the server once back online (T
   await planOn(app, anna, task, TODAY, anna);
 
   await openAs(page, app, anna, '/today');
-  await expect(page.getByRole('region', { name: 'Mijn taken vandaag' })).toContainText('Vaatwasser uitruimen');
+  await expect(page.getByRole('region', { name: 'Mijn taken' })).toContainText('Vaatwasser uitruimen');
 
   await context.setOffline(true);
   await page.getByRole('button', { name: 'Afvinken: Vaatwasser uitruimen' }).click();
   const banner = page.getByText('1 wijziging is offline bewaard en wordt verstuurd zodra er weer verbinding is.');
   await expect(banner).toBeVisible();
-  await expect(page.getByRole('region', { name: 'Afgerond vandaag' })).toContainText('Vaatwasser uitruimen');
+  await expect(page.getByRole('region', { name: 'Afgerond' })).toContainText('Vaatwasser uitruimen');
   expect((await occurrencesOn(app, TODAY))[0]?.status).toBe('open');
 
   await context.setOffline(false);

@@ -18,7 +18,7 @@ No repository secret is needed. The workflows publish with GitHub's short-lived 
 
 Release Please derives the next semantic version from Conventional Commit messages. When pull requests are squash-merged, use a Conventional Commit title for the pull request:
 
-Repository agents first create a dedicated `codex/` feature branch and commit every completed coherent change using this format, without requiring a separate branch or commit request. This keeps `main` protected and the unreleased history usable as the input for generated changelog and release-note entries. Agents still never push, publish, merge, or deploy without explicit permission.
+Repository agents first fetch `origin/main`, fast-forward local `main`, and create a dedicated `codex/` feature branch from that updated source. They commit every completed coherent change using this format, without requiring a separate branch or commit request. This keeps `main` current and protected, and keeps the unreleased history usable as the input for generated changelog and release-note entries. Agents still never push, publish, merge, or deploy without explicit permission.
 
 - `fix: correct overdue task calculation` creates a patch release.
 - `feat: add a monthly planning view` creates a minor release.
@@ -58,6 +58,8 @@ For a release such as `v1.4.2`, the workflow publishes:
 - `ghcr.io/somali-lab/keep-the-house-clean-planner:sha-<full-commit-sha>`
 
 Production can follow `latest` for automatic updates or pin the full semantic version or commit SHA for deterministic rollbacks.
+
+The version shown in the app also identifies its origin. Published GHCR images pass `APP_OFFICIAL_BUILD=true` and show the exact Release Please version, for example `1.3.0`. A build made directly from local source uses the same base version with a UTC build timestamp, for example `1.3.0-local-20260920-093245Z`. The timestamp is generated once when Vite starts the build, so every asset from that build reports the same identifier.
 
 The image currently targets `linux/amd64`, matching the Proxmox VM deployment target. It also contains OCI source, version, and revision labels, a software bill of materials, and build provenance.
 

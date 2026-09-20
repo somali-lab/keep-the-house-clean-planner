@@ -4,8 +4,10 @@ ARG NODE_IMAGE=node:24-bookworm-slim
 
 # ---------- build: install all deps, build the web app ----------
 FROM ${NODE_IMAGE} AS build
+ARG APP_OFFICIAL_BUILD=false
 WORKDIR /app
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
+    APP_OFFICIAL_BUILD=${APP_OFFICIAL_BUILD}
 COPY package.json package-lock.json ./
 COPY packages/shared/package.json packages/shared/
 COPY apps/server/package.json apps/server/

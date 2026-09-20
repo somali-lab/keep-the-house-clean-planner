@@ -44,6 +44,9 @@ export const nl = {
   'common.cancel': 'Annuleren',
   'common.edit': 'Bewerken',
 
+  'cycle.week': 'Cyclusweek {week}',
+  'cycle.startsOn': 'Cyclus start op {date}',
+
   'theme.label': 'Kleurthema',
   'theme.light': 'Licht thema',
   'theme.dark': 'Donker thema',
@@ -249,12 +252,20 @@ export const nl = {
   'planner.saveError': 'Opslaan mislukt. Probeer het opnieuw.',
   'planner.noPlan': 'Er is nog geen plan.',
 
-  'today.mine': 'Mijn taken vandaag',
+  'today.mine': 'Mijn taken',
   'today.unclaimed': 'Nog niet opgepakt',
-  'today.others': 'Van de ander',
+  'today.others': 'Van anderen',
   'today.overdue': 'Achterstallig',
-  'today.finished': 'Afgerond vandaag',
-  'today.empty': 'Niets meer open voor vandaag.',
+  'today.finished': 'Afgerond',
+  'today.empty': 'Geen open taken voor deze dag.',
+  'today.dayNavigation': 'Dag kiezen',
+  'today.previousDay': 'Vorige dag',
+  'today.nextDay': 'Volgende dag',
+  'today.tomorrow': 'Morgen',
+  'today.dayAfterTomorrow': 'Overmorgen',
+  'today.filterPerson': 'Filter op persoon',
+  'today.allPeople': 'Iedereen',
+  'today.personTasks': 'Taken van {name}',
   'today.anyone': 'Wie dan ook',
   'today.completeNamed': 'Afvinken: {task}',
   'today.claim': 'Pak op',
@@ -281,6 +292,12 @@ export const nl = {
     '{count} wijzigingen zijn offline bewaard en worden verstuurd zodra er weer verbinding is.',
   'offline.conflict':
     '"{task}" kon niet worden bijgewerkt: de taak is intussen gewijzigd of verwijderd.',
+  'offline.title': 'Je bent offline',
+  'offline.status':
+    'Je ziet de laatst opgeslagen gegevens. Afvinken wordt bewaard en later verstuurd; andere acties hebben verbinding nodig.',
+  'pwa.updateAvailable': 'Er is een nieuwe versie van de app beschikbaar.',
+  'pwa.updateNow': 'Nu bijwerken',
+  'pwa.updating': 'Bijwerken…',
 
   'history.title': 'Geschiedenis',
   'history.titleFor': 'Geschiedenis van {name}',
@@ -656,6 +673,16 @@ export const nl = {
   'settings.data.confirm': 'Alles vervangen',
   'settings.data.importing': 'Bezig met importeren…',
   'settings.data.imported': 'Import voltooid: alle gegevens zijn vervangen.',
+  'settings.data.resetTitle': 'Opnieuw beginnen met de uitvoering',
+  'settings.data.resetExplainer':
+    'Wis gereedmeldingen, overgeslagen taken en eerdere uitvoeringsgeschiedenis zonder personen, ruimtes, taken of plannen te verwijderen.',
+  'settings.data.resetAction': 'Uitvoeringsgegevens resetten',
+  'settings.data.resetConfirmTitle': 'Alle gereedmeldingen en uitvoeringsgegevens resetten?',
+  'settings.data.resetConfirmBody':
+    'Eerdere uitvoeringen worden gewist en taken vanaf vandaag worden weer openstaand. Personen, ruimtes, taken en het actieve plan blijven bestaan. Dit kan niet ongedaan worden gemaakt.',
+  'settings.data.resetConfirm': 'Ja, alles resetten',
+  'settings.data.resetDone': 'Gereedmeldingen en uitvoeringsgegevens zijn gereset.',
+  'settings.data.resetError': 'De uitvoeringsgegevens konden niet worden gereset.',
 
   'stats.filters': 'Filters',
   'stats.tabs': 'Statistiekonderdeel',

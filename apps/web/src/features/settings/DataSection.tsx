@@ -1,11 +1,13 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Database, Download, TriangleAlert, Upload } from 'lucide-react';
+import { Database, Download, Trash2, TriangleAlert, Upload } from 'lucide-react';
 import { useId, useState, type ChangeEvent } from 'react';
 import { Button, buttonVariants } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { api, ApiRequestError } from '../../api/index.ts';
+import { useResetStatistics } from '../stats/api.ts';
 import { format, t } from '../../i18n/nl.ts';
 import { Field, FormActions, FormMessage, SettingsCardHeader, settingsCardClass } from './SettingsCard.tsx';
 
@@ -43,7 +45,9 @@ export function DataSection() {
   const idPrefix = useId();
   const queryClient = useQueryClient();
   const [pending, setPending] = useState<PendingImport | null>(null);
+  const [confirmReset, setConfirmReset] = useState(false);
   const [message, setMessage] = useState<Message>(null);
+  const resetExecution = useResetStatistics();
 
   const runImport = useMutation({
     mutationFn: (body: Record<string, unknown>) => api.post('/api/import/json?mode=replace&confirm=true', body),
@@ -105,7 +109,60 @@ export function DataSection() {
           />
         </Field>
       </div>
+      <div className="flex flex-col items-start justify-between gap-4 rounded-xl border border-destructive/30 bg-destructive/5 p-4 sm:flex-row sm:items-center">
+        <div>
+          <p className="font-bold">{t('settings.data.resetTitle')}</p>
+          <p className="text-sm text-muted-foreground">{t('settings.data.resetExplainer')}</p>
+        </div>
+        <Button
+          type="button"
+          variant="destructive"
+          className="shrink-0"
+          onClick={() => {
+            setMessage(null);
+            setConfirmReset(true);
+          }}
+        >
+          <Trash2 aria-hidden="true" />
+          {t('settings.data.resetAction')}
+        </Button>
+      </div>
       {message && <FormMessage kind={message.kind}>{message.text}</FormMessage>}
+
+      <Dialog open={confirmReset} onOpenChange={setConfirmReset}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('settings.data.resetConfirmTitle')}</DialogTitle>
+            <DialogDescription>{t('settings.data.resetConfirmBody')}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="ghost" disabled={resetExecution.isPending} onClick={() => setConfirmReset(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={resetExecution.isPending}
+              onClick={() =>
+                resetExecution.mutate(undefined, {
+                  onSuccess: () => {
+                    setConfirmReset(false);
+                    setMessage({ kind: 'status', text: t('settings.data.resetDone') });
+                  },
+                })
+              }
+            >
+              <Trash2 aria-hidden="true" />
+              {t('settings.data.resetConfirm')}
+            </Button>
+          </DialogFooter>
+          {resetExecution.isError && (
+            <p role="alert" className="text-sm font-semibold text-destructive">
+              {t('settings.data.resetError')}
+            </p>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {pending && (
         <div

@@ -26,5 +26,5 @@ test('a task not done for 1.5 times its interval is "Flink achter" and can be pl
   await expect.poll(async () => (await occurrencesOn(app, TODAY)).map((o) => o.taskId)).toEqual([task._id]);
 
   await page.getByRole('navigation', { name: 'Hoofdmenu' }).getByRole('link', { name: 'Vandaag' }).click();
-  await expect(page.getByRole('region', { name: 'Mijn taken vandaag' })).toContainText('Oven schoonmaken');
+  await expect(page.getByRole('region', { name: 'Mijn taken' })).toContainText('Oven schoonmaken');
 });

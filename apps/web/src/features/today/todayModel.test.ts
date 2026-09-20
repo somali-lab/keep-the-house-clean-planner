@@ -48,4 +48,15 @@ describe('groupToday', () => {
     expect(groups.overdue.map((o) => o._id)).toEqual(['o1', 'o2']);
     expect(groups.unclaimed).toEqual([]);
   });
+
+  it('does not call tasks from before the configured cycle start overdue', () => {
+    const groups = groupToday(
+      [makeOccurrence({ _id: 'old', date: '2026-09-14', assigneeId: ME })],
+      ME,
+      TODAY,
+      '2026-09-17',
+    );
+
+    expect(groups.overdue).toEqual([]);
+  });
 });
