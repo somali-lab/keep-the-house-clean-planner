@@ -15,8 +15,8 @@ test('check off, undo, skip with a reason, check off for someone else, and see b
   const statusOf = async (taskId: string) => (await occurrencesOn(app, TODAY)).find((o) => o.taskId === taskId);
 
   await openAs(page, app, anna, '/today');
-  const mine = page.getByRole('region', { name: 'Mijn taken vandaag' });
-  const finished = page.getByRole('region', { name: 'Afgerond vandaag' });
+  const mine = page.getByRole('region', { name: 'Mijn taken' });
+  const finished = page.getByRole('region', { name: 'Afgerond' });
   await expect(mine).toContainText('Afwassen');
 
   // Check off, then undo from the snackbar.
