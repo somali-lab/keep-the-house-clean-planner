@@ -51,7 +51,11 @@ export const createOccurrenceInputSchema = z.object({
 export type CreateOccurrenceInput = z.infer<typeof createOccurrenceInputSchema>;
 
 export const patchOccurrenceInputSchema = z.discriminatedUnion('action', [
-  z.object({ action: z.literal('complete'), completedBy: objectIdSchema.optional() }),
+  z.object({
+    action: z.literal('complete'),
+    completedBy: objectIdSchema.optional(),
+    takeOver: z.literal(true).optional(),
+  }),
   z.object({ action: z.literal('uncomplete') }),
   z.object({ action: z.literal('skip'), reason: z.string().trim().max(500).optional() }),
   z.object({ action: z.literal('reschedule'), date: dayKeySchema }),

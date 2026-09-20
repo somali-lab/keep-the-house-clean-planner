@@ -28,9 +28,20 @@ function setup(settings = makeSettings()) {
       failNext = false;
       throw new Error('boom');
     }
-    const body = JSON.parse(String(init.body)) as { action: 'complete' | 'uncomplete' | 'skip'; completedBy?: string; reason?: string };
+    const body = JSON.parse(String(init.body)) as {
+      action: 'complete' | 'uncomplete' | 'skip';
+      completedBy?: string;
+      reason?: string;
+      takeOver?: true;
+    };
     const current = db.find((o) => o._id === id)!;
-    const next = applyOptimistic(current, { id, kind: body.action, completedBy: body.completedBy, reason: body.reason } as never, {
+    const next = applyOptimistic(current, {
+      id,
+      kind: body.action,
+      completedBy: body.completedBy,
+      reason: body.reason,
+      takeOver: body.takeOver,
+    } as never, {
       profileId: ANNA._id,
       todayKey: TODAY,
       now: NOW,
@@ -56,6 +67,12 @@ function setup(settings = makeSettings()) {
     },
   });
 }
+
+const patchBodies = (fetchMock: ReturnType<typeof mockApi>, id: string) =>
+  fetchMock.mock.calls
+    .filter(([url, init]) =>
+      url === `/api/occurrences/${id}` && (init as RequestInit | undefined)?.method === 'PATCH')
+    .map(([, init]) => JSON.parse(String((init as RequestInit).body)));
 
 const sectionTitles = () => screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
 const section = (name: string) => screen.getByRole('region', { name });
@@ -153,14 +170,36 @@ describe('TodayPage', () => {
     expect(bodies).toEqual([{ action: 'complete' }, { action: 'uncomplete' }]);
   });
 
-  it("credits the task's assignee when another profile checks it off", async () => {
-    setup();
+  it("asks before checking off another person's task and can do so on their behalf", async () => {
+    const fetchMock = setup();
     renderWithProviders(<TodayPage now={NOW} />);
     fireEvent.change(await screen.findByLabelText('Filter op persoon'), { target: { value: BRAM._id } });
     fireEvent.click(await screen.findByRole('button', { name: 'Afvinken: Stofzuigen' }));
 
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('Wie heeft “Stofzuigen” gedaan?');
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('Deze taak staat op naam van Bram de Vries');
+    fireEvent.click(screen.getByRole('button', { name: 'Namens Bram de Vries afvinken' }));
+
     await waitFor(() => expect(db.find((o) => o._id === 'o-other')?.completedBy).toBe(BRAM._id));
+    expect(patchBodies(fetchMock, 'o-other')).toEqual([{ action: 'complete', completedBy: BRAM._id }]);
     expect(await inSection('Afgerond', 'Gedaan door Bram de Vries')).toBeInTheDocument();
+  });
+
+  it("can take over another person's task while checking it off", async () => {
+    const fetchMock = setup();
+    renderWithProviders(<TodayPage now={NOW} />);
+    fireEvent.change(await screen.findByLabelText('Filter op persoon'), { target: { value: 'all' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Afvinken: Stofzuigen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ik heb de taak overgenomen' }));
+
+    await waitFor(() => {
+      expect(db.find((o) => o._id === 'o-other')).toMatchObject({
+        status: 'done',
+        assigneeId: ANNA._id,
+        completedBy: ANNA._id,
+      });
+    });
+    expect(patchBodies(fetchMock, 'o-other')).toEqual([{ action: 'complete', takeOver: true }]);
   });
 
   it('undo after skip → done restores skipped, also later via the item', async () => {
@@ -182,19 +221,6 @@ describe('TodayPage', () => {
     fireEvent.click(within(doneRow).getByRole('button', { name: 'Badkamer ongedaan maken' }));
     await waitFor(() => expect(db.find((o) => o._id === 'o-mine')?.status).toBe('skipped'));
     expect(await inSection('Afgerond', 'Overgeslagen: geen tijd')).toBeInTheDocument();
-  });
-
-  it('attributes a check-off to another profile via the menu', async () => {
-    const fetchMock = setup();
-    renderWithProviders(<TodayPage now={NOW} />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Meer voor Badkamer' }));
-    fireEvent.change(screen.getByLabelText('Afgevinkt door'), { target: { value: BRAM._id } });
-    fireEvent.click(screen.getByRole('button', { name: 'Afvinken namens' }));
-    await waitFor(() => {
-      const call = fetchMock.mock.calls.find(([u]) => u === '/api/occurrences/o-mine');
-      expect(JSON.parse(String((call![1] as RequestInit).body))).toEqual({ action: 'complete', completedBy: BRAM._id });
-    });
-    expect(await inSection('Afgerond', 'Gedaan door Bram de Vries')).toBeInTheDocument();
   });
 
   it('claims an unclaimed item', async () => {

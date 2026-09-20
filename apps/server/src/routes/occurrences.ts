@@ -77,7 +77,14 @@ export const occurrenceRoutes: FastifyPluginAsync = async (app) => {
     const ctx = auditContext(request);
     switch (input.action) {
       case 'complete':
-        return view(await completeOccurrence(ctx, id, input.completedBy ? new ObjectId(input.completedBy) : undefined));
+        return view(
+          await completeOccurrence(
+            ctx,
+            id,
+            input.completedBy ? new ObjectId(input.completedBy) : undefined,
+            input.takeOver,
+          ),
+        );
       case 'uncomplete':
         return view(await uncompleteOccurrence(ctx, id));
       case 'skip':

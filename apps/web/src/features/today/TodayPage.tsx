@@ -12,6 +12,7 @@ import { useRooms, useSettings, useTasks } from '../../api/queries.ts';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
 import { PromoteBanner } from '../promote/PromoteBanner.tsx';
+import { CompletionChoiceDialog } from './CompletionChoiceDialog.tsx';
 import {
   occurrenceKeys,
   useOccurrenceAction,
@@ -58,6 +59,7 @@ export function TodayPage({ now }: { now?: Date }) {
 
   const [snackbar, setSnackbar] = useState<{ id: string; task: string } | null>(null);
   const [failed, setFailed] = useState(false);
+  const [completionChoice, setCompletionChoice] = useState<OccurrenceView | null>(null);
 
   useEffect(() => {
     if (!snackbar) return;
@@ -94,6 +96,14 @@ export function TodayPage({ now }: { now?: Date }) {
         setSnackbar(null);
       },
     });
+  };
+
+  const requestComplete = (occ: OccurrenceView) => {
+    if (occ.assigneeId && occ.assigneeId !== profileId) {
+      setCompletionChoice(occ);
+      return;
+    }
+    run({ id: occ._id, kind: 'complete' }, occ);
   };
 
   const filteredOccurrences = occurrences.data.filter((occurrence) =>
@@ -237,11 +247,8 @@ export function TodayPage({ now }: { now?: Date }) {
                   occurrence={occ}
                   roomName={occ.roomNameSnapshot ?? roomByTask.get(occ.taskId)}
                   users={activeUsers}
-                  profileId={profileId}
                   completionControl={settings.data.completionControl ?? 'circle'}
-                  onComplete={(completedBy) =>
-                    run({ id: occ._id, kind: 'complete', completedBy }, occ)
-                  }
+                  onComplete={() => requestComplete(occ)}
                   onUncomplete={() => run({ id: occ._id, kind: 'uncomplete' }, occ)}
                   onSkip={(reason) => run({ id: occ._id, kind: 'skip', reason }, occ)}
                   onClaim={() => run({ id: occ._id, kind: 'claim' }, occ)}
@@ -250,6 +257,35 @@ export function TodayPage({ now }: { now?: Date }) {
             </ul>
           </section>
         ),
+      )}
+
+      {completionChoice?.assigneeId && (
+        <CompletionChoiceDialog
+          task={completionChoice.taskNameSnapshot}
+          assignee={
+            activeUsers.find((user) => user._id === completionChoice.assigneeId)?.name
+              ?? t('tasks.unknownUser')
+          }
+          open
+          onOpenChange={(open) => {
+            if (!open) setCompletionChoice(null);
+          }}
+          onCompleteForAssignee={() => {
+            run(
+              {
+                id: completionChoice._id,
+                kind: 'complete',
+                completedBy: completionChoice.assigneeId ?? undefined,
+              },
+              completionChoice,
+            );
+            setCompletionChoice(null);
+          }}
+          onTakeOver={() => {
+            run({ id: completionChoice._id, kind: 'complete', takeOver: true }, completionChoice);
+            setCompletionChoice(null);
+          }}
+        />
       )}
 
       {snackbar && (

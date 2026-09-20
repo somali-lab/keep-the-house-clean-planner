@@ -24,7 +24,7 @@ const NOW = new Date('2026-09-16T08:00:00Z'); // Wednesday; week 14–20 Sep
 let db: OccurrenceView[];
 let nextWarnings: ApiWarning[] = [];
 
-function setup() {
+function setup(settings = makeSettings()) {
   storeProfile(ANNA._id);
   db = [
     makeOccurrence({ _id: 'o1', taskNameSnapshot: 'Badkamer', date: '2026-09-15', assigneeId: ANNA._id }),
@@ -32,20 +32,32 @@ function setup() {
     makeOccurrence({ _id: 'o3', taskNameSnapshot: 'Afwas', date: '2026-09-15', status: 'done', assigneeId: ANNA._id }),
   ];
   const update = (id: string) => (init: RequestInit) => {
-    const body = JSON.parse(String(init.body)) as { action: 'reschedule' | 'complete' | 'uncomplete'; date?: string };
+    const body = JSON.parse(String(init.body)) as {
+      action: 'reschedule' | 'complete' | 'uncomplete';
+      date?: string;
+      completedBy?: string;
+      takeOver?: true;
+    };
     const current = db.find((o) => o._id === id)!;
     const updated =
       body.action === 'reschedule'
         ? movedTo(current, body.date!)
         : body.action === 'complete'
-          ? { ...current, status: 'done' as const, completedBy: ANNA._id, completedAt: NOW.toISOString(), statusBeforeCompletion: 'open' as const }
+          ? {
+              ...current,
+              status: 'done' as const,
+              assigneeId: body.takeOver ? ANNA._id : current.assigneeId,
+              completedBy: body.takeOver ? ANNA._id : (body.completedBy ?? current.assigneeId ?? ANNA._id),
+              completedAt: NOW.toISOString(),
+              statusBeforeCompletion: 'open' as const,
+            }
           : { ...current, status: 'open' as const, completedBy: null, completedAt: null, statusBeforeCompletion: null };
     db = db.map((o) => (o._id === id ? updated : o));
     return { ...updated, warnings: nextWarnings };
   };
   return mockApi({
     '/api/users': [ANNA, BRAM],
-    '/api/settings': makeSettings(),
+    '/api/settings': settings,
     '/api/rooms': [makeRoom({ _id: 'r1', name: 'Woonkamer' })],
     '/api/tasks': [makeTask({ _id: 't1', name: 'Huishoudtaak', roomId: 'r1' })],
     '/api/occurrences': () => db,
@@ -171,6 +183,43 @@ describe('WeekPage', () => {
     fireEvent.click(undo);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Afvinken: Badkamer' })).toBeInTheDocument());
     expect(patchBodies(fetchMock, 'o1')).toEqual([{ action: 'complete' }, { action: 'uncomplete' }]);
+  });
+
+  it("asks how to complete another person's task and can take it over", async () => {
+    const fetchMock = setup();
+    renderWithProviders(<WeekPage now={NOW} />);
+    fireEvent.change(await screen.findByLabelText('Filter op persoon'), { target: { value: BRAM._id } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Afvinken: Stofzuigen' }));
+
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('Deze taak staat op naam van Bram de Vries');
+    fireEvent.click(screen.getByRole('button', { name: 'Ik heb de taak overgenomen' }));
+
+    await waitFor(() => expect(db.find((occurrence) => occurrence._id === 'o2')).toMatchObject({
+      status: 'done',
+      assigneeId: ANNA._id,
+      completedBy: ANNA._id,
+    }));
+    expect(patchBodies(fetchMock, 'o2')).toEqual([{ action: 'complete', takeOver: true }]);
+  });
+
+  it('hides occurrences before the first cycle and explains that the cycle has not started', async () => {
+    const fetchMock = setup(makeSettings({ cycleAnchorDate: '2026-09-21' }));
+    db = [
+      makeOccurrence({ _id: 'o1', taskNameSnapshot: 'Te vroeg', date: '2026-09-20', assigneeId: ANNA._id }),
+      makeOccurrence({ _id: 'o2', taskNameSnapshot: 'Vanaf de start', date: '2026-09-21', assigneeId: ANNA._id }),
+    ];
+    renderWithProviders(<WeekPage now={new Date('2026-09-20T08:00:00Z')} />);
+
+    const today = await screen.findByTestId('day:2026-09-20');
+    expect(within(today).getByText('De plancyclus is nog niet begonnen.')).toBeInTheDocument();
+    expect(screen.queryByText('Te vroeg')).not.toBeInTheDocument();
+    expect(await screen.findByText('Vanaf de start')).toBeInTheDocument();
+    expect(screen.getByTestId('week-summary')).toHaveTextContent('1 taken in dit overzicht');
+
+    act(() => {
+      dnd.onDragEnd!({ active: { id: 'occ:o2' }, over: { id: 'day:2026-09-20' } });
+    });
+    expect(patchBodies(fetchMock, 'o2')).toEqual([]);
   });
 
   it('uses the configured completion control and always shows a green check when done', async () => {

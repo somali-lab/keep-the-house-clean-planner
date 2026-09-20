@@ -147,6 +147,30 @@ describe('PATCH /api/occurrences/:id', () => {
     expect(entries[0]!.after).toMatchObject({ completedBy: p2._id });
   });
 
+  it('atomically transfers an assigned task when the actor takes it over', async () => {
+    const occ = await find(weekly, '2026-10-05');
+    expect(occ.assigneeId).toBe(p1._id.toHexString());
+    const { result, entries } = await expectAudited(
+      t,
+      () => patch(occ._id, { action: 'complete', takeOver: true }, p2),
+      { entity: 'occurrence', action: 'complete', count: 1 },
+    );
+
+    expect(result.statusCode, result.body).toBe(200);
+    expect(result.json()).toMatchObject({
+      status: 'done',
+      assigneeId: p2._id.toHexString(),
+      completedBy: p2._id.toHexString(),
+    });
+    expect(entries[0]!.actorId).toEqual(p2._id);
+    expect(entries[0]!.meta).toMatchObject({
+      completedBy: p2._id,
+      wasAssignee: false,
+      takenOver: true,
+      previousAssigneeId: p1._id,
+    });
+  });
+
   it('claims an unclaimed occurrence implicitly for completedBy', async () => {
     const occ = await find(twice, '2026-09-23');
     expect(occ.assigneeId).toBeNull();
@@ -194,8 +218,8 @@ describe('PATCH /api/occurrences/:id', () => {
   });
 
   it('keeps lastCompletedAt correct across a complete/uncomplete sequence', async () => {
-    const a = await find(weekly, '2026-10-05');
-    const b = await find(weekly, '2026-10-12');
+    const a = await find(weekly, '2026-10-12');
+    const b = await find(weekly, '2026-10-19');
     const taskDoc = () => findTaskById(t.db, new ObjectId(weekly));
     // previous tests completed two weekly occurrences at 2026-09-16T08:00Z
     const baseline = (await taskDoc())!.lastCompletedAt;
@@ -222,7 +246,7 @@ describe('PATCH /api/occurrences/:id', () => {
   });
 
   it('rejects invalid transitions with 409', async () => {
-    const occ = await find(weekly, '2026-10-19');
+    const occ = await find(weekly, '2026-10-26');
     expect((await patch(occ._id, { action: 'uncomplete' })).statusCode).toBe(409);
     await patch(occ._id, { action: 'complete' });
     expect((await patch(occ._id, { action: 'complete' })).statusCode).toBe(409);
@@ -230,7 +254,7 @@ describe('PATCH /api/occurrences/:id', () => {
   });
 
   it('validates body, completedBy and id', async () => {
-    const occ = await find(weekly, '2026-10-26');
+    const occ = await find(weekly, '2026-11-02');
     expect((await patch(occ._id, { action: 'explode' })).statusCode).toBe(400);
     const badUser = await patch(occ._id, { action: 'complete', completedBy: '0123456789abcdef01234567' });
     expect(badUser.statusCode).toBe(400);
@@ -241,7 +265,7 @@ describe('PATCH /api/occurrences/:id', () => {
   });
 
   it('validates reschedule and assign payloads (behaviour is covered in reschedule.test.ts)', async () => {
-    const occ = await find(weekly, '2026-11-02');
+    const occ = await find(twice, '2026-11-05');
     expect((await patch(occ._id, { action: 'reschedule' })).statusCode).toBe(400);
     expect((await patch(occ._id, { action: 'assign' })).statusCode).toBe(400);
     expect((await patch(occ._id, { action: 'reschedule', date: '2026-11-03' })).statusCode).toBe(200);

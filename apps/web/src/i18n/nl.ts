@@ -272,8 +272,6 @@ export const nl = {
   'today.claimNamed': '{task} oppakken',
   'today.more': 'Meer',
   'today.moreNamed': 'Meer voor {task}',
-  'today.completedBy': 'Afgevinkt door',
-  'today.completeFor': 'Afvinken namens',
   'today.skip': 'Overslaan',
   'today.skipReason': 'Reden (optioneel)',
   'today.skipConfirm': 'Overslaan bevestigen',
@@ -286,6 +284,11 @@ export const nl = {
   'today.skipped': 'Overgeslagen',
   'today.skippedWithReason': 'Overgeslagen: {reason}',
   'today.actionError': 'Dat lukte niet. De wijziging is teruggedraaid.',
+  'completionChoice.title': 'Wie heeft “{task}” gedaan?',
+  'completionChoice.description':
+    'Deze taak staat op naam van {assignee}. Kies of je namens die persoon afvinkt of de taak zelf hebt overgenomen.',
+  'completionChoice.forAssignee': 'Namens {assignee} afvinken',
+  'completionChoice.takeOver': 'Ik heb de taak overgenomen',
   'offline.pendingOne':
     '1 wijziging is offline bewaard en wordt verstuurd zodra er weer verbinding is.',
   'offline.pendingMany':
@@ -469,6 +472,7 @@ export const nl = {
   'week.hint':
     'Sleep een taak naar een andere dag (op een telefoon: even vasthouden) of gebruik "Verplaats". Het plan zelf verandert niet.',
   'week.emptyDay': 'Niets gepland.',
+  'week.cycleNotStarted': 'De plancyclus is nog niet begonnen.',
   'week.done': 'gedaan',
   'week.skipped': 'overgeslagen',
   'week.movedFrom': 'verplaatst van {date}',

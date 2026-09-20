@@ -69,6 +69,7 @@ export interface ApiOccurrence {
   _id: string;
   taskId: string;
   date: string;
+  assigneeId: string | null;
   status: 'open' | 'done' | 'skipped';
   completedBy: string | null;
 }

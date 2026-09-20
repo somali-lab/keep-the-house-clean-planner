@@ -59,6 +59,7 @@ export async function completeOccurrence(
   ctx: AuditContext,
   id: ObjectId,
   completedByInput?: ObjectId,
+  takeOver = false,
 ): Promise<OccurrenceDoc> {
   const current = await requireOccurrence(ctx, id);
   if (current.status === 'done') throw invalidTransition('done', 'complete');
@@ -66,7 +67,7 @@ export async function completeOccurrence(
   // A normal check-off belongs to the person the task was planned for, even
   // when another profile presses the button. Unassigned work belongs to the
   // actor; the explicit completedBy option can still override either case.
-  const completedBy = completedByInput ?? current.assigneeId ?? ctx.actorId;
+  const completedBy = takeOver ? ctx.actorId : (completedByInput ?? current.assigneeId ?? ctx.actorId);
   if (completedByInput) {
     const user = await findUserById(ctx.db, completedByInput);
     if (!user?.active) {
@@ -78,6 +79,7 @@ export async function completeOccurrence(
 
   const wasAssignee = current.assigneeId?.equals(completedBy) ?? false;
   const claimed = current.assigneeId === null;
+  const reassigned = takeOver && !(current.assigneeId?.equals(ctx.actorId) ?? false);
   const result = await updateOccurrence(
     ctx,
     id,
@@ -86,10 +88,18 @@ export async function completeOccurrence(
       statusBeforeCompletion: current.status,
       completedAt: ctx.clock.now(),
       completedBy,
-      // Completing an unclaimed occurrence claims it for whoever did it.
-      ...(claimed ? { assigneeId: completedBy } : {}),
+      // Completing unassigned work claims it; taking over assigned work transfers it to the actor.
+      ...(claimed || takeOver ? { assigneeId: completedBy } : {}),
     },
-    { action: 'complete', meta: { completedBy, wasAssignee, ...(claimed ? { claimed: true } : {}) } },
+    {
+      action: 'complete',
+      meta: {
+        completedBy,
+        wasAssignee,
+        ...(claimed ? { claimed: true } : {}),
+        ...(reassigned ? { takenOver: true, previousAssigneeId: current.assigneeId } : {}),
+      },
+    },
     { status: current.status },
   );
   if (!result) throw invalidTransition('changed', 'complete');

@@ -44,5 +44,10 @@ describe('schemas', () => {
     });
     expect(patchOccurrenceInputSchema.safeParse({ action: 'reschedule' }).success).toBe(false);
     expect(patchOccurrenceInputSchema.safeParse({ action: 'explode' }).success).toBe(false);
+    expect(patchOccurrenceInputSchema.parse({ action: 'complete', takeOver: true })).toEqual({
+      action: 'complete',
+      takeOver: true,
+    });
+    expect(patchOccurrenceInputSchema.safeParse({ action: 'complete', takeOver: false }).success).toBe(false);
   });
 });

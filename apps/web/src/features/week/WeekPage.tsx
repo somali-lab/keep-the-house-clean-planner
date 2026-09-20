@@ -36,6 +36,7 @@ import { format, t } from '../../i18n/nl.ts';
 import { Avatar } from '../../identity/Avatar.tsx';
 import { useProfile } from '../../identity/index.ts';
 import { PromoteBanner } from '../promote/PromoteBanner.tsx';
+import { CompletionChoiceDialog } from '../today/CompletionChoiceDialog.tsx';
 import { occurrenceKeys, useOccurrenceAction, useOccurrences } from '../today/api.ts';
 import { addDaysKey, dayKeyInZone } from '../today/todayModel.ts';
 import {
@@ -90,6 +91,7 @@ export function WeekPage({ now }: { now?: Date }) {
   const occurrenceAction = useOccurrenceAction(queryKey, { profileId: profile?._id ?? '', todayKey });
   const [warnings, setWarnings] = useState<ApiWarning[]>([]);
   const [failed, setFailed] = useState(false);
+  const [completionChoice, setCompletionChoice] = useState<OccurrenceView | null>(null);
   const roomByTask = useMemo(() => {
     const roomNames = new Map((rooms.data ?? []).map((room) => [room._id, room.name]));
     return new Map((tasks.data ?? []).map((task) => [task._id, roomNames.get(task.roomId) ?? t('tasks.unknownRoom')]));
@@ -128,8 +130,31 @@ export function WeekPage({ now }: { now?: Date }) {
 
   const requestMove = (id: string, date: string) => {
     const occ = occurrences.data?.find((o) => o._id === id);
-    if (!occ || occ.date === date) return;
+    if (!occ || occ.date === date || date < (settings.data?.cycleAnchorDate ?? '')) return;
     move.mutate({ id, date });
+  };
+
+  const complete = (occ: OccurrenceView, mode?: 'assignee' | 'takeOver') => {
+    setFailed(false);
+    occurrenceAction.mutate(
+      {
+        id: occ._id,
+        kind: 'complete',
+        ...(mode === 'takeOver' ? { takeOver: true } : {}),
+        ...(mode === 'assignee' && occ.assigneeId ? { completedBy: occ.assigneeId } : {}),
+      },
+      { onError: () => setFailed(true) },
+    );
+  };
+
+  const requestComplete = (id: string) => {
+    const occ = occurrences.data?.find((item) => item._id === id);
+    if (!occ) return;
+    if (occ.assigneeId && occ.assigneeId !== profile?._id) {
+      setCompletionChoice(occ);
+      return;
+    }
+    complete(occ);
   };
 
   const onDragEnd = ({ active, over }: DragEndEvent) => {
@@ -152,13 +177,15 @@ export function WeekPage({ now }: { now?: Date }) {
       </p>
     );
 
-  const filteredOccurrences = occurrences.data.filter((occurrence) =>
-    personFilter === 'all'
-      ? true
-      : personFilter === 'unassigned'
-        ? occurrence.assigneeId === null
-        : occurrence.assigneeId === personFilter,
-  );
+  const filteredOccurrences = occurrences.data
+    .filter((occurrence) => occurrence.date >= settings.data.cycleAnchorDate)
+    .filter((occurrence) =>
+      personFilter === 'all'
+        ? true
+        : personFilter === 'unassigned'
+          ? occurrence.assigneeId === null
+          : occurrence.assigneeId === personFilter,
+    );
   const openCount = filteredOccurrences.filter((occurrence) => occurrence.status === 'open').length;
   const finishedCount = filteredOccurrences.length - openCount;
 
@@ -272,16 +299,38 @@ export function WeekPage({ now }: { now?: Date }) {
               dayKey={day.dayKey}
               isToday={day.dayKey === todayKey}
               period={day.dayKey < todayKey ? 'past' : day.dayKey === todayKey ? 'today' : 'future'}
+              cycleStarted={day.dayKey >= settings.data.cycleAnchorDate}
               items={day.items}
               users={activeUsers}
               roomByTask={roomByTask}
               completionControl={settings.data.completionControl ?? 'circle'}
-              onComplete={(id) => occurrenceAction.mutate({ id, kind: 'complete' }, { onError: () => setFailed(true) })}
+              onComplete={requestComplete}
               onUncomplete={(id) => occurrenceAction.mutate({ id, kind: 'uncomplete' }, { onError: () => setFailed(true) })}
             />
           ))}
         </div>
       </DndContext>
+      {completionChoice?.assigneeId && (
+        <CompletionChoiceDialog
+          task={completionChoice.taskNameSnapshot}
+          assignee={
+            activeUsers.find((user) => user._id === completionChoice.assigneeId)?.name
+              ?? t('tasks.unknownUser')
+          }
+          open
+          onOpenChange={(open) => {
+            if (!open) setCompletionChoice(null);
+          }}
+          onCompleteForAssignee={() => {
+            complete(completionChoice, 'assignee');
+            setCompletionChoice(null);
+          }}
+          onTakeOver={() => {
+            complete(completionChoice, 'takeOver');
+            setCompletionChoice(null);
+          }}
+        />
+      )}
     </section>
   );
 }
@@ -290,6 +339,7 @@ interface DayColumnProps {
   dayKey: string;
   isToday: boolean;
   period: 'past' | 'today' | 'future';
+  cycleStarted: boolean;
   items: OccurrenceView[];
   users: User[];
   roomByTask: Map<string, string>;
@@ -298,8 +348,8 @@ interface DayColumnProps {
   onUncomplete(id: string): void;
 }
 
-function DayColumn({ dayKey, isToday, period, items, users, roomByTask, completionControl, onComplete, onUncomplete }: DayColumnProps) {
-  const { setNodeRef, isOver } = useDroppable({ id: dayDropId(dayKey) });
+function DayColumn({ dayKey, isToday, period, cycleStarted, items, users, roomByTask, completionControl, onComplete, onUncomplete }: DayColumnProps) {
+  const { setNodeRef, isOver } = useDroppable({ id: dayDropId(dayKey), disabled: !cycleStarted });
   const headingId = `day-${dayKey}`;
   return (
     <section
@@ -331,7 +381,11 @@ function DayColumn({ dayKey, isToday, period, items, users, roomByTask, completi
           </Badge>
         )}
       </div>
-      {items.length === 0 ? (
+      {!cycleStarted ? (
+        <p className="rounded-xl border border-dashed px-3 py-4 text-center text-sm text-muted-foreground">
+          {t('week.cycleNotStarted')}
+        </p>
+      ) : items.length === 0 ? (
         <p className="rounded-xl border border-dashed px-3 py-4 text-center text-sm text-muted-foreground">
           {t('week.emptyDay')}
         </p>
