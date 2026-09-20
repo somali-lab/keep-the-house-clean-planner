@@ -673,6 +673,16 @@ export const nl = {
   'settings.data.confirm': 'Alles vervangen',
   'settings.data.importing': 'Bezig met importeren…',
   'settings.data.imported': 'Import voltooid: alle gegevens zijn vervangen.',
+  'settings.data.resetTitle': 'Opnieuw beginnen met de uitvoering',
+  'settings.data.resetExplainer':
+    'Wis gereedmeldingen, overgeslagen taken en eerdere uitvoeringsgeschiedenis zonder personen, ruimtes, taken of plannen te verwijderen.',
+  'settings.data.resetAction': 'Uitvoeringsgegevens resetten',
+  'settings.data.resetConfirmTitle': 'Alle gereedmeldingen en uitvoeringsgegevens resetten?',
+  'settings.data.resetConfirmBody':
+    'Eerdere uitvoeringen worden gewist en taken vanaf vandaag worden weer openstaand. Personen, ruimtes, taken en het actieve plan blijven bestaan. Dit kan niet ongedaan worden gemaakt.',
+  'settings.data.resetConfirm': 'Ja, alles resetten',
+  'settings.data.resetDone': 'Gereedmeldingen en uitvoeringsgegevens zijn gereset.',
+  'settings.data.resetError': 'De uitvoeringsgegevens konden niet worden gereset.',
 
   'stats.filters': 'Filters',
   'stats.tabs': 'Statistiekonderdeel',

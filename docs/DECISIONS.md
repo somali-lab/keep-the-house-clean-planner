@@ -109,6 +109,7 @@ Afwijkingen van en invullingen bovenop `implementation-plan.md`. Formaat: datum 
   - Cyclusstart en vakanties zijn eigen formulieren, die hun lokale staat houden na opslaan zodat "Opgeslagen." zichtbaar blijft. Maandag wordt ook in de client gecontroleerd.
   - Personen en ruimtes zijn lijsten met inline bewerken. Formulieren met getallen gebruiken `noValidate` zonder `step`: de browser blokkeerde anders stil waarden als 42 minuten, en onze Nederlandse meldingen verschijnen dan wel.
   - Import leest het bestand in de browser en toont de aantallen in een bevestigingsdialoog ("Alles vervangen"). Na een geslaagde import wordt de hele querycache vernieuwd.
+  - Gegevens biedt ook een bevestigde reset van gereedmeldingen en uitvoeringsgeschiedenis via dezelfde geaudite `DELETE /api/stats`-actie als Statistiek; personen, ruimtes, taken en plannen blijven behouden.
   - "Virtueel" bij ruimtes en de intervallen zijn hier (nog) niet bewerkbaar.
   - · Plan T4.4 noemt vakanties, anchor, gebruikers en ruimtes; intervallen hebben al een API met een in-gebruik-controle, maar er is geen taak die er UI voor vraagt.
 - 2026-09-13 · T4.5 · Offline afvinken.
