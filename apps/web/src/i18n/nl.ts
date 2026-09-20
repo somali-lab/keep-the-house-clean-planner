@@ -565,7 +565,7 @@ export const nl = {
   'settings.jobs.nightly.title': 'Planning genereren',
   'settings.jobs.nightly.schedule': 'Dagelijks om 03:00',
   'settings.jobs.nightly.help': 'Controleert en genereert taken voor de huidige en volgende cyclus en werkt de achterstand bij.',
-  'settings.jobs.nightly.result': 'Klaar: {removed} oude taken verwijderd, {generated} taken gegenereerd, {due} bijna achterstallig en {overdue} achterstallig.',
+  'settings.jobs.nightly.result': 'Klaar: {removed} oude taken verwijderd en {generated} taken gegenereerd.',
   'settings.jobs.retention.title': 'Auditgeschiedenis opschonen',
   'settings.jobs.retention.schedule': 'Dagelijks om 03:45',
   'settings.jobs.retention.help': 'Verwijdert auditregels die ouder zijn dan de ingestelde bewaartermijn.',

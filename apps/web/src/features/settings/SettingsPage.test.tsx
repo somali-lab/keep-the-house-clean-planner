@@ -167,7 +167,7 @@ describe('SettingsPage — jobs', () => {
 
     const buttons = screen.getAllByRole('button', { name: 'Nu starten' });
     fireEvent.click(buttons[0]!);
-    expect(await screen.findByText('Klaar: 7 oude taken verwijderd, 5 taken gegenereerd, 4 bijna achterstallig en 1 achterstallig.')).toBeInTheDocument();
+    expect(await screen.findByText('Klaar: 7 oude taken verwijderd en 5 taken gegenereerd.')).toBeInTheDocument();
 
     fireEvent.click(buttons[1]!);
     expect(await screen.findByText('Klaar: 6 oude auditregels verwijderd.')).toBeInTheDocument();

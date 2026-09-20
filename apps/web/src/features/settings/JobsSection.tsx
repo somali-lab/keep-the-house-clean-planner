@@ -97,10 +97,8 @@ export function JobsSection() {
   const generated = nightly.data?.generated.reduce((sum, cycle) => sum + cycle.inserted, 0) ?? 0;
   const nightlyResult = nightly.data
     ? format('settings.jobs.nightly.result', {
-      removed: nightly.data.removed,
+        removed: nightly.data.removed,
         generated,
-        due: nightly.data.due.due,
-        overdue: nightly.data.due.overdue,
       })
     : undefined;
   const morningResult = morning.data

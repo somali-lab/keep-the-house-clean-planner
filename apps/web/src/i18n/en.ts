@@ -496,7 +496,7 @@ export const en = {
   "settings.jobs.nightly.title": "Generate schedule",
   "settings.jobs.nightly.schedule": "Daily at 03:00",
   "settings.jobs.nightly.help": "Checks and generates tasks for the current and next cycle and updates due counts.",
-  "settings.jobs.nightly.result": "Done: {removed} old tasks removed, {generated} tasks generated, {due} due soon, and {overdue} overdue.",
+  "settings.jobs.nightly.result": "Done: {removed} old tasks removed and {generated} tasks generated.",
   "settings.jobs.retention.title": "Clean up audit history",
   "settings.jobs.retention.schedule": "Daily at 03:45",
   "settings.jobs.retention.help": "Deletes audit entries older than the configured retention period.",
