@@ -12,7 +12,6 @@ import {
   Undo2,
 } from 'lucide-react';
 import { useId, useState } from 'react';
-import { NativeSelect } from '@/components/NativeSelect';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,9 +23,8 @@ export interface OccurrenceItemProps {
   occurrence: OccurrenceView;
   roomName: string | undefined;
   users: User[];
-  profileId: string;
   completionControl?: 'circle' | 'thumb';
-  onComplete(completedBy?: string): void;
+  onComplete(): void;
   onUncomplete(): void;
   onSkip(reason: string): void;
   onClaim(): void;
@@ -43,7 +41,6 @@ export function OccurrenceItem({
   occurrence: occ,
   roomName,
   users,
-  profileId,
   completionControl = 'circle',
   onComplete,
   onUncomplete,
@@ -54,7 +51,6 @@ export function OccurrenceItem({
   const [menuOpen, setMenuOpen] = useState(false);
   const [skipping, setSkipping] = useState(false);
   const [reason, setReason] = useState('');
-  const [completedBy, setCompletedBy] = useState(profileId);
   const task = occ.taskNameSnapshot;
   const userName = (id: string | null) =>
     id === null
@@ -76,7 +72,7 @@ export function OccurrenceItem({
             type="button"
             className="check-button grid size-14 shrink-0 cursor-pointer place-items-center rounded-full border-2 border-muted-foreground/40 bg-background text-muted-foreground transition-all outline-none hover:border-success hover:bg-success/10 hover:text-success focus-visible:ring-[3px] focus-visible:ring-ring/50 active:scale-95"
             aria-label={format('today.completeNamed', { task })}
-            onClick={() => onComplete()}
+            onClick={onComplete}
           >
             {completionControl === 'thumb' ? (
               <ThumbsUp className="size-7" aria-hidden="true" />
@@ -195,31 +191,6 @@ export function OccurrenceItem({
 
       {isOpen && menuOpen && (
         <div id={`${idPrefix}-menu`} className="mt-3 grid gap-3 rounded-xl bg-secondary/60 p-3">
-          <div className="grid gap-1.5">
-            <Label htmlFor={`${idPrefix}-by`}>{t('today.completedBy')}</Label>
-            <div className="flex flex-wrap gap-2">
-              <NativeSelect
-                id={`${idPrefix}-by`}
-                className="min-w-40 flex-1 [&_select]:h-11"
-                value={completedBy}
-                onChange={(e) => setCompletedBy(e.target.value)}
-              >
-                {users.map((user) => (
-                  <option key={user._id} value={user._id}>
-                    {user.name}
-                  </option>
-                ))}
-              </NativeSelect>
-              <Button
-                type="button"
-                className="h-11 rounded-full px-4"
-                onClick={() => onComplete(completedBy === profileId ? undefined : completedBy)}
-              >
-                <CheckCircle2 aria-hidden="true" />
-                {t('today.completeFor')}
-              </Button>
-            </div>
-          </div>
           {skipping ? (
             <div className="grid gap-1.5">
               <Label htmlFor={`${idPrefix}-reason`}>{t('today.skipReason')}</Label>

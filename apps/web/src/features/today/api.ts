@@ -16,7 +16,7 @@ export function useOccurrences(from: string, to: string, enabled = true) {
 }
 
 export type OccurrenceAction =
-  | { id: string; kind: 'complete'; completedBy?: string }
+  | { id: string; kind: 'complete'; completedBy?: string; takeOver?: true }
   | { id: string; kind: 'uncomplete' }
   | { id: string; kind: 'skip'; reason?: string }
   | { id: string; kind: 'claim' };
@@ -34,14 +34,16 @@ export function applyOptimistic(
 ): OccurrenceView {
   switch (action.kind) {
     case 'complete': {
-      const completedBy = action.completedBy ?? occ.assigneeId ?? context.profileId;
+      const completedBy = action.takeOver
+        ? context.profileId
+        : (action.completedBy ?? occ.assigneeId ?? context.profileId);
       return {
         ...occ,
         status: 'done',
         statusBeforeCompletion: occ.status === 'skipped' ? 'skipped' : 'open',
         completedAt: context.now.toISOString(),
         completedBy,
-        assigneeId: occ.assigneeId ?? completedBy,
+        assigneeId: action.takeOver ? context.profileId : (occ.assigneeId ?? completedBy),
         isOverdue: false,
       };
     }
@@ -68,7 +70,11 @@ export function sendOccurrenceAction(action: OccurrenceAction, client: ApiClient
   if (action.kind === 'claim') return client.post<OccurrenceView>(`/api/occurrences/${action.id}/claim`);
   const body =
     action.kind === 'complete'
-      ? { action: 'complete', ...(action.completedBy ? { completedBy: action.completedBy } : {}) }
+      ? {
+          action: 'complete',
+          ...(action.completedBy ? { completedBy: action.completedBy } : {}),
+          ...(action.takeOver ? { takeOver: true } : {}),
+        }
       : action.kind === 'skip'
         ? { action: 'skip', ...(action.reason ? { reason: action.reason } : {}) }
         : { action: 'uncomplete' };
