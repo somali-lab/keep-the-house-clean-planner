@@ -99,6 +99,8 @@ export function JobsSection() {
     ? format('settings.jobs.nightly.result', {
         removed: nightly.data.removed,
         generated,
+        due: nightly.data.due.due,
+        overdue: nightly.data.due.overdue,
       })
     : undefined;
   const morningResult = morning.data
