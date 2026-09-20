@@ -4,7 +4,7 @@ import { SYSTEM_ACTOR_ID } from '../src/audit/context.ts';
 import { findActivePlan } from '../src/data/cyclePlans.ts';
 import { COLLECTIONS } from '../src/data/db.ts';
 import { listRooms } from '../src/data/rooms.ts';
-import { getSettings } from '../src/data/settings.ts';
+import { getSettings, updateSettings } from '../src/data/settings.ts';
 import { listUsers } from '../src/data/users.ts';
 import { SEED_ROOMS, seed } from '../src/domain/seed.ts';
 import { createTestApp, type TestApp } from './helpers/testApp.ts';
@@ -76,6 +76,21 @@ describe('seed', () => {
     expect(await counts()).toEqual(first);
     // anchor is not moved by a later boot
     expect((await getSettings(t.db))?.cycleAnchorDate).toBe('2026-09-14');
+  });
+
+  it('adds the three-times-weekly interval to existing settings once, preserving their other intervals', async () => {
+    t = await createTestApp({ seed: false });
+    await seed(t.systemCtx(), seedOptions(t));
+    await updateSettings(t.systemCtx(), { intervals: DEFAULT_INTERVALS.filter((interval) => interval.key !== '3w') });
+    const auditCount = await t.db.collection(COLLECTIONS.auditLog).countDocuments();
+
+    const result = await seed(t.systemCtx(), seedOptions(t));
+    expect(result).toEqual({ settingsCreated: false, usersCreated: 0, roomsCreated: 0, planCreated: false });
+    expect((await getSettings(t.db))?.intervals).toEqual(DEFAULT_INTERVALS);
+    expect(await t.db.collection(COLLECTIONS.auditLog).countDocuments()).toBe(auditCount + 1);
+
+    await seed(t.systemCtx(), seedOptions(t));
+    expect(await t.db.collection(COLLECTIONS.auditLog).countDocuments()).toBe(auditCount + 1);
   });
 
   it('seeds a configurable number of users from SEED_USERS', async () => {

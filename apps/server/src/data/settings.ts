@@ -79,6 +79,17 @@ export async function updateSettings(
   return after;
 }
 
+/** Adds a shipped interval to existing settings without changing other intervals. */
+export async function addIntervalIfMissing(ctx: AuditContext, interval: Interval, beforeKey: string): Promise<boolean> {
+  const settings = await getSettings(ctx.db);
+  if (!settings || settings.intervals.some((item) => item.key === interval.key)) return false;
+
+  const intervals = [...settings.intervals];
+  const index = intervals.findIndex((item) => item.key === beforeKey);
+  intervals.splice(index === -1 ? intervals.length : index, 0, interval);
+  return (await updateSettings(ctx, { intervals })) !== null;
+}
+
 /**
  * Remembers a dismissed promote suggestion. A dismissal for the same slot and
  * target replaces the earlier one, so only the newest evidence id counts.

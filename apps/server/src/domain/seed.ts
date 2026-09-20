@@ -2,7 +2,7 @@ import { DEFAULT_AI_PROMPTS, DEFAULT_INTERVALS, mondayOf, today } from '@huishou
 import type { AuditContext } from '../audit/context.ts';
 import type { SeedUser } from '../config.ts';
 import { countRooms, createRoom } from '../data/rooms.ts';
-import { insertSettingsIfMissing } from '../data/settings.ts';
+import { addIntervalIfMissing, insertSettingsIfMissing } from '../data/settings.ts';
 import { countUsers, createUser } from '../data/users.ts';
 import { ensureDefaultPlan } from './plans.ts';
 
@@ -44,6 +44,7 @@ export async function seed(ctx: AuditContext, options: SeedOptions): Promise<See
     promoteThreshold: 2,
     dismissedPromotions: [],
   });
+  await addIntervalIfMissing(ctx, DEFAULT_INTERVALS.find((interval) => interval.key === '3w')!, '2w');
 
   let usersCreated = 0;
   if ((await countUsers(ctx.db)) === 0) {
