@@ -177,9 +177,11 @@ function DueRow({
             {[
               item.roomName,
               item.intervalLabel,
-              item.daysSince === 1
-                ? t('due.daysSinceOne')
-                : format('due.daysSince', { days: item.daysSince }),
+              item.lastCompletedAt
+                ? item.daysSince === 1
+                  ? t('due.daysSinceOne')
+                  : format('due.daysSince', { days: item.daysSince })
+                : format('due.initialDue', { date: spokenDate(item.initialDueDate) }),
             ]
               .filter(Boolean)
               .join(' · ')}
@@ -194,7 +196,9 @@ function DueRow({
             <p className="flex items-start gap-1.5 text-sm text-muted-foreground italic">
               <CalendarDays className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
               <span>
-                {format('due.plannedNote', { date: spokenDate(item.nextOccurrence.date) })}
+                {format(item.lastCompletedAt ? 'due.plannedNote' : 'due.plannedNoteNever', {
+                  date: spokenDate(item.nextOccurrence.date),
+                })}
               </span>
             </p>
           )}

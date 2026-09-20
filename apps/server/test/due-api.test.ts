@@ -123,6 +123,62 @@ async function dueList(): Promise<DueJson[]> {
 }
 
 describe('GET /api/due', () => {
+  it('keeps a never-completed task ok until its first planned date', async () => {
+    const app = await createTestApp({ now: '2026-09-20T08:00:00.000Z' });
+    try {
+      const [user] = await seededUsers(app);
+      const room = await seededRoom(app);
+      const created = await app.app.inject({
+        method: 'POST',
+        url: '/api/tasks',
+        headers: asProfile(user),
+        payload: {
+          name: 'Voorraad tellen',
+          roomId: room._id.toHexString(),
+          intervalKey: '1w',
+          durationMinutes: 10,
+        },
+      });
+      const taskId = created.json<{ _id: string }>()._id;
+      const planId = (await findActivePlan(app.db))!._id.toHexString();
+      await app.app.inject({
+        method: 'PATCH',
+        url: '/api/settings',
+        headers: asProfile(user),
+        payload: { cycleAnchorDate: '2026-09-21' },
+      });
+      await app.app.inject({
+        method: 'PUT',
+        url: `/api/cycle-plans/${planId}/slots`,
+        headers: asProfile(user),
+        payload: {
+          slots: [0, 1, 2, 3].map((weekIndex) => ({
+            taskId,
+            weekIndex,
+            weekday: 5,
+            assigneeId: user._id.toHexString(),
+          })),
+        },
+      });
+      await app.app.inject({ method: 'POST', url: '/api/jobs/nightly', headers: asProfile(user) });
+
+      const before = await app.app.inject({ method: 'GET', url: '/api/due' });
+      expect(before.json<DueJson[]>().find((item) => item.taskId === taskId)).toMatchObject({
+        state: 'ok',
+        nextOccurrence: { date: '2026-09-25' },
+      });
+
+      app.clock.set('2026-09-25T08:00:00.000Z');
+      const onDate = await app.app.inject({ method: 'GET', url: '/api/due' });
+      expect(onDate.json<DueJson[]>().find((item) => item.taskId === taskId)).toMatchObject({
+        state: 'due',
+        nextOccurrence: { date: '2026-09-25' },
+      });
+    } finally {
+      await app.close();
+    }
+  });
+
   it('shows a task skipped for three cycles as overdue while the grid looks tidy', async () => {
     expect(tidyWarnings.filter((w) => w.taskId === badkamer)).toEqual([]);
 
@@ -133,8 +189,8 @@ describe('GET /api/due', () => {
       roomName: 'Badkamer',
       intervalLabel: '1x per week',
       periodDays: 7,
-      daysSince: 84,
-      ratio: 12,
+      daysSince: 91,
+      ratio: 13,
       state: 'overdue',
       lastCompletedAt: null,
     });
@@ -144,10 +200,10 @@ describe('GET /api/due', () => {
 
   it('ranks all active tasks and keeps recently done tasks ok', async () => {
     const list = await dueList();
-    expect(list.map((i) => i.taskId)).toEqual([badkamer, ramen, stofzuigen]);
+    expect(list.map((i) => i.taskId)).toEqual([badkamer, stofzuigen, ramen]);
     expect(list.find((i) => i.taskId === stofzuigen)).toMatchObject({ daysSince: 1, state: 'ok' });
     expect(list.find((i) => i.taskId === ramen)).toMatchObject({
-      daysSince: 84,
+      daysSince: 0,
       periodDays: 91,
       state: 'ok',
       nextOccurrence: null,

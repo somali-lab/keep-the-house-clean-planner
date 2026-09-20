@@ -439,12 +439,14 @@ export const nl = {
   'export.paperNote': 'Afvinken op papier wordt niet automatisch in de app verwerkt.',
 
   'due.explainer':
-    'Deze lijst kijkt niet naar het plan, maar naar hoelang geleden een taak echt gedaan is.',
+    'Een taak verschijnt vanaf de eerste geplande datum; daarna telt wanneer die echt gedaan is.',
   'due.overdue': 'Flink achter',
   'due.due': 'Aan de beurt',
   'due.daysSince': '{days} dagen geleden',
   'due.daysSinceOne': '1 dag geleden',
+  'due.initialDue': 'Eerste keer aan de beurt op {date}',
   'due.plannedNote': 'Staat nog open op {date} — het plan zegt wanneer, dit zegt hoelang geleden.',
+  'due.plannedNoteNever': 'Staat nog open op {date}.',
   'due.plan': 'Inplannen',
   'due.planNamed': '{task} inplannen',
   'due.doneNow': 'Nu gedaan',

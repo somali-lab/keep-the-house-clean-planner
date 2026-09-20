@@ -15,6 +15,7 @@ export interface DueItemView {
   ratio: number;
   state: 'ok' | 'due' | 'overdue';
   lastCompletedAt: string | null;
+  initialDueDate: string;
   nextOccurrence: { id: string; date: string; assigneeId: string | null } | null;
 }
 
