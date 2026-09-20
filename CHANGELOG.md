@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/somali-lab/keep-the-house-clean-planner/compare/v1.4.0...v1.5.0) (2026-09-20)
+
+
+### Features
+
+* **intervals:** add three-times-weekly option ([#21](https://github.com/somali-lab/keep-the-house-clean-planner/issues/21)) ([bd31923](https://github.com/somali-lab/keep-the-house-clean-planner/commit/bd3192326b20adbc80c30bce43c04b1275c433f9))
+
 ## [1.4.0](https://github.com/somali-lab/keep-the-house-clean-planner/compare/v1.3.0...v1.4.0) (2026-09-20)
 
 
