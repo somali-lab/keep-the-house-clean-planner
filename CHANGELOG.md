@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.4.0](https://github.com/somali-lab/keep-the-house-clean-planner/compare/v1.3.0...v1.4.0) (2026-09-20)
+
+
+### Features
+
+* **settings:** reset execution data from data tab ([67401b0](https://github.com/somali-lab/keep-the-house-clean-planner/commit/67401b051adacb87206e35f40d4b6883f59a50ec))
+* **tasks:** default personal task view to one cycle week ([67401b0](https://github.com/somali-lab/keep-the-house-clean-planner/commit/67401b051adacb87206e35f40d4b6883f59a50ec))
+* **tasks:** distinguish completing on behalf from taking over ([515e463](https://github.com/somali-lab/keep-the-house-clean-planner/commit/515e46342d08e14811f75bbcbb59b9c43c066de2))
+* **today:** browse upcoming days and filter by person ([67401b0](https://github.com/somali-lab/keep-the-house-clean-planner/commit/67401b051adacb87206e35f40d4b6883f59a50ec))
+
+
+### Bug fixes
+
+* **navigation:** link sidebar logo to week overview with pointer feedback ([67401b0](https://github.com/somali-lab/keep-the-house-clean-planner/commit/67401b051adacb87206e35f40d4b6883f59a50ec))
+* **pwa:** clarify offline state and streamline updates ([67401b0](https://github.com/somali-lab/keep-the-house-clean-planner/commit/67401b051adacb87206e35f40d4b6883f59a50ec))
+* **today:** hide overdue tasks before cycle start ([67401b0](https://github.com/somali-lab/keep-the-house-clean-planner/commit/67401b051adacb87206e35f40d4b6883f59a50ec))
+* **week:** hide tasks before the plan cycle starts ([515e463](https://github.com/somali-lab/keep-the-house-clean-planner/commit/515e46342d08e14811f75bbcbb59b9c43c066de2))
+
+
+### Build system and dependencies
+
+* **version:** identify local builds with timestamps ([67401b0](https://github.com/somali-lab/keep-the-house-clean-planner/commit/67401b051adacb87206e35f40d4b6883f59a50ec))
+
+
+### Documentation
+
+* **workflow:** require updated main before feature branches ([67401b0](https://github.com/somali-lab/keep-the-house-clean-planner/commit/67401b051adacb87206e35f40d4b6883f59a50ec))
+
 ## [1.3.0](https://github.com/somali-lab/keep-the-house-clean-planner/compare/v1.2.0...v1.3.0) (2026-09-18)
 
 
