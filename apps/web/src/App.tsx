@@ -7,6 +7,7 @@ import { ProfilePicker, ProfileProvider, useProfile } from './identity/index.ts'
 import { DesktopLayout } from './layouts/DesktopLayout.tsx';
 import { MobileLayout } from './layouts/MobileLayout.tsx';
 import { OfflineSyncProvider } from './offline/OfflineSyncProvider.tsx';
+import { PwaStatus } from './offline/PwaStatus.tsx';
 import { ThemeProvider } from './theme/ThemeProvider.tsx';
 
 export function AppShell() {
@@ -54,6 +55,7 @@ export function App({ queryClient }: { queryClient?: QueryClient }) {
           <OfflineSyncProvider>
             <BrowserRouter>
               <LanguageProvider>
+                <PwaStatus />
                 <AppShell />
               </LanguageProvider>
             </BrowserRouter>

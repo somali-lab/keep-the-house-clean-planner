@@ -291,6 +291,12 @@ export const nl = {
     '{count} wijzigingen zijn offline bewaard en worden verstuurd zodra er weer verbinding is.',
   'offline.conflict':
     '"{task}" kon niet worden bijgewerkt: de taak is intussen gewijzigd of verwijderd.',
+  'offline.title': 'Je bent offline',
+  'offline.status':
+    'Je ziet de laatst opgeslagen gegevens. Afvinken wordt bewaard en later verstuurd; andere acties hebben verbinding nodig.',
+  'pwa.updateAvailable': 'Er is een nieuwe versie van de app beschikbaar.',
+  'pwa.updateNow': 'Nu bijwerken',
+  'pwa.updating': 'Bijwerken…',
 
   'history.title': 'Geschiedenis',
   'history.titleFor': 'Geschiedenis van {name}',

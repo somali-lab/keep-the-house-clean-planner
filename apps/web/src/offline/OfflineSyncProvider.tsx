@@ -1,5 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Button } from '@/components/ui/button';
 import { ApiRequestError, createApiClient } from '../api/client.ts';
 import { sendOccurrenceAction } from '../features/today/api.ts';
 import { format, t } from '../i18n/nl.ts';
@@ -72,18 +73,18 @@ export function OfflineSyncProvider({ children, store: givenStore }: { children:
   return (
     <OfflineQueueContext.Provider value={queue}>
       {pending > 0 && (
-        <p className="offline-banner" role="status">
+        <p className="fixed inset-x-4 bottom-24 z-[70] mx-auto max-w-xl rounded-2xl border border-warning bg-card p-4 font-semibold shadow-xl" role="status">
           {pending === 1 ? t('offline.pendingOne') : format('offline.pendingMany', { count: pending })}
         </p>
       )}
       {conflicts.length > 0 && (
-        <div className="offline-banner is-conflict" role="alert">
+        <div className="fixed inset-x-4 bottom-24 z-[70] mx-auto max-w-xl rounded-2xl border border-destructive/40 bg-card p-4 text-destructive shadow-xl" role="alert">
           {conflicts.map((task, index) => (
             <p key={index}>{format('offline.conflict', { task })}</p>
           ))}
-          <button type="button" onClick={() => setConflicts([])}>
+          <Button type="button" variant="outline" className="mt-3" onClick={() => setConflicts([])}>
             {t('common.close')}
-          </button>
+          </Button>
         </div>
       )}
       {children}

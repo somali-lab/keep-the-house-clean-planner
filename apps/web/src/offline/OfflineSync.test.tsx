@@ -96,7 +96,7 @@ describe('offline check-off', () => {
 
     mode = 'offline';
     fireEvent.click(check);
-    expect(await inSection('Afgerond vandaag', 'Badkamer')).toBeInTheDocument();
+    expect(await inSection('Afgerond', 'Badkamer')).toBeInTheDocument();
     expect(await screen.findByText(PENDING_ONE)).toBeInTheDocument();
     expect(screen.queryByText('Dat lukte niet. De wijziging is teruggedraaid.')).not.toBeInTheDocument();
     expect(await store.all()).toMatchObject([{ action: { id: 'o-mine', kind: 'complete' }, profileId: ANNA._id, taskName: 'Badkamer' }]);
@@ -143,6 +143,7 @@ describe('offline check-off', () => {
   it('still needs a connection to claim, and rolls that back', async () => {
     stubServer();
     renderToday();
+    fireEvent.change(await screen.findByLabelText('Filter op persoon'), { target: { value: 'all' } });
     const claim = await screen.findByRole('button', { name: 'Wastafel oppakken' });
 
     mode = 'offline';
