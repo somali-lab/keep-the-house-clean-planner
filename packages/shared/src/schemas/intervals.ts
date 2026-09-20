@@ -11,6 +11,7 @@ export type Interval = z.infer<typeof intervalSchema>;
 
 export const DEFAULT_INTERVALS: Interval[] = [
   { key: 'daily', label: 'Dagelijks', perCycle: 28, periodDays: 1 },
+  { key: '3w', label: '3x per week', perCycle: 12, periodDays: 2 },
   { key: '2w', label: '2x per week', perCycle: 8, periodDays: 3 },
   { key: '1w', label: '1x per week', perCycle: 4, periodDays: 7 },
   { key: '2wk', label: '1x per 2 weken', perCycle: 2, periodDays: 14 },

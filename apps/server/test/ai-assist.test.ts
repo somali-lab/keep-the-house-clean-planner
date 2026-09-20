@@ -103,7 +103,7 @@ describe('POST /api/ai/suggest-tasks', () => {
     expect(payload.room).toBe('Keuken');
     expect(payload.existingTasks).toEqual([{ name: 'Keuken: aanrecht', intervalKey: '1w', durationMinutes: 20 }]);
     expect(payload.otherTasks).toEqual([{ room: 'Badkamer', name: 'Douche' }]);
-    expect(payload.intervals.map((i) => i.key)).toEqual(['daily', '2w', '1w', '2wk', '4wk', 'quarter']);
+    expect(payload.intervals.map((i) => i.key)).toEqual(['daily', '3w', '2w', '1w', '2wk', '4wk', 'quarter']);
   });
 
   it('drops unknown intervals, invalid durations, empty names and duplicates (case-insensitive)', async () => {

@@ -2,6 +2,7 @@
 
 Afwijkingen van en invullingen bovenop `implementation-plan.md`. Formaat: datum · taak · keuze · reden.
 
+- 2026-09-20 · Intervallen · Nieuwe installaties bieden standaard `3x per week` aan (`perCycle: 12`, `periodDays: 2`). De planner vereist dus twaalf slots per vierweekse cyclus; de achterstandsmeter gebruikt, net als bij `2x per week`, een afgerond geheel aantal kalenderdagen. Bestaande instellingen worden niet automatisch gewijzigd. · Intervallen zijn bewaarde huishoudinstellingen; een automatische toevoeging zou lokale aanpassingen onverwacht veranderen.
 - 2026-09-20 · Buildidentiteit · Lokale bron- en Dockerbuilds tonen `<release>-local-<UTC-timestamp>`; alleen de gepubliceerde GHCR-workflow zet `APP_OFFICIAL_BUILD=true` en toont de kale Release Please-versie. · Maakt in de UI direct zichtbaar of een installatie uit de officiële image-repository of uit lokale source komt, en welke lokale build draait.
 
 - 2026-09-13 · T0.2 · Gekozen majorversies: TypeScript **6.0** (niet 7.0, want `typescript-eslint` 8.70 ondersteunt `<6.1`), ESLint 10 (flat config), typescript-eslint 8, Vitest 5 (`test.projects` i.p.v. workspace-bestand), Prettier 3, `@types/node` 24 (gelijk aan runtime). · Huidige stabiele versies die onderling compatibel zijn.

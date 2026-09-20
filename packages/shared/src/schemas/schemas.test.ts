@@ -37,6 +37,10 @@ describe('schemas', () => {
     expect(vacationRangeSchema.safeParse({ from: '2026-09-20', to: '2026-09-14' }).success).toBe(false);
   });
 
+  it('includes the three-times-weekly interval in the defaults', () => {
+    expect(DEFAULT_INTERVALS).toContainEqual({ key: '3w', label: '3x per week', perCycle: 12, periodDays: 2 });
+  });
+
   it('discriminates occurrence patch actions', () => {
     expect(patchOccurrenceInputSchema.parse({ action: 'skip', reason: 'ziek' })).toEqual({
       action: 'skip',

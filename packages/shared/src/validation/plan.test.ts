@@ -28,6 +28,7 @@ const task = (id: string, intervalKey: string, durationMinutes: number, active =
 });
 
 const WEEKLY = task('weekly', '1w', 40);
+const THREE_TIMES_WEEKLY = task('three-times-weekly', '3w', 10);
 const TWICE = task('twice', '2w', 10);
 const QUARTER = task('quarter', 'quarter', 90);
 const MONTHLY = task('monthly', '4wk', 40);
@@ -101,6 +102,13 @@ describe('validatePlan — interval warnings', () => {
     const result = run(slots);
     expect(result.errors).toEqual([]);
     expect(result.warnings).toEqual([{ code: 'interval_mismatch', taskId: 'twice', placed: 5, required: 8 }]);
+  });
+
+  it('requires 12 slots per cycle for a three-times-weekly task', () => {
+    const slots = Array.from({ length: 11 }, (_, index) => slot('three-times-weekly', Math.floor(index / 3), (index % 3) + 1));
+    const result = run(slots, { tasks: [THREE_TIMES_WEEKLY] });
+    expect(result.errors).toEqual([]);
+    expect(result.warnings).toEqual([{ code: 'interval_mismatch', taskId: 'three-times-weekly', placed: 11, required: 12 }]);
   });
 
   it('warns for active tasks that are not placed at all', () => {
