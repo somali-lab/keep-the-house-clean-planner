@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.2](https://github.com/somali-lab/keep-the-house-clean-planner/compare/v1.5.1...v1.5.2) (2026-09-20)
+
+
+### Bug fixes
+
+* add scheduling controls and correct due tracking ([#25](https://github.com/somali-lab/keep-the-house-clean-planner/issues/25)) ([b5aa7fb](https://github.com/somali-lab/keep-the-house-clean-planner/commit/b5aa7fb63c0a2820bcecdc3fd89e172d8f0e441d))
+
 ## [1.5.1](https://github.com/somali-lab/keep-the-house-clean-planner/compare/v1.5.0...v1.5.1) (2026-09-20)
 
 
