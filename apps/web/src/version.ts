@@ -1,4 +1,4 @@
 import versionText from '../../../version.txt?raw';
 
-/** Release Please updates version.txt in the release PR; the web build embeds that exact value. */
-export const APP_VERSION = versionText.trim();
+/** Official images use the release version; source builds receive an injected local build id. */
+export const APP_VERSION = typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : versionText.trim();
