@@ -45,6 +45,7 @@ export const nl = {
   'common.edit': 'Bewerken',
 
   'cycle.week': 'Cyclusweek {week}',
+  'cycle.startsOn': 'Cyclus start op {date}',
 
   'theme.label': 'Kleurthema',
   'theme.light': 'Licht thema',

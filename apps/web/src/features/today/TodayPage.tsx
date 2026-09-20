@@ -18,7 +18,7 @@ import {
   useOccurrences,
   type OccurrenceAction,
 } from './api.ts';
-import { OccurrenceItem } from './OccurrenceItem.tsx';
+import { OccurrenceItem, shortDate } from './OccurrenceItem.tsx';
 import { longDay } from '../week/weekModel.ts';
 import {
   addDaysKey,
@@ -109,9 +109,17 @@ export function TodayPage({ now }: { now?: Date }) {
   const groupOwnerId = personFilter !== 'all' && personFilter !== 'unassigned'
     ? personFilter
     : profileId;
-  const groups = groupToday(visibleOccurrences, groupOwnerId, selectedDay);
+  const groups = groupToday(
+    visibleOccurrences,
+    groupOwnerId,
+    selectedDay,
+    settings.data.cycleAnchorDate,
+  );
   const selectedPerson = activeUsers.find((user) => user._id === personFilter);
   const cycleWeek = weekIndexFor(selectedDay, settings.data.cycleAnchorDate) + 1;
+  const cycleLabel = selectedDay < settings.data.cycleAnchorDate
+    ? format('cycle.startsOn', { date: shortDate(settings.data.cycleAnchorDate) })
+    : format('cycle.week', { week: cycleWeek });
   const nothingOpen =
     groups.mine.length + groups.unclaimed.length + groups.others.length + groups.overdue.length ===
     0;
@@ -120,7 +128,7 @@ export function TodayPage({ now }: { now?: Date }) {
     <section className="flex flex-col gap-6">
       <PageHeader
         title={t('nav.today')}
-        description={`${longDay(selectedDay)} · ${format('cycle.week', { week: cycleWeek })}`}
+        description={`${longDay(selectedDay)} · ${cycleLabel}`}
         className="mb-0"
       />
       <div className="grid gap-3 rounded-2xl border bg-card p-3 shadow-sm sm:grid-cols-[minmax(0,1fr)_12rem] sm:items-center">

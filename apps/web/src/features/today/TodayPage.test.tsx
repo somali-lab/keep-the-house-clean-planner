@@ -13,7 +13,7 @@ let db: OccurrenceView[];
 let failNext = false;
 
 /** Tiny in-memory server so refetches after a mutation reflect the change. */
-function setup() {
+function setup(settings = makeSettings()) {
   storeProfile(ANNA._id);
   db = [
     makeOccurrence({ _id: 'o-other', taskId: 't1', taskNameSnapshot: 'Stofzuigen', date: TODAY, assigneeId: BRAM._id }),
@@ -40,7 +40,7 @@ function setup() {
   };
   return mockApi({
     '/api/users': [ANNA, BRAM],
-    '/api/settings': makeSettings(),
+    '/api/settings': settings,
     '/api/rooms': [makeRoom({ _id: 'r1', name: 'Badkamer-ruimte' })],
     '/api/tasks': [makeTask({ _id: 't2', name: 'Badkamer', roomId: 'r1' })],
     '/api/occurrences': (_init: RequestInit | undefined, url: string) => {
@@ -118,6 +118,18 @@ describe('TodayPage', () => {
     expect(screen.getByText('Geen open taken voor deze dag.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Vorige dag' }));
     expect(await screen.findByText('Was overmorgen')).toBeInTheDocument();
+  });
+
+  it('does not show pre-cycle tasks as overdue before the cycle starts', async () => {
+    setup(makeSettings({ cycleAnchorDate: '2026-09-21' }));
+    renderWithProviders(<TodayPage now={NOW} />);
+
+    expect(await screen.findByText('woensdag 16 sep · Cyclus start op ma 21-09')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Achterstallig' })).not.toBeInTheDocument();
+    expect(within(section('Mijn taken')).getByText('Badkamer')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Morgen' }));
+    expect(await screen.findByText('donderdag 17 sep · Cyclus start op ma 21-09')).toBeInTheDocument();
   });
 
   it('checks off with one tap, and undo restores the previous status', async () => {

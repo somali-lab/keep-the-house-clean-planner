@@ -36,7 +36,12 @@ export interface TodayGroups {
 }
 
 /** Section order from plan §1.4. */
-export function groupToday(occurrences: OccurrenceView[], profileId: string, todayKey: string): TodayGroups {
+export function groupToday(
+  occurrences: OccurrenceView[],
+  profileId: string,
+  todayKey: string,
+  overdueFrom = '',
+): TodayGroups {
   const sorted = [...occurrences].sort(
     (a, b) =>
       a.date.localeCompare(b.date) || a.taskNameSnapshot.localeCompare(b.taskNameSnapshot, getLocale()),
@@ -48,7 +53,9 @@ export function groupToday(occurrences: OccurrenceView[], profileId: string, tod
       if (occ.date === todayKey) groups.finished.push(occ);
       continue;
     }
-    if (occ.date < todayKey) groups.overdue.push(occ);
+    if (occ.date < todayKey) {
+      if (occ.date >= overdueFrom) groups.overdue.push(occ);
+    }
     else if (occ.assigneeId === profileId) groups.mine.push(occ);
     else if (occ.assigneeId === null) groups.unclaimed.push(occ);
     else groups.others.push(occ);
