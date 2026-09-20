@@ -10,7 +10,7 @@ import {
 import { ObjectId } from 'mongodb';
 import type { AuditContext } from '../audit/context.ts';
 import { findActivePlan, type CyclePlanDoc } from '../data/cyclePlans.ts';
-import { ensureCycle, setCyclePlan, type CycleDoc } from '../data/cycles.ts';
+import { ensureCycle, listCycles, setCyclePlan, type CycleDoc } from '../data/cycles.ts';
 import {
   deleteOccurrences,
   findOccurrences,
@@ -123,13 +123,96 @@ export async function generateCycle(
 export async function generateUpcoming(
   ctx: AuditContext,
   runId: string,
-): Promise<GenerationResult[]> {
+): Promise<ReplacementResult> {
   const current = await currentCycleIndex(ctx);
   const plan = await findActivePlan(ctx.db);
-  return [
-    await generateCycle(ctx, current, { runId, plan }),
-    await generateCycle(ctx, current + 1, { runId, plan }),
-  ];
+  const settings = await requireSettings(ctx);
+  for (const cycle of await listCycles(ctx.db)) {
+    await ensureCycle(ctx, {
+      index: cycle.index,
+      startDate: cycleStart(cycle.index, settings.cycleAnchorDate),
+      endDate: cycleEnd(cycle.index, settings.cycleAnchorDate),
+      planId: cycle.planId,
+      runId,
+    });
+  }
+  if (plan && (await upcomingOccurrencesNeedReplacement(ctx, plan, current, runId))) {
+    return replaceUpcomingOccurrences(ctx, plan, runId, 'nightly_reconciliation');
+  }
+  return {
+    removed: 0,
+    generated: [
+      await generateCycle(ctx, current, { runId, plan }),
+      await generateCycle(ctx, current + 1, { runId, plan }),
+    ],
+  };
+}
+
+function occurrenceKey(taskId: ObjectId, plannedDate: Date): string {
+  return `${taskId.toHexString()}:${plannedDate.getTime()}`;
+}
+
+async function upcomingOccurrencesNeedReplacement(
+  ctx: AuditContext,
+  plan: CyclePlanDoc,
+  currentCycle: number,
+  runId: string,
+): Promise<boolean> {
+  const settings = await requireSettings(ctx);
+  const todayKey = today(settings.timezone, ctx.clock.now());
+  const cycles: CycleDoc[] = [];
+  for (const index of [currentCycle, currentCycle + 1]) {
+    cycles.push(
+      await ensureCycle(ctx, {
+        index,
+        startDate: cycleStart(index, settings.cycleAnchorDate),
+        endDate: cycleEnd(index, settings.cycleAnchorDate),
+        planId: plan._id,
+        runId,
+      }),
+    );
+  }
+
+  const tasks = new Map(
+    (await listTasks(ctx.db)).filter((task) => task.active).map((task) => [task._id.toHexString(), task]),
+  );
+  const expected = new Map<string, ObjectId | null>();
+  for (const cycle of cycles) {
+    for (const slot of plan.slots) {
+      if (!tasks.has(slot.taskId.toHexString())) continue;
+      const dayKey = slotDate(cycle.startDate, slot.weekIndex, slot.weekday);
+      if (dayKey < todayKey || isInVacation(dayKey, settings.vacationRanges)) continue;
+      const plannedDate = fromDayKey(dayKey, settings.timezone);
+      expected.set(occurrenceKey(slot.taskId, plannedDate), slot.assigneeId);
+    }
+  }
+
+  const occurrences = await findOccurrences(ctx.db, {
+    plannedDate: { $gte: fromDayKey(todayKey, settings.timezone) },
+  });
+  const existingKeys = new Set(
+    occurrences.map((occurrence) => occurrenceKey(occurrence.taskId, occurrence.plannedDate)),
+  );
+  if ([...expected.keys()].some((key) => !existingKeys.has(key))) return true;
+
+  return occurrences.some((occurrence) => {
+    if (occurrence.origin !== 'generated') return false;
+    const replaceable =
+      occurrence.status === 'open' &&
+      occurrence.date >= fromDayKey(todayKey, settings.timezone) &&
+      occurrence.date.getTime() === occurrence.plannedDate.getTime();
+    if (!replaceable) return false;
+    const expectedAssignee = expected.get(
+      occurrenceKey(occurrence.taskId, occurrence.plannedDate),
+    );
+    return (
+      expectedAssignee === undefined ||
+      !occurrence.planId?.equals(plan._id) ||
+      (expectedAssignee === null
+        ? occurrence.assigneeId !== null
+        : !occurrence.assigneeId?.equals(expectedAssignee))
+    );
+  });
 }
 
 export interface ReplacementResult {
@@ -166,7 +249,6 @@ export async function replaceUpcomingOccurrences(
   }
 
   const replaceable = await findOccurrences(ctx.db, {
-    cycleId: { $in: cycles.map((c) => c._id) },
     status: 'open',
     origin: 'generated',
     date: { $gte: fromDayKey(todayKey, settings.timezone) },

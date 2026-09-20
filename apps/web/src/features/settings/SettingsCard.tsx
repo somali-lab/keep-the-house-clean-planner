@@ -54,7 +54,7 @@ export function FormMessage({ kind, children }: { kind: 'status' | 'alert'; chil
       )}
     >
       <Icon className="size-4 shrink-0" aria-hidden="true" />
-      {children}
+      <span className="min-w-0 [overflow-wrap:anywhere]">{children}</span>
     </p>
   );
 }

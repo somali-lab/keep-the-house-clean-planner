@@ -9,6 +9,7 @@ import { runMorningNotify } from '../domain/notify/morning.ts';
 
 export interface NightlyResult {
   runId: string;
+  removed: number;
   generated: GenerationResult[];
   due: { due: number; overdue: number };
 }
@@ -16,18 +17,19 @@ export interface NightlyResult {
 /** Generates the current and next cycle, then logs the due-engine summary. Safe to run repeatedly. */
 export async function runNightly(ctx: AuditContext): Promise<NightlyResult> {
   const runId = randomUUID();
-  const generated = await generateUpcoming(ctx, runId);
+  const { generated, removed } = await generateUpcoming(ctx, runId);
   const { items } = await computeDueList(ctx.db, ctx.clock.now());
   const due = summarizeDue(items);
   ctx.log.info(
     {
       runId,
+      removed,
       generated: generated.map((g) => ({ cycleIndex: g.cycleIndex, inserted: g.inserted, skipped: g.skipped })),
       due,
     },
     'nightly run completed',
   );
-  return { runId, generated, due };
+  return { runId, removed, generated, due };
 }
 
 export interface SchedulerHandle {

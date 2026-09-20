@@ -2,13 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { computeDue, dueState, type DueTaskInput } from './due.ts';
 import { DEFAULT_INTERVALS } from './schemas/intervals.ts';
 
-const CREATED = '2026-01-01T09:00:00.000Z';
-
 const task = (overrides: Partial<DueTaskInput> & Pick<DueTaskInput, '_id'>): DueTaskInput => ({
   active: true,
   intervalKey: '1w',
   lastCompletedAt: null,
-  createdAt: CREATED,
+  initialDueDate: '2026-09-16',
   ...overrides,
 });
 
@@ -74,9 +72,19 @@ describe('computeDue', () => {
     expect(result?.daysSince).toBe(0);
   });
 
-  it('falls back to createdAt when never completed', () => {
-    const [result] = computeDue([task({ _id: 'new', intervalKey: 'quarter', createdAt: '2026-06-17T08:00:00Z' })], DEFAULT_INTERVALS, '2026-09-16');
-    expect(result).toMatchObject({ daysSince: 91, periodDays: 91, ratio: 1, state: 'due' });
+  it('uses the explicit first due date when never completed', () => {
+    const input = task({ _id: 'new', intervalKey: 'quarter', initialDueDate: '2026-10-16' });
+    expect(computeDue([input], DEFAULT_INTERVALS, '2026-09-20')[0]).toMatchObject({
+      daysSince: 0,
+      ratio: 0,
+      state: 'ok',
+    });
+    expect(computeDue([input], DEFAULT_INTERVALS, '2026-10-16')[0]).toMatchObject({
+      daysSince: 91,
+      periodDays: 91,
+      ratio: 1,
+      state: 'due',
+    });
   });
 
   it('ranks by ratio, skips inactive tasks and unknown intervals', () => {

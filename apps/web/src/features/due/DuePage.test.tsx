@@ -16,6 +16,7 @@ const item = (overrides: Partial<DueItemView> & Pick<DueItemView, 'taskId' | 'ta
   daysSince: 7,
   ratio: 1,
   lastCompletedAt: null,
+  initialDueDate: '2026-09-09',
   nextOccurrence: null,
   ...overrides,
 });
@@ -61,7 +62,7 @@ describe('DuePage', () => {
     expect(rows).toHaveLength(3);
     expect(rows[0]).toHaveTextContent('Badkamer schoonmaken');
     expect(rows[0]).toHaveTextContent('⚠ Flink achter');
-    expect(rows[0]).toHaveTextContent('Badkamer · 1x per week · 84 dagen geleden');
+    expect(rows[0]).toHaveTextContent('Badkamer · 1x per week · Eerste keer aan de beurt op wo 9 sep');
     expect(rows[1]).toHaveTextContent('Stofzuigen');
     expect(rows[1]).toHaveTextContent('Aan de beurt');
     expect(rows[1]).not.toHaveTextContent('Flink achter');
@@ -72,8 +73,8 @@ describe('DuePage', () => {
     setup();
     renderWithProviders(<DuePage now={NOW} />);
     const [first] = await screen.findAllByRole('listitem');
-    expect(first).toHaveTextContent('Staat nog open op za 19 sep — het plan zegt wanneer, dit zegt hoelang geleden.');
-    expect(screen.getByText('Deze lijst kijkt niet naar het plan, maar naar hoelang geleden een taak echt gedaan is.')).toBeInTheDocument();
+    expect(first).toHaveTextContent('Staat nog open op za 19 sep.');
+    expect(screen.getByText('Een taak verschijnt vanaf de eerste geplande datum; daarna telt wanneer die echt gedaan is.')).toBeInTheDocument();
   });
 
   it('plans a task on a chosen day and person', async () => {

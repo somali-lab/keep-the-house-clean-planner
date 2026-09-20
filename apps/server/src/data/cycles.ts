@@ -30,15 +30,38 @@ export function listCycles(db: Db): Promise<CycleDoc[]> {
 }
 
 /**
- * Returns the cycle document for an index, creating it (audited, with runId)
- * when missing. An existing cycle is left untouched.
+ * Returns the cycle document for an index, creating it when missing. Existing
+ * cycle bounds are realigned when the configured anchor changed.
  */
 export async function ensureCycle(
   ctx: AuditContext,
   input: { index: number; startDate: string; endDate: string; planId: ObjectId | null; runId: string },
 ): Promise<CycleDoc> {
   const existing = await findCycleByIndex(ctx.db, input.index);
-  if (existing) return existing;
+  if (existing) {
+    if (existing.startDate === input.startDate && existing.endDate === input.endDate) return existing;
+    const changes = {
+      startDate: input.startDate,
+      endDate: input.endDate,
+      generatedAt: ctx.clock.now(),
+      generationRunId: input.runId,
+    };
+    const after = await cyclesCollection(ctx.db).findOneAndUpdate(
+      { _id: existing._id },
+      { $set: changes },
+      { returnDocument: 'after' },
+    );
+    if (!after) return existing;
+    await record(ctx, {
+      entity: 'cycle',
+      entityId: existing._id,
+      action: 'update',
+      before: { startDate: existing.startDate, endDate: existing.endDate },
+      after: { startDate: after.startDate, endDate: after.endDate },
+      meta: { runId: input.runId, reason: 'anchor_alignment' },
+    });
+    return after;
+  }
 
   const doc: CycleDoc = {
     _id: new ObjectId(),

@@ -1,6 +1,6 @@
-import { computeDue, fromDayKey, today, toDayKey, type DueState } from '@huishoudplanner/shared';
+import { addDays, computeDue, fromDayKey, today, toDayKey, type DueState } from '@huishoudplanner/shared';
 import type { Db, ObjectId } from 'mongodb';
-import { findOccurrences } from '../data/occurrences.ts';
+import { findFirstGeneratedPlannedDates, findOccurrences } from '../data/occurrences.ts';
 import { listRooms } from '../data/rooms.ts';
 import { getSettings } from '../data/settings.ts';
 import { listTasks } from '../data/tasks.ts';
@@ -18,6 +18,7 @@ export interface DueItem {
   ratio: number;
   state: DueState;
   lastCompletedAt: Date | null;
+  initialDueDate: string;
   /** First open occurrence from today on, if the grid still has one planned. */
   nextOccurrence: { id: ObjectId; date: string; assigneeId: ObjectId | null } | null;
 }
@@ -33,15 +34,20 @@ export async function computeDueList(db: Db, now: Date): Promise<DueList> {
   const tz = settings.timezone;
   const todayKey = today(tz, now);
 
-  const [tasks, rooms, upcoming] = await Promise.all([
+  const [tasks, rooms, upcoming, firstPlannedDates] = await Promise.all([
     listTasks(db, { active: true }),
     listRooms(db),
     findOccurrences(db, { status: 'open', date: { $gte: fromDayKey(todayKey, tz) } }),
+    findFirstGeneratedPlannedDates(db),
   ]);
 
   const taskById = new Map(tasks.map((t) => [t._id.toHexString(), t]));
   const roomName = new Map(rooms.map((r) => [r._id.toHexString(), r.name]));
   const intervalLabel = new Map(settings.intervals.map((i) => [i.key, i.label]));
+  const periodByKey = new Map(settings.intervals.map((i) => [i.key, i.periodDays]));
+  const firstPlannedByTask = new Map(
+    firstPlannedDates.map((occurrence) => [occurrence.taskId.toHexString(), toDayKey(occurrence.plannedDate, tz)]),
+  );
   const nextByTask = new Map<string, (typeof upcoming)[number]>();
   for (const occ of upcoming) {
     const key = occ.taskId.toHexString();
@@ -54,7 +60,9 @@ export async function computeDueList(db: Db, now: Date): Promise<DueList> {
       active: t.active,
       intervalKey: t.intervalKey,
       lastCompletedAt: t.lastCompletedAt,
-      createdAt: t.createdAt,
+      initialDueDate:
+        firstPlannedByTask.get(t._id.toHexString()) ??
+        addDays(toDayKey(t.createdAt, tz), periodByKey.get(t.intervalKey) ?? 0),
     })),
     settings.intervals,
     todayKey,
@@ -76,6 +84,9 @@ export async function computeDueList(db: Db, now: Date): Promise<DueList> {
       ratio: result.ratio,
       state: result.state,
       lastCompletedAt: task.lastCompletedAt,
+      initialDueDate:
+        firstPlannedByTask.get(result.taskId) ??
+        addDays(toDayKey(task.createdAt, tz), result.periodDays),
       nextOccurrence: next ? { id: next._id, date: toDayKey(next.date, tz), assigneeId: next.assigneeId } : null,
     };
   });

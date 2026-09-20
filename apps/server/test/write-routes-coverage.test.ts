@@ -256,9 +256,9 @@ const READ_ONLY_POSTS: ReadOnlyScenario[] = [
 ];
 
 const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
-// Clearing the audit log cannot audit itself without making the cleared log
-// non-empty again. Its behavior and profile requirement are tested separately.
-const INTENTIONALLY_UNAUDITED_ROUTES = ['DELETE /api/audit'];
+// Clearing or pruning the audit log cannot audit itself without making the
+// cleaned log non-empty again. Their behavior and profile requirements are tested separately.
+const INTENTIONALLY_UNAUDITED_ROUTES = ['DELETE /api/audit', 'POST /api/jobs/audit-retention'];
 
 beforeAll(async () => {
   // The deterministic mock always proposes a valid plan, so the AI routes really write.

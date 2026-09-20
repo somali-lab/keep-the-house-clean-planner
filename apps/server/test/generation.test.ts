@@ -41,6 +41,7 @@ interface Ctx {
   ): Promise<void>;
   nightly(): Promise<{
     runId: string;
+    removed: number;
     generated: { cycleIndex: number; inserted: number; skipped: number }[];
   }>;
 }
@@ -256,6 +257,107 @@ describe('generateCycle via nightly job', () => {
 });
 
 describe('editing the active plan', () => {
+  it('repairs future occurrences generated before the cycle anchor changed', async () => {
+    const c = await setup('2026-09-20T08:00:00.000Z');
+    const water = await c.task('Waterbak', '1w', 3);
+    await c.putSlots(
+      c.planId,
+      [0, 1, 2, 3].map((weekIndex) => ({
+        taskId: water,
+        weekIndex,
+        weekday: 3,
+        assigneeId: c.p1._id.toHexString(),
+      })),
+    );
+    await c.nightly();
+
+    const settings = await c.t.app.inject({
+      method: 'PATCH',
+      url: '/api/settings',
+      headers: asProfile(c.p1),
+      payload: { cycleAnchorDate: '2026-09-21' },
+    });
+    expect(settings.statusCode, settings.body).toBe(200);
+    await c.putSlots(
+      c.planId,
+      [0, 1, 2, 3].flatMap((weekIndex) => [1, 3, 5].map((weekday) => ({
+        taskId: water,
+        weekIndex,
+        weekday,
+        assigneeId: c.p2._id.toHexString(),
+      }))),
+    );
+
+    const result = await c.nightly();
+
+    expect(result.removed).toBe(7);
+    const occurrences = await findOccurrences(c.t.db, { taskId: new ObjectId(water) });
+    expect(dayKeys(occurrences)).toEqual([
+      '2026-09-21',
+      '2026-09-23',
+      '2026-09-25',
+      '2026-09-28',
+      '2026-09-30',
+      '2026-10-02',
+      '2026-10-05',
+      '2026-10-07',
+      '2026-10-09',
+      '2026-10-12',
+      '2026-10-14',
+      '2026-10-16',
+    ]);
+    expect(occurrences.every((occurrence) => occurrence.assigneeId?.equals(c.p2._id))).toBe(true);
+    expect((await listCycles(c.t.db)).map((cycle) => [cycle.index, cycle.startDate, cycle.endDate])).toEqual([
+      [-1, '2026-08-24', '2026-09-20'],
+      [0, '2026-09-21', '2026-10-18'],
+      [1, '2026-10-19', '2026-11-15'],
+    ]);
+  });
+
+  it('repairs stale upcoming occurrences during the nightly run', async () => {
+    const c = await setup();
+    const weekly = await c.task('Badkamer', '1w', 30);
+    await c.putSlots(
+      c.planId,
+      [0, 1, 2, 3].map((weekIndex) => ({
+        taskId: weekly,
+        weekIndex,
+        weekday: 1,
+        assigneeId: c.p1._id.toHexString(),
+      })),
+    );
+    await c.nightly();
+
+    await c.putSlots(
+      c.planId,
+      [0, 1, 2, 3].map((weekIndex) => ({
+        taskId: weekly,
+        weekIndex,
+        weekday: 4,
+        assigneeId: c.p2._id.toHexString(),
+      })),
+    );
+    await c.nightly();
+
+    const occurrences = await findOccurrences(c.t.db, { taskId: new ObjectId(weekly) });
+    expect(dayKeys(occurrences)).toEqual([
+      '2026-09-17',
+      '2026-09-24',
+      '2026-10-01',
+      '2026-10-08',
+      '2026-10-15',
+      '2026-10-22',
+      '2026-10-29',
+      '2026-11-05',
+    ]);
+    expect(occurrences.every((occurrence) => occurrence.assigneeId?.equals(c.p2._id))).toBe(true);
+    const deletions = await c.t.db
+      .collection(COLLECTIONS.auditLog)
+      .find({ entity: 'occurrence', action: 'delete', 'meta.reason': 'nightly_reconciliation' })
+      .toArray();
+    expect(deletions).toHaveLength(8);
+  });
+
   it('synchronizes upcoming occurrences when requested by the planner', async () => {
     const c = await setup();
     const weekly = await c.task('Badkamer', '1w', 30);

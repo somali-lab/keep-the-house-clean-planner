@@ -43,6 +43,18 @@ export function findOccurrences(db: Db, filter: Filter<OccurrenceDoc>): Promise<
   return occurrencesCollection(db).find(filter).sort({ date: 1, taskNameSnapshot: 1, _id: 1 }).toArray();
 }
 
+export function findFirstGeneratedPlannedDates(
+  db: Db,
+): Promise<{ taskId: ObjectId; plannedDate: Date }[]> {
+  return occurrencesCollection(db)
+    .aggregate<{ taskId: ObjectId; plannedDate: Date }>([
+      { $match: { origin: 'generated' } },
+      { $group: { _id: '$taskId', plannedDate: { $min: '$plannedDate' } } },
+      { $project: { _id: 0, taskId: '$_id', plannedDate: 1 } },
+    ])
+    .toArray();
+}
+
 export function countOccurrences(db: Db, filter: Filter<OccurrenceDoc> = {}): Promise<number> {
   return occurrencesCollection(db).countDocuments(filter);
 }

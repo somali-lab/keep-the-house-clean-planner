@@ -2,8 +2,8 @@ import type { Interval } from './schemas/intervals.ts';
 import { APP_TIMEZONE, daysBetween, toDayKey, type DayKey } from './time.ts';
 
 /**
- * The "hybrid" half of scheduling: independent of the grid, how long ago was
- * each task last done compared with its interval?
+ * The "hybrid" half of scheduling: a task starts on its initial due date;
+ * after its first completion, elapsed time is compared with its interval.
  */
 
 export type DueState = 'ok' | 'due' | 'overdue';
@@ -16,12 +16,12 @@ export interface DueTaskInput {
   active: boolean;
   intervalKey: string;
   lastCompletedAt: Date | string | null;
-  createdAt: Date | string;
+  initialDueDate: DayKey;
 }
 
 export interface DueResult {
   taskId: string;
-  /** Whole local calendar days since the last completion (or creation). */
+  /** Effective age in days; starts at one interval on the initial due date. */
   daysSince: number;
   periodDays: number;
   ratio: number;
@@ -36,7 +36,8 @@ export function dueState(ratio: number): DueState {
 
 /**
  * Ranked due list for active tasks, highest ratio first. Days are counted in
- * local calendar days (DST-safe). Vacation days count too, and a skipped
+ * local calendar days (DST-safe). Before a never-completed task's initial due
+ * date its effective age is zero. Vacation days count too, and a skipped
  * occurrence does not change `lastCompletedAt`, so skipping keeps a task due.
  * Tasks with an unknown interval key are left out.
  */
@@ -52,8 +53,11 @@ export function computeDue(
     if (!task.active) continue;
     const periodDays = periodByKey.get(task.intervalKey);
     if (!periodDays) continue;
-    const reference = toDayKey(new Date(task.lastCompletedAt ?? task.createdAt), timezone);
-    const daysSince = Math.max(0, daysBetween(reference, today));
+    const daysSince = task.lastCompletedAt
+      ? Math.max(0, daysBetween(toDayKey(new Date(task.lastCompletedAt), timezone), today))
+      : today < task.initialDueDate
+        ? 0
+        : periodDays + daysBetween(task.initialDueDate, today);
     const ratio = daysSince / periodDays;
     results.push({ taskId: task._id, daysSince, periodDays, ratio, state: dueState(ratio) });
   }
