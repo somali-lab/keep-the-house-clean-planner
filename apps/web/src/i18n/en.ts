@@ -31,6 +31,7 @@ export const en = {
   "common.save": "Save",
   "common.cancel": "Cancel",
   "common.edit": "Edit",
+  "cycle.week": "Cycle week {week}",
   "theme.label": "Color Theme",
   "theme.light": "Light Theme",
   "theme.dark": "Dark Theme",

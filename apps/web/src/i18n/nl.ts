@@ -44,6 +44,8 @@ export const nl = {
   'common.cancel': 'Annuleren',
   'common.edit': 'Bewerken',
 
+  'cycle.week': 'Cyclusweek {week}',
+
   'theme.label': 'Kleurthema',
   'theme.light': 'Licht thema',
   'theme.dark': 'Donker thema',

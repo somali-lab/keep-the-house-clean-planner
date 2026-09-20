@@ -1,3 +1,4 @@
+import { weekIndexFor } from '@huishoudplanner/shared/cycle';
 import { ListChecks } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { PageHeader } from '@/components/PageHeader';
@@ -23,10 +24,11 @@ export function MobileTasksPage({ now }: { now?: Date }) {
   const tasks = useTasks();
   const rooms = useRooms();
   const { profile } = useProfile();
-  const [weeks, setWeeks] = useState<WeekRange>(2);
+  const [weeks, setWeeks] = useState<WeekRange>(1);
   const [hiddenRoomIds, setHiddenRoomIds] = useState<Set<string>>(() => new Set());
   const from = dayKeyInZone(now ?? new Date(), settings.data?.timezone ?? 'Europe/Amsterdam');
   const to = addDaysKey(from, weeks * 7 - 1);
+  const cycleWeek = settings.data ? weekIndexFor(from, settings.data.cycleAnchorDate) + 1 : null;
   const occurrences = useOccurrences(from, to, settings.isSuccess);
   const rows = useMemo(() => {
     const relevant = (occurrences.data ?? []).filter(
@@ -68,10 +70,10 @@ export function MobileTasksPage({ now }: { now?: Date }) {
     <section className="flex flex-col gap-5">
       <PageHeader
         title={t('mobileTasks.title')}
-        description={format('mobileTasks.rangeDescription', {
+        description={`${format('mobileTasks.rangeDescription', {
           from: compactDate(from),
           to: compactDate(to),
-        })}
+        })}${weeks === 1 && cycleWeek !== null ? ` · ${format('cycle.week', { week: cycleWeek })}` : ''}`}
         className="mb-0"
       />
 
