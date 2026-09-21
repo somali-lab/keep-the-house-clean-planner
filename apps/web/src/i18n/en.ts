@@ -233,6 +233,8 @@ export const en = {
   "today.claimNamed": "Pick up {task}",
   "today.more": "More",
   "today.moreNamed": "More for {task}",
+  "today.assign": "Assign to",
+  "today.assignTogether": "Together / anyone",
   "today.skip": "Skip",
   "today.skipReason": "Reason (optional)",
   "today.skipConfirm": "Confirm skip",

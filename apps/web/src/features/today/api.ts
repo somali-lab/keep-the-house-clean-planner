@@ -19,12 +19,14 @@ export type OccurrenceAction =
   | { id: string; kind: 'complete'; completedBy?: string; takeOver?: true }
   | { id: string; kind: 'uncomplete' }
   | { id: string; kind: 'skip'; reason?: string }
+  | { id: string; kind: 'assign'; assigneeId: string | null }
   | { id: string; kind: 'claim' };
 
 /** Actions that can wait in the offline queue; claiming needs the server to decide who was first. */
-export type QueueableAction = Exclude<OccurrenceAction, { kind: 'claim' }>;
+export type QueueableAction = Exclude<OccurrenceAction, { kind: 'claim' } | { kind: 'assign' }>;
 
-export const isQueueable = (action: OccurrenceAction): action is QueueableAction => action.kind !== 'claim';
+export const isQueueable = (action: OccurrenceAction): action is QueueableAction =>
+  action.kind !== 'claim' && action.kind !== 'assign';
 
 /** What the server will do, applied locally so the list reacts instantly. */
 export function applyOptimistic(
@@ -60,6 +62,8 @@ export function applyOptimistic(
     }
     case 'skip':
       return { ...occ, status: 'skipped', skipReason: action.reason ? action.reason : null, isOverdue: false };
+    case 'assign':
+      return { ...occ, assigneeId: action.assigneeId };
     case 'claim':
       return { ...occ, assigneeId: context.profileId };
   }
@@ -68,6 +72,12 @@ export function applyOptimistic(
 /** Sends one action; the offline sync passes a client that speaks for the profile that queued it. */
 export function sendOccurrenceAction(action: OccurrenceAction, client: ApiClient = api) {
   if (action.kind === 'claim') return client.post<OccurrenceView>(`/api/occurrences/${action.id}/claim`);
+  if (action.kind === 'assign') {
+    return client.patch<OccurrenceView>(`/api/occurrences/${action.id}`, {
+      action: 'assign',
+      assigneeId: action.assigneeId,
+    });
+  }
   const body =
     action.kind === 'complete'
       ? {

@@ -252,6 +252,7 @@ export function TodayPage({ now }: { now?: Date }) {
                   onUncomplete={() => run({ id: occ._id, kind: 'uncomplete' }, occ)}
                   onSkip={(reason) => run({ id: occ._id, kind: 'skip', reason }, occ)}
                   onClaim={() => run({ id: occ._id, kind: 'claim' }, occ)}
+                  onAssign={(assigneeId) => run({ id: occ._id, kind: 'assign', assigneeId }, occ)}
                 />
               ))}
             </ul>
