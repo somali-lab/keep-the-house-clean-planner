@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.3](https://github.com/somali-lab/keep-the-house-clean-planner/compare/v1.5.2...v1.5.3) (2026-09-21)
+
+
+### Bug fixes
+
+* **web:** allow reassignment from today ([#27](https://github.com/somali-lab/keep-the-house-clean-planner/issues/27)) ([ff31a04](https://github.com/somali-lab/keep-the-house-clean-planner/commit/ff31a0415a9d6da8fdae1100a84efabd80db707f))
+
 ## [1.5.2](https://github.com/somali-lab/keep-the-house-clean-planner/compare/v1.5.1...v1.5.2) (2026-09-20)
 
 
