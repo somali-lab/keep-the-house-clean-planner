@@ -292,7 +292,7 @@ export function WeekPage({ now }: { now?: Date }) {
             3
           </Badge>
         </button>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div data-testid="week-day-grid" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {groupByDay(filteredOccurrences, visibleDays).map((day) => (
             <DayColumn
               key={day.dayKey}
