@@ -29,10 +29,11 @@ function setup(settings = makeSettings()) {
       throw new Error('boom');
     }
     const body = JSON.parse(String(init.body)) as {
-      action: 'complete' | 'uncomplete' | 'skip';
+      action: 'complete' | 'uncomplete' | 'skip' | 'assign';
       completedBy?: string;
       reason?: string;
       takeOver?: true;
+      assigneeId?: string | null;
     };
     const current = db.find((o) => o._id === id)!;
     const next = applyOptimistic(current, {
@@ -41,6 +42,7 @@ function setup(settings = makeSettings()) {
       completedBy: body.completedBy,
       reason: body.reason,
       takeOver: body.takeOver,
+      assigneeId: body.assigneeId,
     } as never, {
       profileId: ANNA._id,
       todayKey: TODAY,
@@ -230,6 +232,24 @@ describe('TodayPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Wastafel oppakken' }));
     expect(await inSection('Mijn taken', 'Wastafel')).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Nog niet opgepakt' })).not.toBeInTheDocument();
+  });
+
+  it('reassigns an open task to another person and back to together', async () => {
+    const fetchMock = setup();
+    renderWithProviders(<TodayPage now={NOW} />);
+    fireEvent.change(await screen.findByLabelText('Filter op persoon'), { target: { value: 'all' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Meer voor Badkamer' }));
+
+    fireEvent.change(screen.getByLabelText('Toewijzen aan'), { target: { value: BRAM._id } });
+    await waitFor(() => expect(db.find((o) => o._id === 'o-mine')?.assigneeId).toBe(BRAM._id));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Meer voor Badkamer' }));
+    fireEvent.change(screen.getByLabelText('Toewijzen aan'), { target: { value: '' } });
+    await waitFor(() => expect(db.find((o) => o._id === 'o-mine')?.assigneeId).toBeNull());
+    expect(patchBodies(fetchMock, 'o-mine')).toEqual([
+      { action: 'assign', assigneeId: BRAM._id },
+      { action: 'assign', assigneeId: null },
+    ]);
   });
 
   it('rolls back an optimistic check-off when the server fails', async () => {

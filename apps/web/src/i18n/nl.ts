@@ -272,6 +272,8 @@ export const nl = {
   'today.claimNamed': '{task} oppakken',
   'today.more': 'Meer',
   'today.moreNamed': 'Meer voor {task}',
+  'today.assign': 'Toewijzen aan',
+  'today.assignTogether': 'Samen / wie dan ook',
   'today.skip': 'Overslaan',
   'today.skipReason': 'Reden (optioneel)',
   'today.skipConfirm': 'Overslaan bevestigen',

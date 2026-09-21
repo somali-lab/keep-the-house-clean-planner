@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/NativeSelect';
 import { cn } from '@/lib/utils';
 import { format, t } from '../../i18n/nl.ts';
 
@@ -28,6 +29,7 @@ export interface OccurrenceItemProps {
   onUncomplete(): void;
   onSkip(reason: string): void;
   onClaim(): void;
+  onAssign(assigneeId: string | null): void;
 }
 
 /** "wo 16-09" style date for day keys. */
@@ -46,6 +48,7 @@ export function OccurrenceItem({
   onUncomplete,
   onSkip,
   onClaim,
+  onAssign,
 }: OccurrenceItemProps) {
   const idPrefix = useId();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -191,6 +194,19 @@ export function OccurrenceItem({
 
       {isOpen && menuOpen && (
         <div id={`${idPrefix}-menu`} className="mt-3 grid gap-3 rounded-xl bg-secondary/60 p-3">
+          <div className="grid gap-1.5">
+            <Label htmlFor={`${idPrefix}-assignee`}>{t('today.assign')}</Label>
+            <NativeSelect
+              id={`${idPrefix}-assignee`}
+              value={occ.assigneeId ?? ''}
+              onChange={(event) => onAssign(event.target.value || null)}
+            >
+              <option value="">{t('today.assignTogether')}</option>
+              {users.map((user) => (
+                <option key={user._id} value={user._id}>{user.name}</option>
+              ))}
+            </NativeSelect>
+          </div>
           {skipping ? (
             <div className="grid gap-1.5">
               <Label htmlFor={`${idPrefix}-reason`}>{t('today.skipReason')}</Label>
