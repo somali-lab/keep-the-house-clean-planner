@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.4](https://github.com/somali-lab/keep-the-house-clean-planner/compare/v1.5.3...v1.5.4) (2026-09-21)
+
+
+### Bug fixes
+
+* **web:** widen week overview cards ([#29](https://github.com/somali-lab/keep-the-house-clean-planner/issues/29)) ([e2fa6a3](https://github.com/somali-lab/keep-the-house-clean-planner/commit/e2fa6a338733fc9cecac13f2854a502e112a5a16))
+
 ## [1.5.3](https://github.com/somali-lab/keep-the-house-clean-planner/compare/v1.5.2...v1.5.3) (2026-09-21)
 
 
