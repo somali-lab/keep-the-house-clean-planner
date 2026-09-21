@@ -97,6 +97,13 @@ describe('WeekPage', () => {
     dnd.onDragEnd = undefined;
   });
 
+  it('uses three columns for wider screens', async () => {
+    setup();
+    renderWithProviders(<WeekPage now={NOW} />);
+
+    expect(await screen.findByTestId('week-day-grid')).toHaveClass('lg:grid-cols-3');
+  });
+
   it('shows three collapsible past days, today and eight future days with distinct borders', async () => {
     setup();
     renderWithProviders(<WeekPage now={NOW} />);

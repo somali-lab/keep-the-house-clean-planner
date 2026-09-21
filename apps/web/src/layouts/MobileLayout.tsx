@@ -52,7 +52,7 @@ export function MobileLayout({ onOpenManagement }: { onOpenManagement: () => voi
           </Button>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 pt-5 pb-28">
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-5 pb-28">
         <Routes>
           {TABS.map((tab) => (
             <Route
