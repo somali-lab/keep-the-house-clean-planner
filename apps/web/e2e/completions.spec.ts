@@ -37,3 +37,14 @@ test('an administrator can correct and remove an incorrect completion', async ({
   const remaining = await app.api<{ _id: string }[]>('GET', `/api/occurrences?from=${TODAY}&to=${TODAY}`);
   expect(remaining.some((item) => item._id === occurrence._id)).toBe(false);
 });
+
+test('the sidebar icon for a long nav label stays visible instead of being squeezed to zero width', async ({
+  page,
+  app,
+}) => {
+  const anna = await app.user('Anna');
+  await openAs(page, app, anna, '/manage/completions');
+  const icon = page.locator('nav[aria-label="Hoofdmenu"] a[href="/manage/completions"] svg');
+  const box = await icon.boundingBox();
+  expect(box?.width).toBeGreaterThan(0);
+});
