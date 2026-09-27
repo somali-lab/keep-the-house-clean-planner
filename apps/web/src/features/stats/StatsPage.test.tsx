@@ -387,4 +387,23 @@ describe('StatsPage', () => {
       ),
     ).toBe(true);
   });
+
+  it('purges only data before a chosen date, without a full reset', async () => {
+    const fetchMock = setup();
+    renderWithProviders(<StatsPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Oude data opschonen' }));
+    expect(screen.getByRole('heading', { name: 'Oude data verwijderen?' })).toBeInTheDocument();
+
+    const dateInput = screen.getByLabelText('Verwijder alles van vóór');
+    fireEvent.change(dateInput, { target: { value: '2026-09-21' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Oude data verwijderen' }));
+
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Oude data zijn opgeschoond. Alles vanaf de gekozen datum bleef staan.',
+    );
+    const deleteCall = fetchMock.mock.calls.find(
+      ([url, init]) => String(url).startsWith('/api/stats') && (init as RequestInit | undefined)?.method === 'DELETE',
+    );
+    expect(deleteCall?.[0]).toBe('/api/stats?before=2026-09-21');
+  });
 });

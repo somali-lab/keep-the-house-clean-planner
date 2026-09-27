@@ -10,6 +10,7 @@ import { ObjectId } from 'mongodb';
 import type { AuditContext } from '../audit/context.ts';
 import { findCycleByIndex } from '../data/cycles.ts';
 import {
+  deleteOccurrences,
   findOccurrenceById,
   findOccurrences,
   insertOccurrencesIdempotent,
@@ -125,6 +126,55 @@ export async function uncompleteOccurrence(ctx: AuditContext, id: ObjectId): Pro
   if (!result) throw invalidTransition('changed', 'uncomplete');
   await refreshLastCompletedAt(ctx, current.taskId, id);
   return result.after;
+}
+
+export async function editCompletion(
+  ctx: AuditContext,
+  id: ObjectId,
+  input: { date: string; completedAt: string; completedBy: ObjectId },
+): Promise<OccurrenceDoc> {
+  const settings = await getSettings(ctx.db);
+  if (!settings) throw new HttpError(500, 'settings_missing');
+  const current = await requireOccurrence(ctx, id);
+  if (current.status !== 'done') throw invalidTransition(current.status, 'edit completion of');
+
+  const user = await findUserById(ctx.db, input.completedBy);
+  if (!user) {
+    throw new HttpError(400, 'validation_error', 'Invalid completedBy', [
+      { field: 'completedBy', message: 'unknown_user' },
+    ]);
+  }
+
+  const currentDate = toDayKey(current.date, settings.timezone);
+  const cycle = input.date === currentDate
+    ? null
+    : await findCycleByIndex(ctx.db, cycleIndexFor(input.date, settings.cycleAnchorDate));
+  if (input.date !== currentDate && !cycle) {
+    throw new HttpError(409, 'cycle_not_generated', 'That day is not generated yet', undefined, { date: input.date });
+  }
+
+  const result = await updateOccurrence(
+    ctx,
+    id,
+    {
+      date: fromDayKey(input.date, settings.timezone),
+      completedAt: new Date(input.completedAt),
+      completedBy: input.completedBy,
+      ...(cycle && !cycle._id.equals(current.cycleId) ? { cycleId: cycle._id } : {}),
+    },
+    { action: 'update', meta: { correction: 'completion' } },
+    { status: 'done' },
+  );
+  if (!result) throw invalidTransition('changed', 'edit completion of');
+  await refreshLastCompletedAt(ctx, current.taskId, id);
+  return result.after;
+}
+
+export async function deleteCompletedOccurrence(ctx: AuditContext, id: ObjectId): Promise<void> {
+  const current = await requireOccurrence(ctx, id);
+  if (current.status !== 'done') throw invalidTransition(current.status, 'delete');
+  await deleteOccurrences(ctx, [current], { correction: 'completion' });
+  await refreshLastCompletedAt(ctx, current.taskId, id);
 }
 
 export async function skipOccurrence(ctx: AuditContext, id: ObjectId, reason?: string): Promise<OccurrenceDoc> {

@@ -133,7 +133,15 @@ const SCENARIOS: Scenario[] = [
   {
     route: 'PATCH /api/occurrences/:id',
     audit: { entity: 'occurrence', action: 'complete' },
-    run: async () => call('PATCH', `/api/occurrences/${await occurrenceId({ assigneeId: p1._id })}`, { action: 'complete' }),
+    run: async () => {
+      ids.completedOccurrence = await occurrenceId({ assigneeId: p1._id });
+      return call('PATCH', `/api/occurrences/${ids.completedOccurrence}`, { action: 'complete' });
+    },
+  },
+  {
+    route: 'DELETE /api/occurrences/:id',
+    audit: { entity: 'occurrence', action: 'delete' },
+    run: () => call('DELETE', `/api/occurrences/${ids.completedOccurrence}`),
   },
   {
     route: 'POST /api/occurrences/:id/claim',

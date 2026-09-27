@@ -1,15 +1,16 @@
 import type { IntervalRow, StatsGroupBy, UserWorkload, WorkloadCycle } from '@huishoudplanner/shared';
-import { CalendarClock, ChartColumnBig, CircleCheck, Clock, Hourglass, ListChecks, Scale, Trash2, TrendingUp } from 'lucide-react';
+import { CalendarClock, CalendarX, ChartColumnBig, CircleCheck, Clock, Hourglass, ListChecks, Scale, Trash2, TrendingUp } from 'lucide-react';
 import { useId, useState, type ReactNode } from 'react';
 import { EmptyState } from '@/components/EmptyState';
 import { NativeSelect } from '@/components/NativeSelect';
 import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { panelTabsListClass, panelTabsTriggerClass, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
-import { useRooms, useTasks, useUsers } from '../../api/queries.ts';
+import { useRooms, useSettings, useTasks, useUsers } from '../../api/queries.ts';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
 import { useCompletion, useDeviations, useIntervals, useResetStatistics, useWorkload, type StatsPeriod } from './api.ts';
@@ -89,6 +90,9 @@ export function StatsPage() {
   const [groupBy, setGroupBy] = useState<StatsGroupBy>('task');
   const [confirmReset, setConfirmReset] = useState(false);
   const [resetDone, setResetDone] = useState(false);
+  const [confirmPurge, setConfirmPurge] = useState(false);
+  const [purgeBefore, setPurgeBefore] = useState('');
+  const [purgeDone, setPurgeDone] = useState(false);
   const { profile } = useProfile();
   const workload = useWorkload(period);
   const completion = useCompletion(period, groupBy);
@@ -97,7 +101,9 @@ export function StatsPage() {
   const users = useUsers();
   const tasks = useTasks();
   const rooms = useRooms();
+  const settings = useSettings();
   const resetStatistics = useResetStatistics();
+  const purgeStatistics = useResetStatistics();
 
   const userName = (id: string | null) =>
     id === null ? t('tasks.anyone') : (users.data?.find((u) => u._id === id)?.name ?? t('tasks.unknownUser'));
@@ -141,6 +147,19 @@ export function StatsPage() {
           </optgroup>
         </NativeSelect>
       </div>
+      {profile?.role === 'admin' && (
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => {
+            setPurgeBefore(settings.data?.cycleAnchorDate ?? '');
+            setConfirmPurge(true);
+          }}
+        >
+          <CalendarX aria-hidden="true" />
+          {t('stats.purge')}
+        </Button>
+      )}
       {profile?.role === 'admin' && (
         <Button
           type="button"
@@ -250,7 +269,47 @@ export function StatsPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={confirmPurge} onOpenChange={setConfirmPurge}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('stats.purgeConfirmTitle')}</DialogTitle>
+            <DialogDescription>{t('stats.purgeConfirmBody')}</DialogDescription>
+          </DialogHeader>
+          <div className="flex max-w-xs flex-col gap-2">
+            <Label htmlFor={`${idPrefix}-purge-before`}>{t('stats.purgeDateLabel')}</Label>
+            <Input
+              id={`${idPrefix}-purge-before`}
+              type="date"
+              className="h-10 bg-card"
+              value={purgeBefore}
+              onChange={(e) => setPurgeBefore(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => setConfirmPurge(false)}>{t('common.cancel')}</Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={purgeStatistics.isPending || !purgeBefore}
+              onClick={() =>
+                purgeStatistics.mutate(purgeBefore, {
+                  onSuccess: () => {
+                    setConfirmPurge(false);
+                    setPurgeDone(true);
+                  },
+                })
+              }
+            >
+              <CalendarX aria-hidden="true" />
+              {t('stats.purgeConfirm')}
+            </Button>
+          </DialogFooter>
+          {purgeStatistics.isError && <p role="alert" className="text-sm font-semibold text-destructive">{t('stats.purgeError')}</p>}
+        </DialogContent>
+      </Dialog>
+
       {resetDone && <p role="status" className="mb-6 rounded-xl bg-success/15 px-4 py-3 font-semibold text-success">{t('stats.resetDone')}</p>}
+      {purgeDone && <p role="status" className="mb-6 rounded-xl bg-success/15 px-4 py-3 font-semibold text-success">{t('stats.purgeDone')}</p>}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="gap-6">
         <TabsList className={panelTabsListClass} aria-label={t('stats.tabs')}>

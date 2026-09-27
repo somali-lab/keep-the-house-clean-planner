@@ -12,37 +12,47 @@ export interface ResetStatisticsResult {
   deletedPastCycles: number;
 }
 
+interface ResetStatisticsOptions {
+  /** Reset every non-open occurrence and task back to open, not just the ones being deleted. */
+  restartFromToday: boolean;
+}
+
 /** Audited destructive reset; household definitions and plans are never touched. */
 export async function resetStatisticsData(
   ctx: AuditContext,
-  startOfToday: Date,
-  currentCycle: number,
+  boundary: Date,
+  boundaryCycle: number,
+  options: ResetStatisticsOptions,
 ): Promise<ResetStatisticsResult> {
-  const deletedOccurrences = await occurrencesCollection(ctx.db).deleteMany({ date: { $lt: startOfToday } });
-  const resetOccurrences = await occurrencesCollection(ctx.db).updateMany(
-    {
-      $or: [
-        { status: { $ne: 'open' } },
-        { completedAt: { $ne: null } },
-        { completedBy: { $ne: null } },
-        { skipReason: { $ne: null } },
-      ],
-    },
-    {
-      $set: {
-        status: 'open',
-        statusBeforeCompletion: null,
-        completedAt: null,
-        completedBy: null,
-        skipReason: null,
-        updatedAt: ctx.clock.now(),
+  const deletedOccurrences = await occurrencesCollection(ctx.db).deleteMany({ date: { $lt: boundary } });
+  let resetOccurrences = { modifiedCount: 0 };
+  let resetTasks = { modifiedCount: 0 };
+  if (options.restartFromToday) {
+    resetOccurrences = await occurrencesCollection(ctx.db).updateMany(
+      {
+        $or: [
+          { status: { $ne: 'open' } },
+          { completedAt: { $ne: null } },
+          { completedBy: { $ne: null } },
+          { skipReason: { $ne: null } },
+        ],
       },
-    },
-  );
-  const resetTasks = await ctx.db
-    .collection(COLLECTIONS.tasks)
-    .updateMany({ lastCompletedAt: { $ne: null } }, { $set: { lastCompletedAt: null, updatedAt: ctx.clock.now() } });
-  const deletedPastCycles = await ctx.db.collection(COLLECTIONS.cycles).deleteMany({ index: { $lt: currentCycle } });
+      {
+        $set: {
+          status: 'open',
+          statusBeforeCompletion: null,
+          completedAt: null,
+          completedBy: null,
+          skipReason: null,
+          updatedAt: ctx.clock.now(),
+        },
+      },
+    );
+    resetTasks = await ctx.db
+      .collection(COLLECTIONS.tasks)
+      .updateMany({ lastCompletedAt: { $ne: null } }, { $set: { lastCompletedAt: null, updatedAt: ctx.clock.now() } });
+  }
+  const deletedPastCycles = await ctx.db.collection(COLLECTIONS.cycles).deleteMany({ index: { $lt: boundaryCycle } });
 
   const result: ResetStatisticsResult = {
     deletedOccurrences: deletedOccurrences.deletedCount,
@@ -55,8 +65,8 @@ export async function resetStatisticsData(
     entityId: SETTINGS_ID,
     action: 'reset',
     before: { statistics: 'bestaande uitvoeringsgeschiedenis' },
-    after: { statistics: 'opnieuw gestart' },
-    meta: { ...result, resetId: randomUUID() },
+    after: { statistics: options.restartFromToday ? 'opnieuw gestart' : 'oude data opgeschoond' },
+    meta: { ...result, resetId: randomUUID(), scoped: !options.restartFromToday },
   });
   return result;
 }
