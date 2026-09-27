@@ -6,8 +6,8 @@ These instructions apply to the entire repository. More focused rules live in `.
 
 1. Read `git status` and preserve changes you did not make.
 2. Fetch `origin/main`, switch to local `main`, and fast-forward it to `origin/main` before starting implementation so the newest source is present locally. If local `main` cannot be fast-forwarded, preserve its unique commits on a backup branch before realigning it; never silently discard work.
-3. Create and switch to a new dedicated feature branch with the `codex/` prefix from that updated `main`. Never create a feature branch from a stale branch and never implement changes directly on `main`.
-4. Locate the implementation, its nearest tests, and the relevant entries in `docs/DECISIONS.md` before editing.
+3. Create and switch to a new dedicated feature branch from that updated `main`, named with a Conventional Commit type prefix, followed by the name of the agent tool doing the work and a short description: `feat/codex-add-export`, `fix/copilot-due-date-bug`. Never create a feature branch from a stale branch and never implement changes directly on `main`.
+4. Locate the implementation, its nearest tests, and any relevant record in `docs/adr/` before editing.
 5. Trace cross-layer changes end to end: shared contract -> server route/domain/data -> web API/UI -> tests.
 6. Prefer the smallest coherent change. Do not refactor unrelated code or update dependencies incidentally.
 7. Commit every completed coherent change with a Conventional Commit message, even when the user does not ask separately. Keep unrelated user changes out of the commit and leave no finished work uncommitted; these commits are the source for Release Please changelog and release notes.
@@ -26,11 +26,11 @@ These instructions apply to the entire repository. More focused rules live in `.
 When sources disagree, use this order and call out the conflict:
 
 1. Executable code and tests.
-2. `docs/DECISIONS.md` for intentional architecture and domain choices.
-3. `README.md` and `docs/RELEASING.md` for supported operation and release behavior.
-4. `docs/huishoudplanner-requirements.md` and `docs/implementation-plan.md` for product intent and historical planning.
+2. `docs/adr/` for intentional architecture decisions and their rationale.
+3. `docs/huishoudplanner-requirements.md` for what the system must do.
+4. `README.md` and `docs/RELEASING.md` for supported operation and release behavior.
 
-Update documentation in the same change when public behavior, configuration, architecture, or an intentional decision changes.
+Update documentation in the same change when public behavior, configuration, architecture, or an intentional decision changes. Behavior belongs in the requirements, architectural choices in an ADR, repository conventions here.
 
 ## Repository map
 
@@ -45,6 +45,7 @@ Update documentation in the same change when public behavior, configuration, arc
 - `apps/web/src/i18n`: Dutch and English message catalogs and language runtime.
 - `apps/web/e2e`: isolated Playwright journeys against the real server and a fresh database.
 - `docker`, `docker-compose.yml`, `scripts/smoke.mjs`: production image and isolated container smoke test.
+- `docs/adr`: architecture decision records.
 
 ## Non-negotiable architecture
 
@@ -62,6 +63,7 @@ Update documentation in the same change when public behavior, configuration, arc
 
 - Add or update a regression test with every behavior change. Prefer pure model tests for logic, component tests for interaction, server integration tests for HTTP/persistence, and Playwright only for critical cross-stack journeys.
 - Server tests use `createTestApp()` with a fresh database and fixed clock. Tests must never call real AI providers, notification endpoints, or a real installation.
+- Every test harness owns its own state: its own database, its own port, its own fixtures created through the data layer. A test that depends on another test's leftovers, on a developer's running stack, or on wall-clock time is a broken test, not a flaky one.
 - Run focused tests while iterating, then the checks selected by `.cursor/skills/verify-household-planner/SKILL.md`.
 - `npm run verify` is the default full quality gate. Use `npm run test:e2e` for affected end-to-end flows and `node scripts/smoke.mjs` only for container/runtime changes.
 - Report exactly what was changed and what was verified. If a relevant check could not run, state why.
