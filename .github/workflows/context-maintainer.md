@@ -53,7 +53,7 @@ safe-outputs:
       - .github/copilot-instructions.md
       - .github/instructions/**/*.instructions.md
       - .cursor/rules/*.mdc
-      - .cursor/skills/**/SKILL.md
+      - .agents/skills/**/SKILL.md
   noop:
 ---
 
@@ -73,11 +73,11 @@ and propose the smallest set of changes that makes them match again.
 - `.cursor/rules/*.mdc` (English) contains the matching Cursor rules selected by `globs` or
   `alwaysApply`. These are manually maintained counterparts of `.github/instructions`; no sync
   script exists. Keep paired rule bodies equivalent while preserving their different frontmatter.
-- `.cursor/skills/**/SKILL.md` (English) contains repeatable procedures for verification,
+- `.agents/skills/**/SKILL.md` (English) contains repeatable procedures for verification,
   releases, server/API changes, web changes, and scheduling-domain changes.
 - `README.md` (English) documents the supported product, setup, operation, and configuration.
 
-No `.claude/skills/`, `.agents/skills/`, `.github/skills/`, or `.github/prompts/` directory
+No `.claude/skills/`, `.github/skills/`, `.github/prompts/`, or `.cursor/skills/` directory
 currently exists.
 
 Nothing else. Do not touch other docs, changelogs, application or test code, configuration,
