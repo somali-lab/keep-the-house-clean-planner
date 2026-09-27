@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.6.0](https://github.com/somali-lab/keep-the-house-clean-planner/compare/v1.5.4...v1.6.0) (2026-09-27)
+
+
+### Features
+
+* add completion record management ([eb148c7](https://github.com/somali-lab/keep-the-house-clean-planner/commit/eb148c71f74fba821614d2b31e4d999cad36af33))
+* **stats:** add date-scoped statistics purge ([#31](https://github.com/somali-lab/keep-the-house-clean-planner/issues/31)) ([6b77c3f](https://github.com/somali-lab/keep-the-house-clean-planner/commit/6b77c3f0e74f32dfc2741bbfa3856cf34c8e853c))
+
+
+### Bug fixes
+
+* **docs:** clarify feature branch naming convention in release process ([eb148c7](https://github.com/somali-lab/keep-the-house-clean-planner/commit/eb148c71f74fba821614d2b31e4d999cad36af33))
+
 ## [1.5.4](https://github.com/somali-lab/keep-the-house-clean-planner/compare/v1.5.3...v1.5.4) (2026-09-21)
 
 
