@@ -1,12 +1,12 @@
 # Repository agent guide
 
-These instructions apply to the entire repository. More focused rules live in `.cursor/rules/`, and repeatable workflows live in `.cursor/skills/`.
+These instructions apply to the entire repository and are the single source of truth for general rules. Path-specific rules live in `.github/instructions/*.instructions.md` (Copilot, scoped by `applyTo`) and in their mirrors `.cursor/rules/*.mdc` (Cursor, scoped by `globs`); change a rule in both. Repeatable workflows live in `.cursor/skills/`. `.github/copilot-instructions.md` and `CLAUDE.md` are thin entry points that delegate here and must stay thin.
 
 ## Start every task
 
 1. Read `git status` and preserve changes you did not make.
 2. Fetch `origin/main`, switch to local `main`, and fast-forward it to `origin/main` before starting implementation so the newest source is present locally. If local `main` cannot be fast-forwarded, preserve its unique commits on a backup branch before realigning it; never silently discard work.
-3. Create and switch to a new dedicated feature branch with the `codex/` prefix from that updated `main`. Never create a feature branch from a stale branch and never implement changes directly on `main`.
+3. Create and switch to a new dedicated feature branch from that updated `main`, named with a Conventional Commit type prefix matching the change followed by the agent tool's name and a short description (e.g. `feat/codex-add-export`, `fix/copilot-due-date-bug`, `chore/claude-update-deps`). Never create a feature branch from a stale branch and never implement changes directly on `main`.
 4. Locate the implementation, its nearest tests, and the relevant entries in `docs/DECISIONS.md` before editing.
 5. Trace cross-layer changes end to end: shared contract -> server route/domain/data -> web API/UI -> tests.
 6. Prefer the smallest coherent change. Do not refactor unrelated code or update dependencies incidentally.
@@ -45,6 +45,7 @@ Update documentation in the same change when public behavior, configuration, arc
 - `apps/web/src/i18n`: Dutch and English message catalogs and language runtime.
 - `apps/web/e2e`: isolated Playwright journeys against the real server and a fresh database.
 - `docker`, `docker-compose.yml`, `scripts/smoke.mjs`: production image and isolated container smoke test.
+- `AGENTS.md`, `.github/instructions`, `.cursor/rules`, `.cursor/skills`, `.github/copilot-instructions.md`, `CLAUDE.md`, `docs/DECISIONS.md`: the agent-context layer, maintained by the `agent-context-maintainer` agentic workflow.
 
 ## Non-negotiable architecture
 
