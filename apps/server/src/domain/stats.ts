@@ -24,15 +24,22 @@ import { listTasks } from '../data/tasks.ts';
 import { listUsers } from '../data/users.ts';
 import { HttpError } from '../http/errors.ts';
 
-/** Clears execution history while preserving people, rooms, tasks and cycle plans. */
-export async function resetStatistics(ctx: AuditContext): Promise<ResetStatisticsResult> {
+/**
+ * Clears execution history while preserving people, rooms, tasks and cycle plans.
+ * Without `before`, every occurrence resets to open ("start over from today"). With `before`,
+ * only occurrences and cycles strictly older than that day are purged; anything from `before`
+ * onward (including its completion status) is left untouched.
+ */
+export async function resetStatistics(ctx: AuditContext, before?: string): Promise<ResetStatisticsResult> {
   const settings = await getSettings(ctx.db);
   if (!settings) throw new HttpError(500, 'settings_missing');
   const todayKey = today(settings.timezone, ctx.clock.now());
-  const startOfToday = fromDayKey(todayKey, settings.timezone);
-  const currentCycle = cycleIndexFor(todayKey, settings.cycleAnchorDate);
+  if (before && before > todayKey) throw new HttpError(400, 'before_in_future');
+  const boundaryKey = before ?? todayKey;
+  const boundary = fromDayKey(boundaryKey, settings.timezone);
+  const boundaryCycle = cycleIndexFor(boundaryKey, settings.cycleAnchorDate);
 
-  return resetStatisticsData(ctx, startOfToday, currentCycle);
+  return resetStatisticsData(ctx, boundary, boundaryCycle, { restartFromToday: before === undefined });
 }
 
 /**

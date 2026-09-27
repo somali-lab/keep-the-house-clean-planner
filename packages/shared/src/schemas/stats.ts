@@ -1,8 +1,14 @@
 import { z } from 'zod';
+import { dayKeySchema } from './common.ts';
 
 export const statsCyclesQuerySchema = z.object({
   cycles: z.coerce.number().int().min(1).max(26).default(4),
   weeks: z.coerce.number().int().min(1).max(3).optional(),
+});
+
+/** Without `before`, every occurrence resets to open ("start over from today"); with it, only data strictly before that day is purged. */
+export const resetStatisticsQuerySchema = z.object({
+  before: dayKeySchema.optional(),
 });
 
 export const statsGroupBySchema = z.enum(['task', 'room', 'user']);

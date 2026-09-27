@@ -79,6 +79,14 @@ export const nl = {
   'stats.resetConfirm': 'Definitief opnieuw beginnen',
   'stats.resetDone': 'Statistieken zijn gewist. Je begint opnieuw met de bestaande planning.',
   'stats.resetError': 'De statistieken konden niet worden gewist.',
+  'stats.purge': 'Oude data opschonen',
+  'stats.purgeConfirmTitle': 'Oude data verwijderen?',
+  'stats.purgeConfirmBody':
+    'Alleen uitvoeringen, cycli en gereedmeldingen van vóór de gekozen datum worden verwijderd. Alles vanaf die datum, inclusief al gedane taken, blijft ongewijzigd staan.',
+  'stats.purgeDateLabel': 'Verwijder alles van vóór',
+  'stats.purgeConfirm': 'Oude data verwijderen',
+  'stats.purgeDone': 'Oude data zijn opgeschoond. Alles vanaf de gekozen datum bleef staan.',
+  'stats.purgeError': 'De oude data konden niet worden opgeschoond.',
   'history.action.reset': '{actor} wiste de statistieken en begon opnieuw',
 
   'tasks.new': 'Nieuwe taak',

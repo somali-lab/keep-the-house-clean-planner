@@ -47,7 +47,7 @@ export function useDeviations(period: StatsPeriod) {
 export function useResetStatistics() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async () => api.delete('/api/stats'),
+    mutationFn: async (before?: string) => api.delete(`/api/stats${before ? `?before=${before}` : ''}`),
     onSuccess: () =>
       Promise.all([
         queryClient.invalidateQueries({ queryKey: ['stats'] }),
