@@ -17,7 +17,7 @@ let weekly: string;
 let twice: string;
 
 async function inject(
-  method: 'GET' | 'PATCH' | 'POST' | 'PUT',
+  method: 'GET' | 'PATCH' | 'POST' | 'PUT' | 'DELETE',
   url: string,
   payload?: Record<string, unknown>,
   user = p1,
@@ -269,6 +269,69 @@ describe('PATCH /api/occurrences/:id', () => {
     expect((await patch(occ._id, { action: 'reschedule' })).statusCode).toBe(400);
     expect((await patch(occ._id, { action: 'assign' })).statusCode).toBe(400);
     expect((await patch(occ._id, { action: 'reschedule', date: '2026-11-03' })).statusCode).toBe(200);
+  });
+
+  it('lets an administrator correct and permanently delete a completion', async () => {
+    const baseline = (await findTaskById(t.db, new ObjectId(weekly)))?.lastCompletedAt;
+    const created = await inject('POST', '/api/occurrences', {
+      taskId: weekly,
+      date: '2026-09-17',
+      assigneeId: p1._id.toHexString(),
+    });
+    expect(created.statusCode, created.body).toBe(201);
+    const id = created.json<OccurrenceView>()._id;
+    expect((await patch(id, { action: 'complete' })).statusCode).toBe(200);
+
+    const forbidden = await patch(
+      id,
+      {
+        action: 'edit_completion',
+        date: '2026-09-18',
+        completedAt: '2026-09-20T12:30:00.000Z',
+        completedBy: p2._id.toHexString(),
+      },
+      p2,
+    );
+    expect(forbidden.statusCode).toBe(403);
+
+    const { result: edited, entries } = await expectAudited(
+      t,
+      () => patch(id, {
+        action: 'edit_completion',
+        date: '2026-09-18',
+        completedAt: '2026-09-20T12:30:00.000Z',
+        completedBy: p2._id.toHexString(),
+      }),
+      { entity: 'occurrence', action: 'update', count: 1 },
+    );
+    expect(edited.statusCode, edited.body).toBe(200);
+    expect(edited.json()).toMatchObject({
+      date: '2026-09-18',
+      status: 'done',
+      completedAt: '2026-09-20T12:30:00.000Z',
+      completedBy: p2._id.toHexString(),
+    });
+    expect(entries[0]!.meta).toMatchObject({ correction: 'completion' });
+    expect((await findTaskById(t.db, new ObjectId(weekly)))?.lastCompletedAt).toEqual(
+      new Date('2026-09-20T12:30:00.000Z'),
+    );
+
+    const forbiddenDelete = await t.app.inject({
+      method: 'DELETE',
+      url: `/api/occurrences/${id}`,
+      headers: asProfile(p2),
+    });
+    expect(forbiddenDelete.statusCode).toBe(403);
+
+    const { result: deleted } = await expectAudited(
+      t,
+      () => inject('DELETE', `/api/occurrences/${id}`),
+      { entity: 'occurrence', action: 'delete', count: 1 },
+    );
+    expect(deleted.statusCode, deleted.body).toBe(200);
+    expect(deleted.json()).toEqual({ deleted: true });
+    expect((await list('from=2026-09-18&to=2026-09-18')).some((occ) => occ._id === id)).toBe(false);
+    expect((await findTaskById(t.db, new ObjectId(weekly)))?.lastCompletedAt).toEqual(baseline);
   });
 });
 

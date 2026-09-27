@@ -65,6 +65,7 @@ describe('app shell', () => {
     expect(nav).not.toHaveTextContent('AI-prompts');
     expect(nav).not.toHaveTextContent('Week');
     expect(nav).toHaveTextContent('Instellingen');
+    expect(nav).toHaveTextContent('Gereedmeldingen');
     expect(screen.getByRole('link', { name: 'Taken' })).toHaveAttribute('href', '/manage/tasks');
     expect(screen.getByRole('button', { name: 'Terug naar overzicht' })).toHaveClass('cursor-pointer');
     expect(screen.getByRole('group', { name: 'Kleurthema' })).toBeInTheDocument();
@@ -97,6 +98,7 @@ describe('app shell', () => {
     expect(nav).not.toHaveTextContent('Planner');
     expect(nav).not.toHaveTextContent('Taken');
     expect(nav).not.toHaveTextContent('Instellingen');
+    expect(nav).not.toHaveTextContent('Gereedmeldingen');
   });
 
   it('opens management with the gear and returns to the standard overview', async () => {

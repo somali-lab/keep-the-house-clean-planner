@@ -15,6 +15,8 @@ import {
   claimOccurrence,
   completeOccurrence,
   createAdhocOccurrence,
+  deleteCompletedOccurrence,
+  editCompletion,
   rescheduleOccurrence,
   skipOccurrence,
   toOccurrenceView,
@@ -23,7 +25,7 @@ import {
 } from '../domain/occurrences.ts';
 import { HttpError, notFound, parseOrThrow } from '../http/errors.ts';
 import { parseIdParam } from '../http/params.ts';
-import { auditContext, requireActor } from '../identity/index.ts';
+import { auditContext, requireActor, requireAdmin } from '../identity/index.ts';
 
 export const occurrenceRoutes: FastifyPluginAsync = async (app) => {
   async function viewContext() {
@@ -87,6 +89,15 @@ export const occurrenceRoutes: FastifyPluginAsync = async (app) => {
         );
       case 'uncomplete':
         return view(await uncompleteOccurrence(ctx, id));
+      case 'edit_completion':
+        await requireAdmin(request);
+        return view(
+          await editCompletion(ctx, id, {
+            date: input.date,
+            completedAt: input.completedAt,
+            completedBy: new ObjectId(input.completedBy),
+          }),
+        );
       case 'skip':
         return view(await skipOccurrence(ctx, id, input.reason));
       case 'reschedule':
@@ -101,5 +112,11 @@ export const occurrenceRoutes: FastifyPluginAsync = async (app) => {
   app.post('/occurrences/:id/claim', { preHandler: requireActor }, async (request) => {
     const id = parseIdParam(request.params);
     return view(await claimOccurrence(auditContext(request), id));
+  });
+
+  app.delete('/occurrences/:id', { preHandler: requireAdmin }, async (request) => {
+    const id = parseIdParam(request.params);
+    await deleteCompletedOccurrence(auditContext(request), id);
+    return { deleted: true };
   });
 };

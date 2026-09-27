@@ -3,6 +3,7 @@ import type { ReactElement } from 'react';
 import { useState } from 'react';
 import {
   ChartColumnBig,
+  ClipboardCheck,
   Scale,
   History,
   ListChecks,
@@ -20,6 +21,7 @@ import { ThemeSwitcher } from '@/components/ThemeSwitcher';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { DistributionPage } from '../features/distribution/DistributionPage.tsx';
+import { CompletionManagementPage } from '../features/completions/CompletionManagementPage.tsx';
 import { HistoryPage } from '../features/history/HistoryPage.tsx';
 import { PlannerPage } from '../features/planner/PlannerPage.tsx';
 import { SettingsPage } from '../features/settings/SettingsPage.tsx';
@@ -36,6 +38,7 @@ const PAGES: Partial<Record<string, ReactElement>> = {
   '/manage/distribution': <DistributionPage />,
   '/manage/statistics': <StatsPage />,
   '/manage/history': <HistoryPage />,
+  '/manage/completions': <CompletionManagementPage />,
   '/manage/settings': <SettingsPage />,
 };
 
@@ -45,6 +48,7 @@ const SECTIONS: { path: string; label: MessageKey; icon: LucideIcon; minimumRole
   { path: '/manage/distribution', label: 'nav.distribution', icon: Scale, minimumRole: 'member' },
   { path: '/manage/statistics', label: 'nav.stats', icon: ChartColumnBig, minimumRole: 'member' },
   { path: '/manage/history', label: 'nav.history', icon: History, minimumRole: 'member' },
+  { path: '/manage/completions', label: 'nav.completions', icon: ClipboardCheck, minimumRole: 'admin' },
   { path: '/manage/settings', label: 'nav.settings', icon: Settings, minimumRole: 'admin' },
 ];
 

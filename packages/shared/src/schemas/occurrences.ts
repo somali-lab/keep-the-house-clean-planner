@@ -57,6 +57,12 @@ export const patchOccurrenceInputSchema = z.discriminatedUnion('action', [
     takeOver: z.literal(true).optional(),
   }),
   z.object({ action: z.literal('uncomplete') }),
+  z.object({
+    action: z.literal('edit_completion'),
+    date: dayKeySchema,
+    completedAt: isoDateTimeSchema,
+    completedBy: objectIdSchema,
+  }),
   z.object({ action: z.literal('skip'), reason: z.string().trim().max(500).optional() }),
   z.object({ action: z.literal('reschedule'), date: dayKeySchema }),
   z.object({ action: z.literal('assign'), assigneeId: objectIdSchema.nullable() }),
