@@ -55,6 +55,13 @@ export const en = {
   "stats.resetConfirm": "Start over",
   "stats.resetDone": "Statistics cleared. You start over with the existing schedule.",
   "stats.resetError": "Statistics could not be cleared.",
+  "stats.purge": "Clean up old data",
+  "stats.purgeConfirmTitle": "Remove old data?",
+  "stats.purgeConfirmBody": "Only runs, cycles, and completions from before the chosen date are removed. Everything from that date onward, including tasks already done, stays untouched.",
+  "stats.purgeDateLabel": "Remove everything before",
+  "stats.purgeConfirm": "Remove old data",
+  "stats.purgeDone": "Old data was cleaned up. Everything from the chosen date onward was kept.",
+  "stats.purgeError": "The old data could not be cleaned up.",
   "history.action.reset": "{actor} cleared the statistics and started over",
 
   "completions.title": "Manage completions",
