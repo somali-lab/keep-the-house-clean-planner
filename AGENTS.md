@@ -7,11 +7,12 @@ These instructions apply to the entire repository. More focused rules live in `.
 1. Read `git status` and preserve changes you did not make.
 2. Fetch `origin/main`, switch to local `main`, and fast-forward it to `origin/main` before starting implementation so the newest source is present locally. If local `main` cannot be fast-forwarded, preserve its unique commits on a backup branch before realigning it; never silently discard work.
 3. Create and switch to a new dedicated feature branch from that updated `main`, named with a Conventional Commit type prefix, followed by the name of the agent tool doing the work and a short description: `feat/codex-add-export`, `fix/copilot-due-date-bug`. Never create a feature branch from a stale branch and never implement changes directly on `main`.
-4. Locate the implementation, its nearest tests, and any relevant record in `docs/adr/` before editing.
-5. Trace cross-layer changes end to end: shared contract -> server route/domain/data -> web API/UI -> tests.
-6. Prefer the smallest coherent change. Do not refactor unrelated code or update dependencies incidentally.
-7. Commit every completed coherent change with a Conventional Commit message, even when the user does not ask separately. Keep unrelated user changes out of the commit and leave no finished work uncommitted; these commits are the source for Release Please changelog and release notes.
-8. Never push, publish, deploy, restore data, or modify a real installation unless the user explicitly asks.
+4. Read the working documents in `docs/` described below; they carry the state of any work that is already in flight.
+5. Locate the implementation, its nearest tests, and any relevant record in `docs/adr/` before editing.
+6. Trace cross-layer changes end to end: shared contract -> server route/domain/data -> web API/UI -> tests.
+7. Prefer the smallest coherent change. Do not refactor unrelated code or update dependencies incidentally.
+8. Commit every completed coherent change with a Conventional Commit message, even when the user does not ask separately. Keep unrelated user changes out of the commit and leave no finished work uncommitted; these commits are the source for Release Please changelog and release notes.
+9. Never push, publish, deploy, restore data, or modify a real installation unless the user explicitly asks.
 
 ## Pull requests and release notes
 
@@ -31,6 +32,16 @@ When sources disagree, use this order and call out the conflict:
 4. `README.md` and `docs/RELEASING.md` for supported operation and release behavior.
 
 Update documentation in the same change when public behavior, configuration, architecture, or an intentional decision changes. Behavior belongs in the requirements, architectural choices in an ADR, repository conventions here.
+
+## Working documents
+
+Three documents in `docs/` hold the state of work in flight. They are scratch space, not an archive, and each one is empty when no work is running.
+
+- `docs/BUILD.md` holds the implementation plan of the current assignment as vertical slices with checkboxes, and is ticked off while the work runs. A single small change needs no plan.
+- `docs/DECISIONS.md` holds one line per decision taken during the work: what was decided and where it was written down permanently. Never write the decision itself here; write it to the requirements, an ADR or this guide first, then record the pointer. The list is what the maintainer reviews.
+- `docs/BLOCKERS.md` holds open questions for the maintainer and anything else that stops the work. Ask directly when there is a conversation; write the entry and stop when there is not.
+
+Empty these documents as part of finishing the work, and report anything left in them. Never move finished content into them for safekeeping: that is what the Git history, the requirements and `docs/adr/` are for.
 
 ## Repository map
 
