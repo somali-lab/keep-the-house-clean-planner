@@ -12,6 +12,10 @@ This repository uses [Release Please](https://github.com/googleapis/release-plea
 
 Normal pull requests run linting, type checking, tests, and a container build before they are merged. The release workflow does not repeat those checks; it only manages the release and builds the image that is actually published.
 
+The end-to-end suite (`npm run test:e2e`) and the container smoke test (`node scripts/smoke.mjs`) deliberately stay out of CI, because both need a browser or a real container runtime. Run them locally when a change touches those paths.
+
+Both **CI** and **Release** also accept a manual `workflow_dispatch` run from the Actions tab, which is how a release pull request is re-created after an interrupted run without pushing an empty commit.
+
 No repository secret is needed. The workflows publish with GitHub's short-lived `GITHUB_TOKEN`; runtime or homelab credentials do not belong in this repository.
 
 ## Commit and pull-request titles
@@ -24,8 +28,10 @@ Repository agents first fetch `origin/main`, fast-forward local `main`, and crea
 - `feat: add a monthly planning view` creates a minor release.
 - `refactor: simplify route handling` creates a patch release.
 - `feat!: replace the cycle configuration format` creates a major release.
-- `docs: explain backup recovery` is included in the next release notes but does not create a release by itself.
-- `chore: update dependencies` is included in the next release notes but does not create a release by itself.
+- `docs: explain backup recovery` creates a patch release.
+- `chore: update dependencies` creates a patch release.
+
+Every type configured in `release-please-config.json` is visible in the changelog and bumps the version. `docs`, `chore`, `test`, `style`, `ci` and `build` are therefore releasable too, each as a patch. A documentation-only change to this repository produces a new patch version, and that is intentional: the published image and the version shown in the app then match the state of the repository they were built from.
 
 Scopes are optional, for example `feat(planner): add keyboard controls`.
 
