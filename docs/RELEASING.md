@@ -49,6 +49,8 @@ END_COMMIT_OVERRIDE
 
 List every intended changelog entry as a valid Conventional Commit line. Release Please then uses those lines instead of reducing the pull request to only its squash title. Review the generated release pull request and confirm that each line appears under the configured section in `CHANGELOG.md`.
 
+This works because the repository sets the default squash commit message to the pull-request title and description (`squash_merge_commit_title: PR_TITLE`, `squash_merge_commit_message: PR_BODY` under Settings, Pull Requests). Without that setting GitHub fills the commit body with the individual branch commits, the override block never reaches `main`, and the extra entries are silently lost.
+
 Repository agents add this override automatically whenever a squash-merged pull request contains multiple release-worthy changes. They derive the logical entries from the complete branch diff and commit history, consolidate fixup or iteration commits, and keep distinct changes separate. After creating or updating the pull request, they read the published description back to verify the exact markers and entries.
 
 Commit overrides only work for squash merges. Do not use a plain merge for a pull request that depends on this block. If the pull request has one release-note entry, a Conventional Commit pull-request title is sufficient.
