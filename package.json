@@ -17,6 +17,7 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "vitest run",
     "test:e2e": "npm run test:e2e --workspace apps/web --if-present",
+    "screenshots": "npm run screenshots --workspace apps/web",
     "smoke": "node scripts/smoke.mjs",
     "format": "prettier --write .",
     "verify": "npm run lint && npm run typecheck && npm run test"
