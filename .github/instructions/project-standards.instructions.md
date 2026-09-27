@@ -5,7 +5,7 @@ applyTo: '**'
 
 # Project standards
 
-- Read root `AGENTS.md`, relevant tests, and matching `docs/DECISIONS.md` entries before editing.
+- Read root `AGENTS.md`, relevant tests, and any matching record in `docs/adr/` before editing.
 - Preserve unrelated user changes and keep the diff scoped to the request.
 - Use Node.js 24+, strict TypeScript, ESM, and explicit `.ts` extensions on relative imports.
 - Do not edit generated output, `node_modules`, backups, reports, or real `.env` files.
