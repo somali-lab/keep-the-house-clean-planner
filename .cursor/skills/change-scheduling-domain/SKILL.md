@@ -18,7 +18,7 @@ description: Changes or reviews four-week cycles, plan slots, generation, occurr
 
 ## Change workflow
 
-1. Search `docs/DECISIONS.md` for cycles, slots, generation, occurrences, due, or activation.
+1. Read the scheduling sections of `docs/huishoudplanner-requirements.md` and check `docs/adr/` for a record that constrains cycles, slots, generation, occurrences, due, or activation.
 2. Write boundary cases as shared pure tests where possible: anchor edges, negative cycle indexes, Sunday ordering, DST transitions, interval mismatch, unavailable users, and duplicate task/day.
 3. Update shared validation/time logic first when both server and web need the rule.
 4. Update server generation/persistence with idempotency, deterministic ordering, and full audit coverage.

@@ -7,7 +7,7 @@ description: Implements or reviews Keep the House Clean server/API changes with 
 
 ## Trace the change
 
-Before editing, inspect the matching shared schema, route, domain function, data repository, audit behavior, web consumer, and tests. Search `docs/DECISIONS.md` for the entity or feature name.
+Before editing, inspect the matching shared schema, route, domain function, data repository, audit behavior, web consumer, and tests. Check `docs/huishoudplanner-requirements.md` for the required behavior and `docs/adr/` for a record that constrains it.
 
 ## Implementation order
 

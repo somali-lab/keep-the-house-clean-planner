@@ -106,8 +106,8 @@ export function DesktopLayout({ onOpenOverview }: { onOpenOverview: () => void }
                     )
                   }
                 >
-                  <Icon className="size-5" aria-hidden="true" />
-                  <span className={cn(collapsed && 'visually-hidden')}>{t(label)}</span>
+                  <Icon className="size-5 shrink-0" aria-hidden="true" />
+                  <span className={cn('truncate', collapsed && 'visually-hidden')}>{t(label)}</span>
                 </NavLink>
               </li>
             ))}

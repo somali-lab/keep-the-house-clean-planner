@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.1](https://github.com/somali-lab/keep-the-house-clean-planner/compare/v1.6.0...v1.6.1) (2026-09-27)
+
+
+### Bug fixes
+
+* **web:** keep completions sidebar icon from collapsing ([#35](https://github.com/somali-lab/keep-the-house-clean-planner/issues/35)) ([706039c](https://github.com/somali-lab/keep-the-house-clean-planner/commit/706039c232c6f493209ca9fd3eb5e0db1d9820aa))
+
 ## [1.6.0](https://github.com/somali-lab/keep-the-house-clean-planner/compare/v1.5.4...v1.6.0) (2026-09-27)
 
 
