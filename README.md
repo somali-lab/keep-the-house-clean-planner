@@ -89,6 +89,11 @@ ghcr.io/somali-lab/keep-the-house-clean-planner
 
 Published tags include the full version (`1.4.2`), rolling minor and major tags (`1.4` and `1`), `latest`, and an immutable `sha-<commit>` tag. See [Releasing](docs/RELEASING.md) for the release flow and the one-time repository settings.
 
+The repository also uses GitHub Agentic Workflows to check its coding-agent
+instructions after releases and once a week. See
+[Agentic workflow checks](docs/AGENTIC-WORKFLOWS.md) for the triggers, review
+scope, security boundaries, generated files, and maintenance commands.
+
 ## Configuration
 
 Configuration is read from `.env`; see [.env.example](.env.example) for a ready-to-use template.
