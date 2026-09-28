@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.6.2](https://github.com/somali-lab/keep-the-house-clean-planner/compare/v1.6.1...v1.6.2) (2026-09-28)
+
+
+### Continuous integration
+
+* **context-maintainer:** look for missing instruction files ([#42](https://github.com/somali-lab/keep-the-house-clean-planner/issues/42)) ([5148269](https://github.com/somali-lab/keep-the-house-clean-planner/commit/51482692ad1bd6d91c6672dee0fad060e8bf0956))
+
+
+### Tests
+
+* add a Playwright script that captures the README screenshots ([cad3796](https://github.com/somali-lab/keep-the-house-clean-planner/commit/cad3796dc532e34f4699139360c3d814b683abe8))
+
+
+### Documentation
+
+* add architecture decision records ([86e740e](https://github.com/somali-lab/keep-the-house-clean-planner/commit/86e740ede410f00b4b0ea516f46c237c2bce71ab))
+* correct the release and branch-naming documentation ([86e740e](https://github.com/somali-lab/keep-the-house-clean-planner/commit/86e740ede410f00b4b0ea516f46c237c2bce71ab))
+* define how the working documents are used ([#39](https://github.com/somali-lab/keep-the-house-clean-planner/issues/39)) ([bf44d2e](https://github.com/somali-lab/keep-the-house-clean-planner/commit/bf44d2ec436079678f0dcf4d13f7a03d73e901e9))
+* regenerate the README screenshots from a scripted demo household ([cad3796](https://github.com/somali-lab/keep-the-house-clean-planner/commit/cad3796dc532e34f4699139360c3d814b683abe8))
+* reset the working documents and remove the completed implementation plan ([86e740e](https://github.com/somali-lab/keep-the-house-clean-planner/commit/86e740ede410f00b4b0ea516f46c237c2bce71ab))
+* rewrite the requirements as a timeless specification ([86e740e](https://github.com/somali-lab/keep-the-house-clean-planner/commit/86e740ede410f00b4b0ea516f46c237c2bce71ab))
+
+
+### Maintenance
+
+* **agents:** add shared repository instruction layers and portable skills ([ea8221b](https://github.com/somali-lab/keep-the-house-clean-planner/commit/ea8221b02df111bd908535b220ee9816e0dd4c61))
+* **workflows:** add safeguarded context maintainer ([ea8221b](https://github.com/somali-lab/keep-the-house-clean-planner/commit/ea8221b02df111bd908535b220ee9816e0dd4c61))
+
 ## [1.6.1](https://github.com/somali-lab/keep-the-house-clean-planner/compare/v1.6.0...v1.6.1) (2026-09-27)
 
 
