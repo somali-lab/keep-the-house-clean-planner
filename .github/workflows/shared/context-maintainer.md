@@ -25,6 +25,7 @@ safe-outputs:
       - CLAUDE.md
       - README.md
       - .github/copilot-instructions.md
+      - .github/instructions/*.instructions.md
       - .github/instructions/**/*.instructions.md
       - .cursor/rules/*.mdc
       - .agents/skills/**/SKILL.md
