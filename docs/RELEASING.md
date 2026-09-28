@@ -10,6 +10,12 @@ This repository uses [Release Please](https://github.com/googleapis/release-plea
 4. The workflow creates the Git tag and GitHub Release.
 5. The released commit is built and published to GHCR.
 
+Merging the release pull request also starts the release-triggered agent-context
+check because Release Please updates `version.txt` and
+`.release-please-manifest.json` on `main`. Ordinary merges and updates to the open
+release pull request do not start that check. See
+[Agentic workflow checks](AGENTIC-WORKFLOWS.md) for the complete process.
+
 Normal pull requests run linting, type checking, tests, and a container build before they are merged. The release workflow does not repeat those checks; it only manages the release and builds the image that is actually published.
 
 The end-to-end suite (`npm run test:e2e`) and the container smoke test (`node scripts/smoke.mjs`) deliberately stay out of CI, because both need a browser or a real container runtime. Run them locally when a change touches those paths.
