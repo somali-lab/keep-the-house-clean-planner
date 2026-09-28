@@ -1,6 +1,6 @@
 # Repository agent guide
 
-These instructions apply to the entire repository. More focused rules live in `.cursor/rules/`, and repeatable workflows live in `.cursor/skills/`.
+These instructions apply to the entire repository and are the single source of truth for general rules. Path-specific rules live in `.github/instructions/*.instructions.md` (Copilot, scoped by `applyTo`) and in their mirrors `.cursor/rules/*.mdc` (Cursor, scoped by `globs`); change a rule in both. Repeatable workflows live in `.agents/skills/`. `.github/copilot-instructions.md` and `CLAUDE.md` are thin entry points that delegate here and must stay thin.
 
 ## Start every task
 
@@ -57,6 +57,7 @@ Empty these documents as part of finishing the work, and report anything left in
 - `apps/web/e2e`: isolated Playwright journeys against the real server and a fresh database.
 - `docker`, `docker-compose.yml`, `scripts/smoke.mjs`: production image and isolated container smoke test.
 - `docs/adr`: architecture decision records.
+- `AGENTS.md`, `.github/instructions`, `.cursor/rules`, `.agents/skills`, `.github/copilot-instructions.md`, `CLAUDE.md`: the agent-context layer, maintained by the `context-maintainer` agentic workflow.
 
 ## Non-negotiable architecture
 
@@ -75,7 +76,7 @@ Empty these documents as part of finishing the work, and report anything left in
 - Add or update a regression test with every behavior change. Prefer pure model tests for logic, component tests for interaction, server integration tests for HTTP/persistence, and Playwright only for critical cross-stack journeys.
 - Server tests use `createTestApp()` with a fresh database and fixed clock. Tests must never call real AI providers, notification endpoints, or a real installation.
 - Every test harness owns its own state: its own database, its own port, its own fixtures created through the data layer. A test that depends on another test's leftovers, on a developer's running stack, or on wall-clock time is a broken test, not a flaky one.
-- Run focused tests while iterating, then the checks selected by `.cursor/skills/verify-household-planner/SKILL.md`.
+- Run focused tests while iterating, then the checks selected by `.agents/skills/verify-household-planner/SKILL.md`.
 - `npm run verify` is the default full quality gate. Use `npm run test:e2e` for affected end-to-end flows and `node scripts/smoke.mjs` only for container/runtime changes.
 - Report exactly what was changed and what was verified. If a relevant check could not run, state why.
 

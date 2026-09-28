@@ -1,0 +1,13 @@
+---
+description: Release Please, GitHub Actions, version, and container publication rules
+applyTo: '.github/workflows/*.yml,.github/workflows/*.yaml,release-please-config.json,.release-please-manifest.json,CHANGELOG.md,version.txt,docs/RELEASING.md,docker/**,docker-compose.yml'
+---
+
+# Release rules
+
+- Follow `docs/RELEASING.md`; normal changes use Conventional Commit titles and Release Please owns release metadata.
+- Do not manually bump `version.txt`, the manifest, or `CHANGELOG.md` outside the release flow unless explicitly requested.
+- Keep GitHub Actions permissions least-privilege and pin third-party actions to full commit SHAs.
+- Never add long-lived credentials; publishing uses the scoped `GITHUB_TOKEN`.
+- Keep the published image compatible with the documented `linux/amd64` Proxmox target.
+- Validate automation changes with the relevant build/test checks and a container build when feasible.

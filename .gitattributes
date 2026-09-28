@@ -4,3 +4,5 @@
 *.ico binary
 *.pdf binary
 *.gz binary
+
+.github/workflows/*.lock.yml linguist-generated=true
