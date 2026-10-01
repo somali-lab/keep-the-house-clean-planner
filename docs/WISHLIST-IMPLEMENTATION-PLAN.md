@@ -15,7 +15,9 @@ uitdrukkelijk verzoek van de opdrachtgever **buiten dit plan**.
 ### Startprompt voor een uitvoerende agent
 
 > Voer werkpakket `Pxx` uit uit `docs/WISHLIST-IMPLEMENTATION-PLAN.md`.
-> Controleer de afhankelijkheden en volg `AGENTS.md` en de vaste werkwijze
+> Controleer of het pakket actief is en of de afhankelijkheden klaar zijn.
+> Voer een gepauzeerd pakket alleen uit na een nieuw expliciet verzoek.
+> Volg daarna `AGENTS.md` en de vaste werkwijze
 > in dit plan. Schrijf de concrete stappen tijdelijk in `docs/BUILD.md`, implementeer
 > de kleinste volledige wijziging, werk tests en permanente documentatie bij,
 > vraag bij nieuwe productkeuzes om een antwoord, verifieer de acceptatiecriteria
@@ -47,9 +49,9 @@ Deze keuzes komen uit de antwoorden van de opdrachtgever en zijn geen defaults:
   beide bonussen en valutaomrekening zijn instelbaar.
 - Gebruikers boeken eigen inwisselingen of uitbetalingen direct. Ook bestaande
   uitvoeringshistorie krijgt met terugwerkende kracht punten.
-- Planning-PDF's krijgen twee aparte bronnen: een gekozen plansjabloon en
-  werkelijk ingeplande taken. Niet-toegewezen taken zijn bij een
-  persoonsselectie apart aan of uit te zetten.
+- De eerder gekozen PDF-uitbreiding staat op pauze; als die later wordt
+  hervat, zijn een gekozen plansjabloon en werkelijk ingeplande taken aparte
+  bronnen en zijn niet-toegewezen taken apart aan of uit te zetten.
 - Mijn taken gebruikt schuivende perioden vanaf vandaag, met zichtbare datums
   en cyclusweeknummers.
 - Alle filterkeuzes in de app blijven na Ctrl+F5 behouden.
@@ -95,8 +97,9 @@ bevestigde keuze voor het nieuwe werk; markeer het conflict in de wijziging.
 
 De bevestigde prioriteit is eerst fouten en dagelijks gebruik, daarna
 uitbreidingen en gamification. Uitvoervolgorde:
-**P01 → P02 → P04 → P05 → P00 → P03 → P06 → P07 → P08 → P09 → P10 → P11 → P12**.
+**P01 → P02 → P04 → P05 → P00 → P03 → P06 → P08 → P09 → P10 → P11 → P12**.
 P00 versnelt de resterende tests na de eerste herstel- en gebruikspakketten.
+P07 is op verzoek gepauzeerd en hoort niet bij deze uitvoervolgorde.
 Pakketten met hetzelfde niveau kunnen na controle van hun afhankelijkheden
 onafhankelijk worden uitgevoerd; testprocessen delen nooit een database,
 poort of fixture. De nummers zijn stabiele verwijzingen, geen verplichting om
@@ -224,6 +227,8 @@ filtermodellen.
   Test meermaals uitvoeren op dezelfde dag, ongedaan maken en herladen.
 
 ### P07 — PDF per persoon of selectie
+
+**Status: on hold. Niet uitvoeren zonder nieuw expliciet verzoek.**
 
 **Afhankelijkheid:** P01. **Oppervlak:** exportschema, PDF-sheets en dialog.
 
