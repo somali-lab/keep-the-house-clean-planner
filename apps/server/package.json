@@ -20,7 +20,7 @@
     "zod": "^4.6.4"
   },
   "devDependencies": {
-    "mongodb-memory-server": "^11.2.0",
+    "mongodb-memory-server": "^11.3.0",
     "pdf-parse": "^2.4.5"
   }
 }
