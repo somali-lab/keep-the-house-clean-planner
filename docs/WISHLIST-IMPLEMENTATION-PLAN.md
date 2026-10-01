@@ -3,10 +3,10 @@
 ## Doel en status
 
 Dit document verdeelt de wensenlijst in kleine, zelfstandig te beoordelen wijzigingen.
-**Status: concept; de productkeuzes in de beslislijst hieronder staan nog open.**
-Een agent voert pas een pakket uit nadat alle bijbehorende keuzes met de
-opdrachtgever zijn bevestigd. Daarna voert de agent **één werkpakket tegelijk**
-uit en controleert de genoemde acceptatiecriteria. Dit is een blijvende roadmap;
+**Status: productkeuzes bevestigd; gereed om per werkpakket uit te voeren.**
+Een agent voert **één werkpakket tegelijk** uit en controleert de genoemde
+acceptatiecriteria. Nieuwe, tijdens uitvoering ontdekte productvragen worden
+aan de opdrachtgever gesteld en niet door de agent ingevuld. Dit is een blijvende roadmap;
 `docs/BUILD.md` blijft de tijdelijke checklist voor het pakket dat daadwerkelijk loopt.
 
 De migratie naar .NET 10, hexagonale architectuur, OpenTelemetry en OAuth2 valt op
@@ -15,70 +15,54 @@ uitdrukkelijk verzoek van de opdrachtgever **buiten dit plan**.
 ### Startprompt voor een uitvoerende agent
 
 > Voer werkpakket `Pxx` uit uit `docs/WISHLIST-IMPLEMENTATION-PLAN.md`.
-> Controleer eerst of de bijbehorende productkeuzes bevestigd zijn. Vraag de
-> opdrachtgever om een antwoord als dat niet zo is; vul geen standaard in.
-> Controleer daarna de afhankelijkheden en volg `AGENTS.md` en de vaste werkwijze
+> Controleer de afhankelijkheden en volg `AGENTS.md` en de vaste werkwijze
 > in dit plan. Schrijf de concrete stappen tijdelijk in `docs/BUILD.md`, implementeer
 > de kleinste volledige wijziging, werk tests en permanente documentatie bij,
-> verifieer de acceptatiecriteria en commit het resultaat. Rapporteer de
+> vraag bij nieuwe productkeuzes om een antwoord, verifieer de acceptatiecriteria
+> en commit het resultaat. Rapporteer de
 > uitgevoerde controles en eventuele open punten. Maak alleen een PR als ik
 > daar afzonderlijk om vraag.
 
-## Bevestigd en nog te besluiten
+## Bevestigde productkeuzes
 
-Bevestigd door de opdrachtgever:
+Deze keuzes komen uit de antwoorden van de opdrachtgever en zijn geen defaults:
 
+- Eerst fouten en dagelijks gebruik, daarna uitbreidingen en gamification.
 - Windowsmeldingen zijn alleen nodig terwijl de planner open is.
 - Meldmomenten worden per persoon ingesteld. Een melding bevat open taken
   voor vandaag en achterstallige taken van die persoon.
 - Vóór planactivatie moet een voorbeeld van de gevolgen zichtbaar zijn.
+- Bij activeren van een ander plan worden alleen onaangeroerde toekomstige
+  open taken vervangen. Afgeronde, overgeslagen, zelf verplaatste en ad-hoc
+  uitvoeringen blijven bestaan.
 - AI-plannen worden als gewone conceptplannen in Planbeheer beoordeeld;
   activeren en verwijderen gebeuren daar.
+- Extra uitvoeringen van bestaande taken, ook meermaals op één dag, én losse
+  eenmalige taken zonder centraal taakrecord zijn allebei gewenst.
 - Gamificationpunten gaan naar degene die het werk werkelijk deed.
 - Week- en cyclusbonussen tellen geplande en ad-hoc taken mee; overgeslagen
-  taken gelden niet als gedaan. De grens voor “op tijd” is nog open.
-- Inwisselingen of uitbetalingen worden geregistreerd; de autorisatie en
-  boekingswijze staan nog open.
+  taken gelden niet als gedaan. “Op tijd” betekent vóór het einde van de
+  betreffende kalenderweek of cyclus.
+- Bonuspunten zijn per persoon, per kalenderweek en per cyclus. Taakpunten,
+  beide bonussen en valutaomrekening zijn instelbaar.
+- Gebruikers boeken eigen inwisselingen of uitbetalingen direct. Ook bestaande
+  uitvoeringshistorie krijgt met terugwerkende kracht punten.
 - Planning-PDF's krijgen twee aparte bronnen: een gekozen plansjabloon en
-  werkelijk ingeplande taken.
+  werkelijk ingeplande taken. Niet-toegewezen taken zijn bij een
+  persoonsselectie apart aan of uit te zetten.
 - Mijn taken gebruikt schuivende perioden vanaf vandaag, met zichtbare datums
   en cyclusweeknummers.
 - Alle filterkeuzes in de app blijven na Ctrl+F5 behouden.
 - De Home-knop gaat altijd naar het weekoverzicht. Twee kolommen bij
   **Vandaag → iedereen** gelden alleen waar het scherm breed genoeg is.
 - Een badge-avatar is een door de beheerder geüploade afbeelding.
+- De About-pagina toont de datum en tijd van de laatste release.
 - De .NET-migratie hoort niet in dit plan.
 
-De volgende productkeuzes zijn **geen implementatiedetails**. Een uitvoerende
-agent mag het genoemde pakket niet starten op basis van een eigen aanname:
-
-- **D01 — Prioriteit (alle pakketten):** welke onderdelen moeten eerst? De
-  volgorde verderop is slechts een voorstel totdat de opdrachtgever kiest.
-- **D02 — Planwissel (P02):** welke toekomstige uitvoeringen worden na de
-  preview daadwerkelijk vervangen of behouden?
-- **D03 — Extra/ad-hoc werk (P06, P10):** gaat het alleen om een extra
-  uitvoering van een bestaande taak, ook meerdere keren per dag, of ook om
-  een losse taak zonder centraal taakrecord?
-- **D05 — PDF-selectie (P07):** hoe worden niet-toegewezen taken behandeld bij
-  een selectie van personen?
-- **D06 — About (P09):** betekent “laatste update” build, installatie of
-  release? Welke tijdzone moet daarbij staan?
-- **D08 — Op tijd (P10):** welke dag of welk tijdstip is de grens voor
-  geplande en ad-hoc taken? Wanneer wordt een periode definitief afgesloten?
-- **D09 — Inwisseling (P10, P12):** wie mag punten inwisselen of een
-  uitbetaling boeken, met welke goedkeuring en welk auditspoor?
-- **D16 — Bonusontvanger (P10):** krijgt iedere persoon een eigen week- en
-  cyclusbonus, is het een huishoudbonus, of zijn beide gewenst? Betekent
-  “week” een kalenderweek of een andere periode?
-- **D17 — Instelbaarheid (P10):** welke puntwaarden, bonusbedragen en
-  valutaomrekening kan een beheerder wijzigen?
-- **D18 — Historie (P10):** krijgen uitvoeringen van vóór de invoering van
-  gamification achteraf punten of begint de telling vanaf de activering?
-
-Na beantwoording worden de gekozen regels in
-`docs/huishoudplanner-requirements.md` gezet en de bijbehorende pakketstappen
-hier aangescherpt. Een open punt blijft zichtbaar; het wordt niet stilzwijgend
-omgezet in een default.
+De uitvoerende agent legt de relevante gekozen regel vast in
+`docs/huishoudplanner-requirements.md` tegelijk met de eerste implementatie
+ervan. Waar de huidige requirements een andere regel noemen, geldt deze
+bevestigde keuze voor het nieuwe werk; markeer het conflict in de wijziging.
 
 ## Vaste werkwijze voor elk werkpakket
 
@@ -109,8 +93,10 @@ omgezet in een default.
 
 ## Volgorde en afhankelijkheden
 
-De voorgestelde volgorde hieronder geeft prioriteit aan zichtbare fouten en
-dagelijks gebruik; D01 kan deze volgorde wijzigen.
+De bevestigde prioriteit is eerst fouten en dagelijks gebruik, daarna
+uitbreidingen en gamification. Uitvoervolgorde:
+**P01 → P02 → P04 → P05 → P00 → P03 → P06 → P07 → P08 → P09 → P10 → P11 → P12**.
+P00 versnelt de resterende tests na de eerste herstel- en gebruikspakketten.
 Pakketten met hetzelfde niveau kunnen na controle van hun afhankelijkheden
 onafhankelijk worden uitgevoerd; testprocessen delen nooit een database,
 poort of fixture. De nummers zijn stabiele verwijzingen, geen verplichting om
@@ -160,12 +146,10 @@ planner-querymutaties, weekoverzicht en mobiele takenlijst.
 - Toon apart de uitvoeringen die blijven bestaan: afgerond, overgeslagen,
   zelf verplaatst en ad hoc. Voorkom dat een verouderde preview als bevestiging
   van een inmiddels gewijzigd plan dient.
-- Implementeer de met D02 bevestigde vervangingsregel. De huidige code bewaart
-  afgeronde, overgeslagen, verplaatste en ad-hoc uitvoeringen; dit is een
-  beschrijving van huidig gedrag, geen genomen productbesluit.
+- Vervang alleen onaangeroerde toekomstige open taken. Behoud afgeronde,
+  overgeslagen, zelf verplaatste en ad-hoc uitvoeringen, zoals bevestigd.
 - Leg uit dat overslaan nu niet doorschuift, niet als uitvoering telt voor de
-  due-berekening en in de geschiedenis blijft. Pas tekst en tests aan als
-  D02 tot een andere regel leidt.
+  due-berekening en in de geschiedenis blijft.
 - **Klaar wanneer:** de preview met de werkelijke activatie overeenkomt voor
   alle vijf genoemde statussen, inclusief een activatie midden in een cyclus.
 
@@ -226,24 +210,26 @@ filtermodellen.
 
 **Afhankelijkheid:** P01; ontwerpbeslissing vóór datamigratie.
 
-- Implementeer de door D03 gekozen vormen van extra of ad-hoc werk. Bepaal
-  daarna of een nieuwe taak eerst in de centrale takenlijst moet komen.
+- Ondersteun een extra uitvoering van een bestaande taak, ook meerdere keren
+  op dezelfde dag, én een losse eenmalige taak zonder record in de centrale
+  takenlijst. Maak het verschil tussen beide acties zichtbaar in de UI.
 - De huidige uniciteitsregel `(cycleId, taskId, plannedDate)` en ad-hoc API
   weigeren een tweede uitvoering van dezelfde taak op dezelfde dag. Leg in
   een ADR vast hoe meerdere werkelijke uitvoeringen naast één geplande
   uitvoering bestaan zonder generatie of historie te beschadigen.
 - Werk gedeeld contract, data, audit, due-berekening, statistiek en UI als één
   verticale wijziging bij. Voorkom dubbele registratie door herhaalde klikken.
-- **Klaar wanneer:** een extra uitvoering op dezelfde dag mogelijk is, een
-  afzonderlijk auditspoor heeft, zichtbaar is in historie/statistiek en een
-  planwissel overleeft. Test ook ongedaan maken en herladen.
+- **Klaar wanneer:** beide soorten uitvoering een afzonderlijk auditspoor
+  hebben, zichtbaar zijn in historie/statistiek en een planwissel overleven.
+  Test meermaals uitvoeren op dezelfde dag, ongedaan maken en herladen.
 
 ### P07 — PDF per persoon of selectie
 
 **Afhankelijkheid:** P01. **Oppervlak:** exportschema, PDF-sheets en dialog.
 
 - Voeg aan planning-PDF's **iedereen**, één persoon en meerdere personen toe.
-  Behandel niet-toegewezen taken volgens D05 en toon de keuze in de UI.
+  Geef bij een persoonsselectie een aparte keuze om niet-toegewezen taken
+  mee te nemen; toon de gekozen instelling in de UI.
 - Bied **plansjabloon** en **werkelijk ingeplande taken** als aparte
   exportkeuzes. Bij gegenereerde uitvoeringen moet een handmatig verplaatste
   taak op de actuele datum staan; bij een conceptsjabloon moet duidelijk zijn
@@ -273,11 +259,11 @@ filtermodellen.
 
 **Afhankelijkheid:** geen.
 
-- Toon versie van de draaiende build, de met D06 gekozen datum/tijd,
+- Toon versie van de draaiende build, datum en tijd van de laatste release,
   licentie of link naar `LICENSE`, en link naar `CHANGELOG.md`.
-- Maak de benodigde datum/tijd ook voor officiële builds beschikbaar; de
-  huidige lokale buildidentiteit alleen dekt een builddatum niet. Label de
-  waarde precies volgens D06, zonder build, installatie en release te verwarren.
+- Maak de releasedatum ook voor officiële builds beschikbaar zonder afhankelijk
+  te zijn van een live GitHub-verzoek. Label haar als **laatste release**;
+  verzin voor een lokale, nog niet uitgebrachte build geen nieuwe releasedatum.
 - **Klaar wanneer:** lokale en officiële buildmetadata, werkende links en
   mobiel/desktopweergave zijn getest. Leg de betekenis vast in README en
   zo nodig ADR-0007.
@@ -287,20 +273,26 @@ filtermodellen.
 **Afhankelijkheid:** P06, omdat extra werk ook meetelt.
 
 - Geef iedere taak een instelbare puntenwaarde; voeg bij instellingen een
-  omrekenfactor van punten naar valuta toe. Registreer inwisselingen of
-  uitbetalingen volgens de nog te bevestigen boekingsregel D09.
+  instelbare omrekenfactor van punten naar valuta en instelbare week- en
+  cyclusbonussen toe. Gebruikers kunnen zelf direct een inwisseling of
+  uitbetaling registreren; audit die boeking.
 - Registreer punten in een idempotent, controleerbaar grootboek per werkelijke
   uitvoering. Ken punten toe aan degene die de taak werkelijk deed. Maak de
   keuze bij **namens iemand afvinken** ondubbelzinnig en corrigeer punten bij
   ongedaan maken of beheerwijziging.
-- Bereken per met D16 bevestigde weekperiode en per cyclus een bonus voor
-  **alles gedaan** en een
-  aanvullende bonus voor **alles op tijd**. Geplande en ad-hoc taken tellen
-  mee; overgeslagen taken zijn niet gedaan. Definieer met D08 de grens voor
-  “op tijd” en het afsluiten van een periode.
-- **Klaar wanneer:** dubbel afvinken geen dubbele punten oplevert, correcties
-  de balans herstellen en week- en cyclusuitkomsten reproduceerbaar zijn met
-  vaste klok en geïsoleerde database.
+- Bereken per persoon en kalenderweek en per persoon en cyclus een bonus voor
+  **alles gedaan** en een aanvullende bonus voor **alles op tijd**. Geplande
+  en ad-hoc taken tellen mee; overgeslagen taken zijn niet gedaan. Voor de
+  weekbonus is een taak op tijd als die vóór het einde van die kalenderweek
+  klaar is; voor de cyclusbonus vóór het einde van de cyclus. Sluit de
+  respectieve bonus pas na afloop van de week of cyclus definitief af.
+- Bereken bij invoering ook punten over bestaande uitvoeringshistorie.
+  Maak de berekening idempotent, zodat herstarten of opnieuw berekenen geen
+  dubbele punten of dubbele bonus oplevert.
+- **Klaar wanneer:** dubbel afvinken of historische herberekening geen dubbele
+  punten oplevert, correcties de balans herstellen, een gebruiker een
+  inwisseling kan boeken en week- en cyclusuitkomsten reproduceerbaar zijn
+  met vaste klok en geïsoleerde database.
 
 ### P11 — Beheerbare badges
 
@@ -342,10 +334,10 @@ de gespiegelde instructies. Controleer ook of de bestaande context-maintainer
 workflow die regel kan behouden. Dit is een eigen, klein documentatiecommit;
 het hoeft niet te wachten tot alle functies klaar zijn.
 
-## Uitvoering pas na bevestiging
+## Uitvoering en nieuwe vragen
 
-De open beslislijst is deel van de definitie van gereedheid. Neem bij elk
-pakket de antwoorden en eventuele nieuwe vragen door met de opdrachtgever.
-Leg bevestigde gedragsregels permanent vast in de requirements en werk daarna
-de acceptatiecriteria van het pakket bij. De .NET-migratie blijft uitgesloten
-totdat er een nieuw, expliciet verzoek voor komt.
+De bovenstaande keuzes zijn bevestigd. Leg ze bij implementatie permanent
+vast in de requirements. Als een nieuw productdetail nodig blijkt dat hier
+niet is besloten, vraag de opdrachtgever gericht om een antwoord en voer het
+afhankelijke deel pas daarna uit. De .NET-migratie blijft uitgesloten totdat
+er een nieuw, expliciet verzoek voor komt.
