@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { useRooms, useSettings, useTasks, useUsers } from '../../api/queries.ts';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
+import { usePersistedFilter } from '../../hooks/usePersistedFilter.ts';
 import { useCompletion, useDeviations, useIntervals, useResetStatistics, useWorkload, type StatsPeriod } from './api.ts';
 import { statsTableClass } from './ChartFrame.tsx';
 import { FairnessBars, type FairnessRow } from './FairnessBars.tsx';
@@ -85,15 +86,16 @@ function KpiCard({ icon, label, value, tint }: { icon: ReactNode; label: string;
 
 export function StatsPage() {
   const idPrefix = useId();
-  const [activeTab, setActiveTab] = useState('overview');
-  const [period, setPeriod] = useState<StatsPeriod>({ unit: 'weeks', count: 1 });
-  const [groupBy, setGroupBy] = useState<StatsGroupBy>('task');
+  const { profile } = useProfile();
+  const profileId = profile?._id ?? null;
+  const [activeTab, setActiveTab] = usePersistedFilter('stats.tab', profileId, 'overview');
+  const [period, setPeriod, resetPeriod] = usePersistedFilter<StatsPeriod>('stats.period', profileId, { unit: 'weeks', count: 1 });
+  const [groupBy, setGroupBy, resetGroupBy] = usePersistedFilter<StatsGroupBy>('stats.groupBy', profileId, 'task');
   const [confirmReset, setConfirmReset] = useState(false);
   const [resetDone, setResetDone] = useState(false);
   const [confirmPurge, setConfirmPurge] = useState(false);
   const [purgeBefore, setPurgeBefore] = useState('');
   const [purgeDone, setPurgeDone] = useState(false);
-  const { profile } = useProfile();
   const workload = useWorkload(period);
   const completion = useCompletion(period, groupBy);
   const intervals = useIntervals(period);
@@ -147,6 +149,9 @@ export function StatsPage() {
           </optgroup>
         </NativeSelect>
       </div>
+      <Button type="button" variant="ghost" onClick={() => { resetPeriod(); resetGroupBy(); }}>
+        {t('stats.resetFilters')}
+      </Button>
       {profile?.role === 'admin' && (
         <Button
           type="button"

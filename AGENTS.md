@@ -16,7 +16,7 @@ These instructions apply to the entire repository and are the single source of t
 
 ## Pull requests and release notes
 
-1. Before creating or updating a pull request, compare the branch with its target and identify every distinct release-worthy change.
+1. Before creating or updating a pull request, compare the branch with its target and identify every distinct release-worthy change. Check whether README, screenshots, requirements, ADRs, and agent context (`AGENTS.md`, scoped instructions and their mirrors, skills, plugins, agents, and workflows) still match the change; update any relevant stale source documents in the same branch. Edit workflow source files and regenerate their compiled output rather than editing generated workflows by hand.
 2. Use a Conventional Commit pull-request title.
 3. For a squash-merged pull request with multiple release-note entries, automatically add the documented `BEGIN_COMMIT_OVERRIDE` block to the pull-request description. Include one valid Conventional Commit line per logical change. Consolidate fixup and iteration commits, but never collapse unrelated changes into one vague entry.
 4. After publishing or updating the pull request, read its description back and verify that both override markers and all intended entries are present before reporting the pull request as complete.

@@ -215,7 +215,16 @@ const SCENARIOS: Scenario[] = [
   {
     route: 'POST /api/cycle-plans/:id/activate',
     audit: { entity: 'cyclePlan', action: 'activate' },
-    run: () => call('POST', `/api/cycle-plans/${ids.plan}/activate`),
+    run: async () => {
+      const preview = await t.app.inject({
+        method: 'GET',
+        url: `/api/cycle-plans/${ids.plan}/activation-preview`,
+        headers: asProfile(p1),
+      });
+      return call('POST', `/api/cycle-plans/${ids.plan}/activate`, {
+        previewToken: preview.json<{ previewToken: string }>().previewToken,
+      });
+    },
   },
   {
     route: 'DELETE /api/stats',

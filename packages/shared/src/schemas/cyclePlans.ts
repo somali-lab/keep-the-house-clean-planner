@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { objectIdSchema, timestampsSchema, weekdaySchema, weekIndexSchema } from './common.ts';
+import { dayKeySchema, objectIdSchema, timestampsSchema, weekdaySchema, weekIndexSchema } from './common.ts';
 
 export const slotSchema = z.object({
   taskId: objectIdSchema,
@@ -48,3 +48,33 @@ export const putSlotsInputSchema = z.object({
   slots: z.array(slotSchema),
 });
 export type PutSlotsInput = z.infer<typeof putSlotsInputSchema>;
+
+export const activationPreviewItemSchema = z.object({
+  occurrenceId: objectIdSchema.nullable(),
+  cycleIndex: z.number().int(),
+  taskId: objectIdSchema,
+  taskName: z.string(),
+  date: dayKeySchema,
+  assigneeId: objectIdSchema.nullable(),
+});
+export type ActivationPreviewItem = z.infer<typeof activationPreviewItemSchema>;
+
+export const activationPreviewSchema = z.object({
+  planId: objectIdSchema,
+  previewToken: z.string().regex(/^[a-f0-9]{64}$/),
+  asOfDate: dayKeySchema,
+  removed: z.array(activationPreviewItemSchema),
+  added: z.array(activationPreviewItemSchema),
+  preserved: z.object({
+    done: z.array(activationPreviewItemSchema),
+    skipped: z.array(activationPreviewItemSchema),
+    moved: z.array(activationPreviewItemSchema),
+    adhoc: z.array(activationPreviewItemSchema),
+  }),
+});
+export type ActivationPreview = z.infer<typeof activationPreviewSchema>;
+
+export const activateCyclePlanInputSchema = z.object({
+  previewToken: activationPreviewSchema.shape.previewToken,
+});
+export type ActivateCyclePlanInput = z.infer<typeof activateCyclePlanInputSchema>;

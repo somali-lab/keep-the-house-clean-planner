@@ -1,5 +1,5 @@
 import type { CyclePlan, Slot } from '@huishoudplanner/shared';
-import { screen, within } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { makeUser, mockApi, storeProfile } from '../../test/fixtures.ts';
 import { makeRoom, makeSettings, makeTask, renderWithProviders } from '../../test/render.tsx';
@@ -39,6 +39,26 @@ function plan(slots: Slot[]): CyclePlan {
 }
 
 describe('DistributionPage', () => {
+  it('keeps the selected plan after remount and offers a reset', async () => {
+    storeProfile(ANNA._id);
+    mockApi({
+      '/api/users': [ANNA],
+      '/api/tasks': [],
+      '/api/rooms': [],
+      '/api/settings': makeSettings(),
+      '/api/cycle-plans': [plan([]), { ...plan([]), _id: 'p2', name: 'Zomer', active: false }],
+    });
+    const first = renderWithProviders(<DistributionPage />);
+    const select = await screen.findByLabelText('Plan');
+    fireEvent.change(select, { target: { value: 'p2' } });
+    expect(select).toHaveValue('p2');
+    first.unmount();
+    renderWithProviders(<DistributionPage />);
+    expect(await screen.findByLabelText('Plan')).toHaveValue('p2');
+    fireEvent.click(screen.getByRole('button', { name: 'Plankeuze herstellen' }));
+    expect(screen.getByLabelText('Plan')).toHaveValue('p1');
+  });
+
   it('shows weekday and weekend minutes per person for the week and cycle', async () => {
     const weekly = makeTask({
       _id: 't1',
