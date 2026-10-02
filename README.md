@@ -24,6 +24,7 @@ The screenshots show a scripted demo household with fictional people and sample 
 - Publishes upcoming tasks from the active plan in the week overview and My tasks. Tasks in a draft appear there only after the plan is activated and their dates are in view.
 - Plan management previews which upcoming tasks will be replaced or kept before activating another plan.
 - Shows today's chores, the upcoming days, and overdue work.
+- Records extra executions of a task and one-off tasks that never enter the task list, with an undo, so work that was not in the plan still counts in history and statistics.
 - Assigns chores to household members and separates weekday from weekend workload.
 - Reviews workload per person, per week, and across the full cycle.
 - Searches tasks by name in the planner and week overview, shows cycle-week information, and keeps each person's filter choices after a reload.

@@ -211,6 +211,7 @@ dismissedPromotions: [ ... ]
 - "Done just now" is one request that records an extra execution already done: `done: true` is only allowed for today, completes it for the given person (the actor when omitted; "anyone" is rejected), and refreshes the task's `lastCompletedAt`. If the task is already planned today, the Due page completes that occurrence instead.
 - Creating an ad-hoc occurrence takes an optional idempotency key (`requestId`). A repeat of the same request with the same key returns `200` with the stored record and writes and audits nothing; the same key for a different request is rejected with `409 idempotency_key_conflict`. The web client creates one key per user action with `crypto.getRandomValues`, keeps it across retries of that action, and does not queue these requests offline.
 - Undoing recorded work is a separate action, `retract`, because there is no planned state to return to: the occurrence is deleted, audited with the reason `retract`, and `lastCompletedAt` falls back to the newest remaining completion. A second retract answers `404`, which clients treat as already undone. Uncomplete on recorded work is rejected with `409 retract_required`; an ad-hoc occurrence that was planned and completed later still uses uncomplete. Today and the week overview mark recorded extra executions with an "Extra" badge (icon and text).
+- Entry points. Today has a "Record Work" action that opens one dialog with two clearly separated choices: an extra execution of an existing task (task and who did it) and a one-off task that does not appear on the task list (name, optional room, duration and who did it). Both are recorded as done today by the chosen person, who defaults to the active profile. The dialog creates one request key per intent, ignores a repeated click while the request is pending, shows validation per field, is keyboard accessible, and is usable on mobile and desktop; the choice is shown with an icon, a radio button and text, not by colour alone. After recording, Today shows the record under finished and offers undo, which retracts. The Due page offers the same dialog per task, opened on "extra" with that task chosen, next to "Schedule" and "Done now".
 
 ### 4.5 Due engine
 
@@ -269,7 +270,8 @@ Every state change is recorded with who, when, which entity, which action, the c
 
 ### 4.11 Data management
 
-- Full JSON export of the dataset, and import of such an export.
+- Full JSON export of the dataset, and import of such an export. The export carries `schemaVersion: 2`, which adds `recordedDone`, `requestId` and a nullable occurrence `taskId` (extra executions and one-off tasks; ADR-0009). Import accepts versions 1 and 2; a version-1 file is valid unchanged. A later version is rejected.
+- Before anything is deleted, import checks the file for duplicates on the unique indexes: two generated occurrences with the same `(cycleId, taskId, plannedDate)` and two occurrences with the same `requestId`. Such a file is rejected as a whole with `validation_error` (`duplicate_slot`, `duplicate_request_id`) and nothing is written, because the replacement would otherwise fail halfway, after the collections were emptied.
 - Import validates the entire file against both the API shape and the storage shape before writing anything, reports what it will replace, and requires explicit confirmation.
 - A nightly database dump is written to a mounted backup path by a separate container.
 

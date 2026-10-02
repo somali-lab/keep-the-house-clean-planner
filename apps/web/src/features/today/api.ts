@@ -166,3 +166,56 @@ export function useOccurrenceAction(
     },
   });
 }
+
+/** Work that was done and was not (or not in this form) in the plan; always recorded as done today (ADR-0009). */
+export type RecordWorkInput =
+  | { kind: 'extra'; taskId: string; date: string; assigneeId: string; requestId: string }
+  | {
+      kind: 'oneOff';
+      name: string;
+      roomId: string | null;
+      durationMinutes: number;
+      date: string;
+      assigneeId: string;
+      requestId: string;
+    };
+
+/**
+ * Records an extra execution or a one-off task as done in one request. The request key makes a repeated
+ * click or retry idempotent. It is not queued offline: the server decides whether the record is new.
+ */
+export function useRecordWork() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    networkMode: 'always',
+    mutationFn: async (input: RecordWorkInput): Promise<OccurrenceView> => {
+      if (input.kind === 'extra') {
+        return (
+          await api.post<OccurrenceView>('/api/occurrences', {
+            taskId: input.taskId,
+            date: input.date,
+            assigneeId: input.assigneeId,
+            done: true,
+            requestId: input.requestId,
+          })
+        ).data;
+      }
+      return (
+        await api.post<OccurrenceView>('/api/occurrences/one-off', {
+          name: input.name,
+          roomId: input.roomId,
+          durationMinutes: input.durationMinutes,
+          date: input.date,
+          assigneeId: input.assigneeId,
+          done: true,
+          requestId: input.requestId,
+        })
+      ).data;
+    },
+    // Occurrences, the due list, tasks (lastCompletedAt) and every statistic read the new record.
+    onSettled: () =>
+      Promise.all(
+        ['occurrences', 'due', 'tasks', 'stats'].map((key) => queryClient.invalidateQueries({ queryKey: [key] })),
+      ),
+  });
+}

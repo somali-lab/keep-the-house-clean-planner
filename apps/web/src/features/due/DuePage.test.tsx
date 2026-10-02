@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { ANNA, BRAM, mockApi, storeProfile } from '../../test/fixtures.ts';
-import { makeSettings, renderWithProviders } from '../../test/render.tsx';
+import { makeRoom, makeSettings, makeTask, renderWithProviders } from '../../test/render.tsx';
 import type { DueItemView } from './api.ts';
 import { DuePage, spokenDate } from './DuePage.tsx';
 
@@ -34,7 +34,9 @@ function setup(due: DueItemView[] = DUE) {
     '/api/users': [ANNA, BRAM],
     '/api/settings': makeSettings(),
     '/api/due': due,
-    'POST /api/occurrences': { _id: 'new1' },
+    'POST /api/occurrences': { _id: 'new1', taskNameSnapshot: 'Stofzuigen' },
+    '/api/tasks': [makeTask({ _id: 't2', name: 'Stofzuigen', roomId: 'r1' }), makeTask({ _id: 't4', name: 'Afwas', roomId: 'r1' })],
+    '/api/rooms': [makeRoom({ _id: 'r1', name: 'Woonkamer' })],
     'PATCH /api/occurrences/new1': { _id: 'new1', status: 'done' },
     'PATCH /api/occurrences/o-today': { _id: 'o-today', status: 'done' },
   });
@@ -131,6 +133,26 @@ describe('DuePage', () => {
     fireEvent.click(button);
     await waitFor(() => expect(callsTo(fetchMock, 'POST', '/api/occurrences')).toHaveLength(3));
     expect((callsTo(fetchMock, 'POST', '/api/occurrences')[2] as { requestId: string }).requestId).not.toBe(first!.requestId);
+  });
+
+  it('offers an extra execution per task, opens the dialog on that task and records it as done today', async () => {
+    const fetchMock = setup();
+    renderWithProviders(<DuePage now={NOW} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Extra keer voor Stofzuigen vastleggen' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Gedaan werk vastleggen' });
+    const task = within(dialog).getByLabelText('Taak');
+    await waitFor(() => expect(task).toHaveValue('t2'));
+    await waitFor(() => expect(within(dialog).getByLabelText('Gedaan door')).toHaveValue(ANNA._id));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Vastleggen' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(callsTo(fetchMock, 'POST', '/api/occurrences')).toEqual([
+      { taskId: 't2', date: '2026-09-16', assigneeId: ANNA._id, done: true, requestId: expect.stringMatching(/^[A-Za-z0-9_-]{16,64}$/) },
+    ]);
+    expect(await screen.findByRole('status')).toHaveTextContent('"Stofzuigen" is vastgelegd.');
+    // The due list is refreshed, because the extra execution restarts the clock of the task.
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([u]) => u === '/api/due').length).toBeGreaterThan(1));
   });
 
   it('uses the configured control for completing a due task', async () => {

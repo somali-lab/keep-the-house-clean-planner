@@ -1,6 +1,6 @@
 import type { OccurrenceView } from '@huishoudplanner/shared';
 import { weekIndexFor } from '@huishoudplanner/shared/cycle';
-import { ChevronLeft, ChevronRight, Sun, TriangleAlert, Undo2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Sun, TriangleAlert, Undo2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { EmptyState } from '@/components/EmptyState';
 import { NativeSelect } from '@/components/NativeSelect';
@@ -22,6 +22,7 @@ import {
   type OccurrenceAction,
 } from './api.ts';
 import { OccurrenceItem, shortDate } from './OccurrenceItem.tsx';
+import { RecordWorkDialog } from './RecordWorkDialog.tsx';
 import { longDay } from '../week/weekModel.ts';
 import {
   addDaysKey,
@@ -58,7 +59,8 @@ export function TodayPage({ now }: { now?: Date }) {
   const profileId = profile?._id ?? '';
   const action = useOccurrenceAction(occurrenceKeys.range(from, selectedDay), { profileId, todayKey });
 
-  const [snackbar, setSnackbar] = useState<{ id: string; task: string } | null>(null);
+  const [snackbar, setSnackbar] = useState<{ id: string; task: string; recorded?: true } | null>(null);
+  const [recordOpen, setRecordOpen] = useState(false);
   const [failed, setFailed] = useState(false);
   const [completionChoice, setCompletionChoice] = useState<OccurrenceView | null>(null);
 
@@ -141,6 +143,12 @@ export function TodayPage({ now }: { now?: Date }) {
         title={t('nav.today')}
         description={`${longDay(selectedDay)} · ${cycleLabel}`}
         className="mb-0"
+        actions={
+          <Button type="button" className="h-11 rounded-full" onClick={() => setRecordOpen(true)}>
+            <Plus aria-hidden="true" />
+            {t('recordWork.open')}
+          </Button>
+        }
       />
       <div className="grid gap-3 rounded-2xl border bg-card p-3 shadow-sm sm:grid-cols-[minmax(0,1fr)_12rem] sm:items-center">
         <div
@@ -294,13 +302,25 @@ export function TodayPage({ now }: { now?: Date }) {
         />
       )}
 
+      <RecordWorkDialog
+        open={recordOpen}
+        onOpenChange={setRecordOpen}
+        todayKey={todayKey}
+        onRecorded={(recorded) => {
+          // Recorded work is dated today: show it, and offer the undo (a retract) like a check-off.
+          setDayOffset(0);
+          setFailed(false);
+          setSnackbar({ id: recorded._id, task: recorded.taskNameSnapshot, recorded: true });
+        }}
+      />
+
       {snackbar && (
         <div
           className="snackbar fixed inset-x-4 bottom-24 z-30 mx-auto flex max-w-md items-center justify-between gap-3 rounded-full bg-foreground py-1.5 pr-1.5 pl-5 text-background shadow-lg"
           role="status"
         >
           <span className="min-w-0 truncate text-sm font-semibold">
-            {format('today.snackbar', { task: snackbar.task })}
+            {format(snackbar.recorded ? 'recordWork.recorded' : 'today.snackbar', { task: snackbar.task })}
           </span>
           <Button
             type="button"
@@ -308,7 +328,7 @@ export function TodayPage({ now }: { now?: Date }) {
             className="h-11 shrink-0 rounded-full bg-background/15 px-4 font-bold text-background hover:bg-background/25 hover:text-background"
             onClick={() => {
               const occ = occurrences.data.find((o) => o._id === snackbar.id);
-              if (occ) run({ id: occ._id, kind: 'uncomplete' }, occ);
+              if (occ) run({ id: occ._id, kind: occ.recordedDone ? 'retract' : 'uncomplete' }, occ);
             }}
           >
             <Undo2 aria-hidden="true" />
