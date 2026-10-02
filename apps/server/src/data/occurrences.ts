@@ -1,5 +1,5 @@
 import type { AuditAction, OccurrenceStatus } from '@huishoudplanner/shared';
-import { MongoBulkWriteError, ObjectId, type Db, type Filter } from 'mongodb';
+import { MongoBulkWriteError, MongoServerError, ObjectId, type Db, type Filter } from 'mongodb';
 import type { AuditContext } from '../audit/context.ts';
 import { diffFields, isEmptyDiff } from '../audit/diff.ts';
 import { record } from '../audit/record.ts';
@@ -27,6 +27,8 @@ export interface OccurrenceDoc {
   roomIdSnapshot?: ObjectId | null;
   roomNameSnapshot?: string | null;
   origin: 'generated' | 'adhoc';
+  /** Client idempotency key of an ad-hoc creation; missing on older data. */
+  requestId?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -111,8 +113,9 @@ export async function updateUpcomingOccurrenceRoomSnapshots(
 }
 
 /**
- * Idempotent bulk insert keyed on the unique index (cycleId, taskId, plannedDate):
- * duplicates are ignored, and only documents that were actually inserted are audited.
+ * Idempotent bulk insert of generated occurrences, keyed on the partial unique
+ * index (cycleId, taskId, plannedDate) for origin 'generated': duplicates are
+ * ignored, and only documents that were actually inserted are audited.
  */
 export async function insertOccurrencesIdempotent(
   ctx: AuditContext,
@@ -120,6 +123,9 @@ export async function insertOccurrencesIdempotent(
   meta: Record<string, unknown>,
 ): Promise<OccurrenceDoc[]> {
   if (docs.length === 0) return [];
+  if (docs.some((doc) => doc.origin !== 'generated')) {
+    throw new Error('insertOccurrencesIdempotent accepts generated occurrences only');
+  }
   let failed = new Set<number>();
   try {
     await occurrencesCollection(ctx.db).insertMany(docs, { ordered: false });
@@ -135,6 +141,28 @@ export async function insertOccurrencesIdempotent(
     await record(ctx, { entity: 'occurrence', entityId: doc._id, action: 'create', after, meta });
   }
   return inserted;
+}
+
+/**
+ * Inserts one ad-hoc occurrence and audits it. A duplicate key (a repeated
+ * requestId) is reported as `inserted: false` instead of being swallowed, so the
+ * caller can decide between replaying and conflicting.
+ */
+export async function insertAdhocOccurrence(
+  ctx: AuditContext,
+  doc: OccurrenceDoc,
+  meta: Record<string, unknown>,
+): Promise<{ inserted: true; doc: OccurrenceDoc } | { inserted: false }> {
+  if (doc.origin !== 'adhoc') throw new Error('insertAdhocOccurrence accepts ad-hoc occurrences only');
+  try {
+    await occurrencesCollection(ctx.db).insertOne(doc);
+  } catch (err) {
+    if (err instanceof MongoServerError && err.code === 11000) return { inserted: false };
+    throw err;
+  }
+  const { after } = diffFields({}, { ...doc }, { ignore: AUDIT_IGNORE });
+  await record(ctx, { entity: 'occurrence', entityId: doc._id, action: 'create', after, meta });
+  return { inserted: true, doc };
 }
 
 /** Deletes the given occurrences, auditing each as action 'delete' with its previous fields. */

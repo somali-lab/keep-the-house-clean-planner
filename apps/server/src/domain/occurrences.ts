@@ -13,7 +13,7 @@ import {
   deleteOccurrences,
   findOccurrenceById,
   findOccurrences,
-  insertOccurrencesIdempotent,
+  insertAdhocOccurrence,
   updateOccurrence,
   type OccurrenceDoc,
 } from '../data/occurrences.ts';
@@ -329,11 +329,12 @@ export async function createAdhocOccurrence(ctx: AuditContext, input: AdhocOccur
     createdAt: now,
     updatedAt: now,
   };
-  const [inserted] = await insertOccurrencesIdempotent(ctx, [doc], { origin: 'adhoc' });
-  if (!inserted) {
+  // The slot key now covers generated occurrences only; a collision needs a repeated requestId (later slice).
+  const result = await insertAdhocOccurrence(ctx, doc, { origin: 'adhoc' });
+  if (!result.inserted) {
     throw new HttpError(409, 'occurrence_exists', 'This task is already planned on that day');
   }
-  return inserted;
+  return result.doc;
 }
 
 /** Sets the actor as assignee only while unassigned (atomic); otherwise 409. */

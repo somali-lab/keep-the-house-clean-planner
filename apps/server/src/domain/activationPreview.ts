@@ -64,9 +64,11 @@ export async function activationPreview(ctx: AuditContext, planId: ObjectId): Pr
   }
   for (const group of Object.values(preserved)) group.sort(byDateAndId);
 
-  // The unique index is (cycleId, taskId, plannedDate). Surviving records with
-  // that key suppress an insert, including skipped and moved occurrences.
-  const occupied = new Set(existing.filter((occurrence) => !removedIds.has(occurrence._id.toHexString()))
+  // The unique index is (cycleId, taskId, plannedDate) for generated occurrences.
+  // Surviving generated records with that key suppress an insert, including
+  // skipped and moved ones; ad-hoc occurrences never occupy a slot.
+  const occupied = new Set(existing
+    .filter((occurrence) => occurrence.origin === 'generated' && !removedIds.has(occurrence._id.toHexString()))
     .map((occurrence) => `${occurrence.cycleId.toHexString()}:${occurrence.taskId.toHexString()}:${occurrence.plannedDate.getTime()}`));
   const added: ActivationPreviewItem[] = [];
   for (const cycleIndex of [current, current + 1]) {

@@ -13,6 +13,8 @@ export const COLLECTIONS = {
 
 export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS];
 
+export const GENERATED_SLOT_INDEX = 'occurrences_generated_slot_unique';
+
 /** Every index the app relies on (requirements §2, §3.8 and plan §1.4). */
 export const INDEXES: Record<CollectionName, IndexDescription[]> = {
   users: [],
@@ -25,7 +27,18 @@ export const INDEXES: Record<CollectionName, IndexDescription[]> = {
     { key: { date: 1, assigneeId: 1 } },
     { key: { status: 1, date: 1 } },
     { key: { taskId: 1, completedAt: -1 } },
-    { key: { cycleId: 1, taskId: 1, plannedDate: 1 }, unique: true },
+    {
+      key: { cycleId: 1, taskId: 1, plannedDate: 1 },
+      name: GENERATED_SLOT_INDEX,
+      unique: true,
+      partialFilterExpression: { origin: 'generated' },
+    },
+    {
+      key: { requestId: 1 },
+      name: 'occurrences_request_id_unique',
+      unique: true,
+      partialFilterExpression: { requestId: { $type: 'string' } },
+    },
   ],
   auditLog: [{ key: { entity: 1, entityId: 1, at: -1 } }, { key: { at: -1 } }],
 };
@@ -36,7 +49,26 @@ export async function connectMongo(url: string): Promise<{ client: MongoClient; 
   return { client, db: client.db() };
 }
 
+/**
+ * ADR-0009: the slot key (cycleId, taskId, plannedDate) was unique for every
+ * occurrence; it is now unique for generated occurrences only. Drops any other
+ * index with exactly that key (including the legacy default name) so the
+ * partial index can be created. Idempotent; a schema change, not audited.
+ */
+async function dropLegacySlotIndexes(db: Db): Promise<void> {
+  const exists = await db.listCollections({ name: COLLECTIONS.occurrences }, { nameOnly: true }).toArray();
+  if (exists.length === 0) return;
+  const collection = db.collection(COLLECTIONS.occurrences);
+  const legacyKey = JSON.stringify({ cycleId: 1, taskId: 1, plannedDate: 1 });
+  for (const index of await collection.indexes()) {
+    if (JSON.stringify(index.key) === legacyKey && index.name !== GENERATED_SLOT_INDEX) {
+      await collection.dropIndex(index.name!);
+    }
+  }
+}
+
 export async function ensureIndexes(db: Db): Promise<void> {
+  await dropLegacySlotIndexes(db);
   for (const [name, indexes] of Object.entries(INDEXES)) {
     const existing = await db.listCollections({ name }, { nameOnly: true }).toArray();
     if (existing.length === 0) await db.createCollection(name);

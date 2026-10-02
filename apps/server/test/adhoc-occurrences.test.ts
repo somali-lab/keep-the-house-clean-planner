@@ -67,14 +67,13 @@ describe('POST /api/occurrences (ad-hoc)', () => {
     expect(res.json<OccurrenceView>().assigneeId).toBeNull();
   });
 
-  it('refuses a second occurrence of the same task on the same day without writing', async () => {
+  it('allows a second ad-hoc occurrence of the same task on the same day (ADR-0009)', async () => {
     const { result } = await expectAudited(t, () => post({ taskId: ramen, date: '2026-09-19' }), {
       entity: 'occurrence',
       action: 'create',
-      count: 0,
+      count: 1,
     });
-    expect(result.statusCode).toBe(409);
-    expect(result.json()).toMatchObject({ code: 'occurrence_exists' });
+    expect(result.statusCode, result.body).toBe(201);
   });
 
   it('only plans within generated cycles', async () => {

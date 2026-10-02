@@ -177,7 +177,7 @@ dismissedPromotions: [ ... ]
 ### 4.3 Generation
 
 - Activating a plan generates occurrences for the cycle's 28 days.
-- Generation is idempotent. Re-running it produces no duplicates, keyed on cycle, task and planned date.
+- Generation is idempotent. Re-running it produces no duplicate generated occurrences, keyed on cycle, task and planned date. Only generated occurrences occupy a slot: an ad-hoc occurrence on a slot day does not suppress the generated one.
 - Generation never creates an occurrence in the past. A cycle activated midway produces the remainder of the cycle only.
 - A nightly job generates the upcoming cycle in advance, so the coming week is always visible.
 - Saving slots in the active plan synchronizes future generated occurrences immediately. The resulting tasks appear on their assigned dates and for their assigned people when those dates are within the selected range in the week overview or My tasks, including after a page reload. Saving slots in an inactive draft does not change those overviews.
