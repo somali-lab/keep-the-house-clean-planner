@@ -85,6 +85,7 @@ const inSection = async (name: string, text: string) =>
 describe('TodayPage', () => {
   beforeEach(() => {
     failNext = false;
+    for (const key of Object.keys(localStorage)) if (key.startsWith('huishoudplanner.filters.')) localStorage.removeItem(key);
   });
 
   it('shows the active profile by default and can switch to another person or everyone', async () => {
@@ -113,6 +114,18 @@ describe('TodayPage', () => {
 
     const url = String(fetchMock.mock.calls.find(([u]) => String(u).startsWith('/api/occurrences'))![0]);
     expect(url).toBe('/api/occurrences?from=2026-07-22&to=2026-09-16');
+  });
+
+  it('persists the selected person and can reset it to the active profile', async () => {
+    setup();
+    const firstRender = renderWithProviders(<TodayPage now={NOW} />);
+    await screen.findByRole('heading', { name: 'Mijn taken' });
+    fireEvent.change(screen.getByLabelText('Filter op persoon'), { target: { value: BRAM._id } });
+    firstRender.unmount();
+    renderWithProviders(<TodayPage now={NOW} />);
+    expect(await screen.findByLabelText('Filter op persoon')).toHaveValue(BRAM._id);
+    fireEvent.click(screen.getByRole('button', { name: 'Filter herstellen' }));
+    expect(screen.getByLabelText('Filter op persoon')).toHaveValue(ANNA._id);
   });
 
   it('shows the cycle week and browses to tomorrow and the day after tomorrow', async () => {

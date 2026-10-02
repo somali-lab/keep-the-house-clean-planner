@@ -1,12 +1,13 @@
 import { weekIndexFor } from '@huishoudplanner/shared/cycle';
 import { ListChecks } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useRooms, useSettings, useTasks } from '../../api/queries.ts';
 import { format, t } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
+import { usePersistedFilter } from '../../hooks/usePersistedFilter.ts';
 import { useOccurrences } from '../today/api.ts';
 import { addDaysKey, dayKeyInZone } from '../today/todayModel.ts';
 import {
@@ -24,8 +25,8 @@ export function MobileTasksPage({ now }: { now?: Date }) {
   const tasks = useTasks();
   const rooms = useRooms();
   const { profile } = useProfile();
-  const [weeks, setWeeks] = useState<WeekRange>(1);
-  const [hiddenRoomIds, setHiddenRoomIds] = useState<Set<string>>(() => new Set());
+  const [weeks, setWeeks, resetWeeks] = usePersistedFilter<WeekRange>('mobileTasks.period', profile?._id ?? null, 1);
+  const [hiddenRoomIds, setHiddenRoomIds, resetRooms] = usePersistedFilter<string[]>('mobileTasks.rooms', profile?._id ?? null, []);
   const from = dayKeyInZone(now ?? new Date(), settings.data?.timezone ?? 'Europe/Amsterdam');
   const to = addDaysKey(from, weeks * 7 - 1);
   const cycleWeek = settings.data ? weekIndexFor(from, settings.data.cycleAnchorDate) + 1 : null;
@@ -39,12 +40,13 @@ export function MobileTasksPage({ now }: { now?: Date }) {
         relevant.filter((occurrence) => occurrence.assigneeId === assigneeId),
         tasks.data ?? [],
         rooms.data ?? [],
-        t('tasks.unknownRoom'),
+        t('tasks.unknownRoom'), from, settings.data?.cycleAnchorDate ?? from,
       );
     return { mine: build(profile?._id ?? ''), unassigned: build(null) };
-  }, [occurrences.data, profile?._id, rooms.data, tasks.data]);
+  }, [from, occurrences.data, profile?._id, rooms.data, settings.data?.cycleAnchorDate, tasks.data]);
+  const hiddenRoomSet = new Set(hiddenRoomIds);
   const filterRooms = (items: TaskOverviewRow[]) =>
-    items.filter((row) => row.roomId === null || !hiddenRoomIds.has(row.roomId));
+    items.filter((row) => row.roomId === null || !hiddenRoomSet.has(row.roomId));
   const visible = { mine: filterRooms(rows.mine), unassigned: filterRooms(rows.unassigned) };
   const allRows = [...rows.mine, ...rows.unassigned];
   const usedRooms = (rooms.data ?? [])
@@ -82,7 +84,7 @@ export function MobileTasksPage({ now }: { now?: Date }) {
           <legend className="text-sm font-semibold">{t('mobileTasks.rooms')}</legend>
           <div className="flex flex-wrap gap-2">
             {usedRooms.map((room) => {
-              const checked = !hiddenRoomIds.has(room._id);
+              const checked = !hiddenRoomSet.has(room._id);
               return (
                 <label
                   key={room._id}
@@ -99,10 +101,9 @@ export function MobileTasksPage({ now }: { now?: Date }) {
                     checked={checked}
                     onChange={() =>
                       setHiddenRoomIds((current) => {
-                        const next = new Set(current);
-                        if (next.has(room._id)) next.delete(room._id);
-                        else next.add(room._id);
-                        return next;
+                        return current.includes(room._id)
+                          ? current.filter((id) => id !== room._id)
+                          : [...current, room._id];
                       })
                     }
                   />
@@ -112,6 +113,9 @@ export function MobileTasksPage({ now }: { now?: Date }) {
             })}
           </div>
         </fieldset>
+        <Button type="button" variant="outline" onClick={() => { resetWeeks(); resetRooms(); }}>
+          {t('mobileTasks.resetFilters')}
+        </Button>
         <fieldset className="grid gap-1.5">
           <legend className="text-sm font-semibold">{t('mobileTasks.period')}</legend>
           <div className="grid grid-cols-3 rounded-lg bg-muted p-1" aria-label={t('mobileTasks.period')}>
@@ -142,8 +146,19 @@ export function MobileTasksPage({ now }: { now?: Date }) {
         </div>
       ) : (
         <div className="grid gap-5">
-          <TaskTable title={t('mobileTasks.mine')} rows={visible.mine} />
-          <TaskTable title={t('mobileTasks.unassigned')} rows={visible.unassigned} />
+          {Array.from({ length: weeks }, (_, block) => {
+            const blockStart = addDaysKey(from, block * 7);
+            const blockEnd = addDaysKey(blockStart, 6);
+            const inBlock = (items: TaskOverviewRow[]) => items.filter((row) => row.periodStart === blockStart);
+            const mine = inBlock(visible.mine);
+            const unassigned = inBlock(visible.unassigned);
+            if (!mine.length && !unassigned.length) return null;
+            return <section key={blockStart} className="grid gap-3" aria-label={format('mobileTasks.block', { from: compactDate(blockStart), to: compactDate(blockEnd) })}>
+              <h2 className="text-lg font-extrabold">{format('mobileTasks.block', { from: compactDate(blockStart), to: compactDate(blockEnd) })}</h2>
+              <TaskTable title={t('mobileTasks.mine')} rows={mine} />
+              <TaskTable title={t('mobileTasks.unassigned')} rows={unassigned} />
+            </section>;
+          })}
         </div>
       )}
     </section>
@@ -173,12 +188,12 @@ function TaskTable({ title, rows }: { title: string; rows: TaskOverviewRow[] }) 
           <tbody>
             {rows.map((row) => (
               <tr
-                key={`${row.taskId}:${row.roomId ?? row.roomName}`}
+                key={`${row.taskId}:${row.roomId ?? row.roomName}:${row.periodStart}:${row.cycleWeek}`}
                 className="border-t align-top first:border-t-0"
               >
                 <td className="px-1.5 py-3 text-muted-foreground break-words sm:px-2">{row.roomName}</td>
                 <th scope="row" className="px-2 py-3 font-semibold break-words sm:px-3">
-                  {row.taskName}
+                  {row.taskName} <span className="block text-xs font-normal text-muted-foreground">{format('cycle.week', { week: row.cycleWeek })}</span>
                 </th>
                 <td className="px-1.5 py-3 leading-relaxed text-muted-foreground break-words sm:px-2">
                   {row.dates.map(datedWeekday).join(', ')}

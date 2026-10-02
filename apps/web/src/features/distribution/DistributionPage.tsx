@@ -1,14 +1,15 @@
 import { Scale } from 'lucide-react';
-import { useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { EmptyState } from '@/components/EmptyState';
 import { NativeSelect } from '@/components/NativeSelect';
 import { PageHeader } from '@/components/PageHeader';
+import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { panelTabsListClass, panelTabsTriggerClass, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useRooms, useSettings, useTasks } from '../../api/queries.ts';
 import { t } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
+import { usePersistedFilter } from '../../hooks/usePersistedFilter.ts';
 import { AllocationOverview } from '../planner/AllocationOverview.tsx';
 import { usePlans } from '../planner/api.ts';
 
@@ -17,8 +18,8 @@ export function DistributionPage() {
   const tasks = useTasks();
   const rooms = useRooms();
   const settings = useSettings();
-  const { activeUsers } = useProfile();
-  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
+  const { activeUsers, profile } = useProfile();
+  const [selectedPlanId, setSelectedPlanId, resetPlan] = usePersistedFilter<string | null>('distribution.plan', profile?._id ?? null, null);
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedTab = searchParams.get('tab') === 'spacing' ? 'spacing' : 'workload';
 
@@ -56,6 +57,7 @@ export function DistributionPage() {
           </option>
         ))}
       </NativeSelect>
+      <Button type="button" variant="ghost" onClick={resetPlan}>{t('distribution.resetFilter')}</Button>
     </div>
   ) : undefined;
 

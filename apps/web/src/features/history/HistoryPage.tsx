@@ -1,6 +1,6 @@
 import type { AuditEntity, AuditEntry } from '@huishoudplanner/shared';
 import { ArrowLeft, Bot, Clock, Filter, History, Sparkles, Trash2, UserRound } from 'lucide-react';
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { EmptyState } from '@/components/EmptyState';
 import { NativeSelect } from '@/components/NativeSelect';
@@ -51,6 +51,24 @@ export function HistoryPage() {
   const panelMode = Boolean(entity && entityId);
   const [confirmClear, setConfirmClear] = useState(false);
   const { profile } = useProfile();
+  const profileId = profile?._id ?? null;
+  const previousProfileId = useRef(profileId);
+  const seenProfile = useRef(false);
+  useEffect(() => {
+    if (!seenProfile.current) {
+      if (profileId) {
+        seenProfile.current = true;
+        previousProfileId.current = profileId;
+      }
+      return;
+    }
+    if (previousProfileId.current === profileId) return;
+    previousProfileId.current = profileId;
+    if (panelMode) return;
+    const next = new URLSearchParams(params);
+    for (const key of ['actorId', 'entity', 'from', 'to']) next.delete(key);
+    setParams(next, { replace: true });
+  }, [profileId, panelMode, params, setParams]);
 
   const filters: AuditFilters = {
     entity,
@@ -180,7 +198,7 @@ export function HistoryPage() {
 
       {!panelMode && (
         <div
-          className="mb-6 grid items-end gap-4 rounded-2xl border bg-card p-5 shadow-sm sm:grid-cols-2 lg:grid-cols-[auto_1fr_1fr_1fr_1fr]"
+          className="mb-6 grid items-end gap-4 rounded-2xl border bg-card p-5 shadow-sm sm:grid-cols-2 lg:grid-cols-[auto_1fr_1fr_1fr_1fr_auto]"
           role="search"
         >
           <div className="hidden size-10 place-items-center rounded-xl bg-accent text-accent-foreground lg:grid">
@@ -229,6 +247,9 @@ export function HistoryPage() {
               onChange={(e) => setFilter('to', e.target.value)}
             />
           </div>
+          <Button type="button" variant="ghost" onClick={() => setParams(new URLSearchParams(), { replace: true })}>
+            {t('history.filter.reset')}
+          </Button>
         </div>
       )}
 

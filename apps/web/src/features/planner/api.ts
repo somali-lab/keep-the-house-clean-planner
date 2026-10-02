@@ -1,4 +1,4 @@
-import type { CyclePlan, PlanSummary, PlanWarning, Slot } from '@huishoudplanner/shared';
+import type { ActivationPreview, CyclePlan, PlanSummary, PlanWarning, Slot } from '@huishoudplanner/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/index.ts';
 
@@ -10,6 +10,16 @@ export interface PutSlotsResponse {
   plan: CyclePlan;
   warnings: PlanWarning[];
   summary: PlanSummary;
+}
+
+export function useActivationPreview(planId: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: [...planKeys.all, planId, 'activation-preview'],
+    queryFn: async () =>
+      (await api.get<ActivationPreview>(`/api/cycle-plans/${planId}/activation-preview`)).data,
+    enabled: Boolean(planId && enabled),
+    staleTime: 0,
+  });
 }
 
 export function usePlans() {
@@ -71,9 +81,11 @@ export function useCreatePlan() {
 export function useActivatePlan() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (planId: string) =>
-      (await api.post<{ plan: CyclePlan; removed: number }>(`/api/cycle-plans/${planId}/activate`))
-        .data,
+    mutationFn: async ({ planId, previewToken }: { planId: string; previewToken: string }) =>
+      (await api.post<{ plan: CyclePlan; removed: number }>(
+        `/api/cycle-plans/${planId}/activate`,
+        { previewToken },
+      )).data,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: planKeys.all }),
   });
 }
