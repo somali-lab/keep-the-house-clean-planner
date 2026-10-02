@@ -2,6 +2,19 @@
 
 These instructions apply to the entire repository and are the single source of truth for general rules. Path-specific rules live in `.github/instructions/*.instructions.md` (Copilot, scoped by `applyTo`) and in their mirrors `.cursor/rules/*.mdc` (Cursor, scoped by `globs`); change a rule in both. Repeatable workflows live in `.agents/skills/`. `.github/copilot-instructions.md` and `CLAUDE.md` are thin entry points that delegate here and must stay thin.
 
+## Scoped instruction index
+
+Read each matching instruction file before editing. The `applyTo` frontmatter in the file is authoritative; this index helps locate the relevant rules.
+
+| Scope | Instruction file | Rules |
+| --- | --- | --- |
+| All files | `.github/instructions/project-standards.instructions.md` | General engineering constraints |
+| Release workflows, versioning, and container files | `.github/instructions/release.instructions.md` | Release and publication |
+| `apps/server/**/*.ts` | `.github/instructions/server.instructions.md` | Server layering, authorization, persistence, and audit |
+| `packages/shared/**/*.ts` | `.github/instructions/shared-domain.instructions.md` | Shared contracts, calendar, cycles, and validation |
+| `**/*.test.ts(x)`, `**/*.spec.ts(x)` | `.github/instructions/tests.instructions.md` | Deterministic tests |
+| `apps/web/**/*.ts(x)`, `apps/web/**/*.css` | `.github/instructions/web.instructions.md` | React, accessibility, API, and translations |
+
 ## Start every task
 
 1. Read `git status` and preserve changes you did not make.
