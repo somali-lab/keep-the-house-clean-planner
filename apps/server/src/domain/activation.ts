@@ -3,6 +3,7 @@ import type { ObjectId } from 'mongodb';
 import type { AuditContext } from '../audit/context.ts';
 import { discardPlan, findPlanById, setActivePlan, type CyclePlanDoc } from '../data/cyclePlans.ts';
 import { HttpError } from '../http/errors.ts';
+import { activationPreview } from './activationPreview.ts';
 import { replaceUpcomingOccurrences, type ReplacementResult } from './generation.ts';
 
 export interface ActivationResult extends ReplacementResult {
@@ -15,7 +16,11 @@ export interface ActivationResult extends ReplacementResult {
  * applies the replacement rule and regenerates. Deletions and generated
  * occurrences are recorded with source 'system' and the same runId.
  */
-export async function activatePlan(ctx: AuditContext, planId: ObjectId): Promise<ActivationResult> {
+export async function activatePlan(ctx: AuditContext, planId: ObjectId, previewToken: string): Promise<ActivationResult> {
+  const fresh = await activationPreview(ctx, planId);
+  if (fresh.previewToken !== previewToken) {
+    throw new HttpError(409, 'stale_activation_preview', 'Activation preview is no longer current');
+  }
   const runId = randomUUID();
   const plan = await setActivePlan(ctx, planId, { runId });
   if (!plan) throw new HttpError(404, 'not_found', 'cycle plan not found');

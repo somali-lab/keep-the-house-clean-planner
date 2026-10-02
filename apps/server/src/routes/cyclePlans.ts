@@ -1,4 +1,5 @@
 import {
+  activateCyclePlanInputSchema,
   createCyclePlanInputSchema,
   putSlotsInputSchema,
   updateCyclePlanInputSchema,
@@ -20,6 +21,7 @@ import { z } from 'zod';
 import { listTasks } from '../data/tasks.ts';
 import { listRooms } from '../data/rooms.ts';
 import { activatePlan, applyProposal, discardProposal } from '../domain/activation.ts';
+import { activationPreview } from '../domain/activationPreview.ts';
 import { diffPlans } from '../domain/planDiff.ts';
 import { replaceUpcomingOccurrences } from '../domain/generation.ts';
 import { slotsToDocs, validateSlotsAgainstDb } from '../domain/plans.ts';
@@ -94,9 +96,15 @@ export const cyclePlanRoutes: FastifyPluginAsync = async (app) => {
     return { deleted: true };
   });
 
+  app.get('/cycle-plans/:id/activation-preview', { preHandler: requirePlanner }, async (request) => {
+    const id = parseIdParam(request.params);
+    return activationPreview(auditContext(request), id);
+  });
+
   app.post('/cycle-plans/:id/activate', { preHandler: requirePlanner }, async (request) => {
     const id = parseIdParam(request.params);
-    return toApi(await activatePlan(auditContext(request), id));
+    const { previewToken } = parseOrThrow(activateCyclePlanInputSchema, request.body);
+    return toApi(await activatePlan(auditContext(request), id, previewToken));
   });
 
   /** Slot-level differences against the active plan, plus minutes per person per week before/after. */

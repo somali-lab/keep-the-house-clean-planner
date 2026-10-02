@@ -32,12 +32,16 @@ import {
 } from '@/components/ui/sheet';
 import { useRooms, useSettings, useTasks } from '../../api/queries.ts';
 import { format, t } from '../../i18n/nl.ts';
+import { ApiRequestError } from '../../api/index.ts';
+import { getLocale } from '../../i18n/runtime.ts';
+import type { ActivationPreviewItem } from '@huishoudplanner/shared';
 import { useProfile } from '../../identity/index.ts';
 import { ExportDialog } from '../export/ExportDialog.tsx';
 import { AiPage } from '../ai/AiPage.tsx';
 import { PromoteBanner } from '../promote/PromoteBanner.tsx';
 import {
   useActivatePlan,
+  useActivationPreview,
   useCreatePlan,
   useDeletePlan,
   usePlans,
@@ -54,6 +58,9 @@ export function PlannerPage() {
   const { activeUsers } = useProfile();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [confirmActivate, setConfirmActivate] = useState(false);
+  const [stalePreview, setStalePreview] = useState(false);
+  const [reviewedFreshPreview, setReviewedFreshPreview] = useState(false);
+  const activationPreview = useActivationPreview(selectedId, confirmActivate);
   const [notice, setNotice] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
@@ -199,6 +206,10 @@ export function PlannerPage() {
                   type="button"
                   onClick={() => {
                     setPlansOpen(false);
+                    activatePlan.reset();
+                    setStalePreview(false);
+                    setReviewedFreshPreview(false);
+                    setNotice(null);
                     setConfirmActivate(true);
                   }}
                 >
@@ -385,18 +396,83 @@ export function PlannerPage() {
               <p className="mt-2 text-sm text-muted-foreground">
                 {t('planner.activate.confirmBody')}
               </p>
+              {activationPreview.isPending || activationPreview.isFetching ? (
+                <p role="status" className="mt-4 text-sm text-muted-foreground">
+                  {t('planner.activate.previewLoading')}
+                </p>
+              ) : activationPreview.isError ? (
+                <p role="alert" className="mt-4 text-sm text-destructive">
+                  {t('planner.activate.previewError')}
+                </p>
+              ) : activationPreview.data ? (
+                <div className="mt-4 max-h-80 space-y-4 overflow-y-auto rounded-lg border p-4">
+                  <p className="text-sm text-muted-foreground">
+                    {format('planner.activate.previewAsOf', { date: formatPreviewDate(activationPreview.data.asOfDate) })}
+                  </p>
+                  <ActivationPreviewSection
+                    title={t('planner.activate.removed')}
+                    items={activationPreview.data.removed}
+                    activeUsers={activeUsers}
+                  />
+                  <ActivationPreviewSection
+                    title={t('planner.activate.added')}
+                    items={activationPreview.data.added}
+                    activeUsers={activeUsers}
+                  />
+                  <section aria-label={t('planner.activate.preserved')}>
+                    <h3 className="font-semibold">
+                      {t('planner.activate.preserved')} ({Object.values(activationPreview.data.preserved).reduce((sum, items) => sum + items.length, 0)})
+                    </h3>
+                    {(['done', 'skipped', 'moved', 'adhoc'] as const).map((kind) => (
+                      <ActivationPreviewSection
+                        key={kind}
+                        title={t(`planner.activate.preserved.${kind}`)}
+                        items={activationPreview.data!.preserved[kind]}
+                        activeUsers={activeUsers}
+                      />
+                    ))}
+                  </section>
+                  <p className="text-sm text-muted-foreground">
+                    {t('planner.activate.skippedExplanation')}
+                  </p>
+                </div>
+              ) : null}
+              {stalePreview && (
+                <div role="alert" className="mt-4 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm">
+                  <p>{t('planner.activate.stale')}</p>
+                  <label className="mt-2 flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      checked={reviewedFreshPreview}
+                      onChange={(event) => setReviewedFreshPreview(event.target.checked)}
+                    />
+                    <span>{t('planner.activate.reviewed')}</span>
+                  </label>
+                </div>
+              )}
               <div className="mt-5 flex flex-wrap gap-2">
                 <Button
                   type="button"
-                  disabled={activatePlan.isPending}
-                  onClick={() =>
-                    activatePlan.mutate(plan._id, {
+                  disabled={activatePlan.isPending || activationPreview.isPending || activationPreview.isFetching || activationPreview.isError || !activationPreview.data || (stalePreview && !reviewedFreshPreview)}
+                  onClick={() => {
+                    const preview = activationPreview.data;
+                    if (!preview) return;
+                    setStalePreview(false);
+                    setReviewedFreshPreview(false);
+                    activatePlan.mutate({ planId: plan._id, previewToken: preview.previewToken }, {
                       onSuccess: () => {
                         setConfirmActivate(false);
                         setNotice(t('planner.activated'));
                       },
-                    })
-                  }
+                      onError: (error) => {
+                        if (error instanceof ApiRequestError && error.code === 'stale_activation_preview') {
+                          setReviewedFreshPreview(false);
+                          setStalePreview(true);
+                          void activationPreview.refetch();
+                        }
+                      },
+                    });
+                  }}
                 >
                   {t('planner.activate.confirm')}
                 </Button>
@@ -404,10 +480,8 @@ export function PlannerPage() {
                   {t('common.cancel')}
                 </Button>
               </div>
-              {activatePlan.isError && (
-                <p role="alert" className="mt-3 text-sm text-destructive">
-                  {t('app.error')}
-                </p>
+              {activatePlan.isError && !(activatePlan.error instanceof ApiRequestError && activatePlan.error.code === 'stale_activation_preview') && (
+                <p role="alert" className="mt-3 text-sm text-destructive">{t('app.error')}</p>
               )}
             </div>
               )}
@@ -425,5 +499,44 @@ export function PlannerPage() {
           )}
       </div>
     </section>
+  );
+}
+
+function ActivationPreviewSection({
+  title,
+  items,
+  activeUsers,
+}: {
+  title: string;
+  items: ActivationPreviewItem[];
+  activeUsers: { _id: string; name: string }[];
+}) {
+  return (
+    <section className="mt-3" aria-label={title}>
+      <h3 className="font-semibold">{title} ({items.length})</h3>
+      {items.length === 0 ? (
+        <p className="mt-1 text-sm text-muted-foreground">{t('planner.activate.none')}</p>
+      ) : (
+        <ul className="mt-1 space-y-1 text-sm">
+          {items.map((item, index) => {
+            const person = activeUsers.find((user) => user._id === item.assigneeId)?.name ??
+              (item.assigneeId ? t('planner.activate.unknownPerson') : t('planner.anyone'));
+            const date = formatPreviewDate(item.date);
+            return (
+              <li key={`${item.occurrenceId ?? item.taskId}-${item.date}-${index}`} className="rounded-md bg-muted/50 px-2 py-1">
+                <span className="font-medium">{item.taskName}</span>
+                <span className="text-muted-foreground"> · {date} · {person}</span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function formatPreviewDate(dayKey: string): string {
+  return new Intl.DateTimeFormat(getLocale(), { dateStyle: 'medium' }).format(
+    new Date(`${dayKey}T12:00:00`),
   );
 }

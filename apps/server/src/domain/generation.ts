@@ -18,12 +18,38 @@ import {
   type OccurrenceDoc,
 } from '../data/occurrences.ts';
 import { getSettings, type SettingsDoc } from '../data/settings.ts';
-import { listTasks } from '../data/tasks.ts';
+import { listTasks, type TaskDoc } from '../data/tasks.ts';
 import { listRooms } from '../data/rooms.ts';
 import { HttpError } from '../http/errors.ts';
 
 export function isInVacation(dayKey: string, ranges: VacationRange[]): boolean {
   return ranges.some((r) => r.from <= dayKey && dayKey <= r.to);
+}
+
+export interface PlannedOccurrence {
+  cycleIndex: number;
+  dayKey: string;
+  task: TaskDoc;
+  assigneeId: ObjectId | null;
+}
+
+/** One source for the dates that generation and activation preview both use. */
+export function plannedOccurrences(
+  plan: CyclePlanDoc,
+  cycleIndex: number,
+  settings: SettingsDoc,
+  tasks: readonly TaskDoc[],
+  todayKey: string,
+): PlannedOccurrence[] {
+  const taskMap = new Map(tasks.map((task) => [task._id.toHexString(), task]));
+  const startDate = cycleStart(cycleIndex, settings.cycleAnchorDate);
+  return plan.slots.flatMap((slot) => {
+    const task = taskMap.get(slot.taskId.toHexString());
+    if (!task?.active) return [];
+    const dayKey = slotDate(startDate, slot.weekIndex, slot.weekday);
+    if (dayKey < todayKey || isInVacation(dayKey, settings.vacationRanges)) return [];
+    return [{ cycleIndex, dayKey, task, assigneeId: slot.assigneeId }];
+  });
 }
 
 async function requireSettings(ctx: AuditContext): Promise<SettingsDoc> {
@@ -74,14 +100,9 @@ export async function generateCycle(
   const now = ctx.clock.now();
   const todayKey = today(settings.timezone, now);
   const [taskDocs, rooms] = await Promise.all([listTasks(ctx.db), listRooms(ctx.db)]);
-  const tasks = new Map(taskDocs.map((task) => [task._id.toHexString(), task]));
   const roomNames = new Map(rooms.map((room) => [room._id.toHexString(), room.name]));
   const docs: OccurrenceDoc[] = [];
-  for (const slot of plan.slots) {
-    const task = tasks.get(slot.taskId.toHexString());
-    if (!task?.active) continue;
-    const dayKey = slotDate(cycle.startDate, slot.weekIndex, slot.weekday);
-    if (dayKey < todayKey || isInVacation(dayKey, settings.vacationRanges)) continue;
+  for (const { task, dayKey, assigneeId } of plannedOccurrences(plan, cycleIndex, settings, taskDocs, todayKey)) {
     const date = fromDayKey(dayKey, settings.timezone);
     docs.push({
       _id: new ObjectId(),
@@ -90,7 +111,7 @@ export async function generateCycle(
       planId: plan._id,
       date,
       plannedDate: date,
-      assigneeId: slot.assigneeId,
+      assigneeId,
       status: 'open',
       statusBeforeCompletion: null,
       completedAt: null,
@@ -188,7 +209,10 @@ async function upcomingOccurrencesNeedReplacement(
   }
 
   const occurrences = await findOccurrences(ctx.db, {
-    plannedDate: { $gte: fromDayKey(todayKey, settings.timezone) },
+    plannedDate: {
+      $gte: fromDayKey(todayKey, settings.timezone),
+      $lt: fromDayKey(cycleStart(currentCycle + 2, settings.cycleAnchorDate), settings.timezone),
+    },
   });
   const existingKeys = new Set(
     occurrences.map((occurrence) => occurrenceKey(occurrence.taskId, occurrence.plannedDate)),
@@ -251,7 +275,10 @@ export async function replaceUpcomingOccurrences(
   const replaceable = await findOccurrences(ctx.db, {
     status: 'open',
     origin: 'generated',
-    date: { $gte: fromDayKey(todayKey, settings.timezone) },
+    date: {
+      $gte: fromDayKey(todayKey, settings.timezone),
+      $lt: fromDayKey(cycleStart(current + 2, settings.cycleAnchorDate), settings.timezone),
+    },
     $expr: { $eq: ['$date', '$plannedDate'] },
   });
   const removed = await deleteOccurrences(ctx, replaceable, { runId, planId: plan._id, reason });

@@ -424,6 +424,16 @@ describe('PlannerPage — activation', () => {
         makePlan({ _id: 'p2', name: 'Zomer' }),
       ],
       {
+        'GET /api/cycle-plans/p2/activation-preview': {
+          planId: 'p2', previewToken: 'preview-1', asOfDate: '2026-09-14',
+          removed: [{ occurrenceId: 'o1', cycleIndex: 0, taskId: 't1', taskName: 'Badkamer', date: '2026-09-15', assigneeId: ANNA._id }],
+          added: [],
+          preserved: {
+            done: [],
+            skipped: [{ occurrenceId: 'o2', cycleIndex: 0, taskId: 't2', taskName: 'Stofzuigen', date: '2026-09-16', assigneeId: null }],
+            moved: [], adhoc: [],
+          },
+        },
         'POST /api/cycle-plans/p2/activate': {
           plan: makePlan({ _id: 'p2', name: 'Zomer', active: true }),
           removed: 3,
@@ -436,9 +446,12 @@ describe('PlannerPage — activation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Dit plan activeren' }));
 
     const dialog = screen.getByRole('dialog', { name: 'Plan activeren?' });
-    expect(dialog).toHaveTextContent(
-      'Afgevinkte, overgeslagen, verplaatste en losse taken blijven staan.',
-    );
+    expect(await within(dialog).findByText('Badkamer')).toBeInTheDocument();
+    expect(dialog).toHaveTextContent('Worden vervangen (1)');
+    expect(dialog).toHaveTextContent('Blijven behouden (1)');
+    expect(dialog).toHaveTextContent('Anna');
+    expect(dialog).toHaveTextContent('Overgeslagen');
+    expect(dialog).toHaveTextContent('telt niet mee voor het bepalen van de volgende vervaldatum');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Activeren' }));
 
     await waitFor(() =>
@@ -446,6 +459,45 @@ describe('PlannerPage — activation', () => {
         true,
       ),
     );
+    const activationCall = fetchMock.mock.calls.find(([url]) => url === '/api/cycle-plans/p2/activate');
+    expect(JSON.parse(String((activationCall?.[1] as RequestInit).body))).toEqual({ previewToken: 'preview-1' });
     expect(await screen.findByText('Plan geactiveerd.')).toBeInTheDocument();
+  });
+
+  it('keeps activation disabled when a stale preview cannot be refreshed', async () => {
+    const fetchMock = setup(
+      [
+        makePlan({ _id: 'p1', name: 'Standaard', active: true }),
+        makePlan({ _id: 'p2', name: 'Zomer' }),
+      ],
+      {
+        'GET /api/cycle-plans/p2/activation-preview': {
+          planId: 'p2', previewToken: 'preview-1', asOfDate: '2026-09-14',
+          removed: [], added: [],
+          preserved: { done: [], skipped: [], moved: [], adhoc: [] },
+        },
+      },
+    );
+    let previewRequests = 0;
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith('/activation-preview') && ++previewRequests > 1) {
+        return Promise.resolve(new Response(JSON.stringify({ code: 'unavailable' }), { status: 503 }));
+      }
+      if (url.endsWith('/activate') && init?.method === 'POST') {
+        return Promise.resolve(new Response(JSON.stringify({ code: 'stale_activation_preview' }), { status: 409 }));
+      }
+      return fetchMock(input, init);
+    }));
+    renderWithProviders(<PlannerPage />);
+    await openPlanManagement();
+    fireEvent.change(await screen.findByLabelText('Plan'), { target: { value: 'p2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Dit plan activeren' }));
+    const dialog = screen.getByRole('dialog', { name: 'Plan activeren?' });
+    const activate = within(dialog).getByRole('button', { name: 'Activeren' });
+    await waitFor(() => expect(activate).toBeEnabled());
+    fireEvent.click(activate);
+    await waitFor(() => expect(dialog).toHaveTextContent('Het activatieoverzicht kon niet worden geladen'));
+    expect(activate).toBeDisabled();
   });
 });
