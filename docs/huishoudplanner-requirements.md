@@ -170,7 +170,9 @@ dismissedPromotions: [ ... ]
 - Workload validation sums the planned minutes per user per day against that user's budget, and marks days over the budget and days over the hard ceiling differently.
 - A drop onto a weekday the assignee is unavailable on is rejected, with an explanation.
 - Per-week totals per user are visible, so imbalance is apparent before the cycle starts.
+- The editor shows each person's planned minutes and the household total for every cycle week. A task-name search matches a case- and accent-insensitive substring and only changes what is visible in the editor; it never changes saved slots.
 - The same validation rules run on the server for every plan write, so a plan that the editor would refuse cannot arrive through the API either.
+- The editor identifies an inactive plan as a draft and explains that its slots do not appear in the week overview or My tasks until the plan is activated.
 
 ### 4.3 Generation
 
@@ -178,8 +180,11 @@ dismissedPromotions: [ ... ]
 - Generation is idempotent. Re-running it produces no duplicates, keyed on cycle, task and planned date.
 - Generation never creates an occurrence in the past. A cycle activated midway produces the remainder of the cycle only.
 - A nightly job generates the upcoming cycle in advance, so the coming week is always visible.
+- Saving slots in the active plan synchronizes future generated occurrences immediately. The resulting tasks appear on their assigned dates and for their assigned people when those dates are within the selected range in the week overview or My tasks, including after a page reload. Saving slots in an inactive draft does not change those overviews.
 - Vacation ranges suppress generation on those dates. The due engine keeps counting the days.
 - Activating a different plan replaces only future occurrences that are still replaceable — untouched, generated, open ones. Anything completed, skipped, rescheduled, or created ad hoc survives, because it records something that actually happened.
+- Before a person activates a plan, show an inspectable preview for the current and next cycle: the open generated occurrences to replace, the occurrences expected from the new plan, and separate groups for completed, skipped, manually moved, and ad-hoc occurrences that remain. Show counts plus each task's date and assignee. Previewing makes no changes.
+- An activation confirmation is tied to the state that was previewed. At confirmation, the server recomputes the preview; if the plan, relevant tasks, settings, or occurrences differ, it rejects the confirmation before any activation writes and requires a fresh review.
 
 ### 4.4 Daily use
 
@@ -192,6 +197,9 @@ dismissedPromotions: [ ... ]
 - An unassigned occurrence can be claimed.
 - Reschedule by dragging to another day. `plannedDate` is preserved. Dragging to a day the assignee is unavailable on is allowed but warned about, because reality outranks the plan.
 - A week overview is the default landing view at every screen width, shows the whole week with drag-to-reschedule, and can collapse past days.
+- The week overview can search by part of a task name and optionally show the cycle-week number on its cards.
+- My tasks groups its sliding 1-, 2-, or 4-week period into seven-day blocks starting today. Each block shows its date range; each task shows its own cycle-week number even when a block crosses a cycle boundary.
+- Filter choices throughout the app survive a hard reload. A person can visibly reset them, and one household member's saved choices are not silently applied to another member.
 - "Done just now" creates an ad-hoc occurrence for a task that was not planned today. At most one ad-hoc occurrence per task per day, and only within a cycle that has been generated.
 
 ### 4.5 Due engine
@@ -348,7 +356,8 @@ GET    /api/cycle-plans                     GET  /api/cycle-plans/active
 GET    /api/cycle-plans/:id                 GET  /api/cycle-plans/:id/diff
 POST   /api/cycle-plans                     PATCH /api/cycle-plans/:id
 DELETE /api/cycle-plans/:id                 PUT  /api/cycle-plans/:id/slots
-POST   /api/cycle-plans/:id/activate
+GET    /api/cycle-plans/:id/activation-preview
+POST   /api/cycle-plans/:id/activate        (body: { previewToken })
 POST   /api/cycle-plans/:id/apply-proposal  POST /api/cycle-plans/:id/discard
 
 GET    /api/occurrences                     POST /api/occurrences

@@ -11,6 +11,8 @@ import { cn } from '@/lib/utils';
 import { useRooms, useSettings, useTasks } from '../../api/queries.ts';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
+import { getActiveProfileId } from '../../identity/profileStore.ts';
+import { usePersistedFilter } from '../../hooks/usePersistedFilter.ts';
 import { PromoteBanner } from '../promote/PromoteBanner.tsx';
 import { CompletionChoiceDialog } from './CompletionChoiceDialog.tsx';
 import {
@@ -47,10 +49,9 @@ export function TodayPage({ now }: { now?: Date }) {
   const timezone = settings.data?.timezone ?? 'Europe/Amsterdam';
   const todayKey = dayKeyInZone(now ?? new Date(), timezone);
   const [dayOffset, setDayOffset] = useState(0);
-  const [personFilter, setPersonFilter] = useState(profile?._id ?? 'all');
-  useEffect(() => {
-    if (profile?._id) setPersonFilter(profile._id);
-  }, [profile?._id]);
+  const [personFilter, setPersonFilter, resetPersonFilter] = usePersistedFilter(
+    'today.person', profile?._id ?? null, profile?._id ?? getActiveProfileId() ?? 'all',
+  );
   const selectedDay = addDaysKey(todayKey, dayOffset);
   const from = addDaysKey(todayKey, -OVERDUE_LOOKBACK_DAYS);
   const occurrences = useOccurrences(from, selectedDay, settings.isSuccess);
@@ -198,6 +199,9 @@ export function TodayPage({ now }: { now?: Date }) {
           {activeUsers.map((user) => <option key={user._id} value={user._id}>{user.name}</option>)}
           <option value="unassigned">{t('today.anyone')}</option>
         </NativeSelect>
+        <Button type="button" variant="outline" onClick={resetPersonFilter}>
+          {t('today.resetFilters')}
+        </Button>
       </div>
       <PromoteBanner />
       {failed && (

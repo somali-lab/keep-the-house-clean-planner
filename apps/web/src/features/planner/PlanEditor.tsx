@@ -11,12 +11,14 @@ import {
 import type { CyclePlan, Interval, Room, Slot, Task, User } from '@huishoudplanner/shared';
 // Subpath import keeps Luxon and Zod out of the web bundle.
 import { validatePlan } from '@huishoudplanner/shared/validation/plan';
-import { Ban, Menu, X } from 'lucide-react';
+import { Ban, Menu, RotateCcw, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/NativeSelect';
 import { cn } from '@/lib/utils';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
+import { usePersistedFilter } from '../../hooks/usePersistedFilter.ts';
 import { useUpdatePlan, usePutSlots } from './api.ts';
 import {
   applyDrop,
@@ -34,6 +36,7 @@ export interface PlanEditorProps {
   tasks: Task[];
   rooms: Room[];
   users: User[];
+  profileId: string | null;
   intervals: Interval[];
   debounceMs?: number;
   onManagePlans?(): void;
@@ -52,11 +55,43 @@ export function rejectionText(rejection: DropRejection): string {
   return format('planner.reject.duplicate', { task: rejection.taskName });
 }
 
-export function PlanEditor({ plan, tasks, rooms, users, intervals, debounceMs = 800, onManagePlans }: PlanEditorProps) {
+export function PlanEditor({
+  plan,
+  tasks,
+  rooms,
+  users,
+  intervals,
+  profileId,
+  debounceMs = 800,
+  onManagePlans,
+}: PlanEditorProps) {
   const [slots, setSlots] = useState<Slot[]>(plan.slots);
   const [themes, setThemes] = useState<string[]>(plan.weekThemes);
-  const [selectedWeek, setSelectedWeek] = useState(0);
-  const [assigneeFilter, setAssigneeFilter] = useState('all');
+  const [selectedWeek, setSelectedWeek, resetWeek] = usePersistedFilter(
+    'planner.week',
+    profileId,
+    0,
+  );
+  const [assigneeFilter, setAssigneeFilter, resetAssignee] = usePersistedFilter(
+    'planner.assignee',
+    profileId,
+    'all',
+  );
+  const [roomFilter, setRoomFilter, resetRoom] = usePersistedFilter(
+    'planner.room',
+    profileId,
+    'all',
+  );
+  const [intervalFilter, setIntervalFilter, resetInterval] = usePersistedFilter(
+    'planner.interval',
+    profileId,
+    'all',
+  );
+  const [searchTerm, setSearchTerm, resetSearch] = usePersistedFilter(
+    'planner.search',
+    profileId,
+    '',
+  );
   const [poolCollapsed, setPoolCollapsed] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>('idle');
@@ -109,6 +144,27 @@ export function PlanEditor({ plan, tasks, rooms, users, intervals, debounceMs = 
   const hasTasksToDistribute = validation.summary.tasks.some(
     (task) => task.required !== null && task.placed !== task.required,
   );
+  const cycleUsers = users.map((user) => ({
+    user,
+    minutes: validation.summary.weeks.reduce(
+      (sum, week) => sum + (week.users.find((entry) => entry.userId === user._id)?.minutes ?? 0),
+      0,
+    ),
+  }));
+  const cycleTotal = validation.summary.weeks.reduce(
+    (sum, week) =>
+      sum +
+      week.users.reduce((weekSum, user) => weekSum + user.minutes, 0) +
+      week.unassignedMinutes,
+    0,
+  );
+  const resetFilters = () => {
+    resetWeek();
+    resetAssignee();
+    resetRoom();
+    resetInterval();
+    resetSearch();
+  };
 
   useEffect(() => {
     if (!hasTasksToDistribute) setPoolCollapsed(true);
@@ -192,6 +248,17 @@ export function PlanEditor({ plan, tasks, rooms, users, intervals, debounceMs = 
               {format('planner.week', { n: weekIndex + 1 })}
             </Button>
           ))}
+          <label className="min-w-40 flex-1">
+            <span className="visually-hidden">{t('planner.searchTasks')}</span>
+            <Input
+              type="search"
+              className="h-10 min-w-40"
+              value={searchTerm}
+              placeholder={t('planner.searchTasks')}
+              aria-label={t('planner.searchTasks')}
+              onChange={(event) => setSearchTerm(event.target.value)}
+            />
+          </label>
           <NativeSelect
             className="w-48"
             aria-label={t('planner.filterAssignee')}
@@ -206,6 +273,10 @@ export function PlanEditor({ plan, tasks, rooms, users, intervals, debounceMs = 
             ))}
             <option value="unassigned">{t('planner.anyone')}</option>
           </NativeSelect>
+          <Button type="button" variant="outline" size="sm" onClick={resetFilters}>
+            <RotateCcw aria-hidden="true" />
+            {t('planner.resetFilters')}
+          </Button>
           <span
             role="status"
             className={cn(
@@ -226,10 +297,30 @@ export function PlanEditor({ plan, tasks, rooms, users, intervals, debounceMs = 
           )}
         </div>
 
+        <section
+          className="flex flex-wrap items-center gap-2 rounded-xl border bg-card px-3 py-2"
+          aria-label={t('planner.cycleTotal')}
+        >
+          <strong className="mr-1 text-sm">{t('planner.distribution.cycle')}:</strong>
+          {cycleUsers.map(({ user, minutes }) => (
+            <span
+              key={user._id}
+              className="rounded-full bg-secondary px-3 py-1 text-xs font-semibold tabular-nums"
+            >
+              {format('planner.weekTotal', { name: user.name, minutes })}
+            </span>
+          ))}
+          <span className="rounded-full bg-accent px-3 py-1 text-xs font-bold tabular-nums">
+            {format('planner.distribution.total', { minutes: cycleTotal })}
+          </span>
+        </section>
+
         <div
           className={cn(
             'grid items-start gap-5 transition-[grid-template-columns]',
-            poolCollapsed ? 'lg:grid-cols-[3.5rem_minmax(0,1fr)]' : 'lg:grid-cols-[17rem_minmax(0,1fr)]',
+            poolCollapsed
+              ? 'lg:grid-cols-[3.5rem_minmax(0,1fr)]'
+              : 'lg:grid-cols-[17rem_minmax(0,1fr)]',
           )}
         >
           <Pool
@@ -239,6 +330,11 @@ export function PlanEditor({ plan, tasks, rooms, users, intervals, debounceMs = 
             summary={validation.summary.tasks}
             collapsed={poolCollapsed}
             onCollapsedChange={setPoolCollapsed}
+            searchTerm={searchTerm}
+            roomFilter={roomFilter}
+            onRoomFilterChange={setRoomFilter}
+            intervalFilter={intervalFilter}
+            onIntervalFilterChange={setIntervalFilter}
           />
           <div className="min-w-0">
             <WeekTable
@@ -258,6 +354,7 @@ export function PlanEditor({ plan, tasks, rooms, users, intervals, debounceMs = 
               }
               showUnassigned={assigneeFilter === 'all' || assigneeFilter === 'unassigned'}
               summary={validation.summary}
+              searchTerm={searchTerm}
               onRemoveSlot={(index) => handleDrop({ kind: 'slot', index }, { kind: 'pool' })}
             />
           </div>

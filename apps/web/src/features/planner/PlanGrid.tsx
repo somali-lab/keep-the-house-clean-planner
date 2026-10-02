@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
 import { Avatar } from '../../identity/Avatar.tsx';
-import { cellId, dragId } from './editorModel.ts';
+import { cellId, dragId, matchesTaskName } from './editorModel.ts';
 
 interface WeekTableProps {
   weekIndex: number;
@@ -20,6 +20,7 @@ interface WeekTableProps {
   users: User[];
   showUnassigned: boolean;
   summary: PlanSummary;
+  searchTerm: string;
   onRemoveSlot(index: number): void;
 }
 
@@ -35,6 +36,7 @@ export function WeekTable({
   users,
   showUnassigned,
   summary,
+  searchTerm,
   onRemoveSlot,
 }: WeekTableProps) {
   const taskById = new Map(tasks.map((task) => [task._id, task]));
@@ -45,7 +47,10 @@ export function WeekTable({
   const minutesFor = (userId: string, weekdays: readonly number[]) =>
     weekDays
       .filter((day) => weekdays.includes(day.weekday))
-      .reduce((total, day) => total + (day.users.find((user) => user.userId === userId)?.minutes ?? 0), 0);
+      .reduce(
+        (total, day) => total + (day.users.find((user) => user.userId === userId)?.minutes ?? 0),
+        0,
+      );
 
   return (
     <section
@@ -76,34 +81,35 @@ export function WeekTable({
           const weekdayMinutes = minutesFor(user._id, [1, 2, 3, 4, 5]);
           const weekendMinutes = minutesFor(user._id, [6, 0]);
           const overBudget =
-            weekdayMinutes > user.dailyBudgetMinutes.weekday || weekendMinutes > user.dailyBudgetMinutes.weekend;
+            weekdayMinutes > user.dailyBudgetMinutes.weekday ||
+            weekendMinutes > user.dailyBudgetMinutes.weekend;
           return (
-          <div
-            key={user._id}
-            className={cn(
-              'flex min-w-0 items-center gap-3 rounded-xl border bg-card px-3 py-2',
-              overBudget && 'border-warning bg-warning/15',
-            )}
-          >
-            <Avatar name={user.name} color={user.color} size="md" />
-            <div className="min-w-0 flex-1">
-              <strong className="block truncate text-sm">{user.name}</strong>
-              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold text-muted-foreground tabular-nums">
-                <span>
-                  {format('planner.weekdayBudget', {
-                    minutes: weekdayMinutes,
-                    budget: user.dailyBudgetMinutes.weekday,
-                  })}
-                </span>
-                <span>
-                  {format('planner.weekendBudget', {
-                    minutes: weekendMinutes,
-                    budget: user.dailyBudgetMinutes.weekend,
-                  })}
-                </span>
+            <div
+              key={user._id}
+              className={cn(
+                'flex min-w-0 items-center gap-3 rounded-xl border bg-card px-3 py-2',
+                overBudget && 'border-warning bg-warning/15',
+              )}
+            >
+              <Avatar name={user.name} color={user.color} size="md" />
+              <div className="min-w-0 flex-1">
+                <strong className="block truncate text-sm">{user.name}</strong>
+                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold text-muted-foreground tabular-nums">
+                  <span>
+                    {format('planner.weekdayBudget', {
+                      minutes: weekdayMinutes,
+                      budget: user.dailyBudgetMinutes.weekday,
+                    })}
+                  </span>
+                  <span>
+                    {format('planner.weekendBudget', {
+                      minutes: weekendMinutes,
+                      budget: user.dailyBudgetMinutes.weekend,
+                    })}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
           );
         })}
       </div>
@@ -128,6 +134,7 @@ export function WeekTable({
                       slots={slots}
                       taskById={taskById}
                       roomById={roomById}
+                      searchTerm={searchTerm}
                       minutes={user ? day?.users.find((u) => u.userId === user._id) : undefined}
                       unassignedMinutes={day?.unassignedMinutes ?? 0}
                       onRemoveSlot={onRemoveSlot}
@@ -172,6 +179,7 @@ interface CellProps {
   slots: Slot[];
   taskById: Map<string, Task>;
   roomById: Map<string, string>;
+  searchTerm: string;
   minutes: { minutes: number; budget: number; overBudget: boolean } | undefined;
   unassignedMinutes: number;
   onRemoveSlot(index: number): void;
@@ -184,6 +192,7 @@ function Cell({
   slots,
   taskById,
   roomById,
+  searchTerm,
   minutes,
   unassignedMinutes,
   onRemoveSlot,
@@ -198,6 +207,9 @@ function Cell({
         slot.weekday === weekday &&
         slot.assigneeId === (user?._id ?? null),
     );
+  const visibleItems = items.filter(({ slot }) =>
+    matchesTaskName(taskById.get(slot.taskId)?.name ?? slot.taskId, searchTerm),
+  );
   const unavailable = user?.unavailableWeekdays.includes(weekday) ?? false;
   const overBudget = minutes?.overBudget ?? false;
 
@@ -219,7 +231,9 @@ function Cell({
           <span className="flex min-w-0 items-center gap-1.5 rounded-md bg-card/85 px-1.5 py-1 text-[0.7rem] font-bold text-muted-foreground">
             <Avatar name={user.name} color={user.color} size="sm" />
             <UserX className="size-3.5 shrink-0 text-destructive" aria-hidden="true" />
-            <span className="truncate">{format('planner.unavailablePerson', { name: user.name })}</span>
+            <span className="truncate">
+              {format('planner.unavailablePerson', { name: user.name })}
+            </span>
           </span>
         )}
         {!user && (
@@ -229,7 +243,7 @@ function Cell({
           </span>
         )}
         <ul className="flex flex-1 flex-col gap-1">
-          {items.map(({ slot, index }) => (
+          {visibleItems.map(({ slot, index }) => (
             <SlotItem
               key={`${slot.taskId}-${index}`}
               index={index}
@@ -338,7 +352,9 @@ function SlotItem({
           className="grid size-7 shrink-0 place-content-center rounded-full border border-primary/25 bg-primary/10 text-center text-primary"
           aria-label={format('tasks.minutes', { minutes: task.durationMinutes })}
         >
-          <strong className="text-[0.65rem] leading-none tabular-nums">{task.durationMinutes}</strong>
+          <strong className="text-[0.65rem] leading-none tabular-nums">
+            {task.durationMinutes}
+          </strong>
           <span className="text-[0.4rem] leading-none font-bold">min</span>
         </span>
       )}
