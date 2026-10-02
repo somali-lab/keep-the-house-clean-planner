@@ -89,6 +89,9 @@ describe('HistoryPage', () => {
 
     expect(screen.getByLabelText('Wie')).toHaveDisplayValue('Bram de Vries');
     expect(within(screen.getByLabelText('Wie')).getByRole('option', { name: 'Systeem' })).toHaveValue(SYSTEM_ACTOR_ID);
+    fireEvent.click(screen.getByRole('button', { name: 'Filters wissen' }));
+    await waitFor(() => expect(auditUrls(fetchMock).at(-1)).toBe('/api/audit?limit=50'));
+    expect(screen.getByLabelText('Wie')).toHaveValue('');
   });
 
   it('loads more entries with the cursor', async () => {

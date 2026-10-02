@@ -37,6 +37,7 @@ import { format, t } from '../../i18n/nl.ts';
 import { getLanguage } from '../../i18n/runtime.ts';
 import { Avatar } from '../../identity/Avatar.tsx';
 import { useProfile } from '../../identity/index.ts';
+import { usePersistedFilter } from '../../hooks/usePersistedFilter.ts';
 import { AiPage } from '../ai/AiPage.tsx';
 import { groupTasksByRoom, type RoomGroup } from './groupTasks.ts';
 import { TaskForm } from './TaskForm.tsx';
@@ -79,9 +80,9 @@ export function TasksPage() {
   const rooms = useRooms();
   const tasks = useTasks();
   const settings = useSettings();
-  const { activeUsers } = useProfile();
-  const [showInactive, setShowInactive] = useState(false);
-  const [roomFilter, setRoomFilter] = useState('all');
+  const { activeUsers, profile } = useProfile();
+  const [showInactive, setShowInactive, resetInactive] = usePersistedFilter('tasks.showInactive', profile?._id ?? null, false);
+  const [roomFilter, setRoomFilter, resetRoom] = usePersistedFilter('tasks.room', profile?._id ?? null, 'all');
   const [editing, setEditing] = useState<Editing>(null);
   const [deleting, setDeleting] = useState<Task | null>(null);
   const [collapsedRooms, setCollapsedRooms] = useState<Set<string> | null>(null);
@@ -200,6 +201,9 @@ export function TasksPage() {
               />
               {t('tasks.showInactive')}
             </label>
+            <Button type="button" variant="outline" onClick={() => { resetRoom(); resetInactive(); }}>
+              {t('tasks.resetFilters')}
+            </Button>
             <Button
               type="button"
               onClick={() => {

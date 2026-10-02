@@ -228,7 +228,9 @@ describe('PlannerPage — budgets and pool', () => {
     });
 
     expect(screen.queryByTestId(`cell:0:1:${ANNA._id}`)).not.toBeInTheDocument();
-    expect(within(screen.getByTestId(`cell:0:1:${BRAM._id}`)).getByText('Stofzuigen')).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId(`cell:0:1:${BRAM._id}`)).getByText('Stofzuigen'),
+    ).toBeInTheDocument();
     expect(screen.queryByTestId('cell:0:1:any')).not.toBeInTheDocument();
   });
 
@@ -297,6 +299,48 @@ describe('PlannerPage — budgets and pool', () => {
     expect(within(pool).getByText('Ramen')).toBeInTheDocument();
     expect(within(pool).queryByText('Badkamer')).not.toBeInTheDocument();
     expect(within(pool).queryByText('Stofzuigen')).not.toBeInTheDocument();
+  });
+
+  it('searches task names in both pool and scheduled cards without changing totals, and resets visible filters', async () => {
+    window.localStorage.clear();
+    setup([
+      makePlan({
+        _id: 'p1',
+        name: 'Standaard',
+        active: true,
+        slots: [slot('t1', 0, 1, ANNA._id), slot('t2', 0, 1, BRAM._id)],
+      }),
+    ]);
+    renderWithProviders(<PlannerPage />);
+
+    const search = await screen.findByRole('searchbox', { name: 'Zoek taken' });
+    const pool = screen.getByRole('complementary', { name: 'Nog in te plannen' });
+    const annaCell = screen.getByTestId(`cell:0:1:${ANNA._id}`);
+    const bramCell = screen.getByTestId(`cell:0:1:${BRAM._id}`);
+    expect(screen.getByRole('region', { name: 'Totaal voor de hele cyclus' })).toHaveTextContent(
+      'Anna: 40 min',
+    );
+    expect(screen.getByRole('region', { name: 'Totaal voor de hele cyclus' })).toHaveTextContent(
+      'Bram: 30 min',
+    );
+    expect(screen.getByRole('region', { name: 'Totaal voor de hele cyclus' })).toHaveTextContent(
+      'Totaal 70 min',
+    );
+
+    fireEvent.change(search, { target: { value: 'STOF' } });
+    expect(within(annaCell).queryByText('Badkamer')).not.toBeInTheDocument();
+    expect(within(bramCell).getByText('Stofzuigen')).toBeInTheDocument();
+    expect(within(pool).queryByText('Badkamer')).not.toBeInTheDocument();
+    expect(window.localStorage.getItem(`huishoudplanner.filters.${ANNA._id}.planner.search`)).toBe(
+      '"STOF"',
+    );
+    expect(screen.getByRole('region', { name: 'Totaal voor de hele cyclus' })).toHaveTextContent(
+      'Totaal 70 min',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Filters wissen' }));
+    expect(within(annaCell).getByText('Badkamer')).toBeInTheDocument();
+    expect(within(pool).getByText('Ramen')).toBeInTheDocument();
   });
 
   it('collapses the task pool to a compact counter and expands it again', async () => {
@@ -425,13 +469,34 @@ describe('PlannerPage — activation', () => {
       ],
       {
         'GET /api/cycle-plans/p2/activation-preview': {
-          planId: 'p2', previewToken: 'preview-1', asOfDate: '2026-09-14',
-          removed: [{ occurrenceId: 'o1', cycleIndex: 0, taskId: 't1', taskName: 'Badkamer', date: '2026-09-15', assigneeId: ANNA._id }],
+          planId: 'p2',
+          previewToken: 'preview-1',
+          asOfDate: '2026-09-14',
+          removed: [
+            {
+              occurrenceId: 'o1',
+              cycleIndex: 0,
+              taskId: 't1',
+              taskName: 'Badkamer',
+              date: '2026-09-15',
+              assigneeId: ANNA._id,
+            },
+          ],
           added: [],
           preserved: {
             done: [],
-            skipped: [{ occurrenceId: 'o2', cycleIndex: 0, taskId: 't2', taskName: 'Stofzuigen', date: '2026-09-16', assigneeId: null }],
-            moved: [], adhoc: [],
+            skipped: [
+              {
+                occurrenceId: 'o2',
+                cycleIndex: 0,
+                taskId: 't2',
+                taskName: 'Stofzuigen',
+                date: '2026-09-16',
+                assigneeId: null,
+              },
+            ],
+            moved: [],
+            adhoc: [],
           },
         },
         'POST /api/cycle-plans/p2/activate': {
@@ -459,8 +524,12 @@ describe('PlannerPage — activation', () => {
         true,
       ),
     );
-    const activationCall = fetchMock.mock.calls.find(([url]) => url === '/api/cycle-plans/p2/activate');
-    expect(JSON.parse(String((activationCall?.[1] as RequestInit).body))).toEqual({ previewToken: 'preview-1' });
+    const activationCall = fetchMock.mock.calls.find(
+      ([url]) => url === '/api/cycle-plans/p2/activate',
+    );
+    expect(JSON.parse(String((activationCall?.[1] as RequestInit).body))).toEqual({
+      previewToken: 'preview-1',
+    });
     expect(await screen.findByText('Plan geactiveerd.')).toBeInTheDocument();
   });
 
@@ -472,23 +541,33 @@ describe('PlannerPage — activation', () => {
       ],
       {
         'GET /api/cycle-plans/p2/activation-preview': {
-          planId: 'p2', previewToken: 'preview-1', asOfDate: '2026-09-14',
-          removed: [], added: [],
+          planId: 'p2',
+          previewToken: 'preview-1',
+          asOfDate: '2026-09-14',
+          removed: [],
+          added: [],
           preserved: { done: [], skipped: [], moved: [], adhoc: [] },
         },
       },
     );
     let previewRequests = 0;
-    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      if (url.endsWith('/activation-preview') && ++previewRequests > 1) {
-        return Promise.resolve(new Response(JSON.stringify({ code: 'unavailable' }), { status: 503 }));
-      }
-      if (url.endsWith('/activate') && init?.method === 'POST') {
-        return Promise.resolve(new Response(JSON.stringify({ code: 'stale_activation_preview' }), { status: 409 }));
-      }
-      return fetchMock(input, init);
-    }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith('/activation-preview') && ++previewRequests > 1) {
+          return Promise.resolve(
+            new Response(JSON.stringify({ code: 'unavailable' }), { status: 503 }),
+          );
+        }
+        if (url.endsWith('/activate') && init?.method === 'POST') {
+          return Promise.resolve(
+            new Response(JSON.stringify({ code: 'stale_activation_preview' }), { status: 409 }),
+          );
+        }
+        return fetchMock(input, init);
+      }),
+    );
     renderWithProviders(<PlannerPage />);
     await openPlanManagement();
     fireEvent.change(await screen.findByLabelText('Plan'), { target: { value: 'p2' } });
@@ -497,7 +576,9 @@ describe('PlannerPage — activation', () => {
     const activate = within(dialog).getByRole('button', { name: 'Activeren' });
     await waitFor(() => expect(activate).toBeEnabled());
     fireEvent.click(activate);
-    await waitFor(() => expect(dialog).toHaveTextContent('Het activatieoverzicht kon niet worden geladen'));
+    await waitFor(() =>
+      expect(dialog).toHaveTextContent('Het activatieoverzicht kon niet worden geladen'),
+    );
     expect(activate).toBeDisabled();
   });
 });

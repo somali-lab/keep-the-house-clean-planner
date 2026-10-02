@@ -23,10 +23,21 @@ export type DropRejection =
   | { reason: 'assignee_unavailable'; taskName: string; userName: string; weekday: number }
   | { reason: 'duplicate_task_day'; taskName: string; weekIndex: number; weekday: number };
 
-export type DropResult = { ok: true; slots: Slot[]; changed: boolean } | { ok: false; rejection: DropRejection };
+export type DropResult =
+  { ok: true; slots: Slot[]; changed: boolean } | { ok: false; rejection: DropRejection };
 
 /** Stable dnd ids: `cell:<week>:<weekday>:<assignee|any>`, `pool`, `task:<id>`, `slot:<index>`. */
 export const POOL_ID = 'pool';
+
+/** Accent and case insensitive substring matching for planner task names. */
+export function matchesTaskName(name: string, query: string): boolean {
+  const normalize = (value: string) =>
+    value
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .toLocaleLowerCase();
+  return normalize(name).includes(normalize(query.trim()));
+}
 const ANY = 'any';
 
 export function cellId(weekIndex: number, weekday: number, assigneeId: string | null): string {
@@ -95,7 +106,12 @@ export function applyDrop(
     if (user?.unavailableWeekdays.includes(target.weekday)) {
       return {
         ok: false,
-        rejection: { reason: 'assignee_unavailable', taskName, userName: user.name, weekday: target.weekday },
+        rejection: {
+          reason: 'assignee_unavailable',
+          taskName,
+          userName: user.name,
+          weekday: target.weekday,
+        },
       };
     }
   }
@@ -110,7 +126,12 @@ export function applyDrop(
   if (duplicate) {
     return {
       ok: false,
-      rejection: { reason: 'duplicate_task_day', taskName, weekIndex: target.weekIndex, weekday: target.weekday },
+      rejection: {
+        reason: 'duplicate_task_day',
+        taskName,
+        weekIndex: target.weekIndex,
+        weekday: target.weekday,
+      },
     };
   }
 
@@ -121,6 +142,9 @@ export function applyDrop(
     assigneeId: targetAssigneeId,
     sortOrder: moving?.sortOrder ?? 0,
   };
-  const next = source.kind === 'slot' ? slots.map((slot, i) => (i === source.index ? placed : slot)) : [...slots, placed];
+  const next =
+    source.kind === 'slot'
+      ? slots.map((slot, i) => (i === source.index ? placed : slot))
+      : [...slots, placed];
   return { ok: true, slots: next, changed: true };
 }

@@ -55,7 +55,7 @@ export function PlannerPage() {
   const tasks = useTasks();
   const rooms = useRooms();
   const settings = useSettings();
-  const { activeUsers } = useProfile();
+  const { activeUsers, profile } = useProfile();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [confirmActivate, setConfirmActivate] = useState(false);
   const [stalePreview, setStalePreview] = useState(false);
@@ -98,13 +98,13 @@ export function PlannerPage() {
   return (
     <section className="flex flex-col gap-5">
       {plan && (
-            <Sheet open={plansOpen} onOpenChange={setPlansOpen}>
-              <SheetContent className="overflow-y-auto sm:max-w-lg">
-                <SheetHeader className="border-b pr-12">
-                  <SheetTitle>{t('planner.manage')}</SheetTitle>
-                  <SheetDescription>{t('planner.manageDescription')}</SheetDescription>
-                </SheetHeader>
-                <div className="grid gap-3 px-4 pb-6 [&>button]:w-full [&>button]:justify-start">
+        <Sheet open={plansOpen} onOpenChange={setPlansOpen}>
+          <SheetContent className="overflow-y-auto sm:max-w-lg">
+            <SheetHeader className="border-b pr-12">
+              <SheetTitle>{t('planner.manage')}</SheetTitle>
+              <SheetDescription>{t('planner.manageDescription')}</SheetDescription>
+            </SheetHeader>
+            <div className="grid gap-3 px-4 pb-6 [&>button]:w-full [&>button]:justify-start">
               <div className="flex items-center gap-2">
                 <Label htmlFor="planner-plan-select" className="text-muted-foreground">
                   {t('planner.plan')}
@@ -260,15 +260,12 @@ export function PlannerPage() {
                 <FileDown aria-hidden="true" />
                 {t('export.open')}
               </Button>
-              <section
-                aria-label={t('settings.ai.title')}
-                className="mt-3 border-t pt-6"
-              >
+              <section aria-label={t('settings.ai.title')} className="mt-3 border-t pt-6">
                 <AiPage section="plan" embedded />
               </section>
-                </div>
-              </SheetContent>
-            </Sheet>
+            </div>
+          </SheetContent>
+        </Sheet>
       )}
 
       <PromoteBanner />
@@ -351,152 +348,185 @@ export function PlannerPage() {
       </Dialog>
 
       {updatePlan.isError && (
-        <p role="alert" className="rounded-xl bg-destructive/10 p-3 text-sm font-semibold text-destructive">
+        <p
+          role="alert"
+          className="rounded-xl bg-destructive/10 p-3 text-sm font-semibold text-destructive"
+        >
           {t('planner.renameError')}
         </p>
       )}
 
       <div className="flex min-w-0 flex-col gap-5">
-          {!plan ? (
-            <EmptyState icon={<CalendarRange className="size-6" aria-hidden="true" />}>
-              <p>{t('planner.noPlan')}</p>
-            </EmptyState>
-          ) : (
-            <>
-              {notice && (
-                <p
-                  role="status"
-                  className="rounded-xl border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success"
-                >
-                  {notice}
-                </p>
-              )}
-              {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} />}
-
-              {!plan.active && (
-                <p
-                  role="note"
-                  className="rounded-xl border border-border bg-muted/50 px-4 py-3 text-sm"
-                >
-                  {t('planner.inactivePlanNotice')}
-                </p>
-              )}
-
-              {confirmActivate && (
-            <div
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="activate-title"
-              className="max-w-xl rounded-2xl border-2 border-primary/30 bg-card p-6 shadow-md"
-            >
-              <h2 id="activate-title" className="flex items-center gap-2">
-                <Power className="size-5 text-primary" aria-hidden="true" />
-                {t('planner.activate.confirmTitle')}
-              </h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {t('planner.activate.confirmBody')}
+        {!plan ? (
+          <EmptyState icon={<CalendarRange className="size-6" aria-hidden="true" />}>
+            <p>{t('planner.noPlan')}</p>
+          </EmptyState>
+        ) : (
+          <>
+            {notice && (
+              <p
+                role="status"
+                className="rounded-xl border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success"
+              >
+                {notice}
               </p>
-              {activationPreview.isPending || activationPreview.isFetching ? (
-                <p role="status" className="mt-4 text-sm text-muted-foreground">
-                  {t('planner.activate.previewLoading')}
-                </p>
-              ) : activationPreview.isError ? (
-                <p role="alert" className="mt-4 text-sm text-destructive">
-                  {t('planner.activate.previewError')}
-                </p>
-              ) : activationPreview.data ? (
-                <div className="mt-4 max-h-80 space-y-4 overflow-y-auto rounded-lg border p-4">
-                  <p className="text-sm text-muted-foreground">
-                    {format('planner.activate.previewAsOf', { date: formatPreviewDate(activationPreview.data.asOfDate) })}
-                  </p>
-                  <ActivationPreviewSection
-                    title={t('planner.activate.removed')}
-                    items={activationPreview.data.removed}
-                    activeUsers={activeUsers}
-                  />
-                  <ActivationPreviewSection
-                    title={t('planner.activate.added')}
-                    items={activationPreview.data.added}
-                    activeUsers={activeUsers}
-                  />
-                  <section aria-label={t('planner.activate.preserved')}>
-                    <h3 className="font-semibold">
-                      {t('planner.activate.preserved')} ({Object.values(activationPreview.data.preserved).reduce((sum, items) => sum + items.length, 0)})
-                    </h3>
-                    {(['done', 'skipped', 'moved', 'adhoc'] as const).map((kind) => (
-                      <ActivationPreviewSection
-                        key={kind}
-                        title={t(`planner.activate.preserved.${kind}`)}
-                        items={activationPreview.data!.preserved[kind]}
-                        activeUsers={activeUsers}
-                      />
-                    ))}
-                  </section>
-                  <p className="text-sm text-muted-foreground">
-                    {t('planner.activate.skippedExplanation')}
-                  </p>
-                </div>
-              ) : null}
-              {stalePreview && (
-                <div role="alert" className="mt-4 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm">
-                  <p>{t('planner.activate.stale')}</p>
-                  <label className="mt-2 flex items-start gap-2">
-                    <input
-                      type="checkbox"
-                      checked={reviewedFreshPreview}
-                      onChange={(event) => setReviewedFreshPreview(event.target.checked)}
-                    />
-                    <span>{t('planner.activate.reviewed')}</span>
-                  </label>
-                </div>
-              )}
-              <div className="mt-5 flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  disabled={activatePlan.isPending || activationPreview.isPending || activationPreview.isFetching || activationPreview.isError || !activationPreview.data || (stalePreview && !reviewedFreshPreview)}
-                  onClick={() => {
-                    const preview = activationPreview.data;
-                    if (!preview) return;
-                    setStalePreview(false);
-                    setReviewedFreshPreview(false);
-                    activatePlan.mutate({ planId: plan._id, previewToken: preview.previewToken }, {
-                      onSuccess: () => {
-                        setConfirmActivate(false);
-                        setNotice(t('planner.activated'));
-                      },
-                      onError: (error) => {
-                        if (error instanceof ApiRequestError && error.code === 'stale_activation_preview') {
-                          setReviewedFreshPreview(false);
-                          setStalePreview(true);
-                          void activationPreview.refetch();
-                        }
-                      },
-                    });
-                  }}
-                >
-                  {t('planner.activate.confirm')}
-                </Button>
-                <Button type="button" variant="ghost" onClick={() => setConfirmActivate(false)}>
-                  {t('common.cancel')}
-                </Button>
-              </div>
-              {activatePlan.isError && !(activatePlan.error instanceof ApiRequestError && activatePlan.error.code === 'stale_activation_preview') && (
-                <p role="alert" className="mt-3 text-sm text-destructive">{t('app.error')}</p>
-              )}
-            </div>
-              )}
+            )}
+            {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} />}
 
-              <PlanEditor
-                key={plan._id}
-                plan={plan}
-                tasks={tasks.data.filter((task) => task.active)}
-                rooms={rooms.data}
-                users={activeUsers}
-                intervals={settings.data.intervals}
-                onManagePlans={() => setPlansOpen(true)}
-              />
-            </>
-          )}
+            {!plan.active && (
+              <p
+                role="note"
+                className="rounded-xl border border-border bg-muted/50 px-4 py-3 text-sm"
+              >
+                {t('planner.inactivePlanNotice')}
+              </p>
+            )}
+
+            {confirmActivate && (
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="activate-title"
+                className="max-w-xl rounded-2xl border-2 border-primary/30 bg-card p-6 shadow-md"
+              >
+                <h2 id="activate-title" className="flex items-center gap-2">
+                  <Power className="size-5 text-primary" aria-hidden="true" />
+                  {t('planner.activate.confirmTitle')}
+                </h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {t('planner.activate.confirmBody')}
+                </p>
+                {activationPreview.isPending || activationPreview.isFetching ? (
+                  <p role="status" className="mt-4 text-sm text-muted-foreground">
+                    {t('planner.activate.previewLoading')}
+                  </p>
+                ) : activationPreview.isError ? (
+                  <p role="alert" className="mt-4 text-sm text-destructive">
+                    {t('planner.activate.previewError')}
+                  </p>
+                ) : activationPreview.data ? (
+                  <div className="mt-4 max-h-80 space-y-4 overflow-y-auto rounded-lg border p-4">
+                    <p className="text-sm text-muted-foreground">
+                      {format('planner.activate.previewAsOf', {
+                        date: formatPreviewDate(activationPreview.data.asOfDate),
+                      })}
+                    </p>
+                    <ActivationPreviewSection
+                      title={t('planner.activate.removed')}
+                      items={activationPreview.data.removed}
+                      activeUsers={activeUsers}
+                    />
+                    <ActivationPreviewSection
+                      title={t('planner.activate.added')}
+                      items={activationPreview.data.added}
+                      activeUsers={activeUsers}
+                    />
+                    <section aria-label={t('planner.activate.preserved')}>
+                      <h3 className="font-semibold">
+                        {t('planner.activate.preserved')} (
+                        {Object.values(activationPreview.data.preserved).reduce(
+                          (sum, items) => sum + items.length,
+                          0,
+                        )}
+                        )
+                      </h3>
+                      {(['done', 'skipped', 'moved', 'adhoc'] as const).map((kind) => (
+                        <ActivationPreviewSection
+                          key={kind}
+                          title={t(`planner.activate.preserved.${kind}`)}
+                          items={activationPreview.data!.preserved[kind]}
+                          activeUsers={activeUsers}
+                        />
+                      ))}
+                    </section>
+                    <p className="text-sm text-muted-foreground">
+                      {t('planner.activate.skippedExplanation')}
+                    </p>
+                  </div>
+                ) : null}
+                {stalePreview && (
+                  <div
+                    role="alert"
+                    className="mt-4 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm"
+                  >
+                    <p>{t('planner.activate.stale')}</p>
+                    <label className="mt-2 flex items-start gap-2">
+                      <input
+                        type="checkbox"
+                        checked={reviewedFreshPreview}
+                        onChange={(event) => setReviewedFreshPreview(event.target.checked)}
+                      />
+                      <span>{t('planner.activate.reviewed')}</span>
+                    </label>
+                  </div>
+                )}
+                <div className="mt-5 flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    disabled={
+                      activatePlan.isPending ||
+                      activationPreview.isPending ||
+                      activationPreview.isFetching ||
+                      activationPreview.isError ||
+                      !activationPreview.data ||
+                      (stalePreview && !reviewedFreshPreview)
+                    }
+                    onClick={() => {
+                      const preview = activationPreview.data;
+                      if (!preview) return;
+                      setStalePreview(false);
+                      setReviewedFreshPreview(false);
+                      activatePlan.mutate(
+                        { planId: plan._id, previewToken: preview.previewToken },
+                        {
+                          onSuccess: () => {
+                            setConfirmActivate(false);
+                            setNotice(t('planner.activated'));
+                          },
+                          onError: (error) => {
+                            if (
+                              error instanceof ApiRequestError &&
+                              error.code === 'stale_activation_preview'
+                            ) {
+                              setReviewedFreshPreview(false);
+                              setStalePreview(true);
+                              void activationPreview.refetch();
+                            }
+                          },
+                        },
+                      );
+                    }}
+                  >
+                    {t('planner.activate.confirm')}
+                  </Button>
+                  <Button type="button" variant="ghost" onClick={() => setConfirmActivate(false)}>
+                    {t('common.cancel')}
+                  </Button>
+                </div>
+                {activatePlan.isError &&
+                  !(
+                    activatePlan.error instanceof ApiRequestError &&
+                    activatePlan.error.code === 'stale_activation_preview'
+                  ) && (
+                    <p role="alert" className="mt-3 text-sm text-destructive">
+                      {t('app.error')}
+                    </p>
+                  )}
+              </div>
+            )}
+
+            <PlanEditor
+              key={plan._id}
+              plan={plan}
+              tasks={tasks.data.filter((task) => task.active)}
+              rooms={rooms.data}
+              users={activeUsers}
+              profileId={profile?._id ?? null}
+              intervals={settings.data.intervals}
+              onManagePlans={() => setPlansOpen(true)}
+            />
+          </>
+        )}
       </div>
     </section>
   );
@@ -513,19 +543,28 @@ function ActivationPreviewSection({
 }) {
   return (
     <section className="mt-3" aria-label={title}>
-      <h3 className="font-semibold">{title} ({items.length})</h3>
+      <h3 className="font-semibold">
+        {title} ({items.length})
+      </h3>
       {items.length === 0 ? (
         <p className="mt-1 text-sm text-muted-foreground">{t('planner.activate.none')}</p>
       ) : (
         <ul className="mt-1 space-y-1 text-sm">
           {items.map((item, index) => {
-            const person = activeUsers.find((user) => user._id === item.assigneeId)?.name ??
+            const person =
+              activeUsers.find((user) => user._id === item.assigneeId)?.name ??
               (item.assigneeId ? t('planner.activate.unknownPerson') : t('planner.anyone'));
             const date = formatPreviewDate(item.date);
             return (
-              <li key={`${item.occurrenceId ?? item.taskId}-${item.date}-${index}`} className="rounded-md bg-muted/50 px-2 py-1">
+              <li
+                key={`${item.occurrenceId ?? item.taskId}-${item.date}-${index}`}
+                className="rounded-md bg-muted/50 px-2 py-1"
+              >
                 <span className="font-medium">{item.taskName}</span>
-                <span className="text-muted-foreground"> · {date} · {person}</span>
+                <span className="text-muted-foreground">
+                  {' '}
+                  · {date} · {person}
+                </span>
               </li>
             );
           })}
