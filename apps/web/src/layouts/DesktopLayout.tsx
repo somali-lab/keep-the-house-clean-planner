@@ -12,6 +12,7 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  House,
 } from 'lucide-react';
 import { NavLink, Navigate, Route, Routes } from 'react-router';
 import { AppLogo } from '@/components/AppLogo';
@@ -122,6 +123,17 @@ export function DesktopLayout({ onOpenOverview }: { onOpenOverview: () => void }
         <header className="sticky top-0 z-20 flex h-16 items-center justify-end gap-2 border-b bg-background/90 px-6 backdrop-blur">
           <LanguageSwitcher />
           <ThemeSwitcher />
+          {/* Same top-right spot as the overview's management button. */}
+          <Button
+            variant="ghost"
+            size="icon-lg"
+            className="rounded-full text-muted-foreground"
+            aria-label={t('layout.home')}
+            title={t('layout.home')}
+            onClick={onOpenOverview}
+          >
+            <House aria-hidden="true" />
+          </Button>
         </header>
         <main className="mx-auto w-full max-w-[96rem] flex-1 px-6 py-7">
           <Routes>
