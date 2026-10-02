@@ -189,6 +189,27 @@ describe('PlannerPage — drops', () => {
   });
 });
 
+describe('PlannerPage — plan status', () => {
+  it('explains that a draft plan is absent from task overviews until activated', async () => {
+    setup([
+      makePlan({ _id: 'p1', name: 'Standaard', active: true }),
+      makePlan({ _id: 'p2', name: 'Zomer' }),
+    ]);
+    renderWithProviders(<PlannerPage />);
+
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+    await openPlanManagement();
+    fireEvent.change(await screen.findByLabelText('Plan'), { target: { value: 'p2' } });
+
+    expect(await screen.findByRole('note')).toHaveTextContent(
+      'Dit is een conceptplan. De taken hierin verschijnen niet in Weekoverzicht of Mijn taken totdat je dit plan activeert.',
+    );
+
+    fireEvent.change(screen.getByLabelText('Plan'), { target: { value: 'p1' } });
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+  });
+});
+
 describe('PlannerPage — budgets and pool', () => {
   it('filters the planning lanes by person without changing the plan', async () => {
     setup([

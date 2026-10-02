@@ -283,6 +283,8 @@ export const nl = {
   'planner.saved': 'Opgeslagen',
   'planner.saveError': 'Opslaan mislukt. Probeer het opnieuw.',
   'planner.noPlan': 'Er is nog geen plan.',
+  'planner.inactivePlanNotice':
+    'Dit is een conceptplan. De taken hierin verschijnen niet in Weekoverzicht of Mijn taken totdat je dit plan activeert.',
 
   'today.mine': 'Mijn taken',
   'today.unclaimed': 'Nog niet opgepakt',

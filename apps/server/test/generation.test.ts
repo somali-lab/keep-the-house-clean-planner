@@ -401,6 +401,67 @@ describe('editing the active plan', () => {
       .toArray();
     expect(deletions).toHaveLength(8);
   });
+
+  it('shows a newly assigned active-plan task in occurrence queries and persistence', async () => {
+    const c = await setup();
+    const taskId = await c.task('Ramen zemen', '4wk', 20);
+    await c.nightly();
+
+    await c.putSlots(c.planId, [{
+      taskId,
+      weekIndex: 0,
+      weekday: 4,
+      assigneeId: c.p1._id.toHexString(),
+    }], true);
+
+    const response = await c.t.app.inject({
+      method: 'GET',
+      url: '/api/occurrences?from=2026-09-14&to=2026-09-20',
+      headers: asProfile(c.p1),
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual([
+      expect.objectContaining({
+        taskId,
+        date: '2026-09-17',
+        assigneeId: c.p1._id.toHexString(),
+        status: 'open',
+      }),
+    ]);
+
+    const persisted = await findOccurrences(c.t.db, { taskId: new ObjectId(taskId) });
+    expect(dayKeys(persisted)).toContain('2026-09-17');
+  });
+
+  it('does not publish slots from a draft plan even when synchronization is requested', async () => {
+    const c = await setup();
+    const taskId = await c.task('Ramen zemen', '4wk', 20);
+    await c.nightly();
+    const created = await c.t.app.inject({
+      method: 'POST',
+      url: '/api/cycle-plans',
+      headers: asProfile(c.p1),
+      payload: { name: 'Concept' },
+    });
+    expect(created.statusCode).toBe(201);
+    const draftId = created.json<{ _id: string; active: boolean }>()._id;
+    expect(created.json<{ active: boolean }>().active).toBe(false);
+
+    await c.putSlots(draftId, [{
+      taskId,
+      weekIndex: 0,
+      weekday: 4,
+      assigneeId: c.p1._id.toHexString(),
+    }], true);
+
+    const response = await c.t.app.inject({
+      method: 'GET',
+      url: '/api/occurrences?from=2026-09-14&to=2026-09-20',
+      headers: asProfile(c.p1),
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual([]);
+  });
 });
 
 describe('POST /api/cycle-plans/:id/activate', () => {
