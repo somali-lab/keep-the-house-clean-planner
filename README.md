@@ -21,6 +21,7 @@ The screenshots show a scripted demo household with fictional people and sample 
 ## What it does
 
 - Builds household schedules around a reusable four-week cycle.
+- Publishes upcoming tasks from the active plan in the week overview and My tasks. Tasks in a draft appear there only after the plan is activated and their dates are in view.
 - Shows today's chores, the upcoming days, and overdue work.
 - Assigns chores to household members and separates weekday from weekend workload.
 - Reviews workload per person, per week, and across the full cycle.

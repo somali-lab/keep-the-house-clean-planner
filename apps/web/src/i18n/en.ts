@@ -242,6 +242,8 @@ export const en = {
   "planner.saved": "Saved",
   "planner.saveError": "Save failed. Try again.",
   "planner.noPlan": "No plan yet.",
+  "planner.inactivePlanNotice":
+    "This is a draft plan. Its tasks will not appear in Week overview or My tasks until you activate this plan.",
   "today.mine": "My tasks",
   "today.unclaimed": "Unclaimed",
   "today.others": "From other people",

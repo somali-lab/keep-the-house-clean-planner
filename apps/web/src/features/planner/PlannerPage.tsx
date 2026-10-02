@@ -362,6 +362,15 @@ export function PlannerPage() {
               )}
               {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} />}
 
+              {!plan.active && (
+                <p
+                  role="note"
+                  className="rounded-xl border border-border bg-muted/50 px-4 py-3 text-sm"
+                >
+                  {t('planner.inactivePlanNotice')}
+                </p>
+              )}
+
               {confirmActivate && (
             <div
               role="dialog"

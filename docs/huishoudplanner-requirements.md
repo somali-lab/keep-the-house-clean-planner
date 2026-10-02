@@ -171,6 +171,7 @@ dismissedPromotions: [ ... ]
 - A drop onto a weekday the assignee is unavailable on is rejected, with an explanation.
 - Per-week totals per user are visible, so imbalance is apparent before the cycle starts.
 - The same validation rules run on the server for every plan write, so a plan that the editor would refuse cannot arrive through the API either.
+- The editor identifies an inactive plan as a draft and explains that its slots do not appear in the week overview or My tasks until the plan is activated.
 
 ### 4.3 Generation
 
@@ -178,6 +179,7 @@ dismissedPromotions: [ ... ]
 - Generation is idempotent. Re-running it produces no duplicates, keyed on cycle, task and planned date.
 - Generation never creates an occurrence in the past. A cycle activated midway produces the remainder of the cycle only.
 - A nightly job generates the upcoming cycle in advance, so the coming week is always visible.
+- Saving slots in the active plan synchronizes future generated occurrences immediately. The resulting tasks appear on their assigned dates and for their assigned people when those dates are within the selected range in the week overview or My tasks, including after a page reload. Saving slots in an inactive draft does not change those overviews.
 - Vacation ranges suppress generation on those dates. The due engine keeps counting the days.
 - Activating a different plan replaces only future occurrences that are still replaceable — untouched, generated, open ones. Anything completed, skipped, rescheduled, or created ad hoc survives, because it records something that actually happened.
 
