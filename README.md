@@ -231,6 +231,8 @@ Useful commands:
 - `npm run screenshots` — regenerate the README screenshots from a scripted demo household.
 - `node scripts/smoke.mjs` — run an isolated Docker smoke test without touching an existing installation.
 
+Dependabot checks npm dependencies monthly. It groups compatible minor and patch development updates; TypeScript is reviewed separately against `typescript-eslint`'s peer range. Major updates to TypeScript, Node type declarations, and jsdom are held until the project's tooling or supported Node version can use them. See [`.github/dependabot.yml`](.github/dependabot.yml) for the rules.
+
 Install the Playwright browser once before running end-to-end tests:
 
 ```sh
