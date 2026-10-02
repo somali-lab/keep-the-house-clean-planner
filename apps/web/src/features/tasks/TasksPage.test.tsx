@@ -15,6 +15,7 @@ const tasks = [
 ];
 
 function setup(extraRoutes: Record<string, unknown> = {}) {
+  for (const key of Object.keys(localStorage)) if (key.startsWith('huishoudplanner.filters.')) localStorage.removeItem(key);
   storeProfile(ANNA._id);
   return mockApi({
     '/api/users': [ANNA, BRAM],
@@ -85,6 +86,8 @@ describe('TasksPage — grouping', () => {
     expect(sections).toHaveLength(1);
     expect(within(sections[0]!).getByRole('heading', { level: 2 })).toHaveTextContent('Badkamer');
     expect(screen.queryByText('Aanrecht')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Filters herstellen' }));
+    expect(screen.getByLabelText('Filter op ruimte')).toHaveValue('all');
   });
 
   it('starts with every room collapsed and can expand one room or all rooms', async () => {

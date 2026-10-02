@@ -1,4 +1,5 @@
 import type { OccurrenceView } from '@huishoudplanner/shared';
+import { addDays } from '@huishoudplanner/shared/time';
 import { getLocale } from '../../i18n/runtime.ts';
 
 /** How far back the Today view looks for overdue items (two cycles). */
@@ -18,8 +19,7 @@ export function dayKeyInZone(now: Date, timeZone: string): string {
 
 /** Calendar arithmetic on day keys. */
 export function addDaysKey(dayKey: string, days: number): string {
-  const [y, m, d] = dayKey.split('-').map(Number) as [number, number, number];
-  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+  return addDays(dayKey, days);
 }
 
 export interface TodayGroups {

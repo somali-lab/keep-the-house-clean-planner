@@ -170,6 +170,7 @@ dismissedPromotions: [ ... ]
 - Workload validation sums the planned minutes per user per day against that user's budget, and marks days over the budget and days over the hard ceiling differently.
 - A drop onto a weekday the assignee is unavailable on is rejected, with an explanation.
 - Per-week totals per user are visible, so imbalance is apparent before the cycle starts.
+- The editor shows each person's planned minutes and the household total for every cycle week. A task-name search matches a case- and accent-insensitive substring and only changes what is visible in the editor; it never changes saved slots.
 - The same validation rules run on the server for every plan write, so a plan that the editor would refuse cannot arrive through the API either.
 - The editor identifies an inactive plan as a draft and explains that its slots do not appear in the week overview or My tasks until the plan is activated.
 
@@ -196,6 +197,9 @@ dismissedPromotions: [ ... ]
 - An unassigned occurrence can be claimed.
 - Reschedule by dragging to another day. `plannedDate` is preserved. Dragging to a day the assignee is unavailable on is allowed but warned about, because reality outranks the plan.
 - A week overview is the default landing view at every screen width, shows the whole week with drag-to-reschedule, and can collapse past days.
+- The week overview can search by part of a task name and optionally show the cycle-week number on its cards.
+- My tasks groups its sliding 1-, 2-, or 4-week period into seven-day blocks starting today. Each block shows its date range; each task shows its own cycle-week number even when a block crosses a cycle boundary.
+- Filter choices throughout the app survive a hard reload. A person can visibly reset them, and one household member's saved choices are not silently applied to another member.
 - "Done just now" creates an ad-hoc occurrence for a task that was not planned today. At most one ad-hoc occurrence per task per day, and only within a cycle that has been generated.
 
 ### 4.5 Due engine

@@ -18,6 +18,8 @@ import { Label } from '@/components/ui/label';
 import { useSettings, useUsers } from '../../api/queries.ts';
 import { format, t } from '../../i18n/nl.ts';
 import { getLocale } from '../../i18n/runtime.ts';
+import { useProfile } from '../../identity/index.ts';
+import { usePersistedFilter } from '../../hooks/usePersistedFilter.ts';
 import { addDaysKey, dayKeyInZone } from '../today/todayModel.ts';
 import { useCompletionRecords, useDeleteCompletion, useEditCompletion } from './api.ts';
 
@@ -40,8 +42,9 @@ export function CompletionManagementPage({ now }: { now?: Date }) {
   const users = useUsers();
   const timezone = settings.data?.timezone ?? 'Europe/Amsterdam';
   const today = dayKeyInZone(now ?? new Date(), timezone);
-  const [from, setFrom] = useState(() => addDaysKey(today, -90));
-  const [to, setTo] = useState(today);
+  const { profile } = useProfile();
+  const [from, setFrom, resetFrom] = usePersistedFilter('completions.from', profile?._id ?? null, addDaysKey(today, -90));
+  const [to, setTo, resetTo] = usePersistedFilter('completions.to', profile?._id ?? null, today);
   const completions = useCompletionRecords(from, to);
   const editCompletion = useEditCompletion();
   const deleteCompletion = useDeleteCompletion();
@@ -75,7 +78,7 @@ export function CompletionManagementPage({ now }: { now?: Date }) {
       <PageHeader title={t('completions.title')} />
       <p className="mb-6 max-w-3xl text-sm text-muted-foreground">{t('completions.explainer')}</p>
 
-      <div className="mb-6 grid items-end gap-4 rounded-2xl border bg-card p-5 shadow-sm sm:grid-cols-[auto_1fr_1fr]" role="search">
+      <div className="mb-6 grid items-end gap-4 rounded-2xl border bg-card p-5 shadow-sm sm:grid-cols-[auto_1fr_1fr_auto]" role="search">
         <div className="hidden size-10 place-items-center rounded-xl bg-accent text-accent-foreground sm:grid">
           <Filter className="size-5" aria-hidden="true" />
         </div>
@@ -87,6 +90,9 @@ export function CompletionManagementPage({ now }: { now?: Date }) {
           <Label htmlFor={`${idPrefix}-to`}>{t('completions.to')}</Label>
           <Input id={`${idPrefix}-to`} type="date" value={to} min={from} onChange={(event) => setTo(event.target.value)} />
         </div>
+        <Button type="button" variant="ghost" onClick={() => { resetFrom(); resetTo(); }}>
+          {t('completions.resetFilters')}
+        </Button>
       </div>
 
       {message && <p role="status" className="mb-4 rounded-xl bg-success/10 p-4 font-semibold text-success">{message}</p>}

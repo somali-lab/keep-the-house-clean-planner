@@ -4,8 +4,9 @@ import { createElement, type ComponentProps } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ANNA, BRAM, mockApi, storeProfile } from '../../test/fixtures.ts';
 import { makeOccurrence, makeRoom, makeSettings, makeTask, renderWithProviders } from '../../test/render.tsx';
+import { resetProfileStore } from '../../identity/profileStore.ts';
 import { WeekPage } from './WeekPage.tsx';
-import { groupByDay, movedTo, overviewDays, shortDay, weekDays, weekRangeLabel } from './weekModel.ts';
+import { groupByDay, matchesTaskName, movedTo, overviewDays, shortDay, weekDays, weekRangeLabel } from './weekModel.ts';
 
 const dnd = vi.hoisted(() => ({ onDragEnd: undefined as undefined | ((event: unknown) => void) }));
 vi.mock('@dnd-kit/core', async (importOriginal) => {
@@ -89,12 +90,20 @@ describe('weekModel', () => {
     expect(movedTo(movedTo(occ, '2026-09-18'), '2026-09-15').movedFrom).toBeNull();
     expect(groupByDay([occ], ['2026-09-15', '2026-09-16']).map((d) => d.items.length)).toEqual([1, 0]);
   });
+
+  it('matches task-name substrings without case or accent differences', () => {
+    expect(matchesTaskName('Café schoonmaken', 'cafe')).toBe(true);
+    expect(matchesTaskName('Badkamer', 'KAM')).toBe(true);
+    expect(matchesTaskName('Badkamer', 'keuken')).toBe(false);
+  });
 });
 
 describe('WeekPage', () => {
   beforeEach(() => {
     nextWarnings = [];
     dnd.onDragEnd = undefined;
+    window.localStorage.clear();
+    resetProfileStore();
   });
 
   it('uses three columns for wider screens', async () => {
@@ -179,6 +188,41 @@ describe('WeekPage', () => {
     fireEvent.change(filter, { target: { value: 'unassigned' } });
     await waitFor(() => expect(screen.queryByText('Stofzuigen')).not.toBeInTheDocument());
     expect(screen.getAllByText('Niets gepland.').length).toBeGreaterThan(0);
+  });
+
+  it('searches task names, shows cycle weeks, and persists week choices per profile', async () => {
+    setup();
+    db[0] = { ...db[0]!, taskNameSnapshot: 'Café badkamer', date: '2026-09-24' };
+    const first = renderWithProviders(<WeekPage now={NOW} />);
+    fireEvent.click(await screen.findByRole('button', { name: /Afgelopen 3 dagen/ }));
+    const search = screen.getByRole('textbox', { name: 'Zoek taken' });
+    fireEvent.change(search, { target: { value: 'CAFE' } });
+    expect(await screen.findByText('Café badkamer')).toBeInTheDocument();
+    expect(screen.queryByText('Stofzuigen')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Toon cyclusweek' }));
+    expect(screen.getByTestId('day:2026-09-16').querySelector('h2')).toHaveTextContent('Cyclusweek 1');
+    fireEvent.click(screen.getByRole('button', { name: 'Volgende periode' }));
+    expect(await screen.findByRole('heading', { name: /woensdag 23 sep/ })).toBeInTheDocument();
+    first.unmount();
+
+    const persistedView = renderWithProviders(<WeekPage now={NOW} />);
+    expect(await screen.findByRole('heading', { name: /woensdag 23 sep/ })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Zoek taken' })).toHaveValue('CAFE');
+    expect(screen.getByRole('button', { name: 'Toon cyclusweek' })).toHaveAttribute('aria-pressed', 'true');
+    expect(await screen.findByText('Café badkamer')).toBeInTheDocument();
+
+    const current = screen.getByRole('button', { name: 'Filters wissen' });
+    fireEvent.click(current);
+    expect(await screen.findByRole('textbox', { name: 'Zoek taken' })).toHaveValue('');
+    expect(screen.getByRole('button', { name: 'Toon cyclusweek' })).toHaveAttribute('aria-pressed', 'false');
+
+    // A different selected profile gets its own defaults and period state.
+    persistedView.unmount();
+    storeProfile(BRAM._id);
+    resetProfileStore();
+    renderWithProviders(<WeekPage now={NOW} />);
+    expect(await screen.findByRole('heading', { name: /woensdag 16 sep Vandaag/ })).toBeInTheDocument();
+    expect(screen.getByLabelText('Filter op persoon')).toHaveValue(BRAM._id);
   });
 
   it('can complete a task and undo it from the overview', async () => {

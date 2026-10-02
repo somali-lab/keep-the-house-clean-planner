@@ -59,22 +59,14 @@ describe('taskOverviewRows', () => {
       taskNameSnapshot: VACUUM.name,
       date: '2026-09-16',
     });
-    expect(taskOverviewRows([...planned, duplicate], [VACUUM, BEDDING], [LIVING, BEDROOM], 'Onbekend')).toEqual([
-      {
-        taskId: BEDDING._id,
-        taskName: BEDDING.name,
-        roomId: BEDROOM._id,
-        roomName: BEDROOM.name,
-        dates: ['2026-09-18'],
-      },
-      {
-        taskId: VACUUM._id,
-        taskName: VACUUM.name,
-        roomId: LIVING._id,
-        roomName: LIVING.name,
-        dates: ['2026-09-16', '2026-09-23', '2026-09-30', '2026-10-07'],
-      },
-    ]);
+    const rows = taskOverviewRows([...planned, duplicate], [VACUUM, BEDDING], [LIVING, BEDROOM], 'Onbekend', '2026-09-16', '2026-09-14');
+    expect(rows.find((row) => row.taskId === VACUUM._id && row.periodStart === '2026-09-16')).toMatchObject({
+      dates: ['2026-09-16'], cycleWeek: 1,
+    });
+    expect(rows.find((row) => row.taskId === VACUUM._id && row.periodStart === '2026-09-23')).toMatchObject({
+      dates: ['2026-09-23'], cycleWeek: 2,
+    });
+    expect(rows.find((row) => row.taskId === BEDDING._id)).toMatchObject({ dates: ['2026-09-18'], cycleWeek: 1 });
   });
 
   it('keeps historical room snapshots separate after a task moves rooms', () => {
@@ -101,17 +93,20 @@ describe('taskOverviewRows', () => {
       [movedTask],
       [LIVING, BEDROOM],
       'Onbekend',
+      '2026-09-16',
+      '2026-09-14',
     );
 
     expect(rows.map((row) => [row.roomName, row.dates])).toEqual([
-      ['Slaapkamer', ['2026-09-23']],
       ['Woonkamer', ['2026-09-16']],
+      ['Slaapkamer', ['2026-09-23']],
     ]);
   });
 });
 
 describe('MobileTasksPage', () => {
   beforeEach(() => {
+    for (const key of Object.keys(localStorage)) if (key.startsWith('huishoudplanner.filters.')) localStorage.removeItem(key);
     setup();
   });
 
@@ -133,16 +128,36 @@ describe('MobileTasksPage', () => {
   });
 
   it('can extend the date range and filter rows by room', async () => {
-    renderWithProviders(<MobileTasksPage now={NOW} />);
+    const firstRender = renderWithProviders(<MobileTasksPage now={NOW} />);
     await screen.findByRole('row', { name: /Stofzuigen/ });
 
     fireEvent.click(screen.getByRole('button', { name: '2 weken' }));
     await waitFor(() => expect(screen.getByText('16 sep t/m 29 sep')).toBeInTheDocument());
-    expect(within(screen.getByRole('row', { name: /Stofzuigen/ })).getByText('wo 16 sep, wo 23 sep')).toBeInTheDocument();
+    const vacuumRows = screen.getAllByRole('row', { name: /Stofzuigen/ });
+    expect(vacuumRows).toHaveLength(2);
+    expect(within(vacuumRows[0]!).getByText('wo 16 sep')).toBeInTheDocument();
+    expect(within(vacuumRows[1]!).getByText('wo 23 sep')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'Woonkamer' }));
     expect(screen.getByRole('row', { name: /Beddengoed/ })).toBeInTheDocument();
-    expect(screen.queryByRole('row', { name: /Stofzuigen/ })).not.toBeInTheDocument();
+    expect(screen.queryAllByRole('row', { name: /Stofzuigen/ })).toHaveLength(0);
     expect(screen.getByRole('checkbox', { name: 'Slaapkamer' })).toBeChecked();
+    firstRender.unmount();
+    renderWithProviders(<MobileTasksPage now={NOW} />);
+    expect(await screen.findByRole('checkbox', { name: 'Woonkamer' })).not.toBeChecked();
+    expect(screen.getByRole('button', { name: '2 weken' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('splits seven-day blocks at cycle-week boundaries and labels each task cycle week', async () => {
+    const firstRender = renderWithProviders(<MobileTasksPage now={NOW} />);
+    await screen.findByRole('row', { name: /Stofzuigen/ });
+    fireEvent.click(screen.getByRole('button', { name: '2 weken' }));
+    firstRender.unmount();
+    renderWithProviders(<MobileTasksPage now={NOW} />);
+    expect(await screen.findByRole('button', { name: '2 weken' })).toHaveAttribute('aria-pressed', 'true');
+    const block = await screen.findByRole('region', { name: '23 sep t/m 29 sep' });
+    expect(within(block).getByRole('row', { name: /Stofzuigen/ })).toHaveTextContent('Cyclusweek 2');
+    fireEvent.click(screen.getByRole('button', { name: 'Filters herstellen' }));
+    expect(await screen.findByRole('button', { name: '1 week' })).toHaveAttribute('aria-pressed', 'true');
   });
 });

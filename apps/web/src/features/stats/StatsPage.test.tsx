@@ -317,7 +317,7 @@ describe('StatsPage', () => {
 
   it('applies the period filter to every chart and table', async () => {
     const fetchMock = setup();
-    renderWithProviders(<StatsPage />);
+    const firstView = renderWithProviders(<StatsPage />);
     const period = await screen.findByLabelText('Periode');
     expect(within(period).getByRole('option', { name: 'Laatste 13 cycli' })).toBeInTheDocument();
     fireEvent.change(period, { target: { value: 'weeks:3' } });
@@ -343,6 +343,11 @@ describe('StatsPage', () => {
         ]),
       ),
     );
+    firstView.unmount();
+    renderWithProviders(<StatsPage />);
+    expect(await screen.findByLabelText('Periode')).toHaveValue('cycles:4');
+    fireEvent.click(screen.getByRole('button', { name: 'Filters wissen' }));
+    expect(screen.getByLabelText('Periode')).toHaveValue('weeks:1');
   });
 
   it('shows planning shifts separately from completion delays and suggests improvements', async () => {

@@ -1,4 +1,6 @@
 import type { OccurrenceView, Room, Task } from '@huishoudplanner/shared';
+import { weekIndexFor } from '@huishoudplanner/shared/cycle';
+import { addDays, daysBetween } from '@huishoudplanner/shared/time';
 import { getLocale } from '../../i18n/runtime.ts';
 
 export interface TaskOverviewRow {
@@ -7,14 +9,18 @@ export interface TaskOverviewRow {
   roomId: string | null;
   roomName: string;
   dates: string[];
+  periodStart: string;
+  cycleWeek: number;
 }
 
-/** One compact row per task, with each occurrence date shown only once. */
+/** One row per task, room, sliding block, and cycle week; dates remain ordered. */
 export function taskOverviewRows(
   occurrences: OccurrenceView[],
   tasks: Task[],
   rooms: Room[],
   unknownRoom: string,
+  periodStart: string,
+  cycleAnchorDate: string,
 ): TaskOverviewRow[] {
   const taskById = new Map(tasks.map((task) => [task._id, task]));
   const roomById = new Map(rooms.map((room) => [room._id, room]));
@@ -26,13 +32,18 @@ export function taskOverviewRows(
     const roomName =
       occurrence.roomNameSnapshot ??
       (roomId ? (roomById.get(roomId)?.name ?? unknownRoom) : unknownRoom);
-    const groupKey = `${occurrence.taskId}:${roomId ?? ''}:${roomName}`;
+    const block = Math.floor(daysBetween(periodStart, occurrence.date) / 7);
+    const blockStart = addDays(periodStart, block * 7);
+    const cycleWeek = weekIndexFor(occurrence.date, cycleAnchorDate) + 1;
+    const groupKey = `${occurrence.taskId}:${roomId ?? ''}:${roomName}:${blockStart}:${cycleWeek}`;
     const row = grouped.get(groupKey) ?? {
       taskId: occurrence.taskId,
       taskName: task?.name ?? occurrence.taskNameSnapshot,
       roomId,
       roomName,
       dates: [],
+      periodStart: blockStart,
+      cycleWeek,
     };
     if (!row.dates.includes(occurrence.date)) row.dates.push(occurrence.date);
     grouped.set(groupKey, row);
@@ -40,6 +51,7 @@ export function taskOverviewRows(
 
   return [...grouped.values()].sort(
     (a, b) =>
+      a.dates[0]!.localeCompare(b.dates[0]!) ||
       a.roomName.localeCompare(b.roomName, getLocale()) ||
       a.taskName.localeCompare(b.taskName, getLocale()),
   );

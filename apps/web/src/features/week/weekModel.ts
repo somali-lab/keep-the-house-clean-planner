@@ -87,6 +87,12 @@ export function groupByDay(occurrences: OccurrenceView[], days: string[]): WeekD
   }));
 }
 
+/** Match task names without case or diacritic differences. */
+export function matchesTaskName(taskName: string, search: string): boolean {
+  const normalize = (value: string) => value.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase();
+  return normalize(taskName).includes(normalize(search).trim());
+}
+
 /** Local view of a move, as the server will store it. */
 export function movedTo(occ: OccurrenceView, date: string): OccurrenceView {
   return { ...occ, date, movedFrom: date === occ.plannedDate ? null : occ.plannedDate };

@@ -10,6 +10,7 @@ import {
   type DragEndEvent,
 } from '@dnd-kit/core';
 import type { ApiWarning, OccurrenceView, User } from '@huishoudplanner/shared';
+import { weekIndexFor } from '@huishoudplanner/shared/cycle';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   CalendarDays,
@@ -25,11 +26,14 @@ import {
   TriangleAlert,
   ThumbsUp,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { NativeSelect } from '@/components/NativeSelect';
+import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { usePersistedFilter } from '../../hooks/usePersistedFilter.ts';
+import { getActiveProfileId } from '../../identity/profileStore.ts';
 import { api } from '../../api/index.ts';
 import { useRooms, useSettings, useTasks } from '../../api/queries.ts';
 import { format, t } from '../../i18n/nl.ts';
@@ -48,6 +52,7 @@ import {
   overviewDays,
   parseDayDropId,
   parseOccurrenceDragId,
+  matchesTaskName,
   shortDay,
   weekRangeLabel,
   weekdayName,
@@ -76,12 +81,13 @@ export function WeekPage({ now }: { now?: Date }) {
   const { profile, activeUsers } = useProfile();
   const queryClient = useQueryClient();
   const todayKey = dayKeyInZone(now ?? new Date(), settings.data?.timezone ?? 'Europe/Amsterdam');
-  const [periodOffset, setPeriodOffset] = useState(0);
-  const [pastExpanded, setPastExpanded] = useState(false);
-  const [personFilter, setPersonFilter] = useState(profile?._id ?? 'all');
-  useEffect(() => {
-    if (profile?._id) setPersonFilter(profile._id);
-  }, [profile?._id]);
+  const profileId = profile?._id ?? null;
+  const initialPersonFilter = profile?._id ?? getActiveProfileId() ?? 'all';
+  const [periodOffset, setPeriodOffset, resetPeriodOffset] = usePersistedFilter('week.periodOffset', profileId, 0);
+  const [pastExpanded, setPastExpanded, resetPastExpanded] = usePersistedFilter('week.pastExpanded', profileId, false);
+  const [personFilter, setPersonFilter, resetPersonFilter] = usePersistedFilter('week.person', profileId, initialPersonFilter);
+  const [taskSearch, setTaskSearch, resetTaskSearch] = usePersistedFilter('week.taskSearch', profileId, '');
+  const [showCycleWeek, setShowCycleWeek, resetShowCycleWeek] = usePersistedFilter('week.showCycleWeek', profileId, false);
   const days = overviewDays(addDaysKey(todayKey, periodOffset * 7));
   const visibleDays = pastExpanded ? days : days.slice(3);
   const from = days[0]!;
@@ -185,7 +191,8 @@ export function WeekPage({ now }: { now?: Date }) {
         : personFilter === 'unassigned'
           ? occurrence.assigneeId === null
           : occurrence.assigneeId === personFilter,
-    );
+    )
+    .filter((occurrence) => matchesTaskName(occurrence.taskNameSnapshot, taskSearch));
   const openCount = filteredOccurrences.filter((occurrence) => occurrence.status === 'open').length;
   const finishedCount = filteredOccurrences.length - openCount;
 
@@ -207,6 +214,22 @@ export function WeekPage({ now }: { now?: Date }) {
           {activeUsers.map((user) => <option key={user._id} value={user._id}>{user.name}</option>)}
           <option value="unassigned">{t('planner.anyone')}</option>
         </NativeSelect>
+        <Input
+          className="h-9 w-full sm:w-44"
+          aria-label={t('week.searchTasks')}
+          placeholder={t('week.searchTasks')}
+          value={taskSearch}
+          onChange={(event) => setTaskSearch(event.target.value)}
+        />
+        <Button
+          type="button"
+          variant={showCycleWeek ? 'default' : 'outline'}
+          className="h-9 rounded-full px-3"
+          aria-pressed={showCycleWeek}
+          onClick={() => setShowCycleWeek((shown) => !shown)}
+        >
+          {t('week.showCycleWeek')}
+        </Button>
         <Badge className="rounded-full px-2.5 py-1 text-xs">
           {format('week.open', { count: openCount })}
         </Badge>
@@ -248,6 +271,20 @@ export function WeekPage({ now }: { now?: Date }) {
             <ChevronRight aria-hidden="true" />
           </Button>
         </div>
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-9 rounded-full px-3"
+          onClick={() => {
+            resetPersonFilter();
+            resetTaskSearch();
+            resetPeriodOffset();
+            resetPastExpanded();
+            resetShowCycleWeek();
+          }}
+        >
+          {t('week.resetFilters')}
+        </Button>
       </div>
       <PromoteBanner />
 
@@ -300,6 +337,8 @@ export function WeekPage({ now }: { now?: Date }) {
               isToday={day.dayKey === todayKey}
               period={day.dayKey < todayKey ? 'past' : day.dayKey === todayKey ? 'today' : 'future'}
               cycleStarted={day.dayKey >= settings.data.cycleAnchorDate}
+              cycleWeek={day.dayKey >= settings.data.cycleAnchorDate ? weekIndexFor(day.dayKey, settings.data.cycleAnchorDate) + 1 : null}
+              showCycleWeek={showCycleWeek}
               items={day.items}
               users={activeUsers}
               roomByTask={roomByTask}
@@ -340,6 +379,8 @@ interface DayColumnProps {
   isToday: boolean;
   period: 'past' | 'today' | 'future';
   cycleStarted: boolean;
+  cycleWeek: number | null;
+  showCycleWeek: boolean;
   items: OccurrenceView[];
   users: User[];
   roomByTask: Map<string, string>;
@@ -348,7 +389,7 @@ interface DayColumnProps {
   onUncomplete(id: string): void;
 }
 
-function DayColumn({ dayKey, isToday, period, cycleStarted, items, users, roomByTask, completionControl, onComplete, onUncomplete }: DayColumnProps) {
+function DayColumn({ dayKey, isToday, period, cycleStarted, cycleWeek, showCycleWeek, items, users, roomByTask, completionControl, onComplete, onUncomplete }: DayColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: dayDropId(dayKey), disabled: !cycleStarted });
   const headingId = `day-${dayKey}`;
   return (
@@ -368,6 +409,9 @@ function DayColumn({ dayKey, isToday, period, cycleStarted, items, users, roomBy
       <div className="mb-3 flex min-h-11 items-start justify-between gap-2">
         <h2 id={headingId} className="flex flex-wrap items-center gap-1.5 text-sm font-extrabold leading-tight">
           {longDay(dayKey)}
+          {showCycleWeek && cycleWeek !== null && (
+            <Badge variant="outline">{format('cycle.week', { week: cycleWeek })}</Badge>
+          )}
           {isToday && (
             <>
               {' '}

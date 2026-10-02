@@ -3,7 +3,7 @@
 ## Doel en status
 
 Dit document verdeelt de wensenlijst in kleine, zelfstandig te beoordelen wijzigingen.
-**Status: productkeuzes bevestigd; gereed om per werkpakket uit te voeren.**
+**Status: P01, P02 en P04 afgerond; na P04 gepauzeerd op verzoek van de opdrachtgever.**
 Een agent voert **één werkpakket tegelijk** uit en controleert de genoemde
 acceptatiecriteria. Nieuwe, tijdens uitvoering ontdekte productvragen worden
 aan de opdrachtgever gesteld en niet door de agent ingevuld. Dit is een blijvende roadmap;
@@ -106,6 +106,22 @@ Pakketten met hetzelfde niveau kunnen na controle van hun afhankelijkheden
 onafhankelijk worden uitgevoerd; testprocessen delen nooit een database,
 poort of fixture. De nummers zijn stabiele verwijzingen, geen verplichting om
 alles in één PR samen te voegen.
+
+| Werkpakket | Status | Resultaat of eerstvolgende stap |
+| --- | --- | --- |
+| P00 — CI-doorlooptijd | Nog niet gestart | Na P05, zodra de uitvoering wordt hervat. |
+| P01 — Planner naar overzichten | Afgerond | [PR #51](https://github.com/somali-lab/keep-the-house-clean-planner/pull/51); de actieve planning bleek al te synchroniseren, met regressiedekking en duidelijke uitleg voor conceptplannen. |
+| P02 — Activatievoorbeeld | Afgerond | [PR #52](https://github.com/somali-lab/keep-the-house-clean-planner/pull/52); inspecteerbare preview en hercontrole bij activatie. |
+| P03 — AI-conceptplan | Nog niet gestart | Na P00, zodra de uitvoering wordt hervat. |
+| P04 — Zoeken, weekinformatie, filters | Afgerond | Deze wijziging: zoeken, cyclusweken, minuten, profielgebonden filterbehoud en gedateerde blokken in Mijn taken. |
+| P05 — Dagweergave en navigatie | Nog niet gestart | Eerstvolgende werkpakket bij hervatting. |
+| P06 — Extra uitvoering en ad-hoc taak | Nog niet gestart | Na P03 volgens de uitvoervolgorde. |
+| P07 — PDF-selectie | On hold | Alleen hervatten op nieuw expliciet verzoek. |
+| P08 — Browsermeldingen | Nog niet gestart | Na P06 volgens de uitvoervolgorde. |
+| P09 — About en projectinformatie | Nog niet gestart | Na P08; opnieuw controleren of screenshots en README actueel zijn. |
+| P10 — Punten en beloningen | Nog niet gestart | Na P09. |
+| P11 — Badges | Nog niet gestart | Na P10. |
+| P12 — Beloningsmeter | Nog niet gestart | Na P10; controleer de afhankelijkheid van P11. |
 
 ### P00 — Meet en herstel de CI-doorlooptijd
 
