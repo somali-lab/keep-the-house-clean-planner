@@ -23,7 +23,9 @@ uitdrukkelijk verzoek van de opdrachtgever **buiten dit plan**.
 > de open vragen in de kolom **Wacht op** beantwoord zijn; stel ze anders eerst.
 > Voer een gepauzeerd pakket alleen uit na een nieuw expliciet verzoek.
 > Volg daarna `AGENTS.md` en de vaste werkwijze
-> in dit plan. Schrijf de concrete stappen tijdelijk in `docs/BUILD.md`, implementeer
+> in dit plan. Werk als orkestrator volgens *Agentverdeling en modelkeuze*:
+> besteed verkennen, bouwen, controleren en reviewen uit aan subagents met het
+> daar genoemde model, en houd het zo goedkoop mogelijk. Schrijf de concrete stappen tijdelijk in `docs/BUILD.md`, implementeer
 > de kleinste volledige wijziging, werk tests en permanente documentatie bij,
 > vraag bij nieuwe productkeuzes om een antwoord, verifieer de acceptatiecriteria
 > en commit het resultaat. Rapporteer de
@@ -63,6 +65,10 @@ Deze keuzes komen uit de antwoorden van de opdrachtgever en zijn geen defaults:
 - De Home-knop gaat altijd naar het weekoverzicht. Twee kolommen bij
   **Vandaag → iedereen** gelden alleen waar het scherm breed genoeg is.
 - Een badge-avatar is een door de beheerder geüploade afbeelding.
+- Badges verschijnen ook op het tabblad van de beloningsmeter; de precieze
+  indeling wordt bij de start van P12 met de opdrachtgever afgestemd.
+- P00 versnelt alleen de bestaande CI-jobs; Playwright-E2E aan CI toevoegen
+  valt buiten dit plan.
 - De About-pagina toont de datum en tijd van de laatste release.
 - De .NET-migratie hoort niet in dit plan.
 
@@ -107,14 +113,78 @@ bevestigde keuze of bestaand gedrag is beantwoord.
 
 ## Open vragen
 
-Vragen die de bevestigde keuzes niet beantwoorden. Een werkpakket begint pas als
-de vragen in zijn kolom **Wacht op** beantwoord zijn. Leg het antwoord vast in de
-requirements of een ADR en verwijder de vraag hier.
+Er staan op dit moment geen open vragen. Een nieuwe vraag krijgt een volgnummer
+(`Qxx`, verder vanaf Q03) en wordt ingevuld in de kolom **Wacht op** van het pakket
+dat erop wacht. Een werkpakket begint pas als die vragen beantwoord zijn. Leg het
+antwoord vast onder *Bevestigde productkeuzes* en verwijder de vraag hier.
 
 | ID | Vraag | Blokkeert | Voorstel |
 | --- | --- | --- | --- |
-| Q01 | CI draait nu geen Playwright-E2E (alleen lint/typecheck, Vitest per project en de containerbuild). Moet P00 alleen de bestaande jobs versnellen, of ook E2E aan CI toevoegen (wat CI langer maakt)? | P00 (alleen het E2E-deel) | Eerst de bestaande jobs versnellen; E2E in CI als apart besluit. |
-| Q02 | Verschijnen badges op het tabblad van de beloningsmeter? | P12 | Nee; badges krijgen een eigen plek, zodat P12 niet op P11 wacht. |
+| — | — | — | — |
+
+## Agentverdeling en modelkeuze
+
+Om credits en tokens te sparen werkt de uitvoerende agent als **orkestrator**: hij
+houdt het overzicht en neemt de beslissingen, en besteedt afgebakend werk uit aan
+subagents met het lichtste model dat de taak aankan. Geldt voor iedere agenttool;
+de kolom *Claude Code* noemt de modelaliassen voor het `model`-veld van een
+subagent, andere tools kiezen hun vergelijkbare lichte, standaard of zware model.
+
+| Niveau | Claude Code | Gebruik voor |
+| --- | --- | --- |
+| Licht | `haiku` | Code en tests opzoeken, CI-tijden meten, `npm run verify` draaien en alleen de fouten samenvatten, i18n-sleutels aanvullen, README/screenshots en agentcontext controleren. |
+| Standaard | `sonnet` | De orkestrator zelf, implementatie per verticale slice, tests schrijven, diffreview bij gewone pakketten. |
+| Zwaar | `opus` | Alleen ontwerpwerk met datamodel-, migratie- of idempotentierisico: de ADR's van P06 en P10a, de periodegrenzen van P10b, en de review van die pakketten vóór de commit. |
+
+**Rollen per pakket**
+
+1. **Orkestrator (standaard).** Leest het plan, stelt open vragen, schrijft
+   `docs/BUILD.md`, deelt het werk op, beoordeelt de resultaten, werkt
+   documentatie bij en commit. Leest geen hele bestanden opnieuw die een
+   subagent al heeft samengevat.
+2. **Verkenner (licht, alleen lezen).** Zoekt het pad shared → server → data →
+   web → tests en de relevante ADR's. Levert bestandsnamen met regelnummers en
+   een korte conclusie, geen gekopieerde bestanden.
+3. **Ontwerper (zwaar, alleen waar de tabel hieronder dat noemt).** Schrijft het
+   ADR-concept en de randgevallen voor tests. De orkestrator legt keuzes die
+   een productvraag zijn alsnog aan de opdrachtgever voor.
+4. **Bouwer (standaard).** Implementeert één verticale slice met tests volgens
+   de vaste werkwijze. Krijgt een op zichzelf staande opdracht met paden, slice
+   en acceptatiecriteria.
+5. **Controleur (licht).** Draait de controles uit
+   `.agents/skills/verify-household-planner/SKILL.md` en meldt alleen wat faalt,
+   met de relevante uitvoer.
+6. **Reviewer (standaard; zwaar bij P06, P10a en P10b).** Beoordeelt de diff
+   tegen de acceptatiecriteria en `AGENTS.md` vóór de commit.
+
+**Spaarregels**
+
+- Besteed niets uit wat één zoekopdracht of één bekend bestand is; doe dat zelf.
+- Alleen lezende subagents mogen parallel lopen. Schrijvende subagents werken
+  na elkaar, één slice tegelijk, zodat ze nooit dezelfde bestanden of dezelfde
+  testdatabase, poort of fixture delen.
+- Begin licht en schaal pas op na een mislukte poging: faalt een lichte of
+  standaard subagent twee keer op dezelfde taak, geef die dan aan het volgende
+  niveau of los haar zelf op.
+- Hergebruik een lopende subagent voor vervolgvragen in plaats van een nieuwe
+  te starten die alles opnieuw moet inlezen.
+- Laat subagents conclusies teruggeven, geen volledige logs of bestanden.
+- Bij kleine pakketten (S) doet de orkestrator het verkennen en bouwen zelf;
+  alleen de controleur en de reviewer zijn dan subagents.
+
+| Pakket | Verkenner | Ontwerper (zwaar) | Bouwer | Reviewer |
+| --- | --- | --- | --- | --- |
+| P00 | Licht: CI-tijden per job en stap meten | — | Standaard | Standaard |
+| P03 | Licht | — | Standaard | Standaard |
+| P05 | Zelf (klein pakket) | — | Zelf | Standaard |
+| P06 | Licht | Ja: ADR datamodel en index | Standaard, per slice | Zwaar |
+| P08 | Licht | — (ADR tabcoördinatie door orkestrator) | Standaard | Standaard |
+| P09 | Zelf (klein pakket) | — | Zelf | Standaard |
+| P10a | Licht | Ja: ADR grootboek en "uitgevoerd door" | Standaard, per slice | Zwaar |
+| P10b | Licht | Ja: periodegrenzen en DST-randgevallen | Standaard | Zwaar |
+| P10c | Zelf | — | Standaard | Standaard |
+| P11 | Licht | — | Standaard | Standaard |
+| P12 | Licht | — | Standaard | Standaard |
 
 ## Vaste werkwijze voor elk werkpakket
 
@@ -153,7 +223,7 @@ uitbreidingen en gamification. Uitvoervolgorde:
 **P01 → P02 → P04 → P00 → P05 → P09 → P03 → P06 → P08 → P10a → P10b → P10c → P11 → P12**.
 
 - P00 staat vooraan in het resterende werk, omdat snellere CI alle volgende
-  pakketten versnelt. Het meetgedeelte kan beginnen vóór Q01 beantwoord is.
+  pakketten versnelt.
 - P09 heeft geen afhankelijkheden en is klein, dus het komt direct na P05.
 - P07 is op verzoek gepauzeerd en hoort niet bij deze uitvoervolgorde.
 
@@ -165,7 +235,7 @@ meerdere dagen met een datamodelwijziging.
 
 | Werkpakket | Status | Omvang | Wacht op | Resultaat of eerstvolgende stap |
 | --- | --- | --- | --- | --- |
-| P00 — CI-doorlooptijd | Nog niet gestart | M | Q01 (alleen E2E) | Eerstvolgende pakket bij hervatting. |
+| P00 — CI-doorlooptijd | Nog niet gestart | M | — | Eerstvolgende pakket bij hervatting. |
 | P01 — Planner naar overzichten | Afgerond | — | — | [PR #51](https://github.com/somali-lab/keep-the-house-clean-planner/pull/51); de actieve planning bleek al te synchroniseren, met regressiedekking en duidelijke uitleg voor conceptplannen. |
 | P02 — Activatievoorbeeld | Afgerond | — | — | [PR #52](https://github.com/somali-lab/keep-the-house-clean-planner/pull/52); inspecteerbare preview en hercontrole bij activatie (ADR-0008). |
 | P03 — AI-conceptplan | Nog niet gestart | S–M | — | Na P09. |
@@ -179,7 +249,7 @@ meerdere dagen met een datamodelwijziging.
 | P10b — Week- en cyclusbonussen | Nog niet gestart | M | — | Na P10a. |
 | P10c — Omrekening en inwisselen | Nog niet gestart | M | — | Na P10a. |
 | P11 — Badges | Nog niet gestart | M | — | Na P10a. |
-| P12 — Beloningsmeter | Nog niet gestart | M | Q02 | Na P10b en P10c; P11 alleen als badges op de metertab komen. |
+| P12 — Beloningsmeter | Nog niet gestart | M | — | Na P10b, P10c en P11; begin met afstemming van de badge-indeling. |
 
 ### P00 — Meet en herstel de CI-doorlooptijd
 
@@ -198,8 +268,7 @@ en Playwright-configuratie en testharnassen.
   waarschijnlijkste kandidaat (bijvoorbeeld door de browser te cachen).
 - Verhoog alleen daarna gericht de paralleliteit binnen een job. Controleer
   dat elke servertest eigen database, poort, klok en fixtures houdt.
-- E2E in CI toevoegen is een apart besluit (Q01); als dat gebeurt, geldt
-  dezelfde isolatie-eis voor iedere E2E-worker.
+- Voeg geen Playwright-E2E aan CI toe; dat valt buiten dit pakket.
 - **Klaar wanneer:** de volledige gate dezelfde controles uitvoert, herhaalde
   runs zonder state-conflicten slagen, en vóór/na-doorlooptijden zijn vastgelegd
   in de PR-beschrijving of het commitbericht.
@@ -444,11 +513,14 @@ Alle drie gebruiken hetzelfde grootboek.
 
 ### P12 — Beloningsmeter met kip en eieren
 
-**Afhankelijkheid:** P10b en P10c; P11 alleen als badges op dit tabblad
-verschijnen (Q02).
+**Afhankelijkheid:** P10b, P10c en P11, omdat badges ook op dit tabblad
+verschijnen.
 
+- Stem bij de start met de opdrachtgever af hoe badges op het tabblad staan,
+  en leg de uitkomst vast voordat je bouwt.
 - Maak een tabblad met voortgang naar het instelbare week- of cyclusdoel:
-  verdiende punten, omrekening, eieren in de mand en een lopende kip.
+  verdiende punten, omrekening, eieren in de mand en een lopende kip, en de
+  behaalde badges.
 - Speel de afrondingsanimatie één keer bij een voltooide meter. Respecteer
   verminderde-beweging-instellingen en geef dezelfde voortgang in tekst.
 - **Klaar wanneer:** voortgang, reset per periode, meerdere profielen,
