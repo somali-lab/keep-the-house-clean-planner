@@ -16,5 +16,25 @@ updates:
     groups:
       npm-development:
         dependency-type: development
+        update-types:
+          - minor
+          - patch
+        # TypeScript must be validated against typescript-eslint's peer range.
+        exclude-patterns:
+          - typescript
       npm-production:
         dependency-type: production
+    ignore:
+      # Keep TypeScript within the range supported by typescript-eslint.
+      # Revisit major updates when its peer dependency accepts the new version.
+      - dependency-name: typescript
+        update-types:
+          - version-update:semver-major
+      # The runtime uses Node 24; keep its type declarations on that major.
+      - dependency-name: '@types/node'
+        update-types:
+          - version-update:semver-major
+      # jsdom 30 requires Node >=24.15; the project still supports Node 24.12.
+      - dependency-name: jsdom
+        update-types:
+          - version-update:semver-major
