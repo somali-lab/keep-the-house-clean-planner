@@ -18,6 +18,8 @@ Each release publishes the exact version, the major and minor aliases, a moving 
 
 The version shown in the interface identifies its origin. A published image shows the plain release version; a build made from local source shows the same base version marked as local, with the moment it was built.
 
+A published image also carries the moment of its release, taken from the release commit at build time rather than fetched from GitHub while running. A local build carries no release moment, because it is not a release.
+
 ## Consequences
 
 - The changelog is a by-product of committing properly rather than a separate chore.
