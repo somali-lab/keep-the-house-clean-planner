@@ -1,4 +1,4 @@
-import type { TaskSuggestion } from '@huishoudplanner/shared';
+import type { AiProposalResponse, TaskSuggestion } from '@huishoudplanner/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { Bot, Check, CircleCheck, FileText, Lightbulb, Plus, Scale, Settings, Sparkles, TriangleAlert, WandSparkles } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
@@ -41,7 +41,16 @@ function CardHeading({ id, icon, children }: { id?: string; icon: ReactNode; chi
   );
 }
 
-export function AiPage({ section = 'all', embedded = false }: { section?: 'all' | 'plan' | 'tasks'; embedded?: boolean }) {
+export function AiPage({
+  section = 'all',
+  embedded = false,
+  onPlanCreated,
+}: {
+  section?: 'all' | 'plan' | 'tasks';
+  embedded?: boolean;
+  /** Called with the stored draft after a successful proposal or rebalance; the caller then owns the announcement. */
+  onPlanCreated?: (result: AiProposalResponse) => void;
+}) {
   const idPrefix = useId();
   const settings = useSettings();
   const plans = usePlans();
@@ -108,6 +117,10 @@ export function AiPage({ section = 'all', embedded = false }: { section?: 'all' 
   const activePlan = plans.data.find((p) => p.active);
   const busy = aiWorking;
   const fail = (error: unknown) => setMessage({ kind: 'alert', text: errorText(error) });
+  const announceCreated = (result: AiProposalResponse) => {
+    if (onPlanCreated) onPlanCreated(result);
+    else setMessage({ kind: 'status', text: t('ai.proposed') });
+  };
   const withConstraints = constraints.trim() ? { constraints: constraints.trim() } : {};
 
   const addSuggestion = async (s: TaskSuggestion) => {
@@ -147,9 +160,7 @@ export function AiPage({ section = 'all', embedded = false }: { section?: 'all' 
             onClick={() => {
               setMessage(null);
               propose.mutate(withConstraints, {
-                onSuccess: () => {
-                  setMessage({ kind: 'status', text: t('ai.proposed') });
-                },
+                onSuccess: announceCreated,
                 onError: fail,
               });
             }}
@@ -168,9 +179,7 @@ export function AiPage({ section = 'all', embedded = false }: { section?: 'all' 
               rebalance.mutate(
                 { planId: activePlan._id, ...withConstraints },
                 {
-                  onSuccess: () => {
-                    setMessage({ kind: 'status', text: t('ai.proposed') });
-                  },
+                  onSuccess: announceCreated,
                   onError: fail,
                 },
               );

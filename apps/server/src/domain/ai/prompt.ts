@@ -102,6 +102,7 @@ Goals, in order:
 4. Balance total minutes per week between people.
 5. Spread repeats of the same task evenly over the cycle.
 6. Respect the free-text constraints (they are written in Dutch).
+7. Soft preference, ranked below availability, the intervals and the hard daily limits: keep recurring activities on the same weekdays and in a recognizable rhythm where possible (for example the same task on the same weekday in each of its repeats). Never break a hard rule, miss a perCycle count or exceed a daily limit for the sake of rhythm.
 In "rebalance" mode, start from currentSlots and change only what improves fairness, spread or budgets.`;
 
 function withCustomInstructions(system: string, customInstructions?: string): string {

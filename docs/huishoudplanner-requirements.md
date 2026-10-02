@@ -273,7 +273,10 @@ Every state change is recorded with who, when, which entity, which action, the c
 
 - Input: active tasks with room, interval and duration; users with availability and budgets; the current template when rebalancing; and optional free-text constraints.
 - Output: strict JSON matching the plan slot schema, plus a rationale per week.
-- The response is always a draft. It is stored as an inactive plan and presented as a diff against the active one. The user applies or discards it; nothing is ever activated automatically.
+- The response is always a draft. It is stored as an inactive plan; the user reviews it in plan management and activates or deletes it there. Nothing is ever activated automatically.
+- After a proposal or rebalance succeeds, the new draft opens in plan management by itself: it is selected, the result is announced, and keyboard focus moves to an AI card above the plan. The draft is then reviewed like any other plan and can be edited, deleted or activated there. The card states that the active plan does not change until the draft is activated, shows the stored rationale per week, and, right after creation, the validation warnings. A rejected proposal (validation failure) changes no selection and its error stays visible.
+- Activating an AI draft always goes through the same activation preview as any other plan.
+- The prompt asks, as a soft preference ranked below availability, the intervals and the hard daily limits, to keep recurring activities on the same weekdays and in a recognizable rhythm. It never outranks a hard rule.
 - The proposal is validated on the server against exactly the same rules as the manual editor. On failure the model is re-prompted once, after which the error is surfaced rather than a broken plan silently accepted.
 
 ### 5.3 Provider

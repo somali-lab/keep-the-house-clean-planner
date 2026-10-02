@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import { format, t } from '../../i18n/nl.ts';
 import { weekdayName } from '../week/weekModel.ts';
 import type { DiffPosition, PlanDiffResponse } from './api.ts';
+import { describeProposalWarning } from './proposalModel.ts';
 
 const DAYS_MONDAY_FIRST = [1, 2, 3, 4, 5, 6, 0];
 
@@ -167,15 +168,7 @@ export function ProposalReview({ diff, users, rationale, busy, onApply, onDiscar
             <h3 className="text-base font-bold">{t('ai.review.warnings')}</h3>
             <ul className="list-disc pl-5 text-sm">
               {diff.warnings.map((w, i) => (
-                <li key={i}>
-                  {w.code === 'interval_mismatch'
-                    ? format('ai.warning.interval', { placed: w.placed ?? 0, required: w.required ?? 0 })
-                    : w.code === 'over_budget'
-                      ? t('ai.warning.budget')
-                      : w.code === 'daily_over_budget'
-                        ? t('ai.warning.dailyBudget')
-                      : w.code}
-                </li>
+                <li key={i}>{describeProposalWarning(w)}</li>
               ))}
             </ul>
           </div>

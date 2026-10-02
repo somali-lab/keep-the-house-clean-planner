@@ -153,6 +153,25 @@ describe('POST /api/ai/propose-plan', () => {
     expect(request!.system).toContain('Never use assigneeId null');
   });
 
+  it('asks for a recognizable weekday rhythm as a soft preference ranked below the hard limits', async () => {
+    const c = await setup((request) => validAnswer(request));
+    await c.post('/api/ai/propose-plan');
+    const system = c.provider.requests[0]!.system;
+    const indexOfAnchor = (text: string) => {
+      const index = system.indexOf(text);
+      expect(index, `prompt contains "${text}"`).toBeGreaterThan(-1);
+      return index;
+    };
+    const rhythm = indexOfAnchor('recognizable rhythm');
+    const line = system.slice(system.lastIndexOf('\n', rhythm) + 1, system.indexOf('\n', rhythm));
+    expect(line).toMatch(/^7\. Soft preference, ranked below availability, the intervals and the hard daily limits/);
+    expect(line).toContain('same weekdays');
+    // It is the lowest-ranked goal and comes after the hard rules and the hard daily limit goal.
+    expect(rhythm).toBeGreaterThan(indexOfAnchor('Never assign a slot to a user on a weekday listed'));
+    expect(rhythm).toBeGreaterThan(indexOfAnchor("3. Keep each individual day's minutes within maxDailyMinutes"));
+    expect(rhythm).toBeGreaterThan(indexOfAnchor('6. Respect the free-text constraints'));
+  });
+
   it('re-prompts once with the error list when the first answer is not valid JSON', async () => {
     const c = await setup((request, attempt) => (attempt === 0 ? 'Hier is je plan: {slots' : validAnswer(request)));
     const res = await c.post('/api/ai/propose-plan');
