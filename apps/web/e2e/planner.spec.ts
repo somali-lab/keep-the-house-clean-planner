@@ -47,7 +47,10 @@ test('create a task, place it by dragging, get refused on an unavailable day, an
 
   await page.getByRole('button', { name: 'Plannen beheren' }).click();
   await page.getByRole('button', { name: 'Dit plan activeren' }).click();
-  await page.getByRole('dialog', { name: 'Plan activeren?' }).getByRole('button', { name: 'Activeren' }).click();
+  const activationDialog = page.getByRole('dialog', { name: 'Plan activeren?' });
+  await expect(activationDialog.getByRole('heading', { name: /Worden vervangen/ })).toBeVisible();
+  await expect(activationDialog).toContainText('Ramen zemen');
+  await activationDialog.getByRole('button', { name: 'Activeren' }).click();
   await expect(page.getByText('Plan geactiveerd.')).toBeVisible();
 
   const active = (await app.api<ApiPlan[]>('GET', '/api/cycle-plans')).find((p) => p.active)!;

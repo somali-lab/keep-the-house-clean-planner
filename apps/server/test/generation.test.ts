@@ -3,6 +3,7 @@ import { ObjectId } from 'mongodb';
 import cron from 'node-cron';
 import { afterEach, describe, expect, it } from 'vitest';
 import { findActivePlan } from '../src/data/cyclePlans.ts';
+import { generateCycle } from '../src/domain/generation.ts';
 import { listCycles } from '../src/data/cycles.ts';
 import { COLLECTIONS } from '../src/data/db.ts';
 import {
@@ -290,7 +291,7 @@ describe('editing the active plan', () => {
 
     const result = await c.nightly();
 
-    expect(result.removed).toBe(7);
+    expect(result.removed).toBe(4);
     const occurrences = await findOccurrences(c.t.db, { taskId: new ObjectId(water) });
     expect(dayKeys(occurrences)).toEqual([
       '2026-09-21',
@@ -305,8 +306,14 @@ describe('editing the active plan', () => {
       '2026-10-12',
       '2026-10-14',
       '2026-10-16',
+      '2026-10-21',
+      '2026-10-28',
+      '2026-11-04',
     ]);
-    expect(occurrences.every((occurrence) => occurrence.assigneeId?.equals(c.p2._id))).toBe(true);
+    expect(occurrences.filter((occurrence) => toDayKey(occurrence.date) <= '2026-10-18')
+      .every((occurrence) => occurrence.assigneeId?.equals(c.p2._id))).toBe(true);
+    expect(occurrences.filter((occurrence) => toDayKey(occurrence.date) > '2026-10-18')
+      .every((occurrence) => occurrence.assigneeId?.equals(c.p1._id))).toBe(true);
     expect((await listCycles(c.t.db)).map((cycle) => [cycle.index, cycle.startDate, cycle.endDate])).toEqual([
       [-1, '2026-08-24', '2026-09-20'],
       [0, '2026-09-21', '2026-10-18'],
@@ -465,6 +472,94 @@ describe('editing the active plan', () => {
 });
 
 describe('POST /api/cycle-plans/:id/activate', () => {
+  it('does not preview a generated insert blocked by a preserved occurrence key', async () => {
+    const c = await setup();
+    const taskId = await c.task('Ramen', '1w');
+    await c.putSlots(c.planId, [0, 1, 2, 3].map((weekIndex) => ({ taskId, weekIndex, weekday: 3 })));
+    await c.nightly();
+    const occurrences = await findOccurrences(c.t.db, { taskId: new ObjectId(taskId) });
+    const findDate = (day: string) => occurrences.find((occurrence) => toDayKey(occurrence.date) === day)!;
+    const done = findDate('2026-09-16');
+    const skipped = findDate('2026-09-23');
+    const moved = findDate('2026-09-30');
+    await updateOccurrence(c.t.systemCtx(), done._id, { status: 'done', completedAt: c.t.clock.now(), completedBy: c.p1._id }, { action: 'complete' });
+    await updateOccurrence(c.t.systemCtx(), skipped._id, { status: 'skipped' }, { action: 'skip' });
+    await updateOccurrence(c.t.systemCtx(), moved._id, { date: new Date('2026-10-01T22:00:00.000Z') }, { action: 'reschedule' });
+    const created = await c.t.app.inject({
+      method: 'POST', url: '/api/cycle-plans', headers: asProfile(c.p1),
+      payload: { name: 'Dezelfde slots', copyFromId: c.planId },
+    });
+    const newPlanId = created.json<{ _id: string }>()._id;
+    const preview = (await c.t.app.inject({ method: 'GET', url: `/api/cycle-plans/${newPlanId}/activation-preview`, headers: asProfile(c.p1) })).json<{
+      previewToken: string; added: { date: string }[]; preserved: Record<'done' | 'skipped' | 'moved' | 'adhoc', { occurrenceId: string }[]>;
+    }>();
+    expect(preview.preserved.done.map((item) => item.occurrenceId)).toContain(done._id.toHexString());
+    expect(preview.preserved.skipped.map((item) => item.occurrenceId)).toContain(skipped._id.toHexString());
+    expect(preview.preserved.moved.map((item) => item.occurrenceId)).toContain(moved._id.toHexString());
+    for (const date of ['2026-09-16', '2026-09-23', '2026-09-30']) {
+      expect(preview.added.map((item) => item.date)).not.toContain(date);
+    }
+    const activated = await c.t.app.inject({ method: 'POST', url: `/api/cycle-plans/${newPlanId}/activate`, headers: asProfile(c.p1), payload: { previewToken: preview.previewToken } });
+    expect(activated.statusCode, activated.body).toBe(200);
+    expect(dayKeys(await findOccurrences(c.t.db, { planId: new ObjectId(newPlanId) }))).toEqual(preview.added.map((item) => item.date).sort());
+  });
+
+  it('requires a fresh preview token and leaves state untouched on stale confirmation', async () => {
+    const c = await setup();
+    const taskId = await c.task('Ramen', '1w');
+    const created = await c.t.app.inject({ method: 'POST', url: '/api/cycle-plans', headers: asProfile(c.p1), payload: { name: 'Nieuw' } });
+    const newPlanId = created.json<{ _id: string }>()._id;
+    const previewRequest = () => c.t.app.inject({ method: 'GET', url: `/api/cycle-plans/${newPlanId}/activation-preview`, headers: asProfile(c.p1) });
+    const auditBefore = await c.t.db.collection(COLLECTIONS.auditLog).countDocuments();
+    const first = await previewRequest();
+    expect(first.statusCode).toBe(200);
+    expect((await c.t.app.inject({ method: 'GET', url: `/api/cycle-plans/${newPlanId}/activation-preview` })).statusCode).toBe(400);
+    expect((await c.t.app.inject({ method: 'GET', url: `/api/cycle-plans/${newPlanId}/activation-preview`, headers: asProfile(c.p2) })).statusCode).toBe(403);
+    expect(await c.t.db.collection(COLLECTIONS.auditLog).countDocuments()).toBe(auditBefore);
+    expect(await listCycles(c.t.db)).toHaveLength(0);
+    const oldToken = first.json<{ previewToken: string }>().previewToken;
+    expect((await c.t.app.inject({ method: 'POST', url: `/api/cycle-plans/${newPlanId}/activate`, headers: asProfile(c.p1) })).statusCode).toBe(400);
+    await c.putSlots(newPlanId, [{ taskId, weekIndex: 0, weekday: 3 }]);
+    const beforeRejected = await c.t.db.collection(COLLECTIONS.auditLog).countDocuments();
+    const rejected = await c.t.app.inject({ method: 'POST', url: `/api/cycle-plans/${newPlanId}/activate`, headers: asProfile(c.p1), payload: { previewToken: oldToken } });
+    expect(rejected.statusCode).toBe(409);
+    expect(rejected.json<{ code: string }>().code).toBe('stale_activation_preview');
+    expect(await c.t.db.collection(COLLECTIONS.auditLog).countDocuments()).toBe(beforeRejected);
+    expect(await listCycles(c.t.db)).toHaveLength(0);
+    expect((await findActivePlan(c.t.db))!._id.toHexString()).toBe(c.planId);
+    expect(first.json<{ previewToken: string }>().previewToken).not.toBe((await previewRequest()).json<{ previewToken: string }>().previewToken);
+    const secondToken = (await previewRequest()).json<{ previewToken: string }>().previewToken;
+    const taskUpdate = await c.t.app.inject({
+      method: 'PATCH', url: `/api/tasks/${taskId}`, headers: asProfile(c.p1), payload: { durationMinutes: 20 },
+    });
+    expect(taskUpdate.statusCode, taskUpdate.body).toBe(200);
+    const staleSnapshot = await c.t.app.inject({
+      method: 'POST', url: `/api/cycle-plans/${newPlanId}/activate`,
+      headers: asProfile(c.p1), payload: { previewToken: secondToken },
+    });
+    expect(staleSnapshot.statusCode).toBe(409);
+    expect((await findActivePlan(c.t.db))!._id.toHexString()).toBe(c.planId);
+  });
+
+  it('keeps generated work beyond the next cycle outside preview and replacement', async () => {
+    const c = await setup();
+    const taskId = await c.task('Ramen', '1w');
+    await c.putSlots(c.planId, [{ taskId, weekIndex: 0, weekday: 3 }]);
+    await c.nightly();
+    await generateCycle(c.t.systemCtx(), 2, { runId: 'future-scope' });
+    const farFuture = (await findOccurrences(c.t.db, { taskId: new ObjectId(taskId) })).find((occurrence) => toDayKey(occurrence.date) === '2026-11-11')!;
+    expect(farFuture).toBeDefined();
+    const created = await c.t.app.inject({ method: 'POST', url: '/api/cycle-plans', headers: asProfile(c.p1), payload: { name: 'Leeg' } });
+    const newPlanId = created.json<{ _id: string }>()._id;
+    const preview = (await c.t.app.inject({ method: 'GET', url: `/api/cycle-plans/${newPlanId}/activation-preview`, headers: asProfile(c.p1) })).json<{
+      previewToken: string; removed: { occurrenceId: string }[];
+    }>();
+    expect(preview.removed.map((item) => item.occurrenceId)).not.toContain(farFuture._id.toHexString());
+    const result = await c.t.app.inject({ method: 'POST', url: `/api/cycle-plans/${newPlanId}/activate`, headers: asProfile(c.p1), payload: { previewToken: preview.previewToken } });
+    expect(result.statusCode, result.body).toBe(200);
+    expect(await countOccurrences(c.t.db, { _id: farFuture._id })).toBe(1);
+  });
+
   it('(c) mid-cycle activation keeps done, skipped, dragged, past and ad-hoc occurrences and replaces the rest', async () => {
     const c = await setup(); // Monday 14 Sep
     const weekly = await c.task('Badkamer', '1w', 30);
@@ -493,7 +588,7 @@ describe('POST /api/cycle-plans/:id/activate', () => {
     await updateOccurrence(
       ctx,
       done._id,
-      { status: 'done', completedAt: new Date(), completedBy: c.p1._id },
+      { status: 'done', completedAt: c.t.clock.now(), completedBy: c.p1._id },
       { action: 'complete' },
     );
     const skipped = await byDay('2026-09-23', twice);
@@ -551,6 +646,28 @@ describe('POST /api/cycle-plans/:id/activate', () => {
     });
     expect(oldOpenFuture.length).toBeGreaterThan(0);
 
+    const previewResponse = await c.t.app.inject({
+      method: 'GET',
+      url: `/api/cycle-plans/${newPlanId}/activation-preview`,
+      headers: asProfile(c.p1),
+    });
+    expect(previewResponse.statusCode, previewResponse.body).toBe(200);
+    const preview = previewResponse.json<{
+      previewToken: string;
+      asOfDate: string;
+      removed: { occurrenceId: string; date: string; assigneeId: string | null }[];
+      added: { date: string; assigneeId: string | null }[];
+      preserved: Record<'done' | 'skipped' | 'moved' | 'adhoc', { occurrenceId: string }[]>;
+    }>();
+    expect(preview.asOfDate).toBe('2026-09-16');
+    expect(preview.removed.map((item) => item.occurrenceId).sort()).toEqual(
+      oldOpenFuture.map((occurrence) => occurrence._id.toHexString()).sort(),
+    );
+    expect(preview.preserved.done.map((item) => item.occurrenceId)).toContain(done._id.toHexString());
+    expect(preview.preserved.skipped.map((item) => item.occurrenceId)).toContain(skipped._id.toHexString());
+    expect(preview.preserved.moved.map((item) => item.occurrenceId)).toContain(dragged._id.toHexString());
+    expect(preview.preserved.adhoc.map((item) => item.occurrenceId)).toContain(adhoc!._id.toHexString());
+
     const { result, entries } = await expectAudited(
       c.t,
       () =>
@@ -558,6 +675,7 @@ describe('POST /api/cycle-plans/:id/activate', () => {
           method: 'POST',
           url: `/api/cycle-plans/${newPlanId}/activate`,
           headers: asProfile(c.p1),
+          payload: { previewToken: preview.previewToken },
         }),
       { entity: 'cyclePlan', action: 'activate', source: 'ui', count: 1 },
     );
@@ -599,6 +717,8 @@ describe('POST /api/cycle-plans/:id/activate', () => {
       '2026-10-29',
       '2026-11-05',
     ]);
+    expect(dayKeys(fresh)).toEqual(preview.added.map((item) => item.date).sort());
+    expect(preview.added.every((item) => item.assigneeId === c.p2._id.toHexString())).toBe(true);
     expect(fresh.every((o) => c.p2._id.equals(o.assigneeId!))).toBe(true);
 
     // only one active plan; the old one's deactivation is audited
@@ -621,6 +741,7 @@ describe('POST /api/cycle-plans/:id/activate', () => {
       method: 'POST',
       url: '/api/cycle-plans/0123456789abcdef01234567/activate',
       headers: asProfile(c.p1),
+      payload: { previewToken: 'a'.repeat(64) },
     });
     expect(unknown.statusCode).toBe(404);
     const anonymous = await c.t.app.inject({

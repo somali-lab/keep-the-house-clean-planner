@@ -182,6 +182,8 @@ dismissedPromotions: [ ... ]
 - Saving slots in the active plan synchronizes future generated occurrences immediately. The resulting tasks appear on their assigned dates and for their assigned people when those dates are within the selected range in the week overview or My tasks, including after a page reload. Saving slots in an inactive draft does not change those overviews.
 - Vacation ranges suppress generation on those dates. The due engine keeps counting the days.
 - Activating a different plan replaces only future occurrences that are still replaceable — untouched, generated, open ones. Anything completed, skipped, rescheduled, or created ad hoc survives, because it records something that actually happened.
+- Before a person activates a plan, show an inspectable preview for the current and next cycle: the open generated occurrences to replace, the occurrences expected from the new plan, and separate groups for completed, skipped, manually moved, and ad-hoc occurrences that remain. Show counts plus each task's date and assignee. Previewing makes no changes.
+- An activation confirmation is tied to the state that was previewed. At confirmation, the server recomputes the preview; if the plan, relevant tasks, settings, or occurrences differ, it rejects the confirmation before any activation writes and requires a fresh review.
 
 ### 4.4 Daily use
 
@@ -350,7 +352,8 @@ GET    /api/cycle-plans                     GET  /api/cycle-plans/active
 GET    /api/cycle-plans/:id                 GET  /api/cycle-plans/:id/diff
 POST   /api/cycle-plans                     PATCH /api/cycle-plans/:id
 DELETE /api/cycle-plans/:id                 PUT  /api/cycle-plans/:id/slots
-POST   /api/cycle-plans/:id/activate
+GET    /api/cycle-plans/:id/activation-preview
+POST   /api/cycle-plans/:id/activate        (body: { previewToken })
 POST   /api/cycle-plans/:id/apply-proposal  POST /api/cycle-plans/:id/discard
 
 GET    /api/occurrences                     POST /api/occurrences
