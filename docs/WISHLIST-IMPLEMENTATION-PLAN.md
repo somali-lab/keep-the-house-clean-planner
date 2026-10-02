@@ -87,7 +87,9 @@ bevestigde keuze voor het nieuwe werk; markeer het conflict in de wijziging.
    agentcontext (`AGENTS.md`, `.github/instructions`, de spiegels in
    `.cursor/rules`, skills, plugins en agentic workflows). Werk relevante
    verouderde tekst in dezelfde wijziging bij. Houd gegenereerde workflows
-   onder hun bestaande generator; bewerk die niet met de hand.
+   onder hun bestaande generator: wijzig zo nodig de Markdown-bron, voer
+   `gh aw compile` uit en controleer de gegenereerde output. Bewerk die output
+   niet met de hand.
 7. Maak een Conventional Commit voor het afgeronde pakket. Maak of wijzig
    alleen een PR wanneer de gebruiker dat vraagt. Volg dan de PR- en
    release-noteregels uit `AGENTS.md`. Push, deploy en publiceer niet zonder
@@ -333,11 +335,11 @@ tegelijk bij. De releasebestanden `version.txt`,
 `.release-please-manifest.json` en `CHANGELOG.md` blijven in beheer van
 Release Please.
 
-Voor de eerste PR die dit plan uitvoert, voeg een blijvende pre-PR
-documentatie- en agentcontextcontrole toe aan `AGENTS.md` en waar toepasselijk
-de gespiegelde instructies. Controleer ook of de bestaande context-maintainer
-workflow die regel kan behouden. Dit is een eigen, klein documentatiecommit;
-het hoeft niet te wachten tot alle functies klaar zijn.
+De pre-PR-documentatie- en agentcontextcontrole staat blijvend in `AGENTS.md`.
+De bestaande context-maintainer-workflow kan alleen de bestanden binnen zijn
+beperkte bewerkbare scope aanpassen; bevindingen daarbuiten meldt hij in zijn
+PR-beschrijving. Wijzigingen aan die workflow lopen via de Markdown-bron en
+`gh aw compile`.
 
 ## Uitvoering en nieuwe vragen
 
