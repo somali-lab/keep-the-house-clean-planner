@@ -186,6 +186,81 @@ subagent, andere tools kiezen hun vergelijkbare lichte, standaard of zware model
 | P11 | Licht | — | Standaard | Standaard |
 | P12 | Licht | — | Standaard | Standaard |
 
+## Onbeheerde uitvoering (loop)
+
+Deze sectie geldt alleen wanneer de opdrachtgever een onbeheerde run start,
+bijvoorbeeld een nachtelijke `/loop` in Claude Code. Waar ze afwijkt van de
+startprompt of de vaste werkwijze, gaat deze sectie voor.
+
+**Opdracht (2 oktober 2026):** voer alle resterende pakketten uit in de
+uitvoervolgorde, behalve P07. Push iedere pakketbranch en maak er een
+draft-PR voor; merge nooit. De orkestrator draait op Sonnet; subagents volgen
+*Agentverdeling en modelkeuze*.
+
+**Bron van dit plan:** lees het van `origin/main`. Staat deze sectie daar nog
+niet, lees het dan met
+`git show docs/claude-wishlist-plan-assumptions:docs/WISHLIST-IMPLEMENTATION-PLAN.md`.
+
+**Branches.** Een pakket waarvan de afhankelijkheden al op `main` staan,
+begint vanaf een bijgewerkte `main`. P10a tot en met P12 bouwen op werk dat
+nog niet gemergd is en worden daarom gestapeld; de basis is dan ook de base
+van de draft-PR, zodat iedere PR alleen het eigen pakket toont.
+
+| Pakket | Branch | Basis en PR-base |
+| --- | --- | --- |
+| P00 | `ci/claude-p00-ci-duration` | `main` |
+| P05 | `feat/claude-p05-today-columns-home` | `main` |
+| P09 | `feat/claude-p09-about-page` | `main` |
+| P03 | `feat/claude-p03-ai-draft-plans` | `main` |
+| P06 | `feat/claude-p06-extra-and-adhoc-runs` | `main` |
+| P08 | `feat/claude-p08-browser-notifications` | `main` |
+| P10a | `feat/claude-p10a-points-ledger` | `feat/claude-p06-extra-and-adhoc-runs` |
+| P10b | `feat/claude-p10b-period-bonuses` | `feat/claude-p10a-points-ledger` |
+| P10c | `feat/claude-p10c-currency-and-redemption` | `feat/claude-p10b-period-bonuses` |
+| P11 | `feat/claude-p11-badges` | `feat/claude-p10c-currency-and-redemption` |
+| P12 | `feat/claude-p12-reward-meter` | `feat/claude-p11-badges` |
+
+**Iedere ronde**
+
+1. Bepaal de voortgang uit GitHub met
+   `gh pr list --state all --json headRefName,title,url,body`. Het eerste
+   pakket in de uitvoervolgorde zonder PR is aan de beurt. Een PR-beschrijving
+   bevat de markering `loop-status: done` of `loop-status: blocked`. Sla een
+   pakket over als een afhankelijkheid `blocked` is; noteer dat voor het
+   eindverslag.
+2. Controleer het gebruik met de gebruikstool van de host (in de desktopapp
+   `get_usage`, anders `npx -y ccusage@latest blocks --active --json`). Staat
+   het 5-uurs- of weeklimiet op 95% of hoger, begin dan geen pakket: plan een
+   wake-up over `min(3600, seconden tot reset)` en controleer bij het ontwaken
+   opnieuw.
+3. Werk de werktree schoon bij, maak de branch vanaf de basis uit de tabel en
+   voer het pakket uit volgens de startprompt, de vaste werkwijze en de
+   agentverdeling. Draai hooguit drie subagents tegelijk, en alleen lezende.
+4. Push de branch en maak een draft-PR met een Conventional Commit-titel
+   volgens de PR-regels in `AGENTS.md`. Zet in de beschrijving de markering,
+   de uitgevoerde controles en een kopje **Beslissingen ter review** met de
+   regels die anders in `docs/DECISIONS.md` zouden staan. Lees de beschrijving
+   terug.
+5. Plan de volgende ronde over 60 seconden. Is er geen pakket meer, schrijf
+   dan het eindverslag (per pakket: PR-link, status, controles, open vragen en
+   overgeslagen pakketten), stuur een melding als de host dat kan en stop de loop.
+
+**Afwijkingen omdat niemand meekijkt**
+
+- Een productvraag die dit plan niet beantwoordt, vul je niet zelf in. Commit
+  het samenhangende deel, zet de vraag in `docs/BLOCKERS.md` op de branch,
+  push, maak de draft-PR met `loop-status: blocked` en de vraag bovenaan, en
+  ga verder met het volgende pakket dat er niet van afhangt.
+- Technische ontwerpkeuzes en ADR's mag je maken; zet ze onder
+  **Beslissingen ter review** in de PR.
+- P12: kies een eenvoudige, toegankelijke indeling voor badges op de
+  metertab en markeer die in de PR als *nog af te stemmen*.
+- Blijft een controle falen na twee serieuze herstelpogingen, behandel het
+  pakket dan als `blocked` en zet de relevante foutuitvoer in de PR.
+- Werk de statustabel in dit plan niet bij in pakketbranches; de draft-PR is
+  de status. De tabel wordt bijgewerkt bij het mergen.
+- Merge, release, deploy of force-push nooit, en raak geen echte installatie aan.
+
 ## Vaste werkwijze voor elk werkpakket
 
 1. Volg `AGENTS.md`: controleer `git status`, werk lokale `main` bij vanaf
