@@ -3,154 +3,159 @@
 ## Doel en status
 
 Dit document verdeelt de wensenlijst in kleine, zelfstandig te beoordelen wijzigingen.
-**Status: P01, P02 en P04 afgerond; na P04 gepauzeerd.**
-
-**Bron:** dit plan is afgeleid van een ongestructureerde braindump van de
-opdrachtgever (letterlijk opgenomen in de [bijlage](#bijlage-oorspronkelijke-braindump)).
-Er heeft **geen vraag-en-antwoordronde** plaatsgevonden. Alles wat verder gaat
-dan de letterlijke wens is daarom een **aanname** (`Axx`) of een **open vraag**
-(`Qxx`), niet een bevestigde keuze. P01, P02 en P04 zijn op basis van aannames
-uitgevoerd; die staan in de lijst met de status *achteraf bevestigen*.
-
+**Status: P01, P02 en P04 afgerond; na P04 gepauzeerd op verzoek van de opdrachtgever.**
 Een agent voert **één werkpakket tegelijk** uit en controleert de genoemde
-acceptatiecriteria. Dit is een blijvende roadmap; `docs/BUILD.md` blijft de
-tijdelijke checklist voor het pakket dat daadwerkelijk loopt.
+acceptatiecriteria. Nieuwe, tijdens uitvoering ontdekte productvragen worden
+aan de opdrachtgever gesteld en niet door de agent ingevuld. Dit is een blijvende roadmap;
+`docs/BUILD.md` blijft de tijdelijke checklist voor het pakket dat daadwerkelijk loopt.
 
-De migratie naar .NET 10, hexagonale architectuur, OpenTelemetry en OAuth2 staat
-in de braindump, maar valt **buiten dit plan** (zie Q10).
+De wensen komen uit een braindump van de opdrachtgever, letterlijk opgenomen in de
+[bijlage](#bijlage-oorspronkelijke-braindump). De antwoorden uit de vraag-en-
+antwoordronde daarover staan onder [Bevestigde productkeuzes](#bevestigde-productkeuzes).
+
+De migratie naar .NET 10, hexagonale architectuur, OpenTelemetry en OAuth2 valt op
+uitdrukkelijk verzoek van de opdrachtgever **buiten dit plan**.
 
 ### Startprompt voor een uitvoerende agent
 
 > Voer werkpakket `Pxx` uit uit `docs/WISHLIST-IMPLEMENTATION-PLAN.md`.
 > Controleer of het pakket actief is, of de afhankelijkheden klaar zijn en of
-> alle open vragen (`Qxx`) in de kolom **Wacht op** beantwoord zijn. Is dat niet
-> zo, stel die vragen dan eerst en begin niet. Behandel aannames (`Axx`) niet als
-> bevestigd: noem bij aanvang welke aannames het pakket gebruikt en vraag of ze
-> kloppen. Voer een gepauzeerd pakket alleen uit na een nieuw expliciet verzoek.
-> Volg daarna `AGENTS.md` en de vaste werkwijze in dit plan. Schrijf de concrete
-> stappen tijdelijk in `docs/BUILD.md`, implementeer de kleinste volledige
-> wijziging, werk tests en permanente documentatie bij, verifieer de
-> acceptatiecriteria en commit het resultaat. Rapporteer de uitgevoerde controles
-> en eventuele open punten. Maak alleen een PR als ik daar afzonderlijk om vraag.
+> de open vragen in de kolom **Wacht op** beantwoord zijn; stel ze anders eerst.
+> Voer een gepauzeerd pakket alleen uit na een nieuw expliciet verzoek.
+> Volg daarna `AGENTS.md` en de vaste werkwijze
+> in dit plan. Schrijf de concrete stappen tijdelijk in `docs/BUILD.md`, implementeer
+> de kleinste volledige wijziging, werk tests en permanente documentatie bij,
+> vraag bij nieuwe productkeuzes om een antwoord, verifieer de acceptatiecriteria
+> en commit het resultaat. Rapporteer de
+> uitgevoerde controles en eventuele open punten. Maak alleen een PR als ik
+> daar afzonderlijk om vraag.
+
+## Bevestigde productkeuzes
+
+Deze keuzes komen uit de antwoorden van de opdrachtgever en zijn geen defaults:
+
+- Eerst fouten en dagelijks gebruik, daarna uitbreidingen en gamification.
+- Windowsmeldingen zijn alleen nodig terwijl de planner open is.
+- Meldmomenten worden per persoon ingesteld. Een melding bevat open taken
+  voor vandaag en achterstallige taken van die persoon.
+- Vóór planactivatie moet een voorbeeld van de gevolgen zichtbaar zijn.
+- Bij activeren van een ander plan worden alleen onaangeroerde toekomstige
+  open taken vervangen. Afgeronde, overgeslagen, zelf verplaatste en ad-hoc
+  uitvoeringen blijven bestaan.
+- AI-plannen worden als gewone conceptplannen in Planbeheer beoordeeld;
+  activeren en verwijderen gebeuren daar.
+- Extra uitvoeringen van bestaande taken, ook meermaals op één dag, én losse
+  eenmalige taken zonder centraal taakrecord zijn allebei gewenst.
+- Gamificationpunten gaan naar degene die het werk werkelijk deed.
+- Week- en cyclusbonussen tellen geplande en ad-hoc taken mee; overgeslagen
+  taken gelden niet als gedaan. “Op tijd” betekent vóór het einde van de
+  betreffende kalenderweek of cyclus.
+- Bonuspunten zijn per persoon, per kalenderweek en per cyclus. Taakpunten,
+  beide bonussen en valutaomrekening zijn instelbaar.
+- Gebruikers boeken eigen inwisselingen of uitbetalingen direct. Ook bestaande
+  uitvoeringshistorie krijgt met terugwerkende kracht punten.
+- De eerder gekozen PDF-uitbreiding staat op pauze; als die later wordt
+  hervat, zijn een gekozen plansjabloon en werkelijk ingeplande taken aparte
+  bronnen en zijn niet-toegewezen taken apart aan of uit te zetten.
+- Mijn taken gebruikt schuivende perioden vanaf vandaag, met zichtbare datums
+  en cyclusweeknummers.
+- Alle filterkeuzes in de app blijven na Ctrl+F5 behouden.
+- De Home-knop gaat altijd naar het weekoverzicht. Twee kolommen bij
+  **Vandaag → iedereen** gelden alleen waar het scherm breed genoeg is.
+- Een badge-avatar is een door de beheerder geüploade afbeelding.
+- De About-pagina toont de datum en tijd van de laatste release.
+- De .NET-migratie hoort niet in dit plan.
+
+De uitvoerende agent legt de relevante gekozen regel vast in
+`docs/huishoudplanner-requirements.md` tegelijk met de eerste implementatie
+ervan. Waar de huidige requirements een andere regel noemen, geldt deze
+bevestigde keuze voor het nieuwe werk; markeer het conflict in de wijziging.
 
 ## Herkomst: van wens naar werkpakket
 
 Iedere regel uit de braindump, in de volgorde van de bijlage. **Wens** is iets dat
-gebouwd moet worden, **vraag** is een vraag van de opdrachtgever die een antwoord
-of uitleg nodig heeft.
+gebouwd moet worden; **vraag** is een vraag van de opdrachtgever die met een
+bevestigde keuze of bestaand gedrag is beantwoord.
 
 | Braindump (samengevat) | Soort | Waar |
 | --- | --- | --- |
-| Windowsmelding zoals bij een mindful check-in, met instelbare tijdstippen | Wens | P08, Q03 |
+| Windowsmelding zoals bij een mindful check-in, met instelbare tijdstippen | Wens | P08 |
 | Taken toegevoegd in de planner verschijnen niet in weekoverzicht of mobiele takenlijst | Wens (defect) | P01 — afgerond |
 | AI-plan beoordelen is niet gebruiksvriendelijk; liever gewoon een plan aanmaken en dat in Planbeheer beoordelen of verwijderen | Wens | P03 |
-| Pipelinetests sneller, bijvoorbeeld parallel, zonder onderlinge conflicten | Wens | P00, Q01 |
+| Pipelinetests sneller, bijvoorbeeld parallel, zonder onderlinge conflicten | Wens | P00 |
 | PDF van plannen voor één persoon of een selectie | Wens | P07 — on hold |
-| Mijn taken: datum per week en cyclusweeknummer zichtbaar, niet alles achter elkaar; extra kolommen mag | Wens | P04 — afgerond |
-| About-pagina met versie, datum/tijd laatste update, licentie(link) en changelog-link | Wens | P09, Q04 |
-| Wat gebeurt er met ingeplande, afgeronde, overgeslagen en zelf verplaatste taken als een ander plan actief wordt? | Vraag | Beantwoord door bestaand gedrag (requirements sinds #37); P02 maakt het zichtbaar — afgerond |
+| Mijn taken: datum per week en cyclusweeknummer zichtbaar, niet alles achter elkaar | Wens | P04 — afgerond |
+| About-pagina met versie, datum/tijd laatste update, licentie(link) en changelog-link | Wens | P09 |
+| Wat gebeurt er met ingeplande, afgeronde, overgeslagen en zelf verplaatste taken als een ander plan actief wordt? | Vraag | Bevestigde keuze; zichtbaar gemaakt in P02 — afgerond |
 | Ctrl+F5 moet filterkeuzes behouden | Wens | P04 — afgerond |
-| Tandwiel rechtsboven vervangen door Home naar de andere weergave; linkernavigatie blijft werken | Wens | P05 |
+| Tandwiel rechtsboven vervangen door Home; linkernavigatie blijft werken | Wens | P05 |
 | README bijwerken met betere screenshots | Wens | Doorlopend, zie *Documentatie- en PR-afsluiting* |
 | Vóór een PR documentatie en agentcontext controleren | Wens | Afgerond in #50 (`AGENTS.md`) |
 | Vandaag → iedereen in twee kolommen naast elkaar | Wens | P05 |
-| Wat houdt overslaan van een taak in? | Vraag | Beantwoord in requirements; uitleg in de UI via P02 — afgerond |
+| Wat houdt overslaan van een taak in? | Vraag | Requirements; uitleg in de UI via P02 — afgerond |
 | Planner: totaal minuten per week, ook voor de andere cyclusweken | Wens | P04 — afgerond |
 | Specifieke CI-run sneller | Wens | P00 |
 | Filteren op (een deel van) de taaknaam in planner en weekoverzicht | Wens | P04 — afgerond |
 | Weekoverzicht: schakelaar voor cyclusweeknummer op de kaart | Wens | P04 — afgerond |
 | Extra uitvoering van een taak registreren, ook als die niet op korte termijn gepland stond | Wens | P06 |
-| Ad-hoc taak uitvoeren, of toch eerst in de centrale takenlijst aanmaken? | Vraag | P06, Q02 |
-| Gamification: punten per taak, omrekening naar valuta, bonus voor alles gedaan en extra bonus voor alles op tijd, per week en per cyclus | Wens | P10a–P10c, Q05–Q07 |
-| Badges met avatar en regel op taken, minuten of aantal keer gedaan | Wens ("eventueel") | P11, Q08 |
-| Tabblad met beloningsmeter: kip, eieren in een mand, animatie als de mand vol is, rennende kip | Wens | P12, Q08 |
-| Backend naar .NET 10, hexagonaal, OpenTelemetry, voorbereid op OAuth2/Keycloak | Wens | Buiten dit plan, Q10 |
+| Ad-hoc taak uitvoeren, of toch eerst in de centrale takenlijst aanmaken? | Vraag | Bevestigde keuze: allebei; P06 |
+| Gamification: punten per taak, omrekening naar valuta, bonus voor alles gedaan en extra bonus voor alles op tijd, per week en per cyclus | Wens | P10a–P10c |
+| Badges met avatar en regel op taken, minuten of aantal keer gedaan | Wens | P11 |
+| Tabblad met beloningsmeter: kip, eieren in een mand, animatie als de mand vol is | Wens | P12 |
+| Backend naar .NET 10, hexagonaal, OpenTelemetry, voorbereid op OAuth2/Keycloak | Wens | Buiten dit plan |
 | AI-hint: activiteiten zoveel mogelijk op dezelfde dagen en in een ritme | Wens | P03 |
-
-## Aannames (niet bevestigd)
-
-Een aanname is een invulling die de braindump niet letterlijk geeft. De uitvoerende
-agent legt een aanname pas in `docs/huishoudplanner-requirements.md` vast nadat de
-opdrachtgever haar heeft bevestigd. Een aanname die al in code zit, staat ook al in
-de requirements; als de opdrachtgever haar afwijst, wordt dat een nieuw werkpakket.
-
-| ID | Aanname | Pakket | Status |
-| --- | --- | --- | --- |
-| A01 | Prioriteit: eerst fouten en dagelijks gebruik, daarna uitbreidingen en gamification. Afgeleid uit de scheidingslijn in de braindump. | Volgorde | Gebruikt; achteraf bevestigen |
-| A02 | Vóór planactivatie toont de app een inspecteerbaar voorbeeld van de gevolgen. De braindump stelde alleen de vraag wat er gebeurt. | P02 | In code; achteraf bevestigen |
-| A03 | Mijn taken groepeert in schuivende blokken vanaf vandaag, niet in kalenderweken. | P04 | In code; achteraf bevestigen |
-| A04 | Filterbehoud geldt voor alle filters in de app en per profiel, zodat een filter van persoon A niet aan B blijft hangen. | P04 | In code; achteraf bevestigen |
-| A05 | Planner toont totaalminuten per persoon én totaal, voor alle vier cyclusweken. | P04 | In code; achteraf bevestigen |
-| A06 | Home gaat altijd naar het weekoverzicht; dat sluit aan op de huidige knop **Terug naar overzicht** in beheer. | P05 | Nog niet gebruikt |
-| A07 | Twee kolommen bij Vandaag → iedereen alleen waar het scherm breed genoeg is; mobiel blijft één kolom. | P05 | Nog niet gebruikt |
-| A08 | Een AI-concept wordt geactiveerd via dezelfde preview als P02. | P03 | Nog niet gebruikt |
-| A09 | Een extra uitvoering kan ook meerdere keren op dezelfde dag. | P06 | Nog niet gebruikt |
-| A10 | "Windowsmelding" betekent een browsermelding (Notification API) zolang de planner in een tabblad open is; geen achtergrondservice en geen melding bij een gesloten browser. | P08 | Nog niet gebruikt |
-| A11 | Bestaande ntfy/Home Assistant-meldingen blijven een aparte, herkenbare instelling. | P08 | Nog niet gebruikt |
-| A12 | Voor PDF's zijn plansjabloon en werkelijk ingeplande taken aparte bronnen, en niet-toegewezen taken zijn apart aan of uit te zetten. | P07 | On hold |
-| A13 | Badges worden beheerd door een beheerder; de avatar is een geüploade afbeelding. | P11 | Nog niet gebruikt |
 
 ## Open vragen
 
-Een werkpakket begint pas als de vragen in zijn kolom **Wacht op** beantwoord
-zijn. Het voorstel is een startpunt voor het gesprek, geen besluit. Leg het
-antwoord vast in de requirements of een ADR en verwijder de vraag hier.
+Vragen die de bevestigde keuzes niet beantwoorden. Een werkpakket begint pas als
+de vragen in zijn kolom **Wacht op** beantwoord zijn. Leg het antwoord vast in de
+requirements of een ADR en verwijder de vraag hier.
 
 | ID | Vraag | Blokkeert | Voorstel |
 | --- | --- | --- | --- |
-| Q01 | CI draait nu geen Playwright-E2E (alleen lint/typecheck, Vitest per project en de containerbuild). Moet P00 alleen de bestaande jobs versnellen, of ook E2E aan CI toevoegen (wat CI langer maakt)? | P00 | Eerst de bestaande jobs versnellen; E2E in CI als apart besluit. |
-| Q02 | Ad-hoc taak: mag die bestaan zonder record in de centrale takenlijst, of maak je hem eerst daar aan? Elke uitvoering heeft nu een verplichte `taskId`. Is meerdere keren per dag nodig (A09)? | P06 | Een "eenmalige" taak die automatisch een verborgen taakrecord krijgt, zodat statistiek en snapshots blijven werken. |
-| Q03 | Welk gedrag van "mindful check-in" is bedoeld? Tijdstippen per persoon of per apparaat? Wat staat in de melding? Volstaat een melding zolang de planner open is (A10)? | P08 | Per persoon; open taken van vandaag plus achterstallige taken; alleen met geopende planner. |
-| Q04 | Is "datum/tijd laatste update" de laatste release, of het bouwmoment van de draaiende versie? | P09 | Laatste release voor officiële builds; bij een lokale build geen verzonnen datum. |
-| Q05 | Wie krijgt de punten als iemand namens een ander aftikt? `completedBy` legt nu het aftikkende profiel vast, niet degene die het werk deed. Komt er een apart veld "uitgevoerd door"? Wie krijgt punten voor de bestaande historie? | P10a | Nieuw veld "uitgevoerd door", standaard gelijk aan het aftikkende profiel; historie volgt `completedBy`. |
-| Q06 | Wat betekent "op tijd": op de geplande dag, vóór het einde van de kalenderweek, of vóór het einde van de cyclus? Tellen overgeslagen en ad-hoc taken mee voor "alles gedaan"? | P10b | Op tijd = uiterlijk op de geplande dag; overgeslagen telt als niet gedaan; ad-hoc telt alleen als extra, niet als vereiste. |
-| Q07 | Bonussen per persoon of voor het hele huishouden? Moeten gebruikers inwisselingen of uitbetalingen kunnen boeken (staat niet in de braindump)? Krijgt bestaande historie met terugwerkende kracht punten? | P10a, P10b, P10c | Per persoon; inwisselen als aparte keuze in P10c; terugwerkende kracht ja, idempotent. |
-| Q08 | Wie mag badges aanmaken (A13)? Verschijnen badges op het tabblad van de beloningsmeter? Is het weekdoel of het cyclusdoel de maat voor een volle mand? | P11, P12 | Beheerder; badges op een eigen plek, niet op de metertab; de gebruiker kiest week of cyclus. |
-| Q09 | Kloppen de aannames die al in code zitten (A01–A05)? | — | Bevestigen of per afwijzing een nieuw pakket maken. |
-| Q10 | Bevestig dat P07 (PDF-selectie) on hold blijft en dat de .NET-migratie een apart traject is buiten dit plan. Deze status is niet uit de braindump te herleiden. | P07 | Beide bevestigen; .NET-migratie later als eigen plan met ADR. |
+| Q01 | CI draait nu geen Playwright-E2E (alleen lint/typecheck, Vitest per project en de containerbuild). Moet P00 alleen de bestaande jobs versnellen, of ook E2E aan CI toevoegen (wat CI langer maakt)? | P00 (alleen het E2E-deel) | Eerst de bestaande jobs versnellen; E2E in CI als apart besluit. |
+| Q02 | Verschijnen badges op het tabblad van de beloningsmeter? | P12 | Nee; badges krijgen een eigen plek, zodat P12 niet op P11 wacht. |
 
 ## Vaste werkwijze voor elk werkpakket
 
 1. Volg `AGENTS.md`: controleer `git status`, werk lokale `main` bij vanaf
    `origin/main`, maak een eigen branch en behoud wijzigingen van anderen.
-2. Controleer de kolom **Wacht op** en de aannames van het pakket. Stel open
-   vragen eerst en begin pas na antwoord.
-3. Lees `docs/BUILD.md`, `docs/DECISIONS.md`, `docs/BLOCKERS.md`, de relevante
+2. Lees `docs/BUILD.md`, `docs/DECISIONS.md`, `docs/BLOCKERS.md`, de relevante
    requirements en ADR's. Zet de concrete verticale stappen van het pakket in
    `docs/BUILD.md` zolang het werk loopt.
-4. Onderzoek het volledige pad van shared contract via server en data naar web.
+3. Onderzoek het volledige pad van shared contract via server en data naar web.
    Maak eerst een reproducerende test bij een defect. Houd API-schrijfacties in
    `apps/server/src/data/` en audit iedere werkelijke statuswijziging.
-5. Werk bij gedrag de relevante sectie van
-   `docs/huishoudplanner-requirements.md` bij met de bevestigde regel. Leg een
-   nieuwe architectuurkeuze in `docs/adr/` vast; noteer de verwijzing tijdelijk in
-   `docs/DECISIONS.md`. Voeg Nederlandse en Engelse UI-teksten toe.
-6. Voer gerichte tests en de controles uit
+4. Werk bij gedrag de relevante sectie van
+   `docs/huishoudplanner-requirements.md` bij. Leg een nieuwe architectuurkeuze
+   in `docs/adr/` vast; noteer de verwijzing tijdelijk in `docs/DECISIONS.md`.
+   Voeg Nederlandse en Engelse UI-teksten toe.
+5. Voer gerichte tests en de controles uit
    `.agents/skills/verify-household-planner/SKILL.md` uit. Test veranderde
    kritieke gebruikersreizen ook met Playwright.
-7. Controleer vóór een PR de README, screenshots, requirements, ADR's en de
+6. Controleer vóór een PR de README, screenshots, requirements, ADR's en de
    agentcontext (`AGENTS.md`, `.github/instructions`, de spiegels in
    `.cursor/rules`, skills, plugins en agentic workflows). Werk relevante
    verouderde tekst in dezelfde wijziging bij. Houd gegenereerde workflows
    onder hun bestaande generator: wijzig zo nodig de Markdown-bron, voer
    `gh aw compile` uit en controleer de gegenereerde output. Bewerk die output
    niet met de hand.
-8. Maak een Conventional Commit voor het afgeronde pakket. Maak of wijzig
+7. Maak een Conventional Commit voor het afgeronde pakket. Maak of wijzig
    alleen een PR wanneer de gebruiker dat vraagt. Volg dan de PR- en
    release-noteregels uit `AGENTS.md`. Push, deploy en publiceer niet zonder
-   expliciet verzoek. Werk de statustabel en de lijsten met aannames en vragen in
-   dit plan bij, en maak de drie tijdelijke werkdocumenten leeg na afronding.
+   expliciet verzoek. Werk de statustabel in dit plan bij en maak de drie
+   tijdelijke werkdocumenten leeg na afronding.
 
 ## Volgorde en afhankelijkheden
 
-Volgens A01 komen eerst fouten en dagelijks gebruik, daarna uitbreidingen en
-gamification. Uitvoervolgorde:
+De bevestigde prioriteit is eerst fouten en dagelijks gebruik, daarna
+uitbreidingen en gamification. Uitvoervolgorde:
 **P01 → P02 → P04 → P00 → P05 → P09 → P03 → P06 → P08 → P10a → P10b → P10c → P11 → P12**.
 
 - P00 staat vooraan in het resterende werk, omdat snellere CI alle volgende
   pakketten versnelt. Het meetgedeelte kan beginnen vóór Q01 beantwoord is.
 - P09 heeft geen afhankelijkheden en is klein, dus het komt direct na P05.
-- P07 is gepauzeerd (Q10) en hoort niet bij deze uitvoervolgorde.
+- P07 is op verzoek gepauzeerd en hoort niet bij deze uitvoervolgorde.
 
 Pakketten zonder onderlinge afhankelijkheid kunnen na controle onafhankelijk
 worden uitgevoerd; testprocessen delen nooit een database, poort of fixture. De
@@ -160,21 +165,21 @@ meerdere dagen met een datamodelwijziging.
 
 | Werkpakket | Status | Omvang | Wacht op | Resultaat of eerstvolgende stap |
 | --- | --- | --- | --- | --- |
-| P00 — CI-doorlooptijd | Nog niet gestart | M | Q01 (alleen voor E2E) | Eerstvolgende pakket bij hervatting. |
+| P00 — CI-doorlooptijd | Nog niet gestart | M | Q01 (alleen E2E) | Eerstvolgende pakket bij hervatting. |
 | P01 — Planner naar overzichten | Afgerond | — | — | [PR #51](https://github.com/somali-lab/keep-the-house-clean-planner/pull/51); de actieve planning bleek al te synchroniseren, met regressiedekking en duidelijke uitleg voor conceptplannen. |
-| P02 — Activatievoorbeeld | Afgerond | — | Q09 | [PR #52](https://github.com/somali-lab/keep-the-house-clean-planner/pull/52); inspecteerbare preview en hercontrole bij activatie (ADR-0008). |
+| P02 — Activatievoorbeeld | Afgerond | — | — | [PR #52](https://github.com/somali-lab/keep-the-house-clean-planner/pull/52); inspecteerbare preview en hercontrole bij activatie (ADR-0008). |
 | P03 — AI-conceptplan | Nog niet gestart | S–M | — | Na P09. |
-| P04 — Zoeken, weekinformatie, filters | Afgerond | — | Q09 | [PR #53](https://github.com/somali-lab/keep-the-house-clean-planner/pull/53); zoeken, cyclusweken, minuten, profielgebonden filterbehoud en gedateerde blokken in Mijn taken. |
+| P04 — Zoeken, weekinformatie, filters | Afgerond | — | — | [PR #53](https://github.com/somali-lab/keep-the-house-clean-planner/pull/53); zoeken, cyclusweken, minuten, profielgebonden filterbehoud en gedateerde blokken in Mijn taken. |
 | P05 — Dagweergave en navigatie | Nog niet gestart | S | — | Na P00. |
-| P06 — Extra uitvoering en ad-hoc taak | Nog niet gestart | L | Q02 | Na P03. |
-| P07 — PDF-selectie | On hold | M | Q10 | Alleen hervatten op nieuw expliciet verzoek. |
-| P08 — Browsermeldingen | Nog niet gestart | M | Q03 | Na P06. |
-| P09 — About en projectinformatie | Nog niet gestart | S | Q04 | Na P05; opnieuw controleren of screenshots en README actueel zijn. |
-| P10a — Punten per uitvoering | Nog niet gestart | L | Q05, Q07 | Na P06 en P08. |
-| P10b — Week- en cyclusbonussen | Nog niet gestart | M | Q06, Q07 | Na P10a. |
-| P10c — Omrekening en inwisselen | Nog niet gestart | M | Q07 | Na P10a. |
-| P11 — Badges | Nog niet gestart | M | Q08 | Na P10a. |
-| P12 — Beloningsmeter | Nog niet gestart | M | Q08 | Na P10b en P10c; P11 alleen als badges op de metertab komen. |
+| P06 — Extra uitvoering en ad-hoc taak | Nog niet gestart | L | — | Na P03. |
+| P07 — PDF-selectie | On hold | M | — | Alleen hervatten op nieuw expliciet verzoek. |
+| P08 — Browsermeldingen | Nog niet gestart | M | — | Na P06. |
+| P09 — About en projectinformatie | Nog niet gestart | S | — | Na P05; opnieuw controleren of screenshots en README actueel zijn. |
+| P10a — Punten per uitvoering | Nog niet gestart | L | — | Na P06 en P08. |
+| P10b — Week- en cyclusbonussen | Nog niet gestart | M | — | Na P10a. |
+| P10c — Omrekening en inwisselen | Nog niet gestart | M | — | Na P10a. |
+| P11 — Badges | Nog niet gestart | M | — | Na P10a. |
+| P12 — Beloningsmeter | Nog niet gestart | M | Q02 | Na P10b en P10c; P11 alleen als badges op de metertab komen. |
 
 ### P00 — Meet en herstel de CI-doorlooptijd
 
@@ -218,21 +223,21 @@ planner-querymutaties, weekoverzicht en mobiele takenlijst.
 
 ### P02 — Voorbeeld van de gevolgen vóór planactivatie
 
-**Status: afgerond in PR #52. Gebruikt aanname A02.**
+**Status: afgerond in PR #52.**
 
 **Afhankelijkheid:** P01. **Oppervlak:** gedeelde planningsregels,
 `generation.ts`, activatieroute, Planbeheer.
 
-- De braindump vroeg wat er bij een planwissel gebeurt. Het antwoord stond al in
-  de requirements: alleen onaangeroerde, gegenereerde, open toekomstige taken
-  worden vervangen; afgeronde, overgeslagen, zelf verplaatste en ad-hoc
-  uitvoeringen blijven bestaan.
-- Bereken vóór activeren voor de huidige en volgende cyclus welke uitvoeringen
-  worden vervangen en welke nieuwe ontstaan. Presenteer aantallen én
-  inspecteerbare taken met datum en persoon.
-- Toon apart de uitvoeringen die blijven bestaan. Voorkom dat een verouderde
-  preview als bevestiging van een inmiddels gewijzigd plan dient.
-- Leg uit dat overslaan niet doorschuift, niet als uitvoering telt voor de
+- Bereken vóór activeren voor de huidige en volgende cyclus welke toekomstige,
+  onaangeroerde, open en gegenereerde uitvoeringen worden vervangen en welke
+  nieuwe uitvoeringen ontstaan. Presenteer aantallen én inspecteerbare taken
+  met datum en persoon.
+- Toon apart de uitvoeringen die blijven bestaan: afgerond, overgeslagen,
+  zelf verplaatst en ad hoc. Voorkom dat een verouderde preview als bevestiging
+  van een inmiddels gewijzigd plan dient.
+- Vervang alleen onaangeroerde toekomstige open taken. Behoud afgeronde,
+  overgeslagen, zelf verplaatste en ad-hoc uitvoeringen, zoals bevestigd.
+- Leg uit dat overslaan nu niet doorschuift, niet als uitvoering telt voor de
   due-berekening en in de geschiedenis blijft.
 - **Klaar wanneer:** de preview met de werkelijke activatie overeenkomt voor
   alle vijf genoemde statussen, inclusief een activatie midden in een cyclus.
@@ -246,7 +251,7 @@ planner-querymutaties, weekoverzicht en mobiele takenlijst.
   Bouw die opslag niet opnieuw. Het resterende werk zit vooral in de UI en in de
   prompt.
 - Toon het concept na aanmaken in een gewone planweergave in Planbeheer met
-  **activeren** en **verwijderen**; activeren gebruikt de preview uit P02 (A08).
+  **activeren** en **verwijderen**; activeren gebruikt altijd de preview uit P02.
   Vervang de huidige verschilweergave in het AI-scherm, die de opdrachtgever niet
   gebruiksvriendelijk vindt, door een verwijzing naar dat concept.
 - Toon werkverdeling en waarschuwingen begrijpelijk. Verberg geen harde
@@ -260,67 +265,71 @@ planner-querymutaties, weekoverzicht en mobiele takenlijst.
 
 ### P04 — Zoeken, weekinformatie en filterbehoud
 
-**Status: afgerond in PR #53. Gebruikt aannames A03, A04 en A05.**
+**Status: afgerond in PR #53.**
 
 **Afhankelijkheid:** P01. **Oppervlak:** planner, weekoverzicht, Mijn taken,
 filtermodellen.
 
 - Zoek in planner en weekoverzicht zonder hoofdlettergevoeligheid op een deel
   van de taaknaam. De zoekterm filtert de zichtbaarheid, niet de opgeslagen
-  planning.
+  planning. Test lege invoer, accenten en een naam die meerdere keren voorkomt.
 - Toon in de planner totaalminuten per persoon en totaal voor elk van de vier
-  cyclusweken.
+  cyclusweken. Gebruik bestaande planningsvalidatie als rekenbron.
 - Voeg in het weekoverzicht een bewaarde schakelaar toe voor het
   cyclusweeknummer op de taak- of dagkaart.
 - Groepeer Mijn taken in schuivende blokken vanaf vandaag met begin- en
-  einddatum en het juiste cyclusweeknummer per taak.
-- Bewaar alle filterkeuzes na Ctrl+F5, per profiel, met een zichtbare reset.
+  einddatum; toon voor de taken het juiste cyclusweeknummer, ook wanneer een
+  blok twee cyclusweken raakt. Houd taken binnen iedere groep op datum
+  gesorteerd.
+- Bewaar alle filterkeuzes in de app na Ctrl+F5 via URL-parameters of
+  browseropslag, passend bij de bestaande pagina. Bied een zichtbare reset.
+  Test herladen en profielwissel, zodat een filter van persoon A niet
+  ongemerkt aan B hangt.
 - **Klaar wanneer:** alle waarden en filters in mobiel en desktop correct
   blijven na navigatie en herladen, met toetsenbord bedienbaar zijn en niet
   alleen via kleur betekenis geven.
 
 ### P05 — Dagweergave en navigatie
 
-**Afhankelijkheid:** P04 voor gedeelde filterkeuzes. **Aannames:** A06, A07.
+**Afhankelijkheid:** P04 voor gedeelde filterkeuzes.
 
 - Zet bij **Vandaag → iedereen** de persoonsoverzichten in twee kolommen
   zodra het scherm breed genoeg is voor leesbare kolommen.
 - Vervang het tandwiel rechtsboven (nu **Instellingen en beheer openen**) door
-  een Home-actie die naar het weekoverzicht gaat. Beheer blijft bereikbaar via
-  de linkernavigatie; controleer dat alle links daar blijven werken, plus
-  rolbeperkingen en de browser-terugknop. Pas de bestaande test in
+  een Home-actie die altijd naar het weekoverzicht gaat. Beheer blijft
+  bereikbaar via de linkernavigatie; controleer dat alle links daar blijven
+  werken, plus rolbeperkingen en de browser-terugknop. Pas de bestaande test in
   `apps/web/src/App.test.tsx` aan, die nu van het tandwiel uitgaat.
 - **Klaar wanneer:** mobiele en desktop-navigatie, toetsenbordfocus en de
   Vandaag-indeling component- en E2E-dekking hebben.
 
 ### P06 — Extra uitvoering en ad-hoc taak
 
-**Afhankelijkheid:** P01. **Wacht op:** Q02. **Aanname:** A09.
+**Afhankelijkheid:** P01; ontwerpbeslissing vóór datamigratie.
 
-- Ondersteun een extra uitvoering van een bestaande taak, ook als die niet op
-  korte termijn gepland stond. Ondersteun daarnaast een ad-hoc taak in de vorm
-  die Q02 bepaalt. Maak het verschil tussen beide acties zichtbaar in de UI.
+- Ondersteun een extra uitvoering van een bestaande taak, ook meerdere keren
+  op dezelfde dag, én een losse eenmalige taak zonder record in de centrale
+  takenlijst. Maak het verschil tussen beide acties zichtbaar in de UI.
 - Datamodel nu: elke `occurrence` heeft een verplichte `taskId`, en de unieke
   index `(cycleId, taskId, plannedDate)` in `apps/server/src/data/db.ts`
   weigert een tweede uitvoering van dezelfde taak op dezelfde dag. De
   idempotente bulk-insert van de generatie leunt op die index. Leg in een ADR
   vast hoe meerdere werkelijke uitvoeringen naast één geplande uitvoering
-  bestaan, en (afhankelijk van Q02) hoe een taak zonder centraal record past,
-  zonder generatie, snapshots of historie te beschadigen. Neem dit besluit
+  bestaan en hoe een taak zonder centraal record past (bijvoorbeeld een
+  optionele `taskId` of een verborgen eenmalig taakrecord), zonder generatie,
+  snapshots, due-berekening of historie te beschadigen. Neem dit besluit
   vóórdat je migratiecode schrijft.
 - Werk gedeeld contract, data, audit, due-berekening, statistiek en UI als één
   verticale wijziging bij. Voorkom dubbele registratie door herhaalde klikken.
 - **Klaar wanneer:** beide soorten uitvoering een afzonderlijk auditspoor
   hebben, zichtbaar zijn in historie/statistiek en een planwissel overleven.
-  Test meermaals uitvoeren op dezelfde dag (als A09 bevestigd is), ongedaan
-  maken en herladen.
+  Test meermaals uitvoeren op dezelfde dag, ongedaan maken en herladen.
 
 ### P07 — PDF per persoon of selectie
 
-**Status: on hold (Q10). Niet uitvoeren zonder nieuw expliciet verzoek.**
+**Status: on hold. Niet uitvoeren zonder nieuw expliciet verzoek.**
 
 **Afhankelijkheid:** P01. **Oppervlak:** exportschema, PDF-sheets en dialog.
-**Aanname:** A12.
 
 - Voeg aan planning-PDF's **iedereen**, één persoon en meerdere personen toe.
   Geef bij een persoonsselectie een aparte keuze om niet-toegewezen taken
@@ -335,96 +344,99 @@ filtermodellen.
 
 ### P08 — Instelbare browsermeldingen op Windows
 
-**Afhankelijkheid:** P01. **Wacht op:** Q03. **Aannames:** A10, A11.
-**Oppervlak:** webinstellingen, meldingslogica en i18n.
+**Afhankelijkheid:** P01. **Oppervlak:** webinstellingen, meldingslogica en i18n.
 
 - Er bestaat nog geen code die de browser-Notification API gebruikt. Bouw
-  meldingen voor een geopende planner, ook wanneer die tab niet actief is.
-- Laat tijdstippen instellen (per persoon of per apparaat volgens Q03).
-  Laat meldingen aan- en uitzetten, toestemming aanvragen en een testmelding
-  tonen. Toon duidelijk wanneer toestemming ontbreekt.
-- Stuur per tijdstip en dag maximaal één samenvatting, ook als er meerdere
-  tabbladen open zijn. Dat vraagt coördinatie tussen tabbladen, bijvoorbeeld met
-  de Web Locks API of `BroadcastChannel` plus een geclaimde sleutel per persoon,
-  datum en tijdstip in browseropslag. Leg het gekozen mechanisme vast in een ADR.
-  Herbereken bij tabherstel, tijdzone- of profielwissel.
-- Houd bestaande ntfy/Home Assistant-meldingen als aparte instelling herkenbaar.
+  meldingen voor een geopende planner, ook wanneer die tab niet actief is. Er
+  is geen eis voor een gesloten browser of OS-achtergrondservice.
+- Stel tijdstippen per persoon in. Laat meldingen aan/uit zetten, toestemming
+  aanvragen en een testmelding tonen. Toon duidelijk wanneer toestemming
+  ontbreekt.
+- Neem open taken voor vandaag en achterstallige taken van de ingestelde
+  persoon op; stuur per tijdstip en dag maximaal één samenvatting, ook bij
+  meerdere open tabbladen. Dat vraagt coördinatie tussen tabbladen, bijvoorbeeld
+  met de Web Locks API of `BroadcastChannel` plus een geclaimde sleutel per
+  persoon, datum en tijdstip in browseropslag; leg het gekozen mechanisme vast in
+  een ADR. Herbereken bij tabherstel, tijdzone- of profielwissel. Houd bestaande
+  ntfy/Home Assistant-meldingen als aparte instelling herkenbaar.
 - **Klaar wanneer:** tijdstippen, toestemming, lege dag, meerdere tabbladen en
   herladen met een vaste klok zijn getest.
 
 ### P09 — About-pagina en actuele projectinformatie
 
-**Afhankelijkheid:** geen. **Wacht op:** Q04.
+**Afhankelijkheid:** geen.
 
-- Toon de versie van de draaiende build, de datum en tijd van de laatste update
-  (volgens Q04), de licentie of een link naar `LICENSE`, en een link naar
-  `CHANGELOG.md`.
+- Toon versie van de draaiende build, datum en tijd van de laatste release,
+  licentie of link naar `LICENSE`, en link naar `CHANGELOG.md`.
 - Huidige situatie: `apps/web/src/versionModel.ts` kent alleen een
   versienummer, met een tijdstempel voor lokale builds; er is geen
   releasedatum. Lever de datum als buildmetadata vanuit de releaseworkflow,
-  zonder live GitHub-verzoek. Volg `.github/instructions/release.instructions.md`
-  en ADR-0007, en bewerk `version.txt`, `.release-please-manifest.json` en
-  `CHANGELOG.md` niet met de hand. Verzin voor een lokale, nog niet
-  uitgebrachte build geen releasedatum.
+  zonder afhankelijk te zijn van een live GitHub-verzoek. Volg
+  `.github/instructions/release.instructions.md` en ADR-0007, en bewerk
+  `version.txt`, `.release-please-manifest.json` en `CHANGELOG.md` niet met de
+  hand. Label de datum als **laatste release**; verzin voor een lokale, nog niet
+  uitgebrachte build geen nieuwe releasedatum.
 - **Klaar wanneer:** lokale en officiële buildmetadata, werkende links en
   mobiel/desktopweergave zijn getest. Leg de betekenis vast in README en
   zo nodig ADR-0007.
 
 ### P10 — Punten en beloningsregels
 
-De braindump vraagt om punten per taak, een omrekening van punten naar valuta,
-een bonus voor alles gedaan en een extra bonus voor alles op tijd, per week en per
-cyclus. Dat is te groot voor één reviewbare wijziging en is daarom gesplitst in
-drie pakketten. Alle drie gebruiken hetzelfde grootboek.
+Te groot voor één reviewbare wijziging en daarom gesplitst in drie pakketten.
+Alle drie gebruiken hetzelfde grootboek.
 
 #### P10a — Punten per uitvoering en grootboek
 
-**Afhankelijkheid:** P06, omdat extra werk ook meetelt. **Wacht op:** Q05, Q07.
+**Afhankelijkheid:** P06, omdat extra werk ook meetelt.
 
 - Geef iedere taak een instelbare puntenwaarde.
 - Registreer punten in een idempotent, controleerbaar grootboek per werkelijke
-  uitvoering. Leg vast wie de taak werkelijk deed volgens Q05; `completedBy` is
-  nu het aftikkende profiel. Corrigeer punten bij ongedaan maken of een
-  beheerwijziging.
-- Bereken, als Q07 dat bevestigt, bij invoering punten over de bestaande
-  uitvoeringshistorie. Herstarten of opnieuw berekenen levert geen dubbele
-  punten op.
+  uitvoering. Ken punten toe aan degene die de taak werkelijk deed.
+  `completedBy` legt nu het aftikkende profiel vast, wat bij **namens iemand
+  afvinken** iemand anders kan zijn. Leg in een ADR vast hoe "uitgevoerd door"
+  wordt opgeslagen en welke waarde bestaande historie krijgt. Maak de keuze bij
+  namens iemand afvinken ondubbelzinnig in de UI en corrigeer punten bij
+  ongedaan maken of beheerwijziging.
+- Bereken bij invoering ook punten over bestaande uitvoeringshistorie. Maak de
+  berekening idempotent, zodat herstarten of opnieuw berekenen geen dubbele
+  punten oplevert.
 - **Klaar wanneer:** dubbel afvinken of historische herberekening geen dubbele
   punten oplevert en correcties de balans herstellen, getest met vaste klok en
   geïsoleerde database.
 
 #### P10b — Week- en cyclusbonussen
 
-**Afhankelijkheid:** P10a. **Wacht op:** Q06, Q07.
+**Afhankelijkheid:** P10a.
 
-- Bereken een bonus voor **alles gedaan** en een aanvullende bonus voor
-  **alles op tijd**, per kalenderweek en per cyclus, met de betekenis van "op
-  tijd" en de telling van overgeslagen en ad-hoc taken volgens Q06. Bonusbedragen
-  zijn instelbaar.
-- Sluit een bonus pas na afloop van de week of cyclus definitief af en ken hem
-  nooit dubbel toe.
+- Bereken per persoon en kalenderweek en per persoon en cyclus een instelbare
+  bonus voor **alles gedaan** en een aanvullende bonus voor **alles op tijd**.
+  Geplande en ad-hoc taken tellen mee; overgeslagen taken zijn niet gedaan. Voor
+  de weekbonus is een taak op tijd als die vóór het einde van die kalenderweek
+  klaar is; voor de cyclusbonus vóór het einde van de cyclus.
+- Sluit de respectieve bonus pas na afloop van de week of cyclus definitief af
+  en ken hem nooit dubbel toe, ook niet bij herberekening.
 - **Klaar wanneer:** week- en cyclusuitkomsten reproduceerbaar zijn met vaste
-  klok, inclusief de grenzen van week, cyclus en DST.
+  klok en geïsoleerde database, inclusief de grenzen van week, cyclus en DST.
 
 #### P10c — Omrekening naar valuta en inwisselen
 
-**Afhankelijkheid:** P10a. **Wacht op:** Q07.
+**Afhankelijkheid:** P10a.
 
 - Voeg bij instellingen een instelbare omrekenfactor van punten naar valuta toe
   en toon het saldo in beide eenheden.
-- Alleen als Q07 dat bevestigt: laat gebruikers een inwisseling of uitbetaling
-  registreren en audit die boeking.
-- **Klaar wanneer:** omrekening en (indien bevestigd) inwisselen het saldo
-  correct en controleerbaar wijzigen.
+- Gebruikers kunnen zelf direct een inwisseling of uitbetaling registreren;
+  audit die boeking.
+- **Klaar wanneer:** een gebruiker een inwisseling kan boeken en omrekening en
+  inwisseling het saldo correct en controleerbaar wijzigen.
 
 ### P11 — Beheerbare badges
 
-**Afhankelijkheid:** P10a. **Wacht op:** Q08. **Aanname:** A13.
+**Afhankelijkheid:** P10a.
 
-- Laat badges maken met naam, geüploade afbeelding en een regel op geselecteerde
-  taken, aantal uitvoeringen of uitgevoerde minuten. Lever voorbeeldbadges uit de
-  braindump (alles op tijd, schoonmaakminuten, herhaalde taken zoals tien keer het
-  toilet); namen en drempels blijven aanpasbaar.
+- Laat een beheerder badges maken met naam, geüploade afbeelding en een regel op
+  geselecteerde taken, aantal uitvoeringen of uitgevoerde minuten. Lever
+  voorbeeldbadges voor alles op tijd, schoonmaakminuten en herhaalde taken;
+  namen en drempels blijven aanpasbaar.
 - Evalueer regels uit dezelfde gecontroleerde uitvoeringsgegevens als P10a.
   Audit regelwijzigingen en voorkom dubbele toekenning bij een herberekening.
 - **Klaar wanneer:** badgebeheer, drempelgrenzen, correcties en toegankelijk
@@ -432,25 +444,25 @@ drie pakketten. Alle drie gebruiken hetzelfde grootboek.
 
 ### P12 — Beloningsmeter met kip en eieren
 
-**Afhankelijkheid:** P10b en P10c; P11 alleen als badges op de metertab komen
-(Q08). **Wacht op:** Q08.
+**Afhankelijkheid:** P10b en P10c; P11 alleen als badges op dit tabblad
+verschijnen (Q02).
 
-- Maak een tabblad met voortgang naar het week- of cyclusdoel: verdiende punten,
-  omrekening, eieren in de mand en een rennende kip.
-- Speel de afrondingsanimatie één keer bij een volle mand. Respecteer
+- Maak een tabblad met voortgang naar het instelbare week- of cyclusdoel:
+  verdiende punten, omrekening, eieren in de mand en een lopende kip.
+- Speel de afrondingsanimatie één keer bij een voltooide meter. Respecteer
   verminderde-beweging-instellingen en geef dezelfde voortgang in tekst.
 - **Klaar wanneer:** voortgang, reset per periode, meerdere profielen,
   schermbreedtes en verminderde beweging zijn getest.
 
 ## Documentatie- en PR-afsluiting
 
-Na elk pakket geldt de vaste werkwijze bovenaan. De braindump vraagt om een
-bijgewerkte README met betere screenshots. Genereer daarom na de zichtbare
-UI-pakketten de README-screenshots opnieuw met `npm run screenshots`; voeg alleen
-beelden toe die een echte, leesbare gebruikerssituatie tonen. Werk de
-README-functiebeschrijving en bediening tegelijk bij. De releasebestanden
-`version.txt`, `.release-please-manifest.json` en `CHANGELOG.md` blijven in beheer
-van Release Please.
+Na elk pakket geldt de vaste werkwijze bovenaan. Na de zichtbare UI-pakketten
+worden de drie bestaande README-screenshots opnieuw gegenereerd met
+`npm run screenshots`; voeg alleen beelden toe die een echte, leesbare
+gebruikerssituatie tonen. Werk de README-functiebeschrijving en bediening
+tegelijk bij. De releasebestanden `version.txt`,
+`.release-please-manifest.json` en `CHANGELOG.md` blijven in beheer van
+Release Please.
 
 De pre-PR-documentatie- en agentcontextcontrole staat blijvend in `AGENTS.md`.
 De bestaande context-maintainer-workflow kan alleen de bestanden binnen zijn
@@ -460,13 +472,11 @@ PR-beschrijving. Wijzigingen aan die workflow lopen via de Markdown-bron en
 
 ## Uitvoering en nieuwe vragen
 
-Behandel alleen de letterlijke braindump en beantwoorde vragen als vaststaand.
-Leg een bevestigd antwoord permanent vast in de requirements of een ADR, werk de
-lijsten met aannames en open vragen in dit plan bij, en voer het afhankelijke deel
-pas daarna uit. Als tijdens de uitvoering een nieuw productdetail nodig blijkt,
-voeg het toe als `Qxx`, vraag de opdrachtgever gericht om een antwoord en vul het
-niet zelf in. De .NET-migratie blijft uitgesloten totdat er een nieuw, expliciet
-verzoek voor komt.
+De bovenstaande keuzes zijn bevestigd. Leg ze bij implementatie permanent
+vast in de requirements. Als een nieuw productdetail nodig blijkt dat hier
+niet is besloten, voeg het toe aan de open vragen, vraag de opdrachtgever
+gericht om een antwoord en voer het afhankelijke deel pas daarna uit. De
+.NET-migratie blijft uitgesloten totdat er een nieuw, expliciet verzoek voor komt.
 
 ## Bijlage: oorspronkelijke braindump
 
