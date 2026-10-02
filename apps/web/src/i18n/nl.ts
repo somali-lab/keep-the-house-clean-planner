@@ -340,6 +340,7 @@ export const nl = {
   'today.skipConfirm': 'Overslaan bevestigen',
   'today.undo': 'Ongedaan maken',
   'today.undoNamed': '{task} ongedaan maken',
+  'today.extra': 'Extra',
   'today.snackbar': '"{task}" afgevinkt.',
   'today.overdueSince': 'Achterstallig — gepland op {date}',
   'today.movedFrom': 'verplaatst van {date}',

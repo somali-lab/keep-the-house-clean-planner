@@ -1,6 +1,6 @@
 import type { User } from '@huishoudplanner/shared';
 import { CalendarDays, CheckCircle2, Circle, Clock, ThumbsUp, TriangleAlert } from 'lucide-react';
-import { useId, useState, type FormEvent } from 'react';
+import { useId, useRef, useState, type FormEvent } from 'react';
 import { EmptyState } from '@/components/EmptyState';
 import { NativeSelect } from '@/components/NativeSelect';
 import { PageHeader } from '@/components/PageHeader';
@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { useSettings } from '../../api/queries.ts';
+import { createRequestKey } from '../../api/requestKey.ts';
 import { format, t } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
 import { dayKeyInZone } from '../today/todayModel.ts';
@@ -28,10 +29,12 @@ export function spokenDate(dayKey: string): string {
 export function DuePage({ now }: { now?: Date }) {
   const settings = useSettings();
   const due = useDue();
-  const { profile, activeUsers } = useProfile();
+  const { activeUsers } = useProfile();
   const { plan, doneNow } = useDueActions();
   const [planning, setPlanning] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  // One idempotency key per "Done now" intent: kept across retries after a failure, dropped once it succeeded.
+  const doneNowKeys = useRef(new Map<string, { date: string; key: string }>());
 
   if (settings.isPending || due.isPending)
     return (
@@ -90,7 +93,13 @@ export function DuePage({ now }: { now?: Date }) {
               }}
               onDoneNow={() => {
                 setFailed(false);
-                doneNow.mutate({ item, todayKey, profileId: profile?._id ?? '' }, { onError });
+                const known = doneNowKeys.current.get(item.taskId);
+                const entry = known?.date === todayKey ? known : { date: todayKey, key: createRequestKey() };
+                doneNowKeys.current.set(item.taskId, entry);
+                doneNow.mutate(
+                  { item, todayKey, requestId: entry.key },
+                  { onSuccess: () => doneNowKeys.current.delete(item.taskId), onError },
+                );
               }}
             />
           ))}

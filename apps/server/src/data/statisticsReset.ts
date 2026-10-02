@@ -27,7 +27,10 @@ export async function resetStatisticsData(
   const deletedOccurrences = await occurrencesCollection(ctx.db).deleteMany({ date: { $lt: boundary } });
   let resetOccurrences = { modifiedCount: 0 };
   let resetTasks = { modifiedCount: 0 };
+  let deletedRecorded = { deletedCount: 0 };
   if (options.restartFromToday) {
+    // Recorded work has no planned state to return to, so it is deleted instead of reopened.
+    deletedRecorded = await occurrencesCollection(ctx.db).deleteMany({ recordedDone: true });
     resetOccurrences = await occurrencesCollection(ctx.db).updateMany(
       {
         $or: [
@@ -55,7 +58,7 @@ export async function resetStatisticsData(
   const deletedPastCycles = await ctx.db.collection(COLLECTIONS.cycles).deleteMany({ index: { $lt: boundaryCycle } });
 
   const result: ResetStatisticsResult = {
-    deletedOccurrences: deletedOccurrences.deletedCount,
+    deletedOccurrences: deletedOccurrences.deletedCount + deletedRecorded.deletedCount,
     resetOccurrences: resetOccurrences.modifiedCount,
     resetTasks: resetTasks.modifiedCount,
     deletedPastCycles: deletedPastCycles.deletedCount,

@@ -27,7 +27,9 @@ export interface OccurrenceDoc {
   roomIdSnapshot?: ObjectId | null;
   roomNameSnapshot?: string | null;
   origin: 'generated' | 'adhoc';
-  /** Client idempotency key of an ad-hoc creation; missing on older data. */
+  /** Created directly in the done state (no planned state to return to); missing on older data means false. */
+  recordedDone?: boolean;
+  /** Client idempotency key of an ad-hoc creation; missing on older data means null. */
   requestId?: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -39,6 +41,10 @@ export const occurrencesCollection = (db: Db) => db.collection<OccurrenceDoc>(CO
 
 export function findOccurrenceById(db: Db, id: ObjectId): Promise<OccurrenceDoc | null> {
   return occurrencesCollection(db).findOne({ _id: id });
+}
+
+export function findOccurrenceByRequestId(db: Db, requestId: string): Promise<OccurrenceDoc | null> {
+  return occurrencesCollection(db).findOne({ requestId });
 }
 
 export function findOccurrences(db: Db, filter: Filter<OccurrenceDoc>): Promise<OccurrenceDoc[]> {
@@ -163,6 +169,24 @@ export async function insertAdhocOccurrence(
   const { after } = diffFields({}, { ...doc }, { ignore: AUDIT_IGNORE });
   await record(ctx, { entity: 'occurrence', entityId: doc._id, action: 'create', after, meta });
   return { inserted: true, doc };
+}
+
+/**
+ * Atomically deletes recorded work (an ad-hoc occurrence created done) and audits it as
+ * 'delete' with the retract reason. Returns null, writing and auditing nothing, when no such
+ * occurrence exists (any more).
+ */
+export async function retractRecordedOccurrence(ctx: AuditContext, id: ObjectId): Promise<OccurrenceDoc | null> {
+  const doc = await occurrencesCollection(ctx.db).findOneAndDelete({
+    _id: id,
+    origin: 'adhoc',
+    recordedDone: true,
+    status: 'done',
+  });
+  if (!doc) return null;
+  const { before } = diffFields({ ...doc }, {}, { ignore: AUDIT_IGNORE });
+  await record(ctx, { entity: 'occurrence', entityId: doc._id, action: 'delete', before, meta: { reason: 'retract' } });
+  return doc;
 }
 
 /** Deletes the given occurrences, auditing each as action 'delete' with its previous fields. */

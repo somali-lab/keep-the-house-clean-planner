@@ -45,19 +45,22 @@ export function useDueActions() {
   });
 
   const doneNow = useMutation({
-    mutationFn: async (input: { item: DueItemView; todayKey: string; profileId: string }) => {
-      // Complete today's planned occurrence if there is one; otherwise add one for today and complete it.
-      const plannedToday = input.item.nextOccurrence?.date === input.todayKey ? input.item.nextOccurrence.id : null;
-      const id =
-        plannedToday ??
-        (
-          await api.post<OccurrenceView>('/api/occurrences', {
-            taskId: input.item.taskId,
-            date: input.todayKey,
-            assigneeId: input.profileId,
-          })
-        ).data._id;
-      return (await api.patch<OccurrenceView>(`/api/occurrences/${id}`, { action: 'complete' })).data;
+    mutationFn: async (input: { item: DueItemView; todayKey: string; requestId: string }) => {
+      // Today's planned occurrence is completed in place; otherwise the extra execution is recorded
+      // as done in one request. The key makes a retry of the same click idempotent (ADR-0009).
+      if (input.item.nextOccurrence?.date === input.todayKey) {
+        return (
+          await api.patch<OccurrenceView>(`/api/occurrences/${input.item.nextOccurrence.id}`, { action: 'complete' })
+        ).data;
+      }
+      return (
+        await api.post<OccurrenceView>('/api/occurrences', {
+          taskId: input.item.taskId,
+          date: input.todayKey,
+          done: true,
+          requestId: input.requestId,
+        })
+      ).data;
     },
     onSuccess: refresh,
   });

@@ -224,6 +224,26 @@ describe('GET /api/due', () => {
     await t.app.inject({ method: 'PATCH', url: `/api/tasks/${ramen}`, headers: headers(), payload: { active: true } });
   });
 
+  it('restarts the due clock with a recorded extra execution and restores it when that is retracted', async () => {
+    expect((await dueList())[0]).toMatchObject({ taskId: badkamer, state: 'overdue', lastCompletedAt: null });
+    const recorded = await t.app.inject({
+      method: 'POST',
+      url: '/api/occurrences',
+      headers: headers(),
+      payload: { taskId: badkamer, date: CYCLE_STARTS[3], done: true, requestId: 'due-api-extra-key-0001' },
+    });
+    expect(recorded.statusCode, recorded.body).toBe(201);
+    expect((await dueList()).find((i) => i.taskId === badkamer)).toMatchObject({ daysSince: 0, state: 'ok' });
+
+    const undone = await t.app.inject({
+      method: 'POST',
+      url: `/api/occurrences/${recorded.json<{ _id: string }>()._id}/retract`,
+      headers: headers(),
+    });
+    expect(undone.statusCode, undone.body).toBe(200);
+    expect((await dueList())[0]).toMatchObject({ taskId: badkamer, state: 'overdue', lastCompletedAt: null });
+  });
+
   it('is summarised by the nightly job', () => {
     expect(lastNightly.due).toEqual({ due: 0, overdue: 1 });
   });

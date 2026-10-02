@@ -76,6 +76,53 @@ describe('DELETE /api/stats', () => {
     expect(await t.db.collection(COLLECTIONS.auditLog).findOne({ entity: 'settings', action: 'reset' })).not.toBeNull();
   });
 
+  it('deletes recorded extra work instead of reopening it when starting over', async () => {
+    t = await createTestApp({ now: '2026-09-14T06:00:00.000Z' });
+    const [person] = await seededUsers(t);
+    const headers = asProfile(person);
+    const room = await seededRoom(t, 'Keuken');
+    const taskResponse = await t.app.inject({
+      method: 'POST',
+      url: '/api/tasks',
+      headers,
+      payload: { name: 'Aanrecht', roomId: room._id.toHexString(), intervalKey: '1w', durationMinutes: 15 },
+    });
+    const taskId = taskResponse.json<{ _id: string }>()._id;
+    await t.app.inject({ method: 'POST', url: '/api/jobs/nightly', headers });
+    const planned = await t.app.inject({
+      method: 'POST',
+      url: '/api/occurrences',
+      headers,
+      payload: { taskId, date: '2026-09-15' },
+    });
+    const recorded = await t.app.inject({
+      method: 'POST',
+      url: '/api/occurrences',
+      headers,
+      payload: { taskId, date: '2026-09-14', done: true, requestId: 'stats-reset-extra-key-01' },
+    });
+    expect(recorded.statusCode, recorded.body).toBe(201);
+    const second = await t.app.inject({
+      method: 'POST',
+      url: '/api/occurrences',
+      headers,
+      payload: { taskId, date: '2026-09-14', done: true, requestId: 'stats-reset-extra-key-02' },
+    });
+    expect(second.statusCode, second.body).toBe(201);
+    expect((await t.db.collection(COLLECTIONS.tasks).findOne({ _id: new ObjectId(taskId) }))!.lastCompletedAt).not.toBeNull();
+
+    const response = await t.app.inject({ method: 'DELETE', url: '/api/stats', headers });
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.json()).toMatchObject({ deletedOccurrences: 2, resetTasks: 1 });
+
+    const remaining = await findOccurrences(t.db, { taskId: new ObjectId(taskId) });
+    expect(remaining.some((o) => o.recordedDone === true)).toBe(false);
+    expect(remaining.every((o) => o.status === 'open')).toBe(true);
+    // The planned extra is reopened as before; only the recorded work disappears.
+    expect(remaining.some((o) => o._id.toHexString() === planned.json<OccurrenceView>()._id)).toBe(true);
+    expect((await t.db.collection(COLLECTIONS.tasks).findOne({ _id: new ObjectId(taskId) }))!.lastCompletedAt).toBeNull();
+  });
+
   it('with `before`, only purges data strictly older than that day and leaves recent completions untouched', async () => {
     t = await createTestApp({ now: '2026-09-14T06:00:00.000Z' }); // Monday, cycle anchor
     const [person] = await seededUsers(t);

@@ -90,7 +90,7 @@ export function TodayPage({ now }: { now?: Date }) {
   const run = (next: OccurrenceAction, occ: OccurrenceView) => {
     setFailed(false);
     if (next.kind === 'complete') setSnackbar({ id: occ._id, task: occ.taskNameSnapshot });
-    if (next.kind === 'uncomplete') setSnackbar(null);
+    if (next.kind === 'uncomplete' || next.kind === 'retract') setSnackbar(null);
     action.mutate(next, {
       onError: () => {
         setFailed(true);
@@ -254,6 +254,7 @@ export function TodayPage({ now }: { now?: Date }) {
                   completionControl={settings.data.completionControl ?? 'circle'}
                   onComplete={() => requestComplete(occ)}
                   onUncomplete={() => run({ id: occ._id, kind: 'uncomplete' }, occ)}
+                  onRetract={() => run({ id: occ._id, kind: 'retract' }, occ)}
                   onSkip={(reason) => run({ id: occ._id, kind: 'skip', reason }, occ)}
                   onClaim={() => run({ id: occ._id, kind: 'claim' }, occ)}
                   onAssign={(assigneeId) => run({ id: occ._id, kind: 'assign', assigneeId }, occ)}

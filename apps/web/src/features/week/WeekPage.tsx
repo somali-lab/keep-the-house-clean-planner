@@ -16,6 +16,7 @@ import {
   CalendarDays,
   Check,
   CheckCircle2,
+  CirclePlus,
   Circle,
   ChevronDown,
   ChevronLeft,
@@ -345,6 +346,7 @@ export function WeekPage({ now }: { now?: Date }) {
               completionControl={settings.data.completionControl ?? 'circle'}
               onComplete={requestComplete}
               onUncomplete={(id) => occurrenceAction.mutate({ id, kind: 'uncomplete' }, { onError: () => setFailed(true) })}
+              onRetract={(id) => occurrenceAction.mutate({ id, kind: 'retract' }, { onError: () => setFailed(true) })}
             />
           ))}
         </div>
@@ -387,9 +389,10 @@ interface DayColumnProps {
   completionControl: 'circle' | 'thumb';
   onComplete(id: string): void;
   onUncomplete(id: string): void;
+  onRetract(id: string): void;
 }
 
-function DayColumn({ dayKey, isToday, period, cycleStarted, cycleWeek, showCycleWeek, items, users, roomByTask, completionControl, onComplete, onUncomplete }: DayColumnProps) {
+function DayColumn({ dayKey, isToday, period, cycleStarted, cycleWeek, showCycleWeek, items, users, roomByTask, completionControl, onComplete, onUncomplete, onRetract }: DayColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: dayDropId(dayKey), disabled: !cycleStarted });
   const headingId = `day-${dayKey}`;
   return (
@@ -444,6 +447,7 @@ function DayColumn({ dayKey, isToday, period, cycleStarted, cycleWeek, showCycle
               completionControl={completionControl}
               onComplete={onComplete}
               onUncomplete={onUncomplete}
+              onRetract={onRetract}
             />
           ))}
         </ul>
@@ -459,6 +463,7 @@ function WeekItem({
   completionControl,
   onComplete,
   onUncomplete,
+  onRetract,
 }: {
   occ: OccurrenceView;
   users: User[];
@@ -466,6 +471,7 @@ function WeekItem({
   completionControl: 'circle' | 'thumb';
   onComplete(id: string): void;
   onUncomplete(id: string): void;
+  onRetract(id: string): void;
 }) {
   const isOpen = occ.status === 'open';
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, isDragging } =
@@ -542,6 +548,12 @@ function WeekItem({
                 {roomName}
               </span>
               {!isOpen && <span>{t(occ.status === 'done' ? 'week.done' : 'week.skipped')}</span>}
+              {occ.recordedDone === true && (
+                <span className="inline-flex items-center gap-1 rounded-md bg-secondary px-1.5 py-0.5 font-semibold text-secondary-foreground">
+                  <CirclePlus className="size-3" aria-hidden="true" />
+                  {t('today.extra')}
+                </span>
+              )}
             </span>
             {occ.isOverdue && (
               <Badge className="bg-warning text-warning-foreground">
@@ -582,7 +594,7 @@ function WeekItem({
             size="icon"
             className="size-9 shrink-0 rounded-full bg-success text-success-foreground hover:bg-success/90"
             aria-label={format('today.undoNamed', { task })}
-            onClick={() => onUncomplete(occ._id)}
+            onClick={() => (occ.recordedDone ? onRetract(occ._id) : onUncomplete(occ._id))}
           >
             <Check aria-hidden="true" />
           </Button>

@@ -20,13 +20,21 @@ export type OccurrenceAction =
   | { id: string; kind: 'uncomplete' }
   | { id: string; kind: 'skip'; reason?: string }
   | { id: string; kind: 'assign'; assigneeId: string | null }
-  | { id: string; kind: 'claim' };
+  | { id: string; kind: 'claim' }
+  /** Undo of recorded extra work: the occurrence is deleted rather than reopened (ADR-0009). */
+  | { id: string; kind: 'retract' };
 
-/** Actions that can wait in the offline queue; claiming needs the server to decide who was first. */
-export type QueueableAction = Exclude<OccurrenceAction, { kind: 'claim' } | { kind: 'assign' }>;
+/** Actions that are PATCHed or claimed as one occurrence; retracting is a separate endpoint. */
+export type SendableAction = Exclude<OccurrenceAction, { kind: 'retract' }>;
+
+/**
+ * Actions that can wait in the offline queue; claiming needs the server to decide who was first,
+ * and a retract needs the server's answer to tell recorded work from planned work.
+ */
+export type QueueableAction = Exclude<OccurrenceAction, { kind: 'claim' } | { kind: 'assign' } | { kind: 'retract' }>;
 
 export const isQueueable = (action: OccurrenceAction): action is QueueableAction =>
-  action.kind !== 'claim' && action.kind !== 'assign';
+  action.kind !== 'claim' && action.kind !== 'assign' && action.kind !== 'retract';
 
 /** What the server will do, applied locally so the list reacts instantly. */
 export function applyOptimistic(
@@ -66,11 +74,13 @@ export function applyOptimistic(
       return { ...occ, assigneeId: action.assigneeId };
     case 'claim':
       return { ...occ, assigneeId: context.profileId };
+    case 'retract':
+      return occ; // the list drops the item instead; see useOccurrenceAction
   }
 }
 
 /** Sends one action; the offline sync passes a client that speaks for the profile that queued it. */
-export function sendOccurrenceAction(action: OccurrenceAction, client: ApiClient = api) {
+export function sendOccurrenceAction(action: SendableAction, client: ApiClient = api) {
   if (action.kind === 'claim') return client.post<OccurrenceView>(`/api/occurrences/${action.id}/claim`);
   if (action.kind === 'assign') {
     return client.patch<OccurrenceView>(`/api/occurrences/${action.id}`, {
@@ -108,6 +118,15 @@ export function useOccurrenceAction(
     // Run even when the browser reports offline, so the action reaches the queue instead of pausing in memory.
     networkMode: 'always',
     mutationFn: async (action: OccurrenceAction): Promise<OccurrenceView | null> => {
+      if (action.kind === 'retract') {
+        try {
+          await api.post(`/api/occurrences/${action.id}/retract`);
+        } catch (error) {
+          // A second retract finds nothing: the work is already undone.
+          if (!(error instanceof ApiRequestError && error.status === 404)) throw error;
+        }
+        return null;
+      }
       try {
         return (await sendOccurrenceAction(action)).data;
       } catch (error) {
@@ -124,7 +143,9 @@ export function useOccurrenceAction(
       await queryClient.cancelQueries({ queryKey });
       const previous = queryClient.getQueryData<OccurrenceView[]>(queryKey);
       replace((list) =>
-        list.map((occ) => (occ._id === action.id ? applyOptimistic(occ, action, { ...context, now: new Date() }) : occ)),
+        action.kind === 'retract'
+          ? list.filter((occ) => occ._id !== action.id)
+          : list.map((occ) => (occ._id === action.id ? applyOptimistic(occ, action, { ...context, now: new Date() }) : occ)),
       );
       return { previous };
     },
@@ -134,7 +155,14 @@ export function useOccurrenceAction(
     onSuccess: (updated) => {
       if (updated) replace((list) => list.map((occ) => (occ._id === updated._id ? updated : occ)));
     },
-    // A queued action keeps the optimistic list; a refetch would fail offline anyway.
-    onSettled: (updated, error) => (updated === null && !error ? undefined : queryClient.invalidateQueries({ queryKey })),
+    // A queued action keeps the optimistic list; a refetch would fail offline anyway. A retract
+    // is never queued, so its list (and the due list, which the deleted work had restarted) is refetched.
+    onSettled: (updated, error, action) => {
+      if (action.kind === 'retract') {
+        void queryClient.invalidateQueries({ queryKey: ['due'] });
+        return queryClient.invalidateQueries({ queryKey });
+      }
+      return updated === null && !error ? undefined : queryClient.invalidateQueries({ queryKey });
+    },
   });
 }

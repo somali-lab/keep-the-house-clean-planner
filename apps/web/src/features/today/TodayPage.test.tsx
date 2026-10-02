@@ -238,6 +238,68 @@ describe('TodayPage', () => {
     expect(await inSection('Afgerond', 'Overgeslagen: geen tijd')).toBeInTheDocument();
   });
 
+  it('marks recorded extra work with an Extra badge, and its undo retracts instead of uncompleting', async () => {
+    storeProfile(ANNA._id);
+    db = [
+      makeOccurrence({
+        _id: 'o-extra',
+        taskId: 't2',
+        taskNameSnapshot: 'Badkamer',
+        date: TODAY,
+        assigneeId: ANNA._id,
+        status: 'done',
+        completedBy: ANNA._id,
+        completedAt: NOW.toISOString(),
+        origin: 'adhoc',
+        recordedDone: true,
+      }),
+      makeOccurrence({ _id: 'o-plain', taskId: 't3', taskNameSnapshot: 'Ramen', date: TODAY, assigneeId: ANNA._id, status: 'done', completedBy: ANNA._id }),
+    ];
+    const fetchMock = mockApi({
+      '/api/users': [ANNA, BRAM],
+      '/api/settings': makeSettings(),
+      '/api/rooms': [makeRoom({ _id: 'r1', name: 'Badkamer-ruimte' })],
+      '/api/tasks': [makeTask({ _id: 't2', name: 'Badkamer', roomId: 'r1' })],
+      '/api/occurrences': () => db,
+      'POST /api/occurrences/o-extra/retract': () => {
+        db = db.filter((o) => o._id !== 'o-extra');
+        return { retracted: true, id: 'o-extra' };
+      },
+    });
+    renderWithProviders(<TodayPage now={NOW} />);
+
+    const finished = await screen.findByRole('region', { name: 'Afgerond' });
+    const rows = within(finished).getAllByRole('listitem');
+    expect(rows).toHaveLength(2);
+    expect(within(rows[0]!).getByText('Extra')).toBeInTheDocument();
+    expect(within(rows[1]!).queryByText('Extra')).not.toBeInTheDocument();
+
+    fireEvent.click(within(rows[0]!).getByRole('button', { name: 'Badkamer ongedaan maken' }));
+    await waitFor(() => expect(within(screen.getByRole('region', { name: 'Afgerond' })).queryByText('Extra')).not.toBeInTheDocument());
+    expect(patchBodies(fetchMock, 'o-extra')).toEqual([]);
+    expect(fetchMock.mock.calls.filter(([u, init]) => u === '/api/occurrences/o-extra/retract' && (init as RequestInit).method === 'POST')).toHaveLength(1);
+    expect(db.map((o) => o._id)).toEqual(['o-plain']);
+  });
+
+  it('treats a second retract (404) as already undone', async () => {
+    storeProfile(ANNA._id);
+    db = [
+      makeOccurrence({ _id: 'o-extra', taskId: 't2', taskNameSnapshot: 'Badkamer', date: TODAY, assigneeId: ANNA._id, status: 'done', completedBy: ANNA._id, origin: 'adhoc', recordedDone: true }),
+    ];
+    mockApi({
+      '/api/users': [ANNA, BRAM],
+      '/api/settings': makeSettings(),
+      '/api/rooms': [],
+      '/api/tasks': [],
+      '/api/occurrences': () => db,
+      // The record is gone already: the mock has no retract route and answers 404.
+    });
+    renderWithProviders(<TodayPage now={NOW} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Badkamer ongedaan maken' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Badkamer ongedaan maken' })).toBeInTheDocument());
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('claims an unclaimed item', async () => {
     setup();
     renderWithProviders(<TodayPage now={NOW} />);

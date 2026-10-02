@@ -26,7 +26,8 @@ import { HttpError } from '../http/errors.ts';
 
 /**
  * Clears execution history while preserving people, rooms, tasks and cycle plans.
- * Without `before`, every occurrence resets to open ("start over from today"). With `before`,
+ * Without `before`, every occurrence resets to open ("start over from today"), except recorded
+ * extra work, which has no planned state and is deleted. With `before`,
  * only occurrences and cycles strictly older than that day are purged; anything from `before`
  * onward (including its completion status) is left untouched.
  */

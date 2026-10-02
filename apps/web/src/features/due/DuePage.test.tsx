@@ -92,12 +92,45 @@ describe('DuePage', () => {
     await waitFor(() => expect(screen.queryByRole('form')).not.toBeInTheDocument());
   });
 
-  it('"Nu gedaan" adds an occurrence for today and completes it', async () => {
+  it('"Nu gedaan" records the execution in one request, already done, with an idempotency key', async () => {
     const fetchMock = setup();
     renderWithProviders(<DuePage now={NOW} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Stofzuigen nu gedaan' }));
-    await waitFor(() => expect(callsTo(fetchMock, 'PATCH', '/api/occurrences/new1')).toEqual([{ action: 'complete' }]));
-    expect(callsTo(fetchMock, 'POST', '/api/occurrences')).toEqual([{ taskId: 't2', date: '2026-09-16', assigneeId: ANNA._id }]);
+    await waitFor(() => expect(callsTo(fetchMock, 'POST', '/api/occurrences')).toHaveLength(1));
+    expect(callsTo(fetchMock, 'POST', '/api/occurrences')).toEqual([
+      { taskId: 't2', date: '2026-09-16', done: true, requestId: expect.stringMatching(/^[A-Za-z0-9_-]{16,64}$/) },
+    ]);
+    expect(fetchMock.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === 'PATCH')).toEqual([]);
+  });
+
+  it('keeps the key when the same click is retried after a failure, and uses a new one after it succeeded', async () => {
+    let attempts = 0;
+    const fetchMock = mockApi({
+      '/api/users': [ANNA, BRAM],
+      '/api/settings': makeSettings(),
+      '/api/due': DUE,
+      'POST /api/occurrences': () => {
+        attempts += 1;
+        if (attempts === 1) throw new TypeError('network down');
+        return { _id: `new${attempts}` };
+      },
+    });
+    storeProfile(ANNA._id);
+    renderWithProviders(<DuePage now={NOW} />);
+    const button = await screen.findByRole('button', { name: 'Stofzuigen nu gedaan' });
+    fireEvent.click(button);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Dat lukte niet');
+    await waitFor(() => expect(button).toBeEnabled());
+    fireEvent.click(button);
+    await waitFor(() => expect(callsTo(fetchMock, 'POST', '/api/occurrences')).toHaveLength(2));
+    const [first, second] = callsTo(fetchMock, 'POST', '/api/occurrences') as { requestId: string }[];
+    expect(second!.requestId).toBe(first!.requestId);
+
+    // A deliberate second execution after the first one succeeded is a new intent.
+    await waitFor(() => expect(button).toBeEnabled());
+    fireEvent.click(button);
+    await waitFor(() => expect(callsTo(fetchMock, 'POST', '/api/occurrences')).toHaveLength(3));
+    expect((callsTo(fetchMock, 'POST', '/api/occurrences')[2] as { requestId: string }).requestId).not.toBe(first!.requestId);
   });
 
   it('uses the configured control for completing a due task', async () => {

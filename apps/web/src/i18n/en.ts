@@ -287,6 +287,7 @@ export const en = {
   "today.skipConfirm": "Confirm skip",
   "today.undo": "Undo",
   "today.undoNamed": "Undo {task}",
+  "today.extra": "Extra",
   "today.snackbar": "\"{task}\" checked off.",
   "today.overdueSince": "Overdue — scheduled for {date}",
   "today.movedFrom": "moved from {date}",
