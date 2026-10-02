@@ -557,7 +557,7 @@ function ActivationPreviewSection({
             const date = formatPreviewDate(item.date);
             return (
               <li
-                key={`${item.occurrenceId ?? item.taskId}-${item.date}-${index}`}
+                key={`${item.occurrenceId ?? item.taskId ?? "none"}-${item.date}-${index}`}
                 className="rounded-md bg-muted/50 px-2 py-1"
               >
                 <span className="font-medium">{item.taskName}</span>

@@ -107,7 +107,7 @@ Exactly one plan is active at a time. Inactive plans are kept, so alternatives a
 ### `occurrences`
 
 ```
-_id, taskId, cycleId, planId | null, date, plannedDate,
+_id, taskId | null, cycleId, planId | null, date, plannedDate,   // taskId null = one-off task
 assigneeId | null,
 status: 'open' | 'done' | 'skipped',
 statusBeforeCompletion: 'open' | 'skipped' | null,
@@ -123,6 +123,7 @@ requestId: string | null         // missing on older data = null
 - `statusBeforeCompletion` exists so that undoing a completion restores the previous status rather than defaulting to open.
 - `recordedDone` marks an occurrence that was created directly in the done state (an extra execution that already happened). It has no planned state to return to, so undoing it deletes it instead of reopening it.
 - `requestId` is the client's idempotency key of an ad-hoc creation; a repeated request with the same key does not create a second occurrence.
+- `taskId` is `null` for a one-off task (see 4.4): it has no task record, and its name, duration and room live only in the snapshot fields, which are always written (`null` for a missing room).
 
 ### `auditLog`
 
@@ -187,7 +188,7 @@ dismissedPromotions: [ ... ]
 - Saving slots in the active plan synchronizes future generated occurrences immediately. The resulting tasks appear on their assigned dates and for their assigned people when those dates are within the selected range in the week overview or My tasks, including after a page reload. Saving slots in an inactive draft does not change those overviews.
 - Vacation ranges suppress generation on those dates. The due engine keeps counting the days.
 - Activating a different plan replaces only future occurrences that are still replaceable — untouched, generated, open ones. Anything completed, skipped, rescheduled, or created ad hoc survives, because it records something that actually happened.
-- Before a person activates a plan, show an inspectable preview for the current and next cycle: the open generated occurrences to replace, the occurrences expected from the new plan, and separate groups for completed, skipped, manually moved, and ad-hoc occurrences that remain. Show counts plus each task's date and assignee. Previewing makes no changes.
+- Before a person activates a plan, show an inspectable preview for the current and next cycle: the open generated occurrences to replace, the occurrences expected from the new plan, and separate groups for completed, skipped, manually moved, and ad-hoc occurrences that remain (extra executions and one-off tasks; a one-off task has no task id and is shown by its name). Show counts plus each task's date and assignee. Previewing makes no changes. Both kinds of ad-hoc occurrence survive activation.
 - An activation confirmation is tied to the state that was previewed. At confirmation, the server recomputes the preview; if the plan, relevant tasks, settings, or occurrences differ, it rejects the confirmation before any activation writes and requires a fresh review.
 
 ### 4.4 Daily use
@@ -206,6 +207,7 @@ dismissedPromotions: [ ... ]
 - Filter choices throughout the app survive a hard reload. A person can visibly reset them, and one household member's saved choices are not silently applied to another member.
 - An extra execution of an existing task is an ad-hoc occurrence, planned or already done, and only within a cycle that has been generated. Several executions of one task on one day coexist, next to the generated occurrence of that day. Planning a task on a day where it already has an open occurrence is allowed and returns the non-blocking warning `task_already_planned`.
   - *Deliberate change:* earlier versions allowed at most one ad-hoc occurrence per task per day, and an ad-hoc occurrence on a slot day suppressed that slot's generated occurrence. Both rules are gone (ADR-0009).
+- A one-off task is work that is done once and has no place in the central task list. It is an ad-hoc occurrence with `taskId: null`, created by `POST /api/occurrences/one-off` with a name (trimmed, 1 to 120 characters), an optional active room, a duration in whole minutes (at least 1), a date, an optional assignee (unassigned when omitted, the actor when it is recorded as done), `done` and `requestId`. No task record is created, so a one-off task never appears in the task list, the due list, the planner or the AI input, and it does not take part in the due engine. The same rules as for an extra execution apply to `done`, the idempotency key and retract. An inactive or unknown room is rejected (`inactive_room`, `unknown_room`).
 - "Done just now" is one request that records an extra execution already done: `done: true` is only allowed for today, completes it for the given person (the actor when omitted; "anyone" is rejected), and refreshes the task's `lastCompletedAt`. If the task is already planned today, the Due page completes that occurrence instead.
 - Creating an ad-hoc occurrence takes an optional idempotency key (`requestId`). A repeat of the same request with the same key returns `200` with the stored record and writes and audits nothing; the same key for a different request is rejected with `409 idempotency_key_conflict`. The web client creates one key per user action with `crypto.getRandomValues`, keeps it across retries of that action, and does not queue these requests offline.
 - Undoing recorded work is a separate action, `retract`, because there is no planned state to return to: the occurrence is deleted, audited with the reason `retract`, and `lastCompletedAt` falls back to the newest remaining completion. A second retract answers `404`, which clients treat as already undone. Uncomplete on recorded work is rejected with `409 retract_required`; an ad-hoc occurrence that was planned and completed later still uses uncomplete. Today and the week overview mark recorded extra executions with an "Extra" badge (icon and text).
@@ -236,6 +238,7 @@ ratio     = daysSince / intervalPeriodDays
 - A period is selected either as a number of recent cycles or as a range of calendar weeks.
 - Reports: an overview, fairness between users, workload per user over time, completion rate per task, room and user, configured versus actually achieved intervals, and deviations between planned and actual days.
 - Every chart has an equivalent table, so the same numbers are available without interpreting a graphic.
+- One-off tasks count like any other occurrence in workload, fairness, the overview and the completion totals per user. Per task, all one-off tasks share one combined row labelled "One-off Task". Per room they count under the room recorded on the occurrence, and one-off tasks without a room share one row without a room. They are left out of the interval report (they have no configured interval) and out of the deviation report, as are recorded extra executions, because nothing was planned.
 - An administrator can reset statistics completely, or purge only the completion data before a chosen date. Starting over deletes recorded extra executions instead of reopening them, because they have no planned state to return to.
 
 ### 4.8 Completion management
@@ -248,7 +251,7 @@ ratio     = daysSince / intervalPeriodDays
 Every state change is recorded with who, when, which entity, which action, the changed fields before and after, and the origin of the change.
 
 - Completing, undoing, skipping, rescheduling, assigning and claiming are each their own entry. Undoing is a new entry, never the removal of the original.
-- Creating an extra execution writes one `create` entry with its final fields, including status and completion, and `meta: { origin: 'adhoc', kind: 'extra', recordedDone, requestId }`. Retracting recorded work is the one exception to the previous rule: the occurrence is deleted, so the entry is a `delete` with `meta.reason: 'retract'` that keeps the removed fields. A replayed request writes no entry.
+- Creating an extra execution writes one `create` entry with its final fields, including status and completion, and `meta: { origin: 'adhoc', kind: 'extra' | 'one_off', recordedDone, requestId }` (a one-off task uses `kind: 'one_off'`). Retracting recorded work is the one exception to the previous rule: the occurrence is deleted, so the entry is a `delete` with `meta.reason: 'retract'` that keeps the removed fields. A replayed request writes no entry.
 - Task, room, user, plan and settings changes record old and new values per changed field.
 - Applying an AI proposal is recorded with an AI origin, so a machine-made plan is always distinguishable from a hand-made one.
 - Generation is recorded with a system origin, so an unexpected occurrence can be traced to the run that created it.
@@ -314,7 +317,7 @@ The fridge is a legitimate output device. The schedule must work without a phone
 ### 6.3 Content rules
 
 - The sheet is a blank checklist. It shows what is planned and nothing about status — no completion marks, no "done by" column.
-- It exports generated occurrences, not the template, so rescheduled items appear where they actually sit.
+- It exports generated occurrences, not the template, so rescheduled items appear where they actually sit. One-off tasks are included, with their room taken from the occurrence (no room when they have none).
 - Only weeks that have already been generated can be exported. The interface states this instead of producing an empty sheet.
 - Paper and application do not synchronise. One line on the sheet says so.
 - The output is black-and-white safe: no information is carried by colour alone.
@@ -372,7 +375,8 @@ POST   /api/cycle-plans/:id/apply-proposal  POST /api/cycle-plans/:id/discard
 
 GET    /api/occurrences                     POST /api/occurrences
 PATCH  /api/occurrences/:id                 POST /api/occurrences/:id/claim
-POST   /api/occurrences/:id/retract         DELETE /api/occurrences/:id
+POST   /api/occurrences/one-off             POST /api/occurrences/:id/retract
+DELETE /api/occurrences/:id
 GET    /api/due
 
 GET    /api/promote-suggestions
@@ -399,6 +403,8 @@ GET    /api/export/json                     POST /api/import/json
 ```
 
 `POST /api/occurrences` takes `{ taskId, date, assigneeId?, done?, requestId? }` and answers `201` with the occurrence and its `warnings`, or `200` when a repeated `requestId` replays the stored record. Errors: `400 validation_error` (`unknown_task`, `inactive_task`, `unknown_user`, `inactive_user`, `done_requires_today`, `done_requires_person`), `409 cycle_not_generated`, `409 idempotency_key_conflict`. `POST /api/occurrences/:id/retract` answers `200 { retracted: true, id }`, `409 not_retractable` for anything but recorded extra work, and `404` when it is already gone.
+
+`POST /api/occurrences/one-off` takes `{ name, roomId?, durationMinutes, date, assigneeId?, done?, requestId? }` and answers like `POST /api/occurrences`: `201` with the occurrence (`taskId: null`) and `warnings`, or `200` on a replay. Errors: `400 validation_error` (`unknown_room`, `inactive_room`, `unknown_user`, `inactive_user`, `done_requires_today`, `done_requires_person`), `409 cycle_not_generated`, `409 idempotency_key_conflict`. A repeated key matches when the stored one-off task has the same name, date and `recordedDone`.
 
 `PATCH /api/occurrences/:id` is a single endpoint carrying an explicit action: complete, uncomplete, edit a completion, skip, reschedule or assign. The action is part of the request, so history records intent rather than an inferred difference.
 

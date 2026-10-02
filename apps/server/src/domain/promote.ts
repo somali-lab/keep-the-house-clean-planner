@@ -51,6 +51,7 @@ export async function computePromoteSuggestions(db: Db, now: Date): Promise<Prom
   const taskName = new Map(tasks.map((t) => [t._id.toHexString(), t.name]));
   const byPlannedDay = new Map<string, OccurrenceDoc>();
   for (const occ of occurrences) {
+    if (!occ.taskId) continue;
     byPlannedDay.set(`${occ.taskId.toHexString()}|${toDayKey(occ.plannedDate, tz)}`, occ);
   }
 

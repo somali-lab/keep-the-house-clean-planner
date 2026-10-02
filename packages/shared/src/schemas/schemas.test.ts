@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_INTERVALS,
+  activationPreviewItemSchema,
+  createOneOffOccurrenceInputSchema,
   createTaskInputSchema,
+  occurrenceSchema,
   patchOccurrenceInputSchema,
   updateSettingsInputSchema,
   vacationRangeSchema,
@@ -53,5 +56,67 @@ describe('schemas', () => {
       takeOver: true,
     });
     expect(patchOccurrenceInputSchema.safeParse({ action: 'complete', takeOver: false }).success).toBe(false);
+  });
+});
+
+describe('one-off task schemas', () => {
+  const base = { name: 'Gordijnen ophangen', durationMinutes: 40, date: '2026-09-19' };
+
+  it('trims the name and accepts every optional field', () => {
+    expect(createOneOffOccurrenceInputSchema.parse({ ...base, name: '  Gordijnen ophangen  ' })).toEqual(base);
+    expect(
+      createOneOffOccurrenceInputSchema.parse({
+        ...base,
+        roomId: null,
+        assigneeId: ID,
+        done: true,
+        requestId: 'one-off-request-key-0001',
+      }),
+    ).toMatchObject({ roomId: null, assigneeId: ID, done: true, requestId: 'one-off-request-key-0001' });
+  });
+
+  it('enforces the name, duration, date and request key bounds', () => {
+    const invalid = [
+      { ...base, name: '   ' },
+      { ...base, name: 'x'.repeat(121) },
+      { ...base, durationMinutes: 0 },
+      { ...base, durationMinutes: 1.5 },
+      { ...base, date: '19-09-2026' },
+      { ...base, roomId: 'nope' },
+      { ...base, requestId: 'short' },
+      { durationMinutes: 40, date: '2026-09-19' },
+    ];
+    for (const input of invalid) expect(createOneOffOccurrenceInputSchema.safeParse(input).success, JSON.stringify(input)).toBe(false);
+    expect(createOneOffOccurrenceInputSchema.safeParse({ ...base, name: 'x'.repeat(120) }).success).toBe(true);
+  });
+
+  it('allows a null taskId on occurrences and activation preview items', () => {
+    const item = { occurrenceId: ID, cycleIndex: 0, taskId: null, taskName: 'Gordijnen ophangen', date: '2026-09-19', assigneeId: null };
+    expect(activationPreviewItemSchema.safeParse(item).success).toBe(true);
+    expect(activationPreviewItemSchema.safeParse({ ...item, taskId: undefined }).success).toBe(false);
+
+    const occurrence = {
+      _id: ID,
+      taskId: null,
+      cycleId: ID,
+      planId: null,
+      date: '2026-09-19',
+      plannedDate: '2026-09-19',
+      assigneeId: null,
+      status: 'open',
+      statusBeforeCompletion: null,
+      completedAt: null,
+      completedBy: null,
+      skipReason: null,
+      durationMinutesSnapshot: 40,
+      taskNameSnapshot: 'Gordijnen ophangen',
+      roomIdSnapshot: null,
+      roomNameSnapshot: null,
+      origin: 'adhoc',
+      createdAt: '2026-09-16T08:00:00.000Z',
+      updatedAt: '2026-09-16T08:00:00.000Z',
+    };
+    expect(occurrenceSchema.safeParse(occurrence).success).toBe(true);
+    expect(occurrenceSchema.safeParse({ ...occurrence, taskId: ID }).success).toBe(true);
   });
 });

@@ -281,6 +281,35 @@ describe('TodayPage', () => {
     expect(db.map((o) => o._id)).toEqual(['o-plain']);
   });
 
+  it('shows a one-off task (no task record) from its snapshots', async () => {
+    storeProfile(ANNA._id);
+    db = [
+      makeOccurrence({
+        _id: 'o-oneoff',
+        taskId: null,
+        taskNameSnapshot: 'Gordijnen ophangen',
+        roomIdSnapshot: 'r1',
+        roomNameSnapshot: 'Woonkamer',
+        date: TODAY,
+        assigneeId: ANNA._id,
+        origin: 'adhoc',
+      }),
+      makeOccurrence({ _id: 'o-roomless', taskId: null, taskNameSnapshot: 'Kast ophalen', date: TODAY, assigneeId: ANNA._id, origin: 'adhoc' }),
+    ];
+    mockApi({
+      '/api/users': [ANNA, BRAM],
+      '/api/settings': makeSettings(),
+      '/api/rooms': [makeRoom({ _id: 'r1', name: 'Woonkamer' })],
+      '/api/tasks': [],
+      '/api/occurrences': () => db,
+    });
+    renderWithProviders(<TodayPage now={NOW} />);
+
+    expect(await screen.findByText('Gordijnen ophangen')).toBeInTheDocument();
+    expect(screen.getByText(/Woonkamer/)).toBeInTheDocument();
+    expect(screen.getByText('Kast ophalen')).toBeInTheDocument();
+  });
+
   it('treats a second retract (404) as already undone', async () => {
     storeProfile(ANNA._id);
     db = [

@@ -52,7 +52,8 @@ export type PutSlotsInput = z.infer<typeof putSlotsInputSchema>;
 export const activationPreviewItemSchema = z.object({
   occurrenceId: objectIdSchema.nullable(),
   cycleIndex: z.number().int(),
-  taskId: objectIdSchema,
+  /** Null for a one-off task (ADR-0009), which has no central task record. */
+  taskId: objectIdSchema.nullable(),
   taskName: z.string(),
   date: dayKeySchema,
   assigneeId: objectIdSchema.nullable(),

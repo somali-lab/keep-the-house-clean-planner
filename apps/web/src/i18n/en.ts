@@ -97,6 +97,8 @@ export const en = {
   "tasks.anyone": "Anyone",
   "tasks.unknownUser": "Unknown profile",
   "tasks.unknownRoom": "Unknown room",
+  "tasks.noRoom": "No room",
+  "tasks.oneOff": "One-off Task",
   "tasks.inactive": "Inactive",
   "tasks.addToRoom": "Add task to {room}",
   "tasks.emptyRoom": "No tasks in this room yet.",

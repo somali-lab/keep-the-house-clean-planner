@@ -23,6 +23,12 @@ import { TrendLines, type TrendSeries } from './TrendLines.tsx';
 const WEEK_PERIODS = [1, 2, 3];
 const CYCLE_PERIODS = [1, 2, 4, 8, 13];
 const GROUP_BY: StatsGroupBy[] = ['task', 'room', 'user'];
+/** Label of the row without a key: one-off tasks, roomless one-off tasks, or work nobody was assigned to. */
+const NULL_ROW_LABEL: Record<StatsGroupBy, MessageKey> = {
+  task: 'tasks.oneOff',
+  room: 'tasks.noRoom',
+  user: 'tasks.anyone',
+};
 
 /** Deviation thresholds for the interval report ("wensdenken"). */
 const LESS_OFTEN = 1.25;
@@ -466,7 +472,7 @@ export function StatsPage() {
                     <tr key={row.key ?? 'none'}>
                       <th scope="row">
                         {row.key === null
-                          ? t('tasks.anyone')
+                          ? t(NULL_ROW_LABEL[completion.data.groupBy])
                           : completion.data.groupBy === 'task'
                             ? taskWithRoom(row.key, row.name)
                             : row.name}

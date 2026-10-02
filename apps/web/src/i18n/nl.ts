@@ -128,6 +128,8 @@ export const nl = {
   'tasks.anyone': 'Wie dan ook',
   'tasks.unknownUser': 'Onbekend profiel',
   'tasks.unknownRoom': 'Onbekende ruimte',
+  'tasks.noRoom': 'Zonder ruimte',
+  'tasks.oneOff': 'Eenmalige taak',
   'tasks.inactive': 'Inactief',
   'tasks.addToRoom': 'Taak toevoegen aan {room}',
   'tasks.emptyRoom': 'Nog geen taken in deze ruimte.',

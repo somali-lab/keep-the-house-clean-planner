@@ -12,7 +12,8 @@ export const requestKeySchema = z.string().regex(/^[A-Za-z0-9_-]{16,64}$/, 'inva
 export const occurrenceSchema = z
   .object({
     _id: objectIdSchema,
-    taskId: objectIdSchema,
+    /** Null for a one-off task (ADR-0009): name, duration and room live in the snapshot fields only. */
+    taskId: objectIdSchema.nullable(),
     cycleId: objectIdSchema,
     planId: objectIdSchema.nullable(),
     date: dayKeySchema,
@@ -59,6 +60,18 @@ export const createOccurrenceInputSchema = z.object({
   requestId: requestKeySchema.optional(),
 });
 export type CreateOccurrenceInput = z.infer<typeof createOccurrenceInputSchema>;
+
+export const createOneOffOccurrenceInputSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  roomId: objectIdSchema.nullable().optional(),
+  durationMinutes: z.number().int().min(1),
+  date: dayKeySchema,
+  assigneeId: objectIdSchema.nullable().optional(),
+  /** Record the work as already done; only allowed for today. */
+  done: z.boolean().optional(),
+  requestId: requestKeySchema.optional(),
+});
+export type CreateOneOffOccurrenceInput = z.infer<typeof createOneOffOccurrenceInputSchema>;
 
 export const patchOccurrenceInputSchema = z.discriminatedUnion('action', [
   z.object({

@@ -7,7 +7,8 @@ import { COLLECTIONS } from './db.ts';
 
 export interface OccurrenceDoc {
   _id: ObjectId;
-  taskId: ObjectId;
+  /** Null for a one-off task (ADR-0009): name, duration and room live in the snapshot fields only. */
+  taskId: ObjectId | null;
   cycleId: ObjectId;
   /** Plan the occurrence was generated from; null for ad-hoc occurrences. */
   planId: ObjectId | null;
@@ -78,7 +79,8 @@ export async function backfillOccurrenceRoomSnapshots(db: Db): Promise<number> {
     })
     .toArray();
   if (docs.length === 0) return 0;
-  const taskIds = [...new Map(docs.map((doc) => [doc.taskId.toHexString(), doc.taskId])).values()];
+  // A one-off task (taskId null) always has its snapshots written and is never matched here.
+  const taskIds = [...new Map(docs.flatMap((doc) => (doc.taskId ? [[doc.taskId.toHexString(), doc.taskId] as const] : []))).values()];
   const tasks = await db.collection<{ _id: ObjectId; roomId: ObjectId }>(COLLECTIONS.tasks).find({ _id: { $in: taskIds } }).toArray();
   const roomIds = [...new Map(tasks.map((task) => [task.roomId.toHexString(), task.roomId])).values()];
   const rooms = await db.collection<{ _id: ObjectId; name: string }>(COLLECTIONS.rooms).find({ _id: { $in: roomIds } }).toArray();
@@ -86,7 +88,7 @@ export async function backfillOccurrenceRoomSnapshots(db: Db): Promise<number> {
   const roomName = new Map(rooms.map((room) => [room._id.toHexString(), room.name]));
   const result = await occurrencesCollection(db).bulkWrite(
     docs.map((doc) => {
-      const roomId = taskRoom.get(doc.taskId.toHexString()) ?? null;
+      const roomId = (doc.taskId ? taskRoom.get(doc.taskId.toHexString()) : null) ?? null;
       return {
         updateOne: {
           filter: { _id: doc._id },

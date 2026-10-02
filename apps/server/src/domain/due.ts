@@ -50,6 +50,7 @@ export async function computeDueList(db: Db, now: Date): Promise<DueList> {
   );
   const nextByTask = new Map<string, (typeof upcoming)[number]>();
   for (const occ of upcoming) {
+    if (!occ.taskId) continue; // a one-off task has no due state (ADR-0009)
     const key = occ.taskId.toHexString();
     if (!nextByTask.has(key)) nextByTask.set(key, occ);
   }

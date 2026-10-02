@@ -111,6 +111,17 @@ describe('describeEntry', () => {
     ).toEqual(['Systeem verwijderde Ramen']);
   });
 
+  it('describes the audit of a one-off task (taskId null) from its snapshots, including a retract', () => {
+    const oneOff = { taskId: null, taskNameSnapshot: 'Gordijnen ophangen', roomIdSnapshot: null, roomNameSnapshot: null, date: '2026-09-16T22:00:00.000Z' };
+    expect(
+      describeEntry(entry({ entity: 'occurrence', entityId: 'ox', action: 'create', after: oneOff, meta: { origin: 'adhoc', kind: 'one_off', recordedDone: true, requestId: null } }), names),
+    ).toEqual(['Anna maakte taak op een dag Gordijnen ophangen op 17-09-2026 aan']);
+    expect(
+      describeEntry(entry({ entity: 'occurrence', entityId: 'ox', action: 'delete', before: oneOff, meta: { reason: 'retract' } }), names),
+    ).toEqual(['Anna verwijderde Gordijnen ophangen op 17-09-2026']);
+    expect(formatValue('taskId', null, names)).toBe('—');
+  });
+
   it('summarises slot changes of a plan', () => {
     const lines = describeEntry(
       entry({ entity: 'cyclePlan', entityId: 'p1', before: { slots: [{}] }, after: { slots: [{}, {}] } }),

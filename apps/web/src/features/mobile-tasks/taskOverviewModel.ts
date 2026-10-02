@@ -4,7 +4,10 @@ import { addDays, daysBetween } from '@huishoudplanner/shared/time';
 import { getLocale } from '../../i18n/runtime.ts';
 
 export interface TaskOverviewRow {
-  taskId: string;
+  /** Null for a one-off task, which has no task record. */
+  taskId: string | null;
+  /** Stable unique key of the row; a one-off task has its own `oneoff:<occurrenceId>` key. */
+  key: string;
   taskName: string;
   roomId: string | null;
   roomName: string;
@@ -27,7 +30,7 @@ export function taskOverviewRows(
   const grouped = new Map<string, TaskOverviewRow>();
 
   for (const occurrence of [...occurrences].sort((a, b) => a.date.localeCompare(b.date))) {
-    const task = taskById.get(occurrence.taskId);
+    const task = occurrence.taskId ? taskById.get(occurrence.taskId) : undefined;
     const roomId = occurrence.roomIdSnapshot ?? task?.roomId ?? null;
     const roomName =
       occurrence.roomNameSnapshot ??
@@ -35,9 +38,11 @@ export function taskOverviewRows(
     const block = Math.floor(daysBetween(periodStart, occurrence.date) / 7);
     const blockStart = addDays(periodStart, block * 7);
     const cycleWeek = weekIndexFor(occurrence.date, cycleAnchorDate) + 1;
-    const groupKey = `${occurrence.taskId}:${roomId ?? ''}:${roomName}:${blockStart}:${cycleWeek}`;
+    // A one-off task never merges with another record: each gets its own row.
+    const groupKey = occurrence.taskId === null ? `oneoff:${occurrence._id}` : `${occurrence.taskId}:${roomId ?? ''}:${roomName}:${blockStart}:${cycleWeek}`;
     const row = grouped.get(groupKey) ?? {
       taskId: occurrence.taskId,
+      key: groupKey,
       taskName: task?.name ?? occurrence.taskNameSnapshot,
       roomId,
       roomName,

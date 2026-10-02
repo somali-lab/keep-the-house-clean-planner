@@ -257,3 +257,32 @@ describe('helpers', () => {
     expect(escapeHtml('<b>"Tom & Jerry\'s"</b>')).toBe('&lt;b&gt;&quot;Tom &amp; Jerry&#39;s&quot;&lt;/b&gt;');
   });
 });
+
+describe('PDF export with a one-off task (taskId null)', { timeout: 60_000 }, () => {
+  it('prints a room-less one-off task from its snapshots, and a one-off task with a room under that room', async () => {
+    const keuken = await seededRoom(t, 'Keuken');
+    const oneOff = (payload: Record<string, unknown>) =>
+      t.app.inject({ method: 'POST', url: '/api/occurrences/one-off', headers: asProfile(p1), payload });
+    expect((await oneOff({ name: 'Kast ophalen', durationMinutes: 25, date: '2026-09-17' })).statusCode).toBe(201);
+    expect(
+      (await oneOff({ name: 'Magnetron ontkalken', roomId: keuken._id.toHexString(), durationMinutes: 15, date: '2026-09-17', assigneeId: p2._id.toHexString() })).statusCode,
+    ).toBe(201);
+
+    const week = await get('/api/export/pdf?fromWeek=2026-W38&weeks=1');
+    expect(week.statusCode, week.body).toBe(200);
+    const { text } = await parsePdf(week.rawPayload);
+    const thursday = between(text, 'donderdag', 'vrijdag').replace(/\s+/g, ' ');
+    expect(thursday).toContain('Kast ophalen');
+    expect(thursday).toContain('Magnetron ontkalken');
+    expect(thursday).toContain('Keuken');
+
+    const day = await get('/api/export/pdf/day?date=2026-09-17');
+    expect(day.statusCode, day.body).toBe(200);
+    expect((await parsePdf(day.rawPayload)).text).toContain('Kast ophalen');
+
+    // The task list and the due list only read tasks, so a one-off task is not in them.
+    const tasks = await get('/api/export/pdf/tasks');
+    expect(tasks.statusCode, tasks.body).toBe(200);
+    expect((await parsePdf(tasks.rawPayload)).text).not.toContain('Kast ophalen');
+  });
+});

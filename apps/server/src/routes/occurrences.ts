@@ -1,6 +1,7 @@
 import {
   addDays,
   createOccurrenceInputSchema,
+  createOneOffOccurrenceInputSchema,
   fromDayKey,
   listOccurrencesQuerySchema,
   patchOccurrenceInputSchema,
@@ -15,6 +16,7 @@ import {
   claimOccurrence,
   completeOccurrence,
   createAdhocOccurrence,
+  createOneOffOccurrence,
   deleteCompletedOccurrence,
   editCompletion,
   retractOccurrence,
@@ -74,6 +76,22 @@ export const occurrenceRoutes: FastifyPluginAsync = async (app) => {
       ...(input.requestId === undefined ? {} : { requestId: input.requestId }),
     });
     // 201 for a new record, 200 when a repeated requestId replays the stored one.
+    return reply.status(result.created ? 201 : 200).send(await viewWithWarnings(result));
+  });
+
+  app.post('/occurrences/one-off', { preHandler: requireActor }, async (request, reply) => {
+    const input = parseOrThrow(createOneOffOccurrenceInputSchema, request.body);
+    const result = await createOneOffOccurrence(auditContext(request), {
+      name: input.name,
+      ...(input.roomId == null ? {} : { roomId: new ObjectId(input.roomId) }),
+      durationMinutes: input.durationMinutes,
+      date: input.date,
+      ...(input.assigneeId === undefined
+        ? {}
+        : { assigneeId: input.assigneeId === null ? null : new ObjectId(input.assigneeId) }),
+      ...(input.done === undefined ? {} : { done: input.done }),
+      ...(input.requestId === undefined ? {} : { requestId: input.requestId }),
+    });
     return reply.status(result.created ? 201 : 200).send(await viewWithWarnings(result));
   });
 

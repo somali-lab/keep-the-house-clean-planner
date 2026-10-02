@@ -443,7 +443,7 @@ function DayColumn({ dayKey, isToday, period, cycleStarted, cycleWeek, showCycle
               key={occ._id}
               occ={occ}
               users={users}
-              roomName={occ.roomNameSnapshot ?? roomByTask.get(occ.taskId) ?? t('tasks.unknownRoom')}
+              roomName={occ.roomNameSnapshot ?? (occ.taskId ? (roomByTask.get(occ.taskId) ?? t('tasks.unknownRoom')) : t('tasks.noRoom'))}
               completionControl={completionControl}
               onComplete={onComplete}
               onUncomplete={onUncomplete}

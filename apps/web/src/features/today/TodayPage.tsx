@@ -249,7 +249,7 @@ export function TodayPage({ now }: { now?: Date }) {
                 <OccurrenceItem
                   key={occ._id}
                   occurrence={occ}
-                  roomName={occ.roomNameSnapshot ?? roomByTask.get(occ.taskId)}
+                  roomName={occ.roomNameSnapshot ?? (occ.taskId ? roomByTask.get(occ.taskId) : undefined)}
                   users={activeUsers}
                   completionControl={settings.data.completionControl ?? 'circle'}
                   onComplete={() => requestComplete(occ)}

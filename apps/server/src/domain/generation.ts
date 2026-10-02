@@ -170,8 +170,8 @@ export async function generateUpcoming(
   };
 }
 
-function occurrenceKey(taskId: ObjectId, plannedDate: Date): string {
-  return `${taskId.toHexString()}:${plannedDate.getTime()}`;
+function occurrenceKey(taskId: ObjectId | null, plannedDate: Date): string {
+  return `${taskId?.toHexString() ?? 'none'}:${plannedDate.getTime()}`;
 }
 
 async function upcomingOccurrencesNeedReplacement(
