@@ -1,3 +1,4 @@
+using Huishoudplanner.Domain.Ai;
 using Huishoudplanner.Domain.CyclePlans;
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Ports.Driven;
@@ -91,6 +92,41 @@ internal sealed class MongoCyclePlanStore : ForStoringCyclePlans
             { "source", PlanSources.Manual },
             { "proposalId", BsonNull.Value },
             { "rationale", BsonNull.Value },
+            { "discarded", false },
+            { "createdAt", now },
+            { "updatedAt", now },
+        };
+        try
+        {
+            await plans.InsertOneAsync(session, document, cancellationToken: cancellationToken).ConfigureAwait(false);
+            return ToPlan(document);
+        }
+        catch (Exception e) when (IsFailure(e))
+        {
+            return Failed("insert", e);
+        }
+    }
+
+    public async Task<OneOf<CyclePlan, PortError>> InsertProposalAsync(NewPlanProposal proposal, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(proposal);
+        if (MongoTransactionContext.Session is not { IsInTransaction: true } session)
+        {
+            return NoTransaction();
+        }
+
+        var now = new BsonDateTime(proposal.CreatedAt.UtcDateTime);
+        var document = new BsonDocument
+        {
+            { "_id", ObjectId.GenerateNewId() },
+            { "name", proposal.Name },
+            { "active", false },
+            { "slots", ToBson(proposal.Slots) },
+            { "weekThemes", new BsonArray(proposal.WeekThemes) },
+            { "draft", true },
+            { "source", PlanSources.Ai },
+            { "proposalId", proposal.ProposalId },
+            { "rationale", new BsonArray(proposal.Rationale) },
             { "discarded", false },
             { "createdAt", now },
             { "updatedAt", now },

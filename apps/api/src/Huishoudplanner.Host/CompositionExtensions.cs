@@ -11,6 +11,7 @@ using Huishoudplanner.Application;
 using Huishoudplanner.Domain.Ports.Driven;
 using Huishoudplanner.Domain.Ports.Driving;
 using Huishoudplanner.Adapters.Http.Rooms;
+using Huishoudplanner.Host.Ai;
 using Huishoudplanner.Host.Audit;
 using Huishoudplanner.Host.Configuration;
 using Huishoudplanner.Host.Startup;
@@ -45,6 +46,7 @@ public static class CompositionExtensions
         services.AddRooms();
         services.AddTasks();
         services.AddCyclePlans();
+        services.AddAi();
         services.AddNotifications();
         services.AddAuditLog();
         return services;
@@ -59,6 +61,7 @@ public static class CompositionExtensions
         app.MapRoomEndpoints();
         app.MapTasks();
         app.MapCyclePlans();
+        app.MapAi();
         app.MapAuditEndpoints();
         app.MapMetaEndpoints();
         app.MapCalendarEndpoints();

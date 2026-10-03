@@ -5,6 +5,7 @@
     <ProjectReference Include="..\..\src\Huishoudplanner.Application\Huishoudplanner.Application.csproj" />
     <ProjectReference Include="..\..\src\Huishoudplanner.Adapters.Mongo\Huishoudplanner.Adapters.Mongo.csproj" />
     <ProjectReference Include="..\..\src\Huishoudplanner.Adapters.Http\Huishoudplanner.Adapters.Http.csproj" />
+    <ProjectReference Include="..\..\src\Huishoudplanner.Adapters.Ai\Huishoudplanner.Adapters.Ai.csproj" />
     <ProjectReference Include="..\..\src\Huishoudplanner.Host\Huishoudplanner.Host.csproj" />
   </ItemGroup>
 

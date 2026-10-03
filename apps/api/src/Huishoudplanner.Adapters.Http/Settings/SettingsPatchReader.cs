@@ -33,6 +33,32 @@ internal sealed class SettingsPatchReader
             : (null, new ValidationErrors(reader.errors.ToDictionary(e => e.Key, e => e.Value.ToArray(), StringComparer.Ordinal)));
     }
 
+    /// <summary>
+    /// Reads the body of the connection test, <c>{ aiProvider }</c>: only that part, with the paths and codes of the settings patch
+    /// (<c>aiProvider.type</c>: <c>invalid_enum</c>). The rules about the values are checked by the use case.
+    /// </summary>
+    public static (AiProviderSettings? Provider, ValidationErrors? Errors) ReadProviderBody(JsonElement body)
+    {
+        var reader = new SettingsPatchReader();
+        AiProviderSettings? provider = null;
+        if (body.ValueKind != JsonValueKind.Object)
+        {
+            reader.Fail("body", ExpectedObject);
+        }
+        else if (!body.TryGetProperty("aiProvider", out var element))
+        {
+            reader.Fail("aiProvider", RequiredMessage);
+        }
+        else
+        {
+            provider = reader.ReadProvider(element, "aiProvider");
+        }
+
+        return reader.errors.Count == 0
+            ? (provider, null)
+            : (null, new ValidationErrors(reader.errors.ToDictionary(e => e.Key, e => e.Value.ToArray(), StringComparer.Ordinal)));
+    }
+
     private SettingsPatch ReadPatch(JsonElement body)
     {
         if (body.ValueKind != JsonValueKind.Object)

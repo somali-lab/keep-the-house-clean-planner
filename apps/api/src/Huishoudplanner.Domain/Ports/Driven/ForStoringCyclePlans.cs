@@ -1,3 +1,4 @@
+using Huishoudplanner.Domain.Ai;
 using Huishoudplanner.Domain.CyclePlans;
 using Huishoudplanner.Domain.Errors;
 using OneOf;
@@ -31,6 +32,9 @@ public interface ForStoringCyclePlans
 
     /// <summary>Stores a new plan (manual, not a draft, no proposal); the store assigns the id and sets both timestamps to the <c>CreatedAt</c> of the new plan.</summary>
     Task<OneOf<CyclePlan, PortError>> InsertAsync(NewCyclePlan plan, CancellationToken cancellationToken);
+
+    /// <summary>Stores an AI draft (inactive, <c>draft: true</c>, <c>source: ai</c>, with proposal id and rationale); the store assigns the id and sets both timestamps to the <c>CreatedAt</c> of the proposal.</summary>
+    Task<OneOf<CyclePlan, PortError>> InsertProposalAsync(NewPlanProposal proposal, CancellationToken cancellationToken);
 
     /// <summary>Sets the given fields and <c>updatedAt</c>; returns the plan as stored afterwards.</summary>
     Task<OneOf<CyclePlan, NotFound, PortError>> UpdateMetaAsync(string id, PlanMetaChanges changes, DateTimeOffset updatedAt, CancellationToken cancellationToken);
