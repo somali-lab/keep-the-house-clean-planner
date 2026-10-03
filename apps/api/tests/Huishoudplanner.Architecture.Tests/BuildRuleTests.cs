@@ -30,6 +30,9 @@ public class BuildRuleTests
         { "Adapters.Notify", "Microsoft.AspNetCore.App", "<FrameworkReference Include=\"Microsoft.AspNetCore.App\" />" },
         { "Adapters.Jobs", "Microsoft.AspNetCore.OpenApi", "<PackageReference Include=\"Microsoft.AspNetCore.OpenApi\" />" },
         { "Adapters.Pdf", "Microsoft.Extensions.AI.Abstractions", "<PackageReference Include=\"Microsoft.Extensions.AI.Abstractions\" />" },
+        { "Adapters.Http", "Anthropic", "<PackageReference Include=\"Anthropic\" />" },
+        { "Application", "OpenAI", "<PackageReference Include=\"OpenAI\" />" },
+        { "Adapters.Notify", "OllamaSharp", "<PackageReference Include=\"OllamaSharp\" />" },
         { "Domain", "Newtonsoft.Json", "<PackageReference Include=\"Newtonsoft.Json\" />" },
     };
 
@@ -69,6 +72,10 @@ public class BuildRuleTests
 
         BuildRules.Violations("Adapters.Mongo", BuildRules.ParseCsproj(head + "<PackageReference Include=\"MongoDB.Driver\" />" + tail)).Should().BeEmpty();
         BuildRules.Violations("Adapters.Ai", BuildRules.ParseCsproj(head + "<PackageReference Include=\"Microsoft.Extensions.AI\" />" + tail)).Should().BeEmpty();
+        foreach (var package in new[] { "Anthropic", "OpenAI", "OllamaSharp" })
+        {
+            BuildRules.Violations("Adapters.Ai", BuildRules.ParseCsproj(head + $"<PackageReference Include=\"{package}\" />" + tail)).Should().BeEmpty();
+        }
         BuildRules.Violations("Adapters.Pdf", BuildRules.ParseCsproj(head + "<PackageReference Include=\"QuestPDF\" />" + tail)).Should().BeEmpty();
     }
 

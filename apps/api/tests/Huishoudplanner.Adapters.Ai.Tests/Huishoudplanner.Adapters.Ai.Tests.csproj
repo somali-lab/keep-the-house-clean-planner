@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Huishoudplanner.Domain\Huishoudplanner.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Huishoudplanner.Adapters.Ai\Huishoudplanner.Adapters.Ai.csproj" />
+  </ItemGroup>
+
+</Project>
