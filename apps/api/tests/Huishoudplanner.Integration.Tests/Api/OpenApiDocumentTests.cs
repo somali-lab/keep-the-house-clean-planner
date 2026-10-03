@@ -79,6 +79,30 @@ public sealed class OpenApiDocumentTests
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
+    [Fact]
+    public async Task DocumentAndScalarUi_areNotShadowedByTheSpaFallback()
+    {
+        var dist = Directory.CreateTempSubdirectory("openapi-spa").FullName;
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(dist, "index.html"), "<html>spa</html>", TestContext.Current.CancellationToken);
+            using var factory = Development().WithWebDist(dist);
+            using var client = factory.CreateClient();
+
+            var document = await client.GetAsync("/openapi/v2.json", TestContext.Current.CancellationToken);
+            var ui = await client.GetAsync("/scalar/v2", TestContext.Current.CancellationToken);
+            var spa = await client.GetAsync("/some/page", TestContext.Current.CancellationToken);
+
+            document.Content.Headers.ContentType?.MediaType.Should().Be("application/json");
+            (await ui.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).Should().NotContain("<html>spa</html>");
+            (await spa.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).Should().Contain("spa");
+        }
+        finally
+        {
+            Directory.Delete(dist, recursive: true);
+        }
+    }
+
     private static string RepositoryRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

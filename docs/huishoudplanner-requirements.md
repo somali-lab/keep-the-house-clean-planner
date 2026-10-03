@@ -679,6 +679,11 @@ All configuration is supplied through environment variables; nothing is baked in
 | `DISABLE_SCHEDULER` | `true` disables background jobs. Default `false`. |
 | `APP_FAKE_NOW` | An ISO instant with offset that freezes the application clock. Only allowed when `ASPNETCORE_ENVIRONMENT=test`; any other mode refuses to start. |
 | `WEB_DIST_DIR` | Location of the built frontend. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP receiver (an OpenTelemetry or EDOT Collector), for example `http://collector:4317` (gRPC) or `http://collector:4318` (HTTP). Unset means no exporter: the application then logs JSON to stdout only. The per-signal `OTEL_EXPORTER_OTLP_{TRACES,METRICS,LOGS}_ENDPOINT` also work. |
+| `OTEL_EXPORTER_OTLP_PROTOCOL` | `grpc` or `http/protobuf` (the exporter default applies when unset). |
+| `OTEL_EXPORTER_OTLP_HEADERS` | Headers for the receiver as `key=value,key=value`, for example `Authorization=ApiKey <key>` for Elastic. A credential: never logged or exported. |
+| `OTEL_SERVICE_NAME` | `service.name` of the telemetry. Default `huishoudplanner-api`. |
+| `OTEL_RESOURCE_ATTRIBUTES` | Extra resource attributes as `key=value,key=value`. `service.version` is always the application version. |
 
 An empty variable is read as unset. Invalid configuration fails at startup with a message naming the offending variables and never echoing their values.
 

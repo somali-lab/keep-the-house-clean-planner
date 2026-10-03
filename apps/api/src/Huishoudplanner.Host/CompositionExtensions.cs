@@ -1,6 +1,7 @@
 using System.Reflection;
 using Huishoudplanner.Adapters.Http;
 using Huishoudplanner.Adapters.Http.Health;
+using Huishoudplanner.Adapters.Http.WebApp;
 using Huishoudplanner.Adapters.Mongo;
 using Huishoudplanner.Application;
 using Huishoudplanner.Domain.Ports.Driving;
@@ -34,6 +35,12 @@ public static class CompositionExtensions
             // apps/api/openapi/v2.json (generated at build time) is the artefact everything else uses.
             app.MapOpenApi();
             app.MapScalarApiReference();
+        }
+        // Mapped endpoints win over the SPA fallback, so the document and the UI are never shadowed by index.html.
+        if (!BuildTimeGeneration.IsRunning)
+        {
+            // No configuration at build time (and the document describes no web app routes: the fallback is excluded from it).
+            app.UseWebApp(app.Services.GetRequiredService<IOptions<AppOptions>>().Value.WebDistDir);
         }
 
         return app;
