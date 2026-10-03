@@ -128,6 +128,16 @@ public sealed class EndpointPolicyAuditTests
     }
 
     [Fact]
+    public void ThePromoteSuggestions_stayOpenLikeTheNodeRoute()
+    {
+        using var factory = ApiFactory.WithoutDatabase();
+
+        var promote = EndpointsOf(factory).Single(e => e.RoutePattern.RawText == "/api/v2/promote-suggestions");
+
+        promote.Metadata.GetOrderedMetadata<IAuthorizeData>().Should().BeEmpty("the GET of routes/promote.ts has no guard");
+    }
+
+    [Fact]
     public void TheAudit_flagsAnUnprotectedWrite_andAnUnprotectedProtectedRead()
     {
         using var factory = ApiFactory.WithoutDatabase().WithEndpoints(routes =>

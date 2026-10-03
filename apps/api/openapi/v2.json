@@ -1043,6 +1043,38 @@
         }
       }
     },
+    "/api/v2/promote-suggestions": {
+      "get": {
+        "tags": [
+          "Promote"
+        ],
+        "summary": "Suggests moving a slot of the active plan to the weekday its occurrences are repeatedly dragged to.",
+        "description": "Needs no profile. A slot is suggested when, in each of the last promoteThreshold consecutive cycles (a setting of at least two), its occurrence was moved to the same weekday within the same week, and optionally always to the same other person. Cycles still to come that nobody has touched are ignored. A dismissed suggestion returns only with newer evidence. Without an active plan the list is empty.",
+        "operationId": "listPromoteSuggestions",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromoteSuggestionListResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/cycle-plans": {
       "get": {
         "tags": [
@@ -7220,6 +7252,102 @@
           }
         }
       },
+      "PromoteFromSlotResponse": {
+        "required": [
+          "weekIndex",
+          "weekday",
+          "assigneeId"
+        ],
+        "type": "object",
+        "properties": {
+          "weekIndex": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "weekday": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "0 Sunday to 6 Saturday.",
+            "format": "int32"
+          },
+          "assigneeId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "PromoteSuggestionListResponse": {
+        "required": [
+          "items"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PromoteSuggestionResponse"
+            }
+          }
+        }
+      },
+      "PromoteSuggestionResponse": {
+        "required": [
+          "planId",
+          "taskId",
+          "taskName",
+          "fromSlot",
+          "toWeekday",
+          "toAssigneeId",
+          "evidence"
+        ],
+        "type": "object",
+        "properties": {
+          "planId": {
+            "type": "string"
+          },
+          "taskId": {
+            "type": "string"
+          },
+          "taskName": {
+            "type": "string"
+          },
+          "fromSlot": {
+            "$ref": "#/components/schemas/PromoteFromSlotResponse"
+          },
+          "toWeekday": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "The weekday (0 Sunday to 6 Saturday) the occurrences were moved to in every one of the evidence cycles.",
+            "format": "int32"
+          },
+          "toAssigneeId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Set only when every move also went to the same other person."
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The moved occurrences, newest cycle first; the first is the newest evidence."
+          }
+        }
+      },
       "ProposePlanRequest": {
         "required": [
           "taskIds",
@@ -8636,6 +8764,10 @@
     {
       "name": "Due",
       "description": "The due engine: every active task ranked by how far it has drifted past its interval."
+    },
+    {
+      "name": "Promote",
+      "description": "Promote suggestions: slots of the active plan whose occurrences keep being moved the same way."
     },
     {
       "name": "Cycle plans",
