@@ -1,5 +1,6 @@
 using System.Reflection;
 using Huishoudplanner.Adapters.Http;
+using Huishoudplanner.Adapters.Http.Audit;
 using Huishoudplanner.Adapters.Http.Calendar;
 using Huishoudplanner.Adapters.Http.Health;
 using Huishoudplanner.Adapters.Http.Users;
@@ -10,6 +11,7 @@ using Huishoudplanner.Application;
 using Huishoudplanner.Domain.Ports.Driven;
 using Huishoudplanner.Domain.Ports.Driving;
 using Huishoudplanner.Adapters.Http.Rooms;
+using Huishoudplanner.Host.Audit;
 using Huishoudplanner.Host.Configuration;
 using Huishoudplanner.Host.Startup;
 using Huishoudplanner.Host.Users;
@@ -33,11 +35,12 @@ public static class CompositionExtensions
         services.AddSingleton<IMetaService, MetaService>();
         services.AddSingleton(sp => new HouseholdOptions(sp.GetRequiredService<IOptions<AppOptions>>().Value.Timezone));
         services.AddScoped<ICalendarService, CalendarService>();
-        services.TryAddSingleton<ForReadingCycleAnchor, PendingCycleAnchor>();
         services.AddMongoAdapter(sp => sp.GetRequiredService<IOptions<AppOptions>>().Value.MongoUrl);
         services.AddUsers();
         services.AddStartup();
+        services.AddSettings();
         services.AddRooms();
+        services.AddAuditLog();
         return services;
     }
 
@@ -48,8 +51,10 @@ public static class CompositionExtensions
         app.MapHealthEndpoints();
         app.MapUserEndpoints();
         app.MapRoomEndpoints();
+        app.MapAuditEndpoints();
         app.MapMetaEndpoints();
         app.MapCalendarEndpoints();
+        app.MapSettings();
         if (app.Environment.IsDevelopment())
         {
             // The document at /openapi/v2.json and its Scalar UI at /scalar/v2 exist in Development only; the checked-in

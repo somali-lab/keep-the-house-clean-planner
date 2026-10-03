@@ -222,7 +222,7 @@ Each phase ends in something demonstrable. Slices are small enough for one pull 
 
 - [x] 1.1 Users: list, create, patch, browser notification moments, `last_admin` rule, seeding from `SEED_USERS`. Port `users.test.ts`, `seed.test.ts`, `browser-notifications.test.ts`.
 - [x] 1.2 Rooms and `room_in_use`. Port `rooms.test.ts`.
-- [ ] 1.3 Settings: read, patch, the bonus schedule rows with `bonus_schedule_conflict`, currency and cents per point, reward goals, intervals, AI settings without the key, `settings_missing`. Port `settings.test.ts`, `interval-change.test.ts`.
+- [x] 1.3 Settings: read, patch, the bonus schedule rows with `bonus_schedule_conflict`, currency and cents per point, reward goals, intervals, AI settings without the key, `settings_missing`. Port `settings.test.ts`, `interval-change.test.ts`.
 - [x] 1.4 `GET /meta/limits` and `GET /calendar` (§4.3).
 
 ### Phase 2 — Tasks and plans
@@ -250,7 +250,7 @@ Each phase ends in something demonstrable. Slices are small enough for one pull 
 ### Phase 5 — Statistics, history, promotion
 
 - [ ] 5.1 Statistics endpoints and the statistics reset. Port `stats.test.ts`, `stats-reset.test.ts`.
-- [ ] 5.2 Audit log read with cursor paging, clear, retention job. Port `audit-api.test.ts`, `audit-retention.test.ts`.
+- [x] 5.2 Audit log read with cursor paging, clear, retention job. Port `audit-api.test.ts`, `audit-retention.test.ts`.
 - [ ] 5.3 Promote suggestions. Port `promote.test.ts`.
 - [ ] 5.4 Audit coverage and write-route coverage tests over every v2 write endpoint (ADR-0004). Port `audit-coverage.test.ts`, `write-routes-coverage.test.ts`.
 

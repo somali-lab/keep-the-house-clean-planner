@@ -56,4 +56,22 @@ public static partial class ProblemResults
             Type = ProblemTypes.UrnFor(code),
             Detail = detail,
         });
+
+    /// <summary>A problem with named extension members (requirements section 8: <c>keys</c>, <c>count</c>, <c>weeks</c>, ...).</summary>
+    public static IResult Problem(int status, string code, string detail, IReadOnlyDictionary<string, object?> extensions)
+    {
+        ArgumentNullException.ThrowIfNull(extensions);
+        var problem = new ProblemDetails
+        {
+            Status = status,
+            Type = ProblemTypes.UrnFor(code),
+            Detail = detail,
+        };
+        foreach (var (name, value) in extensions)
+        {
+            problem.Extensions[name] = value;
+        }
+
+        return Results.Problem(problem);
+    }
 }

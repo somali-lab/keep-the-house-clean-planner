@@ -89,6 +89,44 @@ public static class AuditNames
         _ => throw new ArgumentOutOfRangeException(nameof(source)),
     };
 
+    /// <summary>The wire names of every entity, in declaration order.</summary>
+    public static IReadOnlyList<string> EntityNames { get; } = [.. Enum.GetValues<AuditEntity>().Select(ToWire)];
+
+    /// <summary>The wire names of every source, in declaration order.</summary>
+    public static IReadOnlyList<string> SourceNames { get; } = [.. Enum.GetValues<AuditSource>().Select(ToWire)];
+
+    /// <summary>Parses a wire name (exact, case sensitive).</summary>
+    public static bool TryParseEntity(string? wire, out AuditEntity entity)
+    {
+        foreach (var candidate in Enum.GetValues<AuditEntity>())
+        {
+            if (ToWire(candidate) == wire)
+            {
+                entity = candidate;
+                return true;
+            }
+        }
+
+        entity = default;
+        return false;
+    }
+
+    /// <summary>Parses a wire name (exact, case sensitive).</summary>
+    public static bool TryParseSource(string? wire, out AuditSource source)
+    {
+        foreach (var candidate in Enum.GetValues<AuditSource>())
+        {
+            if (ToWire(candidate) == wire)
+            {
+                source = candidate;
+                return true;
+            }
+        }
+
+        source = default;
+        return false;
+    }
+
     public static AuditSource SourceOf(ActorSource source) => source switch
     {
         ActorSource.Ui => AuditSource.Ui,

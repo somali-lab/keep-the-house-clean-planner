@@ -127,7 +127,7 @@ public sealed class StartupTests(MongoContainerFixture mongo)
             }
 
             var users = await database.GetCollection<BsonDocument>("users").CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: Ct);
-            var audit = await database.GetCollection<BsonDocument>("auditLog").CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: Ct);
+            var audit = await database.GetCollection<BsonDocument>("auditLog").CountDocumentsAsync(Builders<BsonDocument>.Filter.Eq("entity", "user"), cancellationToken: Ct);
 
             await using (var second = ApiFactory.ForMongo(mongo, databaseName))
             {
@@ -135,7 +135,7 @@ public sealed class StartupTests(MongoContainerFixture mongo)
             }
 
             (await database.GetCollection<BsonDocument>("users").CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: Ct)).Should().Be(users).And.Be(2);
-            (await database.GetCollection<BsonDocument>("auditLog").CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: Ct)).Should().Be(audit).And.Be(2);
+            (await database.GetCollection<BsonDocument>("auditLog").CountDocumentsAsync(Builders<BsonDocument>.Filter.Eq("entity", "user"), cancellationToken: Ct)).Should().Be(audit).And.Be(2);
         }
         finally
         {
@@ -161,7 +161,7 @@ public sealed class StartupTests(MongoContainerFixture mongo)
 
             var names = await database.GetCollection<BsonDocument>("users").Find(FilterDefinition<BsonDocument>.Empty).ToListAsync(Ct);
             names.Select(u => u["name"].AsString).Should().Equal("Solo");
-            (await database.GetCollection<BsonDocument>("auditLog").CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: Ct)).Should().Be(0);
+            (await database.GetCollection<BsonDocument>("auditLog").CountDocumentsAsync(Builders<BsonDocument>.Filter.Eq("entity", "user"), cancellationToken: Ct)).Should().Be(0);
         }
         finally
         {
