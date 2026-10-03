@@ -15,6 +15,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Huishoudplanner.Adapters.Ai.Tests/Huishoudplanner.Adapters.Ai.Tests.csproj" />
+    <Project Path="tests/Huishoudplanner.Adapters.Pdf.Tests/Huishoudplanner.Adapters.Pdf.Tests.csproj" />
     <Project Path="tests/Huishoudplanner.Application.Tests/Huishoudplanner.Application.Tests.csproj" />
     <Project Path="tests/Huishoudplanner.Architecture.Tests/Huishoudplanner.Architecture.Tests.csproj" />
     <Project Path="tests/Huishoudplanner.Domain.Tests/Huishoudplanner.Domain.Tests.csproj" />
