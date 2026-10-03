@@ -3,7 +3,7 @@
 ## Doel en status
 
 Dit document verdeelt de wensenlijst in kleine, zelfstandig te beoordelen wijzigingen.
-**Status: P01, P02 en P04 afgerond; na P04 gepauzeerd op verzoek van de opdrachtgever.**
+**Status: P01, P02 en P04 afgerond. Alle overige pakketten behalve P07 zijn in de nachtrun van 2–3 oktober 2026 uitgevoerd en staan als draft-PR klaar voor beoordeling (#57–#67); P07 staat on hold.**
 Een agent voert **één werkpakket tegelijk** uit en controleert de genoemde
 acceptatiecriteria. Nieuwe, tijdens uitvoering ontdekte productvragen worden
 aan de opdrachtgever gesteld en niet door de agent ingevuld. Dit is een blijvende roadmap;
@@ -310,21 +310,21 @@ meerdere dagen met een datamodelwijziging.
 
 | Werkpakket | Status | Omvang | Wacht op | Resultaat of eerstvolgende stap |
 | --- | --- | --- | --- | --- |
-| P00 — CI-doorlooptijd | Nog niet gestart | M | — | Eerstvolgende pakket bij hervatting. |
+| P00 — CI-doorlooptijd | Draft-PR | M | — | [PR #57](https://github.com/somali-lab/keep-the-house-clean-planner/pull/57); server-job ± 15% sneller door alleen de headless shell te installeren en downloads te cachen. |
 | P01 — Planner naar overzichten | Afgerond | — | — | [PR #51](https://github.com/somali-lab/keep-the-house-clean-planner/pull/51); de actieve planning bleek al te synchroniseren, met regressiedekking en duidelijke uitleg voor conceptplannen. |
 | P02 — Activatievoorbeeld | Afgerond | — | — | [PR #52](https://github.com/somali-lab/keep-the-house-clean-planner/pull/52); inspecteerbare preview en hercontrole bij activatie (ADR-0008). |
-| P03 — AI-conceptplan | Nog niet gestart | S–M | — | Na P09. |
+| P03 — AI-conceptplan | Draft-PR | S–M | — | [PR #60](https://github.com/somali-lab/keep-the-house-clean-planner/pull/60); concept opent na aanmaken in plannenbeheer met AI-kaart; ritmevoorkeur in de prompt. |
 | P04 — Zoeken, weekinformatie, filters | Afgerond | — | — | [PR #53](https://github.com/somali-lab/keep-the-house-clean-planner/pull/53); zoeken, cyclusweken, minuten, profielgebonden filterbehoud en gedateerde blokken in Mijn taken. |
-| P05 — Dagweergave en navigatie | Nog niet gestart | S | — | Na P00. |
-| P06 — Extra uitvoering en ad-hoc taak | Nog niet gestart | L | — | Na P03. |
+| P05 — Dagweergave en navigatie | Draft-PR | S | — | [PR #58](https://github.com/somali-lab/keep-the-house-clean-planner/pull/58); Home-knop rechtsboven in beheer, twee kolommen bij Vandaag → iedereen. |
+| P06 — Extra uitvoering en ad-hoc taak | Draft-PR | L | — | [PR #61](https://github.com/somali-lab/keep-the-house-clean-planner/pull/61); ADR-0009 (Proposed); productvragen in de PR. |
 | P07 — PDF-selectie | On hold | M | — | Alleen hervatten op nieuw expliciet verzoek. |
-| P08 — Browsermeldingen | Nog niet gestart | M | — | Na P06. |
-| P09 — About en projectinformatie | Nog niet gestart | S | — | Na P05; opnieuw controleren of screenshots en README actueel zijn. |
-| P10a — Punten per uitvoering | Nog niet gestart | L | — | Na P06 en P08. |
-| P10b — Week- en cyclusbonussen | Nog niet gestart | M | — | Na P10a. |
-| P10c — Omrekening en inwisselen | Nog niet gestart | M | — | Na P10a. |
-| P11 — Badges | Nog niet gestart | M | — | Na P10a. |
-| P12 — Beloningsmeter | Nog niet gestart | M | — | Na P10b, P10c en P11; begin met afstemming van de badge-indeling. |
+| P08 — Browsermeldingen | Draft-PR | M | — | [PR #62](https://github.com/somali-lab/keep-the-house-clean-planner/pull/62); ADR-0010 (Proposed); werkt alleen via HTTPS of localhost. |
+| P09 — About en projectinformatie | Draft-PR | S | — | [PR #59](https://github.com/somali-lab/keep-the-house-clean-planner/pull/59); About-pagina met releasemoment uit de releasecommit. |
+| P10a — Punten per uitvoering | Draft-PR | L | — | [PR #63](https://github.com/somali-lab/keep-the-house-clean-planner/pull/63), gestapeld op #61; ADR-0011 (Proposed). |
+| P10b — Week- en cyclusbonussen | Draft-PR | M | — | [PR #64](https://github.com/somali-lab/keep-the-house-clean-planner/pull/64), gestapeld op #63; ADR-0012 (Proposed). |
+| P10c — Omrekening en inwisselen | Draft-PR | M | — | [PR #65](https://github.com/somali-lab/keep-the-house-clean-planner/pull/65), gestapeld op #64; ADR-0013 (Proposed). |
+| P11 — Badges | Draft-PR | M | — | [PR #66](https://github.com/somali-lab/keep-the-house-clean-planner/pull/66), gestapeld op #65; ADR-0014 (Proposed). |
+| P12 — Beloningsmeter | Draft-PR | M | — | [PR #67](https://github.com/somali-lab/keep-the-house-clean-planner/pull/67), gestapeld op #66; ADR-0015 (Proposed); badge-indeling nog af te stemmen. |
 
 ### P00 — Meet en herstel de CI-doorlooptijd
 
