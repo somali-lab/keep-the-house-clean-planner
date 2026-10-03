@@ -14,7 +14,7 @@ namespace Huishoudplanner.Integration.Tests.Api;
 /// ADR-0011, <c>points-reconcile.test.ts</c> on the real host and a real replica set: the reconciliation makes the ledger match the occurrences,
 /// idempotently, at startup, in the nightly run and on an administrator's request (<c>POST /api/v2/points/recompute</c>). Old and drifted data is
 /// written straight into the database, which no use case does, to prove the reconciliation repairs it. Monday 2026-09-14 is the first day of cycle 0.
-/// The bonus step, the badge step, the statistics reset and the import are later slices.
+/// The bonus step is in <c>PointsBonusEndpointTests</c>; the badge step and the import are later slices.
 /// </summary>
 public sealed class PointsReconcileEndpointTests(MongoContainerFixture mongo)
 {
@@ -144,16 +144,15 @@ public sealed class PointsReconcileEndpointTests(MongoContainerFixture mongo)
     }
 
     [Fact]
-    public async Task Recompute_neverTouchesAnEntryOfAnotherKind()
+    public async Task Recompute_neverTouchesABookedRedemption()
     {
         await using var h = await PointsHarness.StartAsync(mongo);
-        var bonus = await h.InsertOtherEntryAsync(h.P1, "2026-09-20", 10, "bonus_week_done");
         var redemption = await h.InsertOtherEntryAsync(h.P1, "2026-09-18", -5, "redemption");
 
         var result = await Recompute(h);
 
         (Count(result, "created"), Count(result, "updated"), Count(result, "removed")).Should().Be((0, 0, 0));
-        (await h.EntriesAsync()).Select(e => e["_id"].AsObjectId).Should().BeEquivalentTo([bonus, redemption]);
+        (await h.EntriesAsync()).Select(e => e["_id"].AsObjectId).Should().BeEquivalentTo([redemption]);
         (await Summaries(h)).Should().BeEmpty();
     }
 
