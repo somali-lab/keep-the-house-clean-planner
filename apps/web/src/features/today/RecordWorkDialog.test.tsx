@@ -55,7 +55,7 @@ const posts = (fetchMock: ReturnType<typeof mockApi>, url: string) =>
 const anyPost = (fetchMock: ReturnType<typeof mockApi>) =>
   fetchMock.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === 'POST');
 
-const dialog = () => screen.getByRole('dialog', { name: 'Gedaan werk vastleggen' });
+const dialog = () => screen.getByRole('dialog', { name: 'Extra taak' });
 const submit = () => within(dialog()).getByRole('button', { name: 'Vastleggen' });
 const choose = (name: string) => fireEvent.click(within(dialog()).getByRole('radio', { name }));
 const oneOffChoice = 'Eenmalige taak (komt niet in de takenlijst)';
@@ -312,6 +312,172 @@ describe('RecordWorkDialog', () => {
       await chooseStofzuigen();
       expect(screen.queryByRole('group', { name: /staat vandaag nog open/ })).not.toBeInTheDocument();
       expect(submit()).toBeInTheDocument();
+    });
+  });
+
+  describe('planning instead of recording', () => {
+    const planMode = () => choose('Inplannen');
+    const planSubmit = () => within(dialog()).getByRole('button', { name: 'Inplannen' });
+    const dateField = () => screen.getByLabelText('Datum');
+    async function chooseTask(id: string) {
+      const task = await screen.findByLabelText('Taak', { selector: 'select' });
+      await waitFor(() => expect(within(task).getAllByRole('option')).toHaveLength(3));
+      fireEvent.change(task, { target: { value: id } });
+    }
+    /** Lets the server answer the planning request with an error status. */
+    function refusePlanning(fetchMock: ReturnType<typeof mockApi>, code: string, status: number) {
+      const inner = fetchMock.getMockImplementation()!;
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (input: RequestInfo | URL, init?: RequestInit) =>
+          String(input) === '/api/occurrences' && init?.method === 'POST'
+            ? new Response(JSON.stringify({ code, message: 'refused' }), { status })
+            : inner(input, init),
+        ),
+      );
+    }
+
+    it('offers the mode as a radio group with a legend, defaults to already done, and swaps the person and date fields', async () => {
+      setup();
+      const group = await screen.findByRole('group', { name: 'Wanneer?' });
+      const done = within(group).getByRole('radio', { name: 'Al gedaan (vandaag)' });
+      const plan = within(group).getByRole('radio', { name: 'Inplannen' });
+      expect(done).toBeChecked();
+      expect(plan).not.toBeChecked();
+      expect(plan).toHaveAccessibleDescription('Komt als open taak op de gekozen dag.');
+      expect(screen.getByLabelText('Gedaan door')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Datum')).not.toBeInTheDocument();
+
+      planMode();
+      expect(plan).toBeChecked();
+      expect(screen.queryByLabelText('Gedaan door')).not.toBeInTheDocument();
+      expect(screen.queryByText(/Wordt vastgelegd als gedaan/)).not.toBeInTheDocument();
+      // Today or later, nothing earlier; the person defaults to anyone and lists the active users.
+      expect(dateField()).toHaveValue(TODAY);
+      expect(dateField()).toHaveAttribute('min', TODAY);
+      const who = screen.getByLabelText('Voor wie');
+      expect(who).toHaveValue('');
+      await waitFor(() => expect(within(who).getAllByRole('option')).toHaveLength(3));
+      expect(within(who).getAllByRole('option').map((o) => o.textContent)).toEqual(['Wie dan ook', ANNA.name, BRAM.name]);
+      expect(planSubmit()).toHaveAttribute('type', 'submit');
+
+      choose('Al gedaan (vandaag)');
+      expect(screen.getByLabelText('Gedaan door')).toBeInTheDocument();
+      expect(within(dialog()).getByRole('button', { name: 'Vastleggen' })).toBeInTheDocument();
+    });
+
+    it('plans an extra execution for another person on a later day as an open occurrence', async () => {
+      const { fetchMock, onRecorded, onOpenChange } = setup({
+        'POST /api/occurrences': makeOccurrence({ _id: 'new1', taskId: 't1', origin: 'adhoc', date: '2026-09-18', assigneeId: BRAM._id }),
+      });
+      await chooseTask('t1');
+      planMode();
+      fireEvent.change(dateField(), { target: { value: '2026-09-18' } });
+      fireEvent.change(screen.getByLabelText('Voor wie'), { target: { value: BRAM._id } });
+      fireEvent.click(planSubmit());
+
+      await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
+      expect(posts(fetchMock, '/api/occurrences')).toEqual([
+        { taskId: 't1', date: '2026-09-18', assigneeId: BRAM._id, requestId: expect.stringMatching(KEY) },
+      ]);
+      expect(onRecorded.mock.calls[0]![1]).toBe('planned');
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
+
+    it('plans a one-off task for anyone', async () => {
+      const { fetchMock, onRecorded } = setup({
+        'POST /api/occurrences/one-off': makeOccurrence({ _id: 'new2', taskId: null, origin: 'adhoc', date: '2026-09-20', assigneeId: null }),
+      });
+      await screen.findByLabelText('Taak');
+      choose(oneOffChoice);
+      planMode();
+      fireEvent.change(screen.getByLabelText('Naam van de klus'), { target: { value: 'Zolder opruimen' } });
+      await waitFor(() => expect(within(screen.getByLabelText('Ruimte (optioneel)')).getAllByRole('option')).toHaveLength(2));
+      fireEvent.change(screen.getByLabelText('Ruimte (optioneel)'), { target: { value: 'r1' } });
+      fireEvent.change(screen.getByLabelText('Duur (minuten)'), { target: { value: '90' } });
+      fireEvent.change(dateField(), { target: { value: '2026-09-20' } });
+      fireEvent.click(planSubmit());
+
+      await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
+      expect(posts(fetchMock, '/api/occurrences/one-off')).toEqual([
+        { name: 'Zolder opruimen', roomId: 'r1', durationMinutes: 90, date: '2026-09-20', assigneeId: null, requestId: expect.stringMatching(KEY) },
+      ]);
+      expect(posts(fetchMock, '/api/occurrences')).toEqual([]);
+    });
+
+    it('refuses a day before today next to the date field, linked with aria-describedby', async () => {
+      const { fetchMock } = setup();
+      await chooseTask('t1');
+      planMode();
+      fireEvent.change(dateField(), { target: { value: '2026-09-15' } });
+      fireEvent.click(planSubmit());
+      expect(await screen.findByText('Kies vandaag of een latere dag.')).toBeInTheDocument();
+      expect(dateField()).toBeInvalid();
+      expect(dateField()).toHaveAccessibleDescription('Kies vandaag of een latere dag.');
+      expect(dateField()).toHaveFocus();
+      expect(anyPost(fetchMock)).toEqual([]);
+
+      fireEvent.change(dateField(), { target: { value: '' } });
+      fireEvent.click(planSubmit());
+      expect(await screen.findByText('Kies een datum.')).toBeInTheDocument();
+    });
+
+    it('shows the cycle-not-generated refusal of the server under the date field and keeps the dialog open', async () => {
+      const { fetchMock, onRecorded, onOpenChange } = setup();
+      refusePlanning(fetchMock, 'cycle_not_generated', 409);
+      await chooseTask('t1');
+      planMode();
+      fireEvent.change(dateField(), { target: { value: '2027-03-01' } });
+      fireEvent.click(planSubmit());
+
+      const message = 'Die dag valt nog niet in een aangemaakte cyclus. Kies een eerdere dag.';
+      expect(await screen.findByText(message)).toBeInTheDocument();
+      expect(dateField()).toBeInvalid();
+      expect(dateField()).toHaveAccessibleDescription(message);
+      expect(dateField()).toHaveFocus();
+      expect(onRecorded).not.toHaveBeenCalled();
+      expect(onOpenChange).not.toHaveBeenCalled();
+      expect(screen.queryByText('Vastleggen is niet gelukt. Probeer het opnieuw.')).not.toBeInTheDocument();
+
+      // Changing the day clears the refusal.
+      fireEvent.change(dateField(), { target: { value: '2026-09-18' } });
+      expect(screen.queryByText(message)).not.toBeInTheDocument();
+    });
+
+    it('shows any other 4xx refusal as a planning problem under the date field', async () => {
+      const { fetchMock } = setup();
+      refusePlanning(fetchMock, 'validation_error', 400);
+      await chooseTask('t2');
+      planMode();
+      fireEvent.click(planSubmit());
+      expect(await screen.findByText('Inplannen op deze dag is niet gelukt. Kies een andere dag of probeer het opnieuw.')).toBeInTheDocument();
+      expect(dateField()).toBeInvalid();
+    });
+
+    it('a double click creates one planned record', async () => {
+      const reply = deferred<OccurrenceView>();
+      const { fetchMock, onRecorded } = setup({ 'POST /api/occurrences': () => reply.promise });
+      await chooseTask('t2');
+      planMode();
+      const button = planSubmit();
+      fireEvent.click(button);
+      fireEvent.click(button);
+      expect(await screen.findByRole('button', { name: 'Bezig met inplannen…' })).toBeDisabled();
+      expect(posts(fetchMock, '/api/occurrences')).toHaveLength(1);
+      reply.resolve(makeOccurrence({ _id: 'new1', taskId: 't2', origin: 'adhoc' }));
+      await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
+      expect(posts(fetchMock, '/api/occurrences')).toHaveLength(1);
+    });
+
+    it('only mentions a task that is still planned today when recording as done', async () => {
+      const PLANNED = makeOccurrence({ _id: 'o-planned', taskId: 't1', taskNameSnapshot: 'Stofzuigen', date: TODAY, assigneeId: ANNA._id });
+      setup({ '/api/occurrences': [PLANNED] });
+      await chooseTask('t1');
+      expect(await screen.findByRole('group', { name: /staat vandaag nog open/ })).toBeInTheDocument();
+      planMode();
+      expect(screen.queryByRole('group', { name: /staat vandaag nog open/ })).not.toBeInTheDocument();
+      expect(within(dialog()).queryByRole('button', { name: 'Afvinken' })).not.toBeInTheDocument();
+      expect(planSubmit()).toBeInTheDocument();
     });
   });
 

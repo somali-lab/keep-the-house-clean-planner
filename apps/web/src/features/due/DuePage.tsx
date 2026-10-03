@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { useSettings } from '../../api/queries.ts';
 import { format, t } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
+import { shortDate } from '../today/OccurrenceItem.tsx';
 import { RecordWorkDialog } from '../today/RecordWorkDialog.tsx';
 import { dayKeyInZone } from '../today/todayModel.ts';
 import { useDue, useDueActions, type DueItemView } from './api.ts';
@@ -118,7 +119,11 @@ export function DuePage({ now }: { now?: Date }) {
         initialTaskId={extraFor ?? undefined}
         onRecorded={(occurrence, how) => {
           setFailed(false);
-          setRecorded(format(how === 'recorded' ? 'recordWork.recorded' : 'today.snackbar', { task: occurrence.taskNameSnapshot }));
+          setRecorded(
+            how === 'planned'
+              ? format('recordWork.scheduled', { task: occurrence.taskNameSnapshot, date: shortDate(occurrence.date) })
+              : format(how === 'recorded' ? 'recordWork.recorded' : 'today.snackbar', { task: occurrence.taskNameSnapshot }),
+          );
         }}
       />
     </section>

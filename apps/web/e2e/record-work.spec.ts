@@ -33,9 +33,9 @@ test('record two extra executions and a one-off task, undo one, and keep both ki
 
   await openAs(page, app, anna, '/today');
   const finished = page.getByRole('region', { name: 'Afgerond' });
-  const dialog = page.getByRole('dialog', { name: 'Gedaan werk vastleggen' });
+  const dialog = page.getByRole('dialog', { name: 'Extra taak' });
   const record = async (fill: () => Promise<void>, click: 'click' | 'dblclick' = 'click') => {
-    await page.getByRole('button', { name: 'Werk vastleggen' }).click();
+    await page.getByRole('button', { name: 'Extra taak' }).click();
     await expect(dialog.getByRole('radio', { name: 'Extra keer voor een bestaande taak' })).toBeChecked();
     await fill();
     await dialog.getByRole('button', { name: 'Vastleggen' })[click]();
@@ -113,4 +113,56 @@ test('record two extra executions and a one-off task, undo one, and keep both ki
 
   await page.getByLabel('Voltooiing per').selectOption('room');
   await expect(table.getByRole('row', { name: /Woonkamer/ }).getByRole('cell').first()).toHaveText('2');
+});
+
+test('plan an extra execution and a one-off task for a later day, one of them from the Taken screen', async ({ page, app }) => {
+  const anna = await app.user('Anna');
+  const task = await createTask(app, anna, { name: 'Stofzuigen', room: 'Woonkamer', intervalKey: '1w', durationMinutes: 20 });
+  await generateCycles(app, anna);
+  const records = (date: string) => app.api<ApiRecord[]>('GET', `/api/occurrences?from=${date}&to=${date}`);
+
+  await openAs(page, app, anna, '/today');
+  const dialog = page.getByRole('dialog', { name: 'Extra taak' });
+
+  // Extra execution of an existing task, planned for tomorrow for Anna: an open occurrence, without undo.
+  await page.getByRole('button', { name: 'Extra taak' }).click();
+  await expect(dialog.getByRole('radio', { name: 'Al gedaan (vandaag)' })).toBeChecked();
+  await dialog.getByRole('radio', { name: 'Inplannen' }).check();
+  await dialog.getByLabel('Taak', { exact: true }).selectOption({ label: 'Stofzuigen · Woonkamer' });
+  await dialog.getByLabel('Datum').fill('2026-09-17');
+  await dialog.getByLabel('Voor wie').selectOption({ label: 'Anna' });
+  await dialog.getByRole('button', { name: 'Inplannen' }).click();
+  await expect(dialog).toBeHidden();
+  const snackbar = page.locator('.snackbar');
+  await expect(snackbar).toContainText('"Stofzuigen" is ingepland op do 17-09.');
+  await expect(snackbar.getByRole('button', { name: 'Ongedaan maken' })).toHaveCount(0);
+  await expect.poll(async () => (await records('2026-09-17')).filter((o) => o.taskId === task._id && o.origin === 'adhoc').length).toBe(1);
+  expect((await records('2026-09-17')).find((o) => o.taskId === task._id && o.origin === 'adhoc')).toMatchObject({ status: 'open' });
+
+  // It is open work on that day.
+  await page.getByRole('button', { name: 'Morgen', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Mijn taken' })).toContainText('Stofzuigen');
+
+  // One-off task for anyone, planned from the Taken screen: it shows up there in the dated block after saving.
+  await page.goto(`${app.baseURL}/tasks`);
+  await expect(page.getByRole('heading', { name: 'Mijn taken' })).toBeVisible();
+  await page.getByRole('button', { name: 'Extra taak' }).click();
+  await dialog.getByRole('radio', { name: 'Eenmalige taak (komt niet in de takenlijst)' }).check();
+  await dialog.getByRole('radio', { name: 'Inplannen' }).check();
+  await dialog.getByLabel('Naam van de klus').fill('Gordijnen ophangen');
+  await dialog.getByLabel('Duur (minuten)').fill('40');
+  await dialog.getByLabel('Datum').fill('2026-09-18');
+  await expect(dialog.getByLabel('Voor wie')).toHaveValue('');
+  await dialog.getByRole('button', { name: 'Inplannen' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('region', { name: 'Nog niet toegewezen' })).toContainText('Gordijnen ophangen');
+  await expect.poll(async () => (await records('2026-09-18')).filter((o) => o.taskId === null).length).toBe(1);
+  expect((await records('2026-09-18')).find((o) => o.taskId === null)).toMatchObject({ status: 'open', taskNameSnapshot: 'Gordijnen ophangen' });
+  expect(await app.api<unknown[]>('GET', '/api/tasks')).toHaveLength(1);
+
+  // The day after tomorrow shows it as open work that nobody has picked up yet.
+  await page.goto(`${app.baseURL}/today`);
+  await page.getByRole('button', { name: 'Overmorgen' }).click();
+  await page.getByLabel('Filter op persoon').selectOption('all');
+  await expect(page.getByRole('region', { name: 'Nog niet opgepakt' })).toContainText('Gordijnen ophangen');
 });

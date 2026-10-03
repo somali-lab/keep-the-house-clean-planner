@@ -1,5 +1,5 @@
 import type { OccurrenceView } from '@huishoudplanner/shared';
-import { CirclePlus, ClipboardCheck, Sparkles, TriangleAlert } from 'lucide-react';
+import { CalendarPlus, CircleCheck, CirclePlus, ClipboardCheck, Sparkles, TriangleAlert } from 'lucide-react';
 import { useId, useMemo, useRef, useState, type FormEvent } from 'react';
 import { NativeSelect } from '@/components/NativeSelect';
 import { Button } from '@/components/ui/button';
@@ -7,27 +7,34 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
+import { ApiRequestError } from '../../api/index.ts';
 import { useRooms, useTasks } from '../../api/queries.ts';
-import { format, t } from '../../i18n/nl.ts';
+import { format, t, type MessageKey } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
 import { useCheckOffPlanned, useOccurrences, useRecordWork } from './api.ts';
 import { shortDate } from './OccurrenceItem.tsx';
-import { buildRecordWork, type RecordWorkField, type RecordWorkForm, type RecordWorkKind } from './recordWorkModel.ts';
+import {
+  buildRecordWork,
+  type RecordWorkField,
+  type RecordWorkForm,
+  type RecordWorkKind,
+  type RecordWorkMode,
+} from './recordWorkModel.ts';
 
 interface RecordWorkDialogProps {
   open: boolean;
   onOpenChange(open: boolean): void;
-  /** The day the work is recorded on; recorded work is always done today. */
+  /** Today: work recorded as done is dated today, and a planned day is today or later. */
   todayKey: string;
   /** Opens on "extra" with this task chosen (the Overdue page records an extra for one task). */
   initialTaskId?: string;
-  /** `checkedOff`: the planned occurrence of the task was completed instead of recording an extra one. */
+  /** `checkedOff`: the planned occurrence of the task was completed instead of recording an extra one; `planned`: an open occurrence was created. */
   onRecorded?(occurrence: OccurrenceView, how: RecordWorkHow): void;
 }
 
-export type RecordWorkHow = 'recorded' | 'checkedOff';
+export type RecordWorkHow = 'recorded' | 'checkedOff' | 'planned';
 
-/** Records work that was done and that the plan did not ask for: an extra execution or a one-off task. */
+/** Records (as done today) or plans (as an open occurrence) work the plan did not ask for: an extra execution or a one-off task. */
 export function RecordWorkDialog({ open, onOpenChange, todayKey, initialTaskId, onRecorded }: RecordWorkDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -56,9 +63,18 @@ const KINDS: { kind: RecordWorkKind; label: 'recordWork.kind.extra' | 'recordWor
   { kind: 'oneOff', label: 'recordWork.kind.oneOff', hint: 'recordWork.kind.oneOffHint' },
 ];
 
-const FIELD_ORDER: RecordWorkField[] = ['taskId', 'name', 'duration', 'doneBy'];
+const MODES: {
+  mode: RecordWorkMode;
+  label: 'recordWork.mode.done' | 'recordWork.mode.plan';
+  hint: 'recordWork.mode.doneHint' | 'recordWork.mode.planHint';
+}[] = [
+  { mode: 'done', label: 'recordWork.mode.done', hint: 'recordWork.mode.doneHint' },
+  { mode: 'plan', label: 'recordWork.mode.plan', hint: 'recordWork.mode.planHint' },
+];
+
+const FIELD_ORDER: RecordWorkField[] = ['taskId', 'name', 'duration', 'date', 'doneBy'];
 /** Id suffix of the control of each field. */
-const FIELD_CONTROL: Record<RecordWorkField, string> = { taskId: 'task', name: 'name', duration: 'duration', doneBy: 'done-by' };
+const FIELD_CONTROL: Record<RecordWorkField, string> = { taskId: 'task', name: 'name', duration: 'duration', date: 'date', doneBy: 'done-by' };
 
 const PLANNED_CHOICES: {
   value: 'checkOff' | 'extra';
@@ -90,11 +106,14 @@ function RecordWorkFormBody({
   const formRef = useRef<HTMLFormElement>(null);
   const [chosen, setForm] = useState<RecordWorkForm>({
     kind: 'extra',
+    mode: 'done',
     taskId: initialTaskId ?? '',
     name: '',
     roomId: '',
     duration: '',
     doneBy: '',
+    date: todayKey,
+    planFor: '',
   });
   // Until someone else is chosen, the person doing the recording did the work (the profile may still be loading).
   const form: RecordWorkForm = { ...chosen, doneBy: chosen.doneBy || (profile?._id ?? '') };
@@ -102,6 +121,8 @@ function RecordWorkFormBody({
   const [plannedChoice, setPlannedChoice] = useState<'checkOff' | 'extra'>('checkOff');
   const [submitted, setSubmitted] = useState(false);
   const [failed, setFailed] = useState(false);
+  // The server's refusal of the chosen day while planning (a day outside the generated cycles, or any other 4xx).
+  const [serverDateError, setServerDateError] = useState<MessageKey | null>(null);
   // A second click can arrive before the pending state has rendered, so the guard is synchronous.
   const inFlight = useRef(false);
 
@@ -112,17 +133,23 @@ function RecordWorkFormBody({
   const activeRooms = useMemo(() => (rooms.data ?? []).filter((room) => room.active), [rooms.data]);
   const roomNames = useMemo(() => new Map((rooms.data ?? []).map((room) => [room._id, room.name])), [rooms.data]);
 
+  const planning = form.mode === 'plan';
+  // A planned task that is still open today only matters when the work is recorded as done.
   const planned =
-    form.kind === 'extra' && form.taskId
+    !planning && form.kind === 'extra' && form.taskId
       ? (todayOccurrences.data ?? []).find(
           (occurrence) => occurrence.taskId === form.taskId && occurrence.status === 'open' && occurrence.date === todayKey,
         )
       : undefined;
   const checkingOff = planned !== undefined && plannedChoice === 'checkOff';
   const result = buildRecordWork(form, todayKey);
-  const errors = submitted && !result.ok ? result.errors : {};
+  const validation: Partial<Record<RecordWorkField, MessageKey>> = submitted && !result.ok ? result.errors : {};
+  const errors: Partial<Record<RecordWorkField, MessageKey>> = serverDateError
+    ? { ...validation, date: serverDateError }
+    : validation;
   const set = <K extends keyof RecordWorkForm>(key: K, value: RecordWorkForm[K]) => {
     setFailed(false);
+    setServerDateError(null);
     setForm((current) => ({ ...current, [key]: value }));
   };
   const fieldProps = (field: RecordWorkField) => ({
@@ -150,21 +177,27 @@ function RecordWorkFormBody({
     }
     inFlight.current = true;
     setFailed(false);
+    setServerDateError(null);
     try {
       if (planned && plannedChoice === 'checkOff') {
         onRecorded(await checkOff.mutateAsync({ id: planned._id, completedBy: form.doneBy }), 'checkedOff');
       } else {
-        onRecorded(await record.mutateAsync(result.body), 'recorded');
+        onRecorded(await record.mutateAsync(result.body), planning ? 'planned' : 'recorded');
       }
-    } catch {
-      setFailed(true);
+    } catch (error) {
+      if (planning && error instanceof ApiRequestError && error.status >= 400 && error.status < 500) {
+        setServerDateError(error.code === 'cycle_not_generated' ? 'recordWork.error.cycleNotGenerated' : 'recordWork.error.planRejected');
+        formRef.current?.querySelector<HTMLElement>(`[id="${idPrefix}-date"]`)?.focus();
+      } else {
+        setFailed(true);
+      }
     } finally {
       inFlight.current = false;
     }
   };
 
   const pending = record.isPending || checkOff.isPending;
-  const errorFields = FIELD_ORDER.filter((field) => errors[field]);
+  const errorFields = FIELD_ORDER.filter((field) => validation[field]);
   const noTasks = tasks.isSuccess && activeTasks.length === 0;
 
   return (
@@ -203,6 +236,44 @@ function RecordWorkFormBody({
             </label>
           );
         })}
+      </fieldset>
+
+      <fieldset className="grid gap-2">
+        <legend className="mb-1 text-sm font-semibold">{t('recordWork.mode')}</legend>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {MODES.map(({ mode, label, hint }) => {
+            const selected = form.mode === mode;
+            const Icon = mode === 'done' ? CircleCheck : CalendarPlus;
+            return (
+              <label
+                key={mode}
+                className={cn(
+                  'flex cursor-pointer items-start gap-3 rounded-xl border-2 p-3 transition-colors has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/50',
+                  selected ? 'border-primary bg-primary/5' : 'border-border bg-card hover:bg-secondary/50',
+                )}
+              >
+                <input
+                  type="radio"
+                  name={`${idPrefix}-mode`}
+                  className="mt-1 size-5 shrink-0 accent-primary"
+                  checked={selected}
+                  onChange={() => set('mode', mode)}
+                  aria-labelledby={`${idPrefix}-${mode}-label`}
+                  aria-describedby={`${idPrefix}-${mode}-hint`}
+                />
+                <Icon className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />
+                <span className="grid min-w-0 gap-0.5">
+                  <span id={`${idPrefix}-${mode}-label`} className="leading-snug font-bold">
+                    {t(label)}
+                  </span>
+                  <span id={`${idPrefix}-${mode}-hint`} className="text-sm text-muted-foreground">
+                    {t(hint)}
+                  </span>
+                </span>
+              </label>
+            );
+          })}
+        </div>
       </fieldset>
 
       {form.kind === 'extra' ? (
@@ -311,26 +382,62 @@ function RecordWorkFormBody({
         </>
       )}
 
-      <div className="grid gap-1.5">
-        <Label htmlFor={`${idPrefix}-done-by`}>{t('recordWork.doneBy')}</Label>
-        <NativeSelect
-          id={`${idPrefix}-done-by`}
-          className="[&_select]:h-11"
-          value={form.doneBy}
-          onChange={(event) => set('doneBy', event.target.value)}
-          {...fieldProps('doneBy')}
-        >
-          {form.doneBy === '' && <option value="" />}
-          {activeUsers.map((user) => (
-            <option key={user._id} value={user._id}>
-              {user.name}
-            </option>
-          ))}
-        </NativeSelect>
-        {fieldError('doneBy')}
-      </div>
+      {planning ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-1.5">
+            <Label htmlFor={`${idPrefix}-date`}>{t('recordWork.date')}</Label>
+            <Input
+              id={`${idPrefix}-date`}
+              className="h-11"
+              type="date"
+              min={todayKey}
+              value={form.date}
+              onChange={(event) => set('date', event.target.value)}
+              {...fieldProps('date')}
+            />
+            {fieldError('date')}
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor={`${idPrefix}-plan-for`}>{t('recordWork.planFor')}</Label>
+            <NativeSelect
+              id={`${idPrefix}-plan-for`}
+              className="[&_select]:h-11"
+              value={form.planFor}
+              onChange={(event) => set('planFor', event.target.value)}
+            >
+              <option value="">{t('recordWork.anyone')}</option>
+              {activeUsers.map((user) => (
+                <option key={user._id} value={user._id}>
+                  {user.name}
+                </option>
+              ))}
+            </NativeSelect>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="grid gap-1.5">
+            <Label htmlFor={`${idPrefix}-done-by`}>{t('recordWork.doneBy')}</Label>
+            <NativeSelect
+              id={`${idPrefix}-done-by`}
+              className="[&_select]:h-11"
+              value={form.doneBy}
+              onChange={(event) => set('doneBy', event.target.value)}
+              {...fieldProps('doneBy')}
+            >
+              {form.doneBy === '' && <option value="" />}
+              {activeUsers.map((user) => (
+                <option key={user._id} value={user._id}>
+                  {user.name}
+                </option>
+              ))}
+            </NativeSelect>
+            {fieldError('doneBy')}
+          </div>
 
-      <p className="text-sm text-muted-foreground">{format('recordWork.doneNow', { date: shortDate(todayKey) })}</p>
+          <p className="text-sm text-muted-foreground">{format('recordWork.doneNow', { date: shortDate(todayKey) })}</p>
+        </>
+      )}
 
       {errorFields.length > 0 && (
         <p role="alert" className="flex items-center gap-2 rounded-xl bg-destructive/10 p-3 text-sm font-semibold text-destructive">
@@ -352,7 +459,11 @@ function RecordWorkFormBody({
         </Button>
         <Button type="submit" className="h-11 rounded-full" disabled={pending || !profile}>
           {checkingOff && !pending && <ClipboardCheck aria-hidden="true" />}
-          {pending ? t('recordWork.submitting') : checkingOff ? t('recordWork.checkOff') : t('recordWork.submit')}
+          {pending
+            ? t(planning ? 'recordWork.submittingPlan' : 'recordWork.submitting')
+            : checkingOff
+              ? t('recordWork.checkOff')
+              : t(planning ? 'recordWork.submitPlan' : 'recordWork.submit')}
         </Button>
       </div>
     </form>

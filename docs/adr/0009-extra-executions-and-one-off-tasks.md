@@ -86,6 +86,8 @@ Creation writes one `create` audit entry that contains the final fields, includi
 
 The client derives a request key from `crypto.getRandomValues`, which also works on plain HTTP. It creates one key for each user intent: when the action renders or the dialog opens. Every retry and every rapid repeat click reuses that key, and a new key is created only after the request settles. Ad-hoc creation is not placed in the offline queue.
 
+The web client offers both kinds in one "Extra Task" dialog (Today, the Tasks overview and the Due page) with a choice between "Already Done (Today)", which sends `done: true`, and "Plan", which omits `done` and creates an open ad-hoc occurrence on a chosen day (today or later) for a person or anyone. The same request-key rule applies to both, and a `409 cycle_not_generated` is shown under the date field.
+
 ### Readers of occurrences
 
 | Reader | Extra execution | One-off task (`taskId: null`) |

@@ -169,20 +169,24 @@ export function useOccurrenceAction(
   });
 }
 
-/** Work that was done and was not (or not in this form) in the plan; always recorded as done today (ADR-0009). */
+/**
+ * Work that is not (or not in this form) in the plan (ADR-0009): either recorded as done today (`done`,
+ * with the person who did it) or planned as an open occurrence on a day (`assigneeId` null: anyone).
+ */
 export type RecordWorkInput =
-  | { kind: 'extra'; taskId: string; date: string; assigneeId: string }
+  | { kind: 'extra'; taskId: string; date: string; assigneeId: string | null; done: boolean }
   | {
       kind: 'oneOff';
       name: string;
       roomId: string | null;
       durationMinutes: number;
       date: string;
-      assigneeId: string;
+      assigneeId: string | null;
+      done: boolean;
     };
 
 /**
- * Records an extra execution or a one-off task as done in one request. The request key belongs to the
+ * Records an extra execution or a one-off task as done, or plans it as an open occurrence, in one request. The request key belongs to the
  * intent (kind, task or name, date, person, ...): a repeated click, a retry, or a closed and reopened
  * dialog with the same values reuses it, so the server stores one record; it is dropped once the request
  * succeeded. Not queued offline: the server decides whether the record is new.
@@ -201,7 +205,7 @@ export function useRecordWork() {
                 taskId: input.taskId,
                 date: input.date,
                 assigneeId: input.assigneeId,
-                done: true,
+                ...(input.done ? { done: true } : {}),
                 requestId,
               })
             ).data
@@ -212,7 +216,7 @@ export function useRecordWork() {
                 durationMinutes: input.durationMinutes,
                 date: input.date,
                 assigneeId: input.assigneeId,
-                done: true,
+                ...(input.done ? { done: true } : {}),
                 requestId,
               })
             ).data;
