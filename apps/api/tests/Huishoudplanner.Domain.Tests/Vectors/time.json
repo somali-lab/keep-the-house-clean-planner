@@ -1,0 +1,1603 @@
+{
+  "module": "time",
+  "cases": [
+    {
+      "name": "valid ordinary date",
+      "function": "isDayKey",
+      "input": {
+        "key": "2026-09-14"
+      },
+      "expected": true
+    },
+    {
+      "name": "valid leap day",
+      "function": "isDayKey",
+      "input": {
+        "key": "2028-02-29"
+      },
+      "expected": true
+    },
+    {
+      "name": "invalid: 29 Feb in a non-leap year",
+      "function": "isDayKey",
+      "input": {
+        "key": "2026-02-29"
+      },
+      "expected": false
+    },
+    {
+      "name": "invalid: century is not a leap year",
+      "function": "isDayKey",
+      "input": {
+        "key": "2100-02-29"
+      },
+      "expected": false
+    },
+    {
+      "name": "valid: 400-year rule makes 2000 a leap year",
+      "function": "isDayKey",
+      "input": {
+        "key": "2000-02-29"
+      },
+      "expected": true
+    },
+    {
+      "name": "invalid: 30 Feb",
+      "function": "isDayKey",
+      "input": {
+        "key": "2026-02-30"
+      },
+      "expected": false
+    },
+    {
+      "name": "invalid: month 13",
+      "function": "isDayKey",
+      "input": {
+        "key": "2026-13-01"
+      },
+      "expected": false
+    },
+    {
+      "name": "invalid: day 00",
+      "function": "isDayKey",
+      "input": {
+        "key": "2026-09-00"
+      },
+      "expected": false
+    },
+    {
+      "name": "invalid: unpadded month",
+      "function": "isDayKey",
+      "input": {
+        "key": "2026-9-14"
+      },
+      "expected": false
+    },
+    {
+      "name": "invalid: empty",
+      "function": "isDayKey",
+      "input": {
+        "key": ""
+      },
+      "expected": false
+    },
+    {
+      "name": "invalid: text",
+      "function": "isDayKey",
+      "input": {
+        "key": "nope"
+      },
+      "expected": false
+    },
+    {
+      "name": "invalid: trailing time",
+      "function": "isDayKey",
+      "input": {
+        "key": "2026-09-14T00:00"
+      },
+      "expected": false
+    },
+    {
+      "name": "Amsterdam is ahead of UTC on a summer evening",
+      "function": "today",
+      "input": {
+        "tz": "Europe/Amsterdam",
+        "now": "2026-09-13T22:30:00Z"
+      },
+      "expected": "2026-09-14"
+    },
+    {
+      "name": "UTC keeps the previous day",
+      "function": "today",
+      "input": {
+        "tz": "UTC",
+        "now": "2026-09-13T22:30:00Z"
+      },
+      "expected": "2026-09-13"
+    },
+    {
+      "name": "winter evening: 23:30 UTC is already the next day",
+      "function": "today",
+      "input": {
+        "tz": "Europe/Amsterdam",
+        "now": "2026-12-15T23:30:00Z"
+      },
+      "expected": "2026-12-16"
+    },
+    {
+      "name": "winter: 22:59 UTC is still the same day",
+      "function": "today",
+      "input": {
+        "tz": "Europe/Amsterdam",
+        "now": "2026-12-15T22:59:59Z"
+      },
+      "expected": "2026-12-15"
+    },
+    {
+      "name": "year boundary",
+      "function": "today",
+      "input": {
+        "tz": "Europe/Amsterdam",
+        "now": "2026-12-31T23:00:00Z"
+      },
+      "expected": "2027-01-01"
+    },
+    {
+      "name": "leap day in Amsterdam",
+      "function": "today",
+      "input": {
+        "tz": "Europe/Amsterdam",
+        "now": "2028-02-28T23:00:00Z"
+      },
+      "expected": "2028-02-29"
+    },
+    {
+      "name": "spring forward: last second of the 23-hour day",
+      "function": "toDayKey",
+      "input": {
+        "instant": "2026-03-29T21:59:59Z",
+        "tz": "Europe/Amsterdam"
+      },
+      "expected": "2026-03-29"
+    },
+    {
+      "name": "spring forward: first second of the next day",
+      "function": "toDayKey",
+      "input": {
+        "instant": "2026-03-29T22:00:00Z",
+        "tz": "Europe/Amsterdam"
+      },
+      "expected": "2026-03-30"
+    },
+    {
+      "name": "spring forward: first instant of the 23-hour day",
+      "function": "toDayKey",
+      "input": {
+        "instant": "2026-03-28T23:00:00Z",
+        "tz": "Europe/Amsterdam"
+      },
+      "expected": "2026-03-29"
+    },
+    {
+      "name": "fall back: last second of the 25-hour day",
+      "function": "toDayKey",
+      "input": {
+        "instant": "2026-10-25T22:59:59Z",
+        "tz": "Europe/Amsterdam"
+      },
+      "expected": "2026-10-25"
+    },
+    {
+      "name": "fall back: first second of the next day",
+      "function": "toDayKey",
+      "input": {
+        "instant": "2026-10-25T23:00:00Z",
+        "tz": "Europe/Amsterdam"
+      },
+      "expected": "2026-10-26"
+    },
+    {
+      "name": "fall back: first instant of the 25-hour day",
+      "function": "toDayKey",
+      "input": {
+        "instant": "2026-10-24T22:00:00Z",
+        "tz": "Europe/Amsterdam"
+      },
+      "expected": "2026-10-25"
+    },
+    {
+      "name": "fall back: the repeated hour (first 02:30)",
+      "function": "toDayKey",
+      "input": {
+        "instant": "2026-10-25T00:30:00Z",
+        "tz": "Europe/Amsterdam"
+      },
+      "expected": "2026-10-25"
+    },
+    {
+      "name": "fall back: the repeated hour (second 02:30)",
+      "function": "toDayKey",
+      "input": {
+        "instant": "2026-10-25T01:30:00Z",
+        "tz": "Europe/Amsterdam"
+      },
+      "expected": "2026-10-25"
+    },
+    {
+      "name": "leap day",
+      "function": "toDayKey",
+      "input": {
+        "instant": "2028-02-29T12:00:00Z",
+        "tz": "Europe/Amsterdam"
+      },
+      "expected": "2028-02-29"
+    },
+    {
+      "name": "UTC midnight",
+      "function": "toDayKey",
+      "input": {
+        "instant": "2026-09-14T00:00:00Z",
+        "tz": "UTC"
+      },
+      "expected": "2026-09-14"
+    },
+    {
+      "name": "invalid timezone throws",
+      "function": "toDayKey",
+      "input": {
+        "instant": "2026-09-14T00:00:00Z",
+        "tz": "Not/AZone"
+      },
+      "throws": "RangeError"
+    },
+    {
+      "name": "ordinary summer day",
+      "function": "fromDayKey",
+      "input": {
+        "key": "2026-09-14",
+        "tz": "Europe/Amsterdam"
+      },
+      "expected": "2026-09-13T22:00:00.000Z"
+    },
+    {
+      "name": "ordinary winter day",
+      "function": "fromDayKey",
+      "input": {
+        "key": "2026-12-16",
+        "tz": "Europe/Amsterdam"
+      },
+      "expected": "2026-12-15T23:00:00.000Z"
+    },
+    {
+      "name": "spring forward day starts in CET",
+      "function": "fromDayKey",
+      "input": {
+        "key": "2026-03-29",
+        "tz": "Europe/Amsterdam"
+      },
+      "expected": "2026-03-28T23:00:00.000Z"
+    },
+    {
+      "name": "day after spring forward starts in CEST",
+      "function": "fromDayKey",
+      "input": {
+        "key": "2026-03-30",
+        "tz": "Europe/Amsterdam"
+      },
+      "expected": "2026-03-29T22:00:00.000Z"
+    },
+    {
+      "name": "fall back day starts in CEST",
+      "function": "fromDayKey",
+      "input": {
+        "key": "2026-10-25",
+        "tz": "Europe/Amsterdam"
+      },
+      "expected": "2026-10-24T22:00:00.000Z"
+    },
+    {
+      "name": "day after fall back starts in CET",
+      "function": "fromDayKey",
+      "input": {
+        "key": "2026-10-26",
+        "tz": "Europe/Amsterdam"
+      },
+      "expected": "2026-10-25T23:00:00.000Z"
+    },
+    {
+      "name": "leap day",
+      "function": "fromDayKey",
+      "input": {
+        "key": "2028-02-29",
+        "tz": "Europe/Amsterdam"
+      },
+      "expected": "2028-02-28T23:00:00.000Z"
+    },
+    {
+      "name": "UTC",
+      "function": "fromDayKey",
+      "input": {
+        "key": "2026-09-14",
+        "tz": "UTC"
+      },
+      "expected": "2026-09-14T00:00:00.000Z"
+    },
+    {
+      "name": "invalid key throws",
+      "function": "fromDayKey",
+      "input": {
+        "key": "nope",
+        "tz": "Europe/Amsterdam"
+      },
+      "throws": "RangeError"
+    },
+    {
+      "name": "non-existent date throws",
+      "function": "fromDayKey",
+      "input": {
+        "key": "2026-02-30",
+        "tz": "Europe/Amsterdam"
+      },
+      "throws": "RangeError"
+    },
+    {
+      "name": "invalid timezone throws",
+      "function": "fromDayKey",
+      "input": {
+        "key": "2026-09-14",
+        "tz": "Not/AZone"
+      },
+      "throws": "RangeError"
+    },
+    {
+      "name": "'00:00'",
+      "function": "isTimeOfDay",
+      "input": {
+        "value": "00:00"
+      },
+      "expected": true
+    },
+    {
+      "name": "'07:30'",
+      "function": "isTimeOfDay",
+      "input": {
+        "value": "07:30"
+      },
+      "expected": true
+    },
+    {
+      "name": "'23:59'",
+      "function": "isTimeOfDay",
+      "input": {
+        "value": "23:59"
+      },
+      "expected": true
+    },
+    {
+      "name": "'24:00'",
+      "function": "isTimeOfDay",
+      "input": {
+        "value": "24:00"
+      },
+      "expected": false
+    },
+    {
+      "name": "'7:30'",
+      "function": "isTimeOfDay",
+      "input": {
+        "value": "7:30"
+      },
+      "expected": false
+    },
+    {
+      "name": "'07:60'",
+      "function": "isTimeOfDay",
+      "input": {
+        "value": "07:60"
+      },
+      "expected": false
+    },
+    {
+      "name": "'0730'",
+      "function": "isTimeOfDay",
+      "input": {
+        "value": "0730"
+      },
+      "expected": false
+    },
+    {
+      "name": "''",
+      "function": "isTimeOfDay",
+      "input": {
+        "value": ""
+      },
+      "expected": false
+    },
+    {
+      "name": "summer time in Amsterdam",
+      "function": "fromDayKeyTime",
+      "input": {
+        "key": "2026-09-16",
+        "time": "10:00",
+        "tz": "Europe/Amsterdam"
+      },
+      "expected": "2026-09-16T08:00:00.000Z"
+    },
+    {
+      "name": "winter time in Amsterdam",
+      "function": "fromDayKeyTime",
+      "input": {
+        "key": "2026-12-16",
+        "time": "10:00",
+        "tz": "Europe/Amsterdam"
+      },
+      "expected": "2026-12-16T09:00:00.000Z"
+    },
+    {
+      "name": "UTC",
+      "function": "fromDayKeyTime",
+      "input": {
+        "key": "2026-09-16",
+        "time": "10:00",
+        "tz": "UTC"
+      },
+      "expected": "2026-09-16T10:00:00.000Z"
+    },
+    {
+      "name": "spring forward day, 08:00 is summer time",
+      "function": "fromDayKeyTime",
+      "input": {
+        "key": "2026-03-29",
+        "time": "08:00",
+        "tz": "Europe/Amsterdam"
+      },
+      "expected": "2026-03-29T06:00:00.000Z"
+    },
+    {
+      "name": "spring forward day, 01:30 is still winter time",
+      "function": "fromDayKeyTime",
+      "input": {
+        "key": "2026-03-29",
+        "time": "01:30",
+        "tz": "Europe/Amsterdam"
+      },
+      "expected": "2026-03-29T00:30:00.000Z"
+    },
+    {
+      "name": "spring forward gap: 02:00 is skipped",
+      "function": "fromDayKeyTime",
+      "input": {
+        "key": "2026-03-29",
+        "time": "02:00",
+        "tz": "Europe/Amsterdam"
+      },
+      "expected": "2026-03-29T01:00:00.000Z"
+    },
+    {
+      "name": "spring forward gap: 02:30 lands after the gap",
+      "function": "fromDayKeyTime",
+      "input": {
+        "key": "2026-03-29",
+        "time": "02:30",
+        "tz": "Europe/Amsterdam"
+      },
+      "expected": "2026-03-29T01:30:00.000Z"
+    },
+    {
+      "name": "spring forward gap: 02:59",
+      "function": "fromDayKeyTime",
+      "input": {
+        "key": "2026-03-29",
+        "time": "02:59",
+        "tz": "Europe/Amsterdam"
+      },
+      "expected": "2026-03-29T01:59:00.000Z"
+    },
+    {
+      "name": "spring forward: 03:00 exists",
+      "function": "fromDayKeyTime",
+      "input": {
+        "key": "2026-03-29",
+        "time": "03:00",
+        "tz": "Europe/Amsterdam"
+      },
+      "expected": "2026-03-29T01:00:00.000Z"
+    },
+    {
+      "name": "fall back day, 08:00 is winter time",
+      "function": "fromDayKeyTime",
+      "input": {
+        "key": "2026-10-25",
+        "time": "08:00",
+        "tz": "Europe/Amsterdam"
+      },
+      "expected": "2026-10-25T07:00:00.000Z"
+    },
+    {
+      "name": "fall back overlap: 02:00 is the first occurrence",
+      "function": "fromDayKeyTime",
+      "input": {
+        "key": "2026-10-25",
+        "time": "02:00",
+        "tz": "Europe/Amsterdam"
+      },
+      "expected": "2026-10-25T00:00:00.000Z"
+    },
+    {
+      "name": "fall back overlap: 02:30 is the first occurrence",
+      "function": "fromDayKeyTime",
+      "input": {
+        "key": "2026-10-25",
+        "time": "02:30",
+        "tz": "Europe/Amsterdam"
+      },
+      "expected": "2026-10-25T00:30:00.000Z"
+    },
+    {
+      "name": "fall back overlap: 02:59 is the first occurrence",
+      "function": "fromDayKeyTime",
+      "input": {
+        "key": "2026-10-25",
+        "time": "02:59",
+        "tz": "Europe/Amsterdam"
+      },
+      "expected": "2026-10-25T00:59:00.000Z"
+    },
+    {
+      "name": "fall back: 03:00 is winter time",
+      "function": "fromDayKeyTime",
+      "input": {
+        "key": "2026-10-25",
+        "time": "03:00",
+        "tz": "Europe/Amsterdam"
+      },
+      "expected": "2026-10-25T02:00:00.000Z"
+    },
+    {
+      "name": "fall back: 01:59 is summer time",
+      "function": "fromDayKeyTime",
+      "input": {
+        "key": "2026-10-25",
+        "time": "01:59",
+        "tz": "Europe/Amsterdam"
+      },
+      "expected": "2026-10-24T23:59:00.000Z"
+    },
+    {
+      "name": "leap day",
+      "function": "fromDayKeyTime",
+      "input": {
+        "key": "2028-02-29",
+        "time": "23:59",
+        "tz": "Europe/Amsterdam"
+      },
+      "expected": "2028-02-29T22:59:00.000Z"
+    },
+    {
+      "name": "midnight",
+      "function": "fromDayKeyTime",
+      "input": {
+        "key": "2026-09-16",
+        "time": "00:00",
+        "tz": "Europe/Amsterdam"
+      },
+      "expected": "2026-09-15T22:00:00.000Z"
+    },
+    {
+      "name": "invalid key throws",
+      "function": "fromDayKeyTime",
+      "input": {
+        "key": "nope",
+        "time": "10:00",
+        "tz": "Europe/Amsterdam"
+      },
+      "throws": "RangeError"
+    },
+    {
+      "name": "invalid time throws",
+      "function": "fromDayKeyTime",
+      "input": {
+        "key": "2026-09-16",
+        "time": "25:00",
+        "tz": "Europe/Amsterdam"
+      },
+      "throws": "RangeError"
+    },
+    {
+      "name": "invalid timezone throws",
+      "function": "fromDayKeyTime",
+      "input": {
+        "key": "2026-09-16",
+        "time": "10:00",
+        "tz": "Not/AZone"
+      },
+      "throws": "RangeError"
+    },
+    {
+      "name": "one day",
+      "function": "addDays",
+      "input": {
+        "key": "2026-09-14",
+        "days": 1
+      },
+      "expected": "2026-09-15"
+    },
+    {
+      "name": "zero days",
+      "function": "addDays",
+      "input": {
+        "key": "2026-09-14",
+        "days": 0
+      },
+      "expected": "2026-09-14"
+    },
+    {
+      "name": "negative",
+      "function": "addDays",
+      "input": {
+        "key": "2026-09-14",
+        "days": -14
+      },
+      "expected": "2026-08-31"
+    },
+    {
+      "name": "into the spring forward day",
+      "function": "addDays",
+      "input": {
+        "key": "2026-03-28",
+        "days": 1
+      },
+      "expected": "2026-03-29"
+    },
+    {
+      "name": "across the spring forward day",
+      "function": "addDays",
+      "input": {
+        "key": "2026-03-28",
+        "days": 2
+      },
+      "expected": "2026-03-30"
+    },
+    {
+      "name": "into the fall back day",
+      "function": "addDays",
+      "input": {
+        "key": "2026-10-24",
+        "days": 1
+      },
+      "expected": "2026-10-25"
+    },
+    {
+      "name": "across the fall back day",
+      "function": "addDays",
+      "input": {
+        "key": "2026-10-24",
+        "days": 3
+      },
+      "expected": "2026-10-27"
+    },
+    {
+      "name": "month end",
+      "function": "addDays",
+      "input": {
+        "key": "2026-01-31",
+        "days": 1
+      },
+      "expected": "2026-02-01"
+    },
+    {
+      "name": "year end",
+      "function": "addDays",
+      "input": {
+        "key": "2026-12-31",
+        "days": 1
+      },
+      "expected": "2027-01-01"
+    },
+    {
+      "name": "year start backwards",
+      "function": "addDays",
+      "input": {
+        "key": "2027-01-01",
+        "days": -1
+      },
+      "expected": "2026-12-31"
+    },
+    {
+      "name": "leap day forwards",
+      "function": "addDays",
+      "input": {
+        "key": "2028-02-28",
+        "days": 1
+      },
+      "expected": "2028-02-29"
+    },
+    {
+      "name": "leap day skipped in a non-leap year",
+      "function": "addDays",
+      "input": {
+        "key": "2027-02-28",
+        "days": 1
+      },
+      "expected": "2027-03-01"
+    },
+    {
+      "name": "over a leap day",
+      "function": "addDays",
+      "input": {
+        "key": "2028-02-28",
+        "days": 2
+      },
+      "expected": "2028-03-01"
+    },
+    {
+      "name": "a full 28-day cycle across fall back",
+      "function": "addDays",
+      "input": {
+        "key": "2026-10-12",
+        "days": 28
+      },
+      "expected": "2026-11-09"
+    },
+    {
+      "name": "invalid key throws",
+      "function": "addDays",
+      "input": {
+        "key": "2026-13-01",
+        "days": 1
+      },
+      "throws": "RangeError"
+    },
+    {
+      "name": "non-day-key text throws",
+      "function": "addDays",
+      "input": {
+        "key": "nope",
+        "days": 1
+      },
+      "throws": "RangeError"
+    },
+    {
+      "name": "same day",
+      "function": "daysBetween",
+      "input": {
+        "from": "2026-09-14",
+        "to": "2026-09-14"
+      },
+      "expected": 0
+    },
+    {
+      "name": "one week",
+      "function": "daysBetween",
+      "input": {
+        "from": "2026-09-14",
+        "to": "2026-09-21"
+      },
+      "expected": 7
+    },
+    {
+      "name": "negative",
+      "function": "daysBetween",
+      "input": {
+        "from": "2026-09-21",
+        "to": "2026-09-14"
+      },
+      "expected": -7
+    },
+    {
+      "name": "across spring forward (23-hour day)",
+      "function": "daysBetween",
+      "input": {
+        "from": "2026-03-28",
+        "to": "2026-03-30"
+      },
+      "expected": 2
+    },
+    {
+      "name": "across fall back (25-hour day)",
+      "function": "daysBetween",
+      "input": {
+        "from": "2026-10-24",
+        "to": "2026-10-27"
+      },
+      "expected": 3
+    },
+    {
+      "name": "spring forward day to next",
+      "function": "daysBetween",
+      "input": {
+        "from": "2026-03-29",
+        "to": "2026-03-30"
+      },
+      "expected": 1
+    },
+    {
+      "name": "fall back day to next",
+      "function": "daysBetween",
+      "input": {
+        "from": "2026-10-25",
+        "to": "2026-10-26"
+      },
+      "expected": 1
+    },
+    {
+      "name": "across a whole DST half year",
+      "function": "daysBetween",
+      "input": {
+        "from": "2026-03-01",
+        "to": "2026-11-01"
+      },
+      "expected": 245
+    },
+    {
+      "name": "across a leap day",
+      "function": "daysBetween",
+      "input": {
+        "from": "2028-02-28",
+        "to": "2028-03-01"
+      },
+      "expected": 2
+    },
+    {
+      "name": "no leap day in a non-leap year",
+      "function": "daysBetween",
+      "input": {
+        "from": "2027-02-28",
+        "to": "2027-03-01"
+      },
+      "expected": 1
+    },
+    {
+      "name": "a leap year",
+      "function": "daysBetween",
+      "input": {
+        "from": "2028-01-01",
+        "to": "2029-01-01"
+      },
+      "expected": 366
+    },
+    {
+      "name": "a non-leap year",
+      "function": "daysBetween",
+      "input": {
+        "from": "2026-01-01",
+        "to": "2027-01-01"
+      },
+      "expected": 365
+    },
+    {
+      "name": "invalid from throws",
+      "function": "daysBetween",
+      "input": {
+        "from": "nope",
+        "to": "2026-09-14"
+      },
+      "throws": "RangeError"
+    },
+    {
+      "name": "invalid to throws",
+      "function": "daysBetween",
+      "input": {
+        "from": "2026-09-14",
+        "to": "2026-02-30"
+      },
+      "throws": "RangeError"
+    },
+    {
+      "name": "Sunday",
+      "function": "weekdaySun0",
+      "input": {
+        "key": "2026-09-13"
+      },
+      "expected": 0
+    },
+    {
+      "name": "Monday",
+      "function": "weekdaySun0",
+      "input": {
+        "key": "2026-09-14"
+      },
+      "expected": 1
+    },
+    {
+      "name": "Saturday",
+      "function": "weekdaySun0",
+      "input": {
+        "key": "2026-09-19"
+      },
+      "expected": 6
+    },
+    {
+      "name": "leap day (Tuesday)",
+      "function": "weekdaySun0",
+      "input": {
+        "key": "2028-02-29"
+      },
+      "expected": 2
+    },
+    {
+      "name": "spring forward day (Sunday)",
+      "function": "weekdaySun0",
+      "input": {
+        "key": "2026-03-29"
+      },
+      "expected": 0
+    },
+    {
+      "name": "fall back day (Sunday)",
+      "function": "weekdaySun0",
+      "input": {
+        "key": "2026-10-25"
+      },
+      "expected": 0
+    },
+    {
+      "name": "invalid throws",
+      "function": "weekdaySun0",
+      "input": {
+        "key": "nope"
+      },
+      "throws": "RangeError"
+    },
+    {
+      "name": "Sunday",
+      "function": "weekdayMon0",
+      "input": {
+        "key": "2026-09-13"
+      },
+      "expected": 6
+    },
+    {
+      "name": "Monday",
+      "function": "weekdayMon0",
+      "input": {
+        "key": "2026-09-14"
+      },
+      "expected": 0
+    },
+    {
+      "name": "Saturday",
+      "function": "weekdayMon0",
+      "input": {
+        "key": "2026-09-19"
+      },
+      "expected": 5
+    },
+    {
+      "name": "leap day (Tuesday)",
+      "function": "weekdayMon0",
+      "input": {
+        "key": "2028-02-29"
+      },
+      "expected": 1
+    },
+    {
+      "name": "invalid throws",
+      "function": "weekdayMon0",
+      "input": {
+        "key": "nope"
+      },
+      "throws": "RangeError"
+    },
+    {
+      "name": "0",
+      "function": "sun0ToMon0",
+      "input": {
+        "weekday": 0
+      },
+      "expected": 6
+    },
+    {
+      "name": "1",
+      "function": "sun0ToMon0",
+      "input": {
+        "weekday": 1
+      },
+      "expected": 0
+    },
+    {
+      "name": "2",
+      "function": "sun0ToMon0",
+      "input": {
+        "weekday": 2
+      },
+      "expected": 1
+    },
+    {
+      "name": "3",
+      "function": "sun0ToMon0",
+      "input": {
+        "weekday": 3
+      },
+      "expected": 2
+    },
+    {
+      "name": "4",
+      "function": "sun0ToMon0",
+      "input": {
+        "weekday": 4
+      },
+      "expected": 3
+    },
+    {
+      "name": "5",
+      "function": "sun0ToMon0",
+      "input": {
+        "weekday": 5
+      },
+      "expected": 4
+    },
+    {
+      "name": "6",
+      "function": "sun0ToMon0",
+      "input": {
+        "weekday": 6
+      },
+      "expected": 5
+    },
+    {
+      "name": "0",
+      "function": "mon0ToSun0",
+      "input": {
+        "weekday": 0
+      },
+      "expected": 1
+    },
+    {
+      "name": "1",
+      "function": "mon0ToSun0",
+      "input": {
+        "weekday": 1
+      },
+      "expected": 2
+    },
+    {
+      "name": "2",
+      "function": "mon0ToSun0",
+      "input": {
+        "weekday": 2
+      },
+      "expected": 3
+    },
+    {
+      "name": "3",
+      "function": "mon0ToSun0",
+      "input": {
+        "weekday": 3
+      },
+      "expected": 4
+    },
+    {
+      "name": "4",
+      "function": "mon0ToSun0",
+      "input": {
+        "weekday": 4
+      },
+      "expected": 5
+    },
+    {
+      "name": "5",
+      "function": "mon0ToSun0",
+      "input": {
+        "weekday": 5
+      },
+      "expected": 6
+    },
+    {
+      "name": "6",
+      "function": "mon0ToSun0",
+      "input": {
+        "weekday": 6
+      },
+      "expected": 0
+    },
+    {
+      "name": "Monday",
+      "function": "isMonday",
+      "input": {
+        "key": "2026-09-14"
+      },
+      "expected": true
+    },
+    {
+      "name": "Sunday",
+      "function": "isMonday",
+      "input": {
+        "key": "2026-09-13"
+      },
+      "expected": false
+    },
+    {
+      "name": "Tuesday",
+      "function": "isMonday",
+      "input": {
+        "key": "2026-09-15"
+      },
+      "expected": false
+    },
+    {
+      "name": "invalid text is not a Monday and does not throw",
+      "function": "isMonday",
+      "input": {
+        "key": "nope"
+      },
+      "expected": false
+    },
+    {
+      "name": "non-existent date is not a Monday and does not throw",
+      "function": "isMonday",
+      "input": {
+        "key": "2026-02-30"
+      },
+      "expected": false
+    },
+    {
+      "name": "Friday",
+      "function": "isWeekend",
+      "input": {
+        "key": "2026-09-18"
+      },
+      "expected": false
+    },
+    {
+      "name": "Saturday",
+      "function": "isWeekend",
+      "input": {
+        "key": "2026-09-19"
+      },
+      "expected": true
+    },
+    {
+      "name": "Sunday",
+      "function": "isWeekend",
+      "input": {
+        "key": "2026-09-20"
+      },
+      "expected": true
+    },
+    {
+      "name": "Monday",
+      "function": "isWeekend",
+      "input": {
+        "key": "2026-09-21"
+      },
+      "expected": false
+    },
+    {
+      "name": "invalid throws",
+      "function": "isWeekend",
+      "input": {
+        "key": "nope"
+      },
+      "throws": "RangeError"
+    },
+    {
+      "name": "ordinary week",
+      "function": "isoWeek",
+      "input": {
+        "key": "2026-09-14"
+      },
+      "expected": {
+        "year": 2026,
+        "week": 38
+      }
+    },
+    {
+      "name": "week 53 ends the year",
+      "function": "isoWeek",
+      "input": {
+        "key": "2026-12-31"
+      },
+      "expected": {
+        "year": 2026,
+        "week": 53
+      }
+    },
+    {
+      "name": "early January still in week 53 of the previous year",
+      "function": "isoWeek",
+      "input": {
+        "key": "2027-01-03"
+      },
+      "expected": {
+        "year": 2026,
+        "week": 53
+      }
+    },
+    {
+      "name": "first Monday of 2027 is week 1",
+      "function": "isoWeek",
+      "input": {
+        "key": "2027-01-04"
+      },
+      "expected": {
+        "year": 2027,
+        "week": 1
+      }
+    },
+    {
+      "name": "late December already in week 1 of the next year",
+      "function": "isoWeek",
+      "input": {
+        "key": "2025-12-29"
+      },
+      "expected": {
+        "year": 2026,
+        "week": 1
+      }
+    },
+    {
+      "name": "1 Jan 2021 belongs to 2020-W53",
+      "function": "isoWeek",
+      "input": {
+        "key": "2021-01-01"
+      },
+      "expected": {
+        "year": 2020,
+        "week": 53
+      }
+    },
+    {
+      "name": "1 Jan 2026 is week 1",
+      "function": "isoWeek",
+      "input": {
+        "key": "2026-01-01"
+      },
+      "expected": {
+        "year": 2026,
+        "week": 1
+      }
+    },
+    {
+      "name": "1 Jan 2027 belongs to 2026-W53",
+      "function": "isoWeek",
+      "input": {
+        "key": "2027-01-01"
+      },
+      "expected": {
+        "year": 2026,
+        "week": 53
+      }
+    },
+    {
+      "name": "31 Dec 2024 belongs to 2025-W01",
+      "function": "isoWeek",
+      "input": {
+        "key": "2024-12-31"
+      },
+      "expected": {
+        "year": 2025,
+        "week": 1
+      }
+    },
+    {
+      "name": "leap day",
+      "function": "isoWeek",
+      "input": {
+        "key": "2028-02-29"
+      },
+      "expected": {
+        "year": 2028,
+        "week": 9
+      }
+    },
+    {
+      "name": "spring forward day",
+      "function": "isoWeek",
+      "input": {
+        "key": "2026-03-29"
+      },
+      "expected": {
+        "year": 2026,
+        "week": 13
+      }
+    },
+    {
+      "name": "fall back day",
+      "function": "isoWeek",
+      "input": {
+        "key": "2026-10-25"
+      },
+      "expected": {
+        "year": 2026,
+        "week": 43
+      }
+    },
+    {
+      "name": "invalid throws",
+      "function": "isoWeek",
+      "input": {
+        "key": "nope"
+      },
+      "throws": "RangeError"
+    },
+    {
+      "name": "ordinary week",
+      "function": "isoWeekLabel",
+      "input": {
+        "key": "2026-09-14"
+      },
+      "expected": "2026-W38"
+    },
+    {
+      "name": "zero-padded single digit week",
+      "function": "isoWeekLabel",
+      "input": {
+        "key": "2026-01-05"
+      },
+      "expected": "2026-W02"
+    },
+    {
+      "name": "Sunday ends the week",
+      "function": "isoWeekLabel",
+      "input": {
+        "key": "2026-09-20"
+      },
+      "expected": "2026-W38"
+    },
+    {
+      "name": "2026-W53 Thursday",
+      "function": "isoWeekLabel",
+      "input": {
+        "key": "2026-12-31"
+      },
+      "expected": "2026-W53"
+    },
+    {
+      "name": "2026-W53 Sunday",
+      "function": "isoWeekLabel",
+      "input": {
+        "key": "2027-01-03"
+      },
+      "expected": "2026-W53"
+    },
+    {
+      "name": "2027-W01 Monday",
+      "function": "isoWeekLabel",
+      "input": {
+        "key": "2027-01-04"
+      },
+      "expected": "2027-W01"
+    },
+    {
+      "name": "2026-W01 starts in December 2025",
+      "function": "isoWeekLabel",
+      "input": {
+        "key": "2025-12-29"
+      },
+      "expected": "2026-W01"
+    },
+    {
+      "name": "2020-W53",
+      "function": "isoWeekLabel",
+      "input": {
+        "key": "2021-01-01"
+      },
+      "expected": "2020-W53"
+    },
+    {
+      "name": "2021-W01",
+      "function": "isoWeekLabel",
+      "input": {
+        "key": "2021-01-04"
+      },
+      "expected": "2021-W01"
+    },
+    {
+      "name": "2025-W01 starts in December 2024",
+      "function": "isoWeekLabel",
+      "input": {
+        "key": "2024-12-30"
+      },
+      "expected": "2025-W01"
+    },
+    {
+      "name": "2024-W01 starts on 1 Jan",
+      "function": "isoWeekLabel",
+      "input": {
+        "key": "2024-01-01"
+      },
+      "expected": "2024-W01"
+    },
+    {
+      "name": "2016 ends in W52",
+      "function": "isoWeekLabel",
+      "input": {
+        "key": "2017-01-01"
+      },
+      "expected": "2016-W52"
+    },
+    {
+      "name": "invalid throws",
+      "function": "isoWeekLabel",
+      "input": {
+        "key": "nope"
+      },
+      "throws": "RangeError"
+    },
+    {
+      "name": "ordinary week",
+      "function": "mondayOfIsoWeek",
+      "input": {
+        "label": "2026-W38"
+      },
+      "expected": "2026-09-14"
+    },
+    {
+      "name": "week 1 starting in the previous year",
+      "function": "mondayOfIsoWeek",
+      "input": {
+        "label": "2026-W01"
+      },
+      "expected": "2025-12-29"
+    },
+    {
+      "name": "week 1 of 2025 starts in December 2024",
+      "function": "mondayOfIsoWeek",
+      "input": {
+        "label": "2025-W01"
+      },
+      "expected": "2024-12-30"
+    },
+    {
+      "name": "week 53 exists in 2026",
+      "function": "mondayOfIsoWeek",
+      "input": {
+        "label": "2026-W53"
+      },
+      "expected": "2026-12-28"
+    },
+    {
+      "name": "week 53 exists in 2020",
+      "function": "mondayOfIsoWeek",
+      "input": {
+        "label": "2020-W53"
+      },
+      "expected": "2020-12-28"
+    },
+    {
+      "name": "week 53 does not exist in 2027",
+      "function": "mondayOfIsoWeek",
+      "input": {
+        "label": "2027-W53"
+      },
+      "expected": null
+    },
+    {
+      "name": "week 52 of 2027",
+      "function": "mondayOfIsoWeek",
+      "input": {
+        "label": "2027-W52"
+      },
+      "expected": "2027-12-27"
+    },
+    {
+      "name": "week 00 does not exist",
+      "function": "mondayOfIsoWeek",
+      "input": {
+        "label": "2026-W00"
+      },
+      "expected": null
+    },
+    {
+      "name": "week 54 does not exist",
+      "function": "mondayOfIsoWeek",
+      "input": {
+        "label": "2026-W54"
+      },
+      "expected": null
+    },
+    {
+      "name": "missing W",
+      "function": "mondayOfIsoWeek",
+      "input": {
+        "label": "2026-38"
+      },
+      "expected": null
+    },
+    {
+      "name": "single digit week",
+      "function": "mondayOfIsoWeek",
+      "input": {
+        "label": "2026-W3"
+      },
+      "expected": null
+    },
+    {
+      "name": "lowercase w",
+      "function": "mondayOfIsoWeek",
+      "input": {
+        "label": "2026-w38"
+      },
+      "expected": null
+    },
+    {
+      "name": "empty",
+      "function": "mondayOfIsoWeek",
+      "input": {
+        "label": ""
+      },
+      "expected": null
+    },
+    {
+      "name": "leading space",
+      "function": "mondayOfIsoWeek",
+      "input": {
+        "label": " 2026-W38"
+      },
+      "expected": null
+    },
+    {
+      "name": "Sunday goes back six days",
+      "function": "mondayOf",
+      "input": {
+        "key": "2026-09-13"
+      },
+      "expected": "2026-09-07"
+    },
+    {
+      "name": "Monday is itself",
+      "function": "mondayOf",
+      "input": {
+        "key": "2026-09-14"
+      },
+      "expected": "2026-09-14"
+    },
+    {
+      "name": "Wednesday",
+      "function": "mondayOf",
+      "input": {
+        "key": "2026-09-16"
+      },
+      "expected": "2026-09-14"
+    },
+    {
+      "name": "across month boundary",
+      "function": "mondayOf",
+      "input": {
+        "key": "2026-10-01"
+      },
+      "expected": "2026-09-28"
+    },
+    {
+      "name": "across year boundary",
+      "function": "mondayOf",
+      "input": {
+        "key": "2027-01-01"
+      },
+      "expected": "2026-12-28"
+    },
+    {
+      "name": "spring forward Sunday",
+      "function": "mondayOf",
+      "input": {
+        "key": "2026-03-29"
+      },
+      "expected": "2026-03-23"
+    },
+    {
+      "name": "fall back Sunday",
+      "function": "mondayOf",
+      "input": {
+        "key": "2026-10-25"
+      },
+      "expected": "2026-10-19"
+    },
+    {
+      "name": "leap day",
+      "function": "mondayOf",
+      "input": {
+        "key": "2028-02-29"
+      },
+      "expected": "2028-02-28"
+    },
+    {
+      "name": "invalid throws",
+      "function": "mondayOf",
+      "input": {
+        "key": "nope"
+      },
+      "throws": "RangeError"
+    }
+  ]
+}
