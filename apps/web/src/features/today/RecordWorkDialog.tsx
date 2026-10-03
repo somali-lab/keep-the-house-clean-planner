@@ -1,5 +1,5 @@
 import type { OccurrenceView } from '@huishoudplanner/shared';
-import { CirclePlus, Sparkles, TriangleAlert } from 'lucide-react';
+import { CirclePlus, ClipboardCheck, Sparkles, TriangleAlert } from 'lucide-react';
 import { useId, useMemo, useRef, useState, type FormEvent } from 'react';
 import { NativeSelect } from '@/components/NativeSelect';
 import { Button } from '@/components/ui/button';
@@ -8,10 +8,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { useRooms, useTasks } from '../../api/queries.ts';
-import { createRequestKey } from '../../api/requestKey.ts';
 import { format, t } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
-import { useRecordWork } from './api.ts';
+import { useCheckOffPlanned, useOccurrences, useRecordWork } from './api.ts';
 import { shortDate } from './OccurrenceItem.tsx';
 import { buildRecordWork, type RecordWorkField, type RecordWorkForm, type RecordWorkKind } from './recordWorkModel.ts';
 
@@ -22,8 +21,11 @@ interface RecordWorkDialogProps {
   todayKey: string;
   /** Opens on "extra" with this task chosen (the Overdue page records an extra for one task). */
   initialTaskId?: string;
-  onRecorded?(occurrence: OccurrenceView): void;
+  /** `checkedOff`: the planned occurrence of the task was completed instead of recording an extra one. */
+  onRecorded?(occurrence: OccurrenceView, how: RecordWorkHow): void;
 }
+
+export type RecordWorkHow = 'recorded' | 'checkedOff';
 
 /** Records work that was done and that the plan did not ask for: an extra execution or a one-off task. */
 export function RecordWorkDialog({ open, onOpenChange, todayKey, initialTaskId, onRecorded }: RecordWorkDialogProps) {
@@ -39,8 +41,8 @@ export function RecordWorkDialog({ open, onOpenChange, todayKey, initialTaskId, 
           todayKey={todayKey}
           initialTaskId={initialTaskId}
           onCancel={() => onOpenChange(false)}
-          onRecorded={(occurrence) => {
-            onRecorded?.(occurrence);
+          onRecorded={(occurrence, how) => {
+            onRecorded?.(occurrence, how);
             onOpenChange(false);
           }}
         />
@@ -54,6 +56,19 @@ const KINDS: { kind: RecordWorkKind; label: 'recordWork.kind.extra' | 'recordWor
   { kind: 'oneOff', label: 'recordWork.kind.oneOff', hint: 'recordWork.kind.oneOffHint' },
 ];
 
+const FIELD_ORDER: RecordWorkField[] = ['taskId', 'name', 'duration', 'doneBy'];
+/** Id suffix of the control of each field. */
+const FIELD_CONTROL: Record<RecordWorkField, string> = { taskId: 'task', name: 'name', duration: 'duration', doneBy: 'done-by' };
+
+const PLANNED_CHOICES: {
+  value: 'checkOff' | 'extra';
+  label: 'recordWork.planned.checkOff' | 'recordWork.planned.extra';
+  hint: 'recordWork.planned.checkOffHint' | 'recordWork.planned.extraHint';
+}[] = [
+  { value: 'checkOff', label: 'recordWork.planned.checkOff', hint: 'recordWork.planned.checkOffHint' },
+  { value: 'extra', label: 'recordWork.planned.extra', hint: 'recordWork.planned.extraHint' },
+];
+
 function RecordWorkFormBody({
   todayKey,
   initialTaskId,
@@ -63,13 +78,16 @@ function RecordWorkFormBody({
   todayKey: string;
   initialTaskId?: string;
   onCancel(): void;
-  onRecorded(occurrence: OccurrenceView): void;
+  onRecorded(occurrence: OccurrenceView, how: RecordWorkHow): void;
 }) {
   const idPrefix = useId();
   const { profile, activeUsers } = useProfile();
   const tasks = useTasks();
   const rooms = useRooms();
   const record = useRecordWork();
+  const checkOff = useCheckOffPlanned();
+  const todayOccurrences = useOccurrences(todayKey, todayKey);
+  const formRef = useRef<HTMLFormElement>(null);
   const [chosen, setForm] = useState<RecordWorkForm>({
     kind: 'extra',
     taskId: initialTaskId ?? '',
@@ -80,11 +98,10 @@ function RecordWorkFormBody({
   });
   // Until someone else is chosen, the person doing the recording did the work (the profile may still be loading).
   const form: RecordWorkForm = { ...chosen, doneBy: chosen.doneBy || (profile?._id ?? '') };
+  // When the chosen task is still planned today, checking that off is the default: it keeps one execution in the history.
+  const [plannedChoice, setPlannedChoice] = useState<'checkOff' | 'extra'>('checkOff');
   const [submitted, setSubmitted] = useState(false);
   const [failed, setFailed] = useState(false);
-  // One idempotency key per intent: a repeated click or retry of the same values reuses it, changed values
-  // are a new intent, and a successful request drops it.
-  const intent = useRef<{ signature: string; key: string } | null>(null);
   // A second click can arrive before the pending state has rendered, so the guard is synchronous.
   const inFlight = useRef(false);
 
@@ -95,6 +112,13 @@ function RecordWorkFormBody({
   const activeRooms = useMemo(() => (rooms.data ?? []).filter((room) => room.active), [rooms.data]);
   const roomNames = useMemo(() => new Map((rooms.data ?? []).map((room) => [room._id, room.name])), [rooms.data]);
 
+  const planned =
+    form.kind === 'extra' && form.taskId
+      ? (todayOccurrences.data ?? []).find(
+          (occurrence) => occurrence.taskId === form.taskId && occurrence.status === 'open' && occurrence.date === todayKey,
+        )
+      : undefined;
+  const checkingOff = planned !== undefined && plannedChoice === 'checkOff';
   const result = buildRecordWork(form, todayKey);
   const errors = submitted && !result.ok ? result.errors : {};
   const set = <K extends keyof RecordWorkForm>(key: K, value: RecordWorkForm[K]) => {
@@ -105,9 +129,10 @@ function RecordWorkFormBody({
     'aria-invalid': errors[field] ? true : undefined,
     'aria-describedby': errors[field] ? `${idPrefix}-${field}-error` : undefined,
   });
+  // The summary below is the one alert; each field's message is linked through aria-describedby.
   const fieldError = (field: RecordWorkField) =>
     errors[field] ? (
-      <p id={`${idPrefix}-${field}-error`} role="alert" className="flex items-center gap-1.5 text-sm font-semibold text-destructive">
+      <p id={`${idPrefix}-${field}-error`} className="flex items-center gap-1.5 text-sm font-semibold text-destructive">
         <TriangleAlert className="size-4 shrink-0" aria-hidden="true" />
         {t(errors[field])}
       </p>
@@ -117,15 +142,20 @@ function RecordWorkFormBody({
     event.preventDefault();
     if (inFlight.current) return;
     setSubmitted(true);
-    if (!result.ok) return;
-    const signature = JSON.stringify(result.body);
-    if (intent.current?.signature !== signature) intent.current = { signature, key: createRequestKey() };
+    if (!result.ok) {
+      // Move focus to the first field that needs attention.
+      const first = FIELD_ORDER.find((field) => result.errors[field]);
+      if (first) formRef.current?.querySelector<HTMLElement>(`[id="${idPrefix}-${FIELD_CONTROL[first]}"]`)?.focus();
+      return;
+    }
     inFlight.current = true;
     setFailed(false);
     try {
-      const occurrence = await record.mutateAsync({ ...result.body, requestId: intent.current.key });
-      intent.current = null;
-      onRecorded(occurrence);
+      if (planned && plannedChoice === 'checkOff') {
+        onRecorded(await checkOff.mutateAsync({ id: planned._id, completedBy: form.doneBy }), 'checkedOff');
+      } else {
+        onRecorded(await record.mutateAsync(result.body), 'recorded');
+      }
     } catch {
       setFailed(true);
     } finally {
@@ -133,11 +163,12 @@ function RecordWorkFormBody({
     }
   };
 
-  const pending = record.isPending;
+  const pending = record.isPending || checkOff.isPending;
+  const errorFields = FIELD_ORDER.filter((field) => errors[field]);
   const noTasks = tasks.isSuccess && activeTasks.length === 0;
 
   return (
-    <form className="grid gap-5" onSubmit={submit} noValidate aria-label={t('recordWork.title')}>
+    <form ref={formRef} className="grid gap-5" onSubmit={submit} noValidate aria-label={t('recordWork.title')}>
       <fieldset className="grid gap-2">
         <legend className="mb-1 text-sm font-semibold">{t('recordWork.kind')}</legend>
         {KINDS.map(({ kind, label, hint }) => {
@@ -181,7 +212,10 @@ function RecordWorkFormBody({
             id={`${idPrefix}-task`}
             className="[&_select]:h-11"
             value={form.taskId}
-            onChange={(event) => set('taskId', event.target.value)}
+            onChange={(event) => {
+              set('taskId', event.target.value);
+              setPlannedChoice('checkOff');
+            }}
             {...fieldProps('taskId')}
           >
             <option value="">{t('recordWork.taskPlaceholder')}</option>
@@ -193,6 +227,38 @@ function RecordWorkFormBody({
           </NativeSelect>
           {noTasks && <p className="text-sm text-muted-foreground">{t('recordWork.noTasks')}</p>}
           {fieldError('taskId')}
+          {planned && (
+            <fieldset className="mt-2 grid gap-2 rounded-xl border-2 border-warning bg-warning/10 p-3">
+              <legend className="flex items-center gap-1.5 px-1 text-sm font-semibold">
+                <TriangleAlert className="size-4 shrink-0" aria-hidden="true" />
+                {format('recordWork.planned.notice', { task: planned.taskNameSnapshot })}
+              </legend>
+              {PLANNED_CHOICES.map(({ value, label, hint }) => (
+                <label
+                  key={value}
+                  className="flex cursor-pointer items-start gap-3 rounded-lg p-2 has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/50"
+                >
+                  <input
+                    type="radio"
+                    name={`${idPrefix}-planned`}
+                    className="mt-1 size-5 shrink-0 accent-primary"
+                    checked={plannedChoice === value}
+                    onChange={() => setPlannedChoice(value)}
+                    aria-labelledby={`${idPrefix}-planned-${value}-label`}
+                    aria-describedby={`${idPrefix}-planned-${value}-hint`}
+                  />
+                  <span className="grid gap-0.5">
+                    <span id={`${idPrefix}-planned-${value}-label`} className="leading-snug font-bold">
+                      {t(label)}
+                    </span>
+                    <span id={`${idPrefix}-planned-${value}-hint`} className="text-sm text-muted-foreground">
+                      {t(hint)}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+          )}
         </div>
       ) : (
         <>
@@ -266,6 +332,13 @@ function RecordWorkFormBody({
 
       <p className="text-sm text-muted-foreground">{format('recordWork.doneNow', { date: shortDate(todayKey) })}</p>
 
+      {errorFields.length > 0 && (
+        <p role="alert" className="flex items-center gap-2 rounded-xl bg-destructive/10 p-3 text-sm font-semibold text-destructive">
+          <TriangleAlert className="size-4 shrink-0" aria-hidden="true" />
+          {t('recordWork.error.summary')}
+        </p>
+      )}
+
       {failed && (
         <p role="alert" className="flex items-center gap-2 rounded-xl bg-destructive/10 p-3 text-sm font-semibold text-destructive">
           <TriangleAlert className="size-4 shrink-0" aria-hidden="true" />
@@ -277,8 +350,9 @@ function RecordWorkFormBody({
         <Button type="button" variant="outline" className="h-11 rounded-full" onClick={onCancel}>
           {t('common.cancel')}
         </Button>
-        <Button type="submit" className="h-11 rounded-full" disabled={pending}>
-          {pending ? t('recordWork.submitting') : t('recordWork.submit')}
+        <Button type="submit" className="h-11 rounded-full" disabled={pending || !profile}>
+          {checkingOff && !pending && <ClipboardCheck aria-hidden="true" />}
+          {pending ? t('recordWork.submitting') : checkingOff ? t('recordWork.checkOff') : t('recordWork.submit')}
         </Button>
       </div>
     </form>

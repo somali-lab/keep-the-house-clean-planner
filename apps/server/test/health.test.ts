@@ -1,4 +1,4 @@
-import { ObjectId } from 'mongodb';
+import { ObjectId, type Db } from 'mongodb';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { systemContext } from '../src/audit/context.ts';
 import { COLLECTIONS, ensureIndexes, GENERATED_SLOT_INDEX, INDEXES } from '../src/data/db.ts';
@@ -66,6 +66,29 @@ describe('ensureIndexes', () => {
 
   it('is idempotent', async () => {
     await expect(ensureIndexes(t.db)).resolves.toBeUndefined();
+  });
+
+  describe('dropping the legacy slot index while another startup does the same', () => {
+    /** A database whose legacy index is listed, but whose drop fails like a concurrent startup beat us to it. */
+    const fakeDb = (dropError: unknown) =>
+      ({
+        listCollections: () => ({ toArray: async () => [{ name: 'any' }] }),
+        collection: () => ({
+          indexes: async () => [{ name: 'cycleId_1_taskId_1_plannedDate_1', key: { cycleId: 1, taskId: 1, plannedDate: 1 } }],
+          dropIndex: async () => {
+            throw dropError;
+          },
+          createIndexes: async () => [],
+        }),
+      }) as unknown as Db;
+
+    it('ignores IndexNotFound (27), because the index is already gone', async () => {
+      await expect(ensureIndexes(fakeDb(Object.assign(new Error('index not found'), { code: 27 })))).resolves.toBeUndefined();
+    });
+
+    it('still fails on any other error', async () => {
+      await expect(ensureIndexes(fakeDb(Object.assign(new Error('not authorized'), { code: 13 })))).rejects.toThrow('not authorized');
+    });
   });
 
   it('migrates the legacy slot index to the partial index and changes nothing on a second run', async () => {

@@ -42,7 +42,7 @@ The slot uniqueness applies to generated occurrences only, and a second index ma
 The data layer migrates the legacy index on startup, inside `ensureIndexes` and before the occurrence indexes are created:
 
 1. List the indexes of `occurrences`; if the collection does not exist yet, skip the migration.
-2. Drop every index whose key is exactly `{ cycleId: 1, taskId: 1, plannedDate: 1 }` and that is not the partial index named above. This includes the legacy default name `cycleId_1_taskId_1_plannedDate_1`.
+2. Drop every index whose key is exactly `{ cycleId: 1, taskId: 1, plannedDate: 1 }` and that is not the partial index named above. This includes the legacy default name `cycleId_1_taskId_1_plannedDate_1`. An index that a concurrent startup dropped first (MongoDB code 27, IndexNotFound) is ignored.
 3. Create the indexes from `INDEXES` as before.
 
 A second run finds only the new index and changes nothing. The migration is safe on an existing database for three reasons. It runs before the HTTP server and the scheduler start, and the deployment runs a single application process (ADR-0005), so no write falls between the drop and the create. The new constraint is strictly weaker than the old one, so creating it cannot fail on existing data. No existing document has a `requestId`. Like the room-snapshot backfill, an index change is a schema change, not a state change, and it is not audited.
@@ -68,7 +68,7 @@ A second run finds only the new index and changes nothing. The migration is safe
 
 Both routes require a selected profile (`requireActor`), as creating an ad-hoc occurrence does today.
 
-- **`done: false`** creates an open occurrence in a generated cycle. For an existing task, an omitted assignee means the task's default assignee. For a one-off task, an omitted assignee means unassigned. When the task already has an open occurrence that day, the response carries a non-blocking warning `task_already_planned`.
+- **`done: false`** creates an open occurrence in a generated cycle. For an existing task, an omitted assignee means the task's default assignee. For a one-off task, an omitted assignee means unassigned. When the task already has an open occurrence that day, the response carries a non-blocking warning `task_already_planned`. The same warning is returned for `done: true`, so the client can offer to check off the planned occurrence instead of recording an extra one.
 - **`done: true`** requires `date` to be today in the household timezone. It writes one document that is already done, with `recordedDone: true`, `statusBeforeCompletion: null`, `completedAt` set to now and `completedBy` set to the assignee. An omitted assignee means the actor, and `null` is rejected because someone did the work. For an existing task, the task's `lastCompletedAt` is refreshed.
 - **Responses:** `201` with the occurrence view and `warnings` on creation. A repeated `requestId` whose stored record has the same `taskId` (or, for a one-off task, the same snapshot name), the same `date` and the same `recordedDone` returns `200` with the current state of that record. It writes nothing and audits nothing.
 - **Errors:**
@@ -78,7 +78,7 @@ Both routes require a selected profile (`requireActor`), as creating an ad-hoc o
 
   `409 occurrence_exists` is no longer produced.
 
-Undoing recorded work uses a separate action. `POST /api/occurrences/:id/retract`, with `requireActor`, deletes an occurrence only when it is `origin: 'adhoc'`, `recordedDone: true` and `status: 'done'`. The deletion is audited as `delete` with `meta.reason: 'retract'`, and `lastCompletedAt` is refreshed. The response is `200 { retracted: true, id }`. Any other occurrence is rejected with `409 not_retractable`. A second retract returns `404 not_found`, which the client treats as already undone. `uncomplete` on a recorded-done occurrence returns `409 retract_required` rather than leaving an open record behind. Ad-hoc occurrences that were planned and completed later still use `uncomplete`.
+Undoing recorded work uses a separate action. `POST /api/occurrences/:id/retract`, with `requireActor`, deletes an occurrence only when it is `origin: 'adhoc'`, `recordedDone: true` and `status: 'done'`, and only when its `date` is today in the household timezone. Retract is an undo of today's work, not a correction: any profile may undo what was just recorded, but deleting an older completion stays an administrator's correction (`DELETE /api/occurrences/:id`), so a non-admin cannot remove history that they could not recreate. An older record is rejected with `409 retract_not_today`, and the web client shows the undo of recorded work only on its own day. The deletion is audited as `delete` with `meta.reason: 'retract'`, and `lastCompletedAt` is refreshed. The response is `200 { retracted: true, id }`. Any other occurrence is rejected with `409 not_retractable`. A second retract returns `404 not_found`, which the client treats as already undone. `uncomplete` on a recorded-done occurrence returns `409 retract_required` rather than leaving an open record behind. Ad-hoc occurrences that were planned and completed later still use `uncomplete`.
 
 Creation writes one `create` audit entry that contains the final fields, including status and completion, with `meta: { origin: 'adhoc', kind: 'extra' | 'one_off', recordedDone, requestId }`. One write produces one entry.
 
@@ -121,4 +121,4 @@ The export `schemaVersion` becomes `2`. Import accepts versions `1` and `2`; a v
 - `taskId` is nullable in the API contract. Every consumer has to handle a one-off task, and the compiler finds the places that do not.
 - A key that is retried after its record was retracted creates the record again, because the deletion also removes the key. This needs a delayed retry after an undo; the audit log shows both events.
 - Clients that call the API without a `requestId` get no protection against duplicates. The web client always sends one.
-- An application version older than this decision cannot import a version-2 export, which is rejected on `schemaVersion`. Downgrade was never supported.
+- An application version older than this decision cannot import a version-2 export, which is rejected on `schemaVersion`. Downgrade was never supported. Rolling back to an older image after the upgrade also needs a pre-upgrade export or backup: the old full unique index cannot be rebuilt once extra executions share a slot (see `docs/RELEASING.md`).

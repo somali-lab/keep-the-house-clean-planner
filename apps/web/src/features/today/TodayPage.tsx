@@ -89,9 +89,9 @@ export function TodayPage({ now }: { now?: Date }) {
       </p>
     );
 
-  const run = (next: OccurrenceAction, occ: OccurrenceView) => {
+  const run = (next: OccurrenceAction, occ?: OccurrenceView) => {
     setFailed(false);
-    if (next.kind === 'complete') setSnackbar({ id: occ._id, task: occ.taskNameSnapshot });
+    if (next.kind === 'complete' && occ) setSnackbar({ id: occ._id, task: occ.taskNameSnapshot });
     if (next.kind === 'uncomplete' || next.kind === 'retract') setSnackbar(null);
     action.mutate(next, {
       onError: () => {
@@ -257,6 +257,7 @@ export function TodayPage({ now }: { now?: Date }) {
                 <OccurrenceItem
                   key={occ._id}
                   occurrence={occ}
+                  todayKey={todayKey}
                   roomName={occ.roomNameSnapshot ?? (occ.taskId ? roomByTask.get(occ.taskId) : undefined)}
                   users={activeUsers}
                   completionControl={settings.data.completionControl ?? 'circle'}
@@ -306,11 +307,16 @@ export function TodayPage({ now }: { now?: Date }) {
         open={recordOpen}
         onOpenChange={setRecordOpen}
         todayKey={todayKey}
-        onRecorded={(recorded) => {
+        onRecorded={(recorded, how) => {
           // Recorded work is dated today: show it, and offer the undo (a retract) like a check-off.
           setDayOffset(0);
           setFailed(false);
-          setSnackbar({ id: recorded._id, task: recorded.taskNameSnapshot, recorded: true });
+          // A checked-off planned task is undone like any check-off; recorded work is undone with a retract.
+          setSnackbar(
+            how === 'recorded'
+              ? { id: recorded._id, task: recorded.taskNameSnapshot, recorded: true }
+              : { id: recorded._id, task: recorded.taskNameSnapshot },
+          );
         }}
       />
 
@@ -327,8 +333,13 @@ export function TodayPage({ now }: { now?: Date }) {
             variant="ghost"
             className="h-11 shrink-0 rounded-full bg-background/15 px-4 font-bold text-background hover:bg-background/25 hover:text-background"
             onClick={() => {
+              // Recorded work is retracted by its stored id; it does not have to be in the current list yet.
+              if (snackbar.recorded) {
+                run({ id: snackbar.id, kind: 'retract' });
+                return;
+              }
               const occ = occurrences.data.find((o) => o._id === snackbar.id);
-              if (occ) run({ id: occ._id, kind: occ.recordedDone ? 'retract' : 'uncomplete' }, occ);
+              if (occ) run({ id: occ._id, kind: 'uncomplete' }, occ);
             }}
           >
             <Undo2 aria-hidden="true" />

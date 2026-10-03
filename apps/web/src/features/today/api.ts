@@ -1,6 +1,7 @@
 import type { OccurrenceView } from '@huishoudplanner/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiRequestError, type ApiClient } from '../../api/index.ts';
+import { releaseRequestKey, requestKeyFor } from '../../api/requestKey.ts';
 import { useOfflineQueue } from '../../offline/context.ts';
 
 export const occurrenceKeys = {
@@ -156,10 +157,11 @@ export function useOccurrenceAction(
       if (updated) replace((list) => list.map((occ) => (occ._id === updated._id ? updated : occ)));
     },
     // A queued action keeps the optimistic list; a refetch would fail offline anyway. A retract
-    // is never queued, so its list (and the due list, which the deleted work had restarted) is refetched.
+    // is never queued, so its list is refetched, and so is everything the deleted work fed: the due list
+    // (it restarted the due clock), the tasks (lastCompletedAt) and the statistics.
     onSettled: (updated, error, action) => {
       if (action.kind === 'retract') {
-        void queryClient.invalidateQueries({ queryKey: ['due'] });
+        for (const key of ['due', 'tasks', 'stats']) void queryClient.invalidateQueries({ queryKey: [key] });
         return queryClient.invalidateQueries({ queryKey });
       }
       return updated === null && !error ? undefined : queryClient.invalidateQueries({ queryKey });
@@ -169,7 +171,7 @@ export function useOccurrenceAction(
 
 /** Work that was done and was not (or not in this form) in the plan; always recorded as done today (ADR-0009). */
 export type RecordWorkInput =
-  | { kind: 'extra'; taskId: string; date: string; assigneeId: string; requestId: string }
+  | { kind: 'extra'; taskId: string; date: string; assigneeId: string }
   | {
       kind: 'oneOff';
       name: string;
@@ -177,42 +179,64 @@ export type RecordWorkInput =
       durationMinutes: number;
       date: string;
       assigneeId: string;
-      requestId: string;
     };
 
 /**
- * Records an extra execution or a one-off task as done in one request. The request key makes a repeated
- * click or retry idempotent. It is not queued offline: the server decides whether the record is new.
+ * Records an extra execution or a one-off task as done in one request. The request key belongs to the
+ * intent (kind, task or name, date, person, ...): a repeated click, a retry, or a closed and reopened
+ * dialog with the same values reuses it, so the server stores one record; it is dropped once the request
+ * succeeded. Not queued offline: the server decides whether the record is new.
  */
 export function useRecordWork() {
   const queryClient = useQueryClient();
   return useMutation({
     networkMode: 'always',
     mutationFn: async (input: RecordWorkInput): Promise<OccurrenceView> => {
-      if (input.kind === 'extra') {
-        return (
-          await api.post<OccurrenceView>('/api/occurrences', {
-            taskId: input.taskId,
-            date: input.date,
-            assigneeId: input.assigneeId,
-            done: true,
-            requestId: input.requestId,
-          })
-        ).data;
-      }
-      return (
-        await api.post<OccurrenceView>('/api/occurrences/one-off', {
-          name: input.name,
-          roomId: input.roomId,
-          durationMinutes: input.durationMinutes,
-          date: input.date,
-          assigneeId: input.assigneeId,
-          done: true,
-          requestId: input.requestId,
-        })
-      ).data;
+      const intent = `record-work:${JSON.stringify(input)}`;
+      const requestId = requestKeyFor(intent);
+      const created =
+        input.kind === 'extra'
+          ? (
+              await api.post<OccurrenceView>('/api/occurrences', {
+                taskId: input.taskId,
+                date: input.date,
+                assigneeId: input.assigneeId,
+                done: true,
+                requestId,
+              })
+            ).data
+          : (
+              await api.post<OccurrenceView>('/api/occurrences/one-off', {
+                name: input.name,
+                roomId: input.roomId,
+                durationMinutes: input.durationMinutes,
+                date: input.date,
+                assigneeId: input.assigneeId,
+                done: true,
+                requestId,
+              })
+            ).data;
+      releaseRequestKey(intent);
+      return created;
     },
     // Occurrences, the due list, tasks (lastCompletedAt) and every statistic read the new record.
+    onSettled: () =>
+      Promise.all(
+        ['occurrences', 'due', 'tasks', 'stats'].map((key) => queryClient.invalidateQueries({ queryKey: [key] })),
+      ),
+  });
+}
+
+/**
+ * Completes the planned occurrence of a task (for the person who did it) instead of recording an extra
+ * execution. It is the same PATCH as a check-off; the key is not needed because completing twice is refused.
+ */
+export function useCheckOffPlanned() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    networkMode: 'always',
+    mutationFn: async (input: { id: string; completedBy: string }): Promise<OccurrenceView> =>
+      (await sendOccurrenceAction({ id: input.id, kind: 'complete', completedBy: input.completedBy })).data,
     onSettled: () =>
       Promise.all(
         ['occurrences', 'due', 'tasks', 'stats'].map((key) => queryClient.invalidateQueries({ queryKey: [key] })),

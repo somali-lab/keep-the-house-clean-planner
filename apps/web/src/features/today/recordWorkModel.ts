@@ -15,8 +15,8 @@ export interface RecordWorkForm {
 
 export type RecordWorkField = 'taskId' | 'name' | 'duration' | 'doneBy';
 
-/** The request without its idempotency key, which belongs to the intent and not to the form values. */
-export type RecordWorkBody = RecordWorkInput extends infer Input ? (Input extends unknown ? Omit<Input, 'requestId'> : never) : never;
+/** What is being recorded; the idempotency key belongs to this intent, not to the form. */
+export type RecordWorkBody = RecordWorkInput;
 
 export const RECORD_WORK_ERRORS: Record<RecordWorkField, MessageKey> = {
   taskId: 'recordWork.error.task',

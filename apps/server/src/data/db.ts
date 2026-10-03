@@ -13,6 +13,9 @@ export const COLLECTIONS = {
 
 export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS];
 
+/** MongoDB error code for dropping an index that no longer exists. */
+const INDEX_NOT_FOUND = 27;
+
 export const GENERATED_SLOT_INDEX = 'occurrences_generated_slot_unique';
 
 /** Every index the app relies on (requirements §2, §3.8 and plan §1.4). */
@@ -62,7 +65,12 @@ async function dropLegacySlotIndexes(db: Db): Promise<void> {
   const legacyKey = JSON.stringify({ cycleId: 1, taskId: 1, plannedDate: 1 });
   for (const index of await collection.indexes()) {
     if (JSON.stringify(index.key) === legacyKey && index.name !== GENERATED_SLOT_INDEX) {
-      await collection.dropIndex(index.name!);
+      try {
+        await collection.dropIndex(index.name!);
+      } catch (error) {
+        // A concurrent startup dropped it first (IndexNotFound): the goal is reached.
+        if ((error as { code?: number }).code !== INDEX_NOT_FOUND) throw error;
+      }
     }
   }
 }

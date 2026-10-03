@@ -1,11 +1,14 @@
 import type { OccurrenceView } from '@huishoudplanner/shared';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { resetRequestKeys } from '../../api/requestKey.ts';
 import { ANNA, BRAM, mockApi, storeProfile } from '../../test/fixtures.ts';
 import { makeOccurrence, makeRoom, makeTask, renderWithProviders } from '../../test/render.tsx';
 import { RecordWorkDialog } from './RecordWorkDialog.tsx';
 
 const TODAY = '2026-09-16';
+
+afterEach(() => resetRequestKeys());
 const KEY = /^[A-Za-z0-9_-]{16,64}$/;
 
 function deferred<T>() {
@@ -20,6 +23,7 @@ function setup(routes: Record<string, unknown> = {}, props: { initialTaskId?: st
   storeProfile(ANNA._id);
   const fetchMock = mockApi({
     '/api/users': [ANNA, BRAM],
+    '/api/occurrences': [],
     '/api/rooms': [makeRoom({ _id: 'r1', name: 'Keuken' }), makeRoom({ _id: 'r2', name: 'Zolder', active: false })],
     '/api/tasks': [
       makeTask({ _id: 't1', name: 'Stofzuigen', roomId: 'r1' }),
@@ -30,10 +34,17 @@ function setup(routes: Record<string, unknown> = {}, props: { initialTaskId?: st
   });
   const onOpenChange = vi.fn();
   const onRecorded = vi.fn();
-  renderWithProviders(
-    <RecordWorkDialog open onOpenChange={onOpenChange} todayKey={TODAY} onRecorded={onRecorded} {...props} />,
-  );
-  return { fetchMock, onOpenChange, onRecorded };
+  const open = () =>
+    renderWithProviders(
+      <RecordWorkDialog open onOpenChange={onOpenChange} todayKey={TODAY} onRecorded={onRecorded} {...props} />,
+    );
+  const first = open();
+  // Closing the dialog unmounts it; reopening starts a fresh form.
+  const reopen = () => {
+    first.unmount();
+    return open();
+  };
+  return { fetchMock, onOpenChange, onRecorded, reopen };
 }
 
 const posts = (fetchMock: ReturnType<typeof mockApi>, url: string) =>
@@ -189,19 +200,54 @@ describe('RecordWorkDialog', () => {
     expect(third!.requestId).not.toBe(first!.requestId);
   });
 
-  it('refuses an incomplete form with a message per field and sends nothing', async () => {
-    const { fetchMock } = setup();
-    await screen.findByLabelText('Taak');
+  it('keeps the request key of a failed request when the dialog is closed and reopened with the same values', async () => {
+    let attempts = 0;
+    const { fetchMock, reopen, onRecorded } = setup({
+      'POST /api/occurrences': () => {
+        attempts += 1;
+        if (attempts === 1) throw new TypeError('network down');
+        return makeOccurrence({ _id: 'new1', taskId: 't1', origin: 'adhoc', recordedDone: true });
+      },
+    });
+    const fill = async () => {
+      const task = await screen.findByLabelText('Taak', { selector: 'select' });
+      await waitFor(() => expect(within(task).getAllByRole('option')).toHaveLength(3));
+      await waitFor(() => expect(screen.getByLabelText('Gedaan door')).toHaveValue(ANNA._id));
+      fireEvent.change(task, { target: { value: 't1' } });
+    };
+    await fill();
     fireEvent.click(submit());
+    expect(await screen.findByText('Vastleggen is niet gelukt. Probeer het opnieuw.')).toBeInTheDocument();
+
+    reopen();
+    await fill();
+    fireEvent.click(submit());
+    await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
+    const [first, second] = posts(fetchMock, '/api/occurrences') as { requestId: string }[];
+    expect(second!.requestId).toBe(first!.requestId);
+  });
+
+  it('refuses an incomplete form with one alert, a message per field and focus on the first invalid field', async () => {
+    const { fetchMock } = setup();
+    await screen.findByLabelText('Taak', { selector: 'select' });
+    await waitFor(() => expect(submit()).toBeEnabled());
+    fireEvent.click(submit());
+    const task = screen.getByLabelText('Taak', { selector: 'select' });
     expect(await screen.findByText('Kies een taak.')).toBeInTheDocument();
-    expect(screen.getByLabelText('Taak')).toBeInvalid();
+    expect(task).toBeInvalid();
+    expect(task).toHaveAccessibleDescription('Kies een taak.');
+    expect(task).toHaveFocus();
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(screen.getByRole('alert')).toHaveTextContent('Controleer de gemarkeerde velden');
 
     choose(oneOffChoice);
     fireEvent.click(submit());
     expect(await screen.findByText('Vul een naam in.')).toBeInTheDocument();
     expect(screen.getByText('Vul de duur in hele minuten in (minstens 1).')).toBeInTheDocument();
     expect(screen.getByLabelText('Naam van de klus')).toBeInvalid();
+    expect(screen.getByLabelText('Naam van de klus')).toHaveFocus();
     expect(screen.getByLabelText('Duur (minuten)')).toBeInvalid();
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
 
     fireEvent.change(screen.getByLabelText('Naam van de klus'), { target: { value: '   ' } });
     fireEvent.change(screen.getByLabelText('Duur (minuten)'), { target: { value: '0' } });
@@ -209,6 +255,64 @@ describe('RecordWorkDialog', () => {
     expect(screen.getByText('Vul een naam in.')).toBeInTheDocument();
     expect(screen.getByText('Vul de duur in hele minuten in (minstens 1).')).toBeInTheDocument();
     expect(anyPost(fetchMock)).toEqual([]);
+  });
+
+  it('cannot be submitted before the profile has loaded', async () => {
+    setup();
+    expect(submit()).toBeDisabled();
+    await waitFor(() => expect(submit()).toBeEnabled());
+  });
+
+  describe('when the chosen task is still planned today', () => {
+    const PLANNED = makeOccurrence({ _id: 'o-planned', taskId: 't1', taskNameSnapshot: 'Stofzuigen', date: TODAY, assigneeId: ANNA._id });
+
+    async function chooseStofzuigen() {
+      const task = await screen.findByLabelText('Taak', { selector: 'select' });
+      await waitFor(() => expect(within(task).getAllByRole('option')).toHaveLength(3));
+      await waitFor(() => expect(screen.getByLabelText('Gedaan door')).toHaveValue(ANNA._id));
+      fireEvent.change(task, { target: { value: 't1' } });
+    }
+
+    it('says so and checks off the planned occurrence by default, for the chosen person', async () => {
+      const { fetchMock, onRecorded } = setup({
+        '/api/occurrences': [PLANNED, makeOccurrence({ _id: 'o-other', taskId: 't2', date: TODAY }), makeOccurrence({ _id: 'o-tomorrow', taskId: 't2', date: '2026-09-17' })],
+        'PATCH /api/occurrences/o-planned': { ...PLANNED, status: 'done', completedBy: BRAM._id },
+      });
+      await chooseStofzuigen();
+      const choices = await screen.findByRole('group', { name: '"Stofzuigen" staat vandaag nog open in het plan.' });
+      expect(within(choices).getByRole('radio', { name: 'Vink de geplande taak af' })).toBeChecked();
+      expect(within(choices).getByRole('radio', { name: 'Toch een extra keer registreren' })).not.toBeChecked();
+
+      fireEvent.change(screen.getByLabelText('Gedaan door'), { target: { value: BRAM._id } });
+      fireEvent.click(within(dialog()).getByRole('button', { name: 'Afvinken' }));
+      await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
+      expect(onRecorded.mock.calls[0]![1]).toBe('checkedOff');
+      const patches = fetchMock.mock.calls.filter(([u, init]) => u === '/api/occurrences/o-planned' && (init as RequestInit | undefined)?.method === 'PATCH');
+      expect(patches.map(([, init]) => JSON.parse(String((init as RequestInit).body)))).toEqual([{ action: 'complete', completedBy: BRAM._id }]);
+      expect(anyPost(fetchMock)).toEqual([]);
+    });
+
+    it('records an extra execution anyway when that is chosen, and leaves the planned task open', async () => {
+      const { fetchMock, onRecorded } = setup({
+        '/api/occurrences': [PLANNED],
+        'POST /api/occurrences': makeOccurrence({ _id: 'new1', taskId: 't1', origin: 'adhoc', recordedDone: true }),
+      });
+      await chooseStofzuigen();
+      fireEvent.click(await screen.findByRole('radio', { name: 'Toch een extra keer registreren' }));
+      expect(within(dialog()).queryByRole('button', { name: 'Afvinken' })).not.toBeInTheDocument();
+      fireEvent.click(submit());
+      await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
+      expect(onRecorded.mock.calls[0]![1]).toBe('recorded');
+      expect(posts(fetchMock, '/api/occurrences')).toHaveLength(1);
+      expect(fetchMock.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === 'PATCH')).toEqual([]);
+    });
+
+    it('does not mention it for a task that is not planned today or only planned later', async () => {
+      setup({ '/api/occurrences': [{ ...PLANNED, date: '2026-09-17' }, { ...PLANNED, _id: 'o-done', status: 'done' }] });
+      await chooseStofzuigen();
+      expect(screen.queryByRole('group', { name: /staat vandaag nog open/ })).not.toBeInTheDocument();
+      expect(submit()).toBeInTheDocument();
+    });
   });
 
   it('closes on cancel without sending anything', async () => {

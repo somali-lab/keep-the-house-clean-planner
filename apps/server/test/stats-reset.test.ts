@@ -113,7 +113,11 @@ describe('DELETE /api/stats', () => {
 
     const response = await t.app.inject({ method: 'DELETE', url: '/api/stats', headers });
     expect(response.statusCode, response.body).toBe(200);
-    expect(response.json()).toMatchObject({ deletedOccurrences: 2, resetTasks: 1 });
+    // Recorded work is counted apart from the occurrences before the boundary, in the result and in the audit entry.
+    expect(response.json()).toMatchObject({ deletedOccurrences: 0, deletedRecorded: 2, resetTasks: 1 });
+    const audit = await t.db.collection(COLLECTIONS.auditLog).find({ entity: 'settings', action: 'reset' }).toArray();
+    expect(audit).toHaveLength(1);
+    expect(audit[0]!.meta).toMatchObject({ deletedOccurrences: 0, deletedRecorded: 2, scoped: false });
 
     const remaining = await findOccurrences(t.db, { taskId: new ObjectId(taskId) });
     expect(remaining.some((o) => o.recordedDone === true)).toBe(false);

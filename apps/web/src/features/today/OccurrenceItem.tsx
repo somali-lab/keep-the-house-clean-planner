@@ -23,6 +23,8 @@ import { format, t } from '../../i18n/nl.ts';
 
 export interface OccurrenceItemProps {
   occurrence: OccurrenceView;
+  /** The household's today; recorded work can only be undone on the day it was recorded. */
+  todayKey: string;
   roomName: string | undefined;
   users: User[];
   completionControl?: 'circle' | 'thumb';
@@ -44,6 +46,7 @@ export function shortDate(dayKey: string): string {
 
 export function OccurrenceItem({
   occurrence: occ,
+  todayKey,
   roomName,
   users,
   completionControl = 'circle',
@@ -171,7 +174,7 @@ export function OccurrenceItem({
               {t('today.claim')}
             </Button>
           )}
-          {occ.status === 'done' && (
+          {occ.status === 'done' && (!recorded || occ.date === todayKey) && (
             <Button
               type="button"
               variant="ghost"

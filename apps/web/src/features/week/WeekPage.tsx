@@ -448,6 +448,7 @@ function DayColumn({ dayKey, isToday, period, cycleStarted, cycleWeek, showCycle
               onComplete={onComplete}
               onUncomplete={onUncomplete}
               onRetract={onRetract}
+              isToday={isToday}
             />
           ))}
         </ul>
@@ -464,6 +465,7 @@ function WeekItem({
   onComplete,
   onUncomplete,
   onRetract,
+  isToday,
 }: {
   occ: OccurrenceView;
   users: User[];
@@ -472,6 +474,8 @@ function WeekItem({
   onComplete(id: string): void;
   onUncomplete(id: string): void;
   onRetract(id: string): void;
+  /** Recorded work can only be undone (retracted) on the day it was recorded. */
+  isToday: boolean;
 }) {
   const isOpen = occ.status === 'open';
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, isDragging } =
@@ -587,7 +591,15 @@ function WeekItem({
             {completionControl === 'thumb' ? <ThumbsUp aria-hidden="true" /> : <Circle aria-hidden="true" />}
           </Button>
         )}
-        {occ.status === 'done' && (
+        {occ.status === 'done' && occ.recordedDone && !isToday && (
+          <span
+            className="grid size-9 shrink-0 place-items-center rounded-full bg-success text-success-foreground"
+            aria-hidden="true"
+          >
+            <Check className="size-4" />
+          </span>
+        )}
+        {occ.status === 'done' && !(occ.recordedDone && !isToday) && (
           <Button
             type="button"
             variant="default"

@@ -272,6 +272,26 @@ describe('WeekPage', () => {
     expect(patchBodies(fetchMock, 'o-extra')).toEqual([]);
   });
 
+  it('offers no undo for recorded work of an earlier day, because retracting is only an undo of today', async () => {
+    storeProfile(ANNA._id);
+    db = [
+      makeOccurrence({ _id: 'o-old', taskNameSnapshot: 'Ramen', date: '2026-09-15', assigneeId: ANNA._id, status: 'done', completedBy: ANNA._id, origin: 'adhoc', recordedDone: true }),
+      makeOccurrence({ _id: 'o-planned', taskNameSnapshot: 'Afwas', date: '2026-09-15', assigneeId: ANNA._id, status: 'done', completedBy: ANNA._id }),
+    ];
+    mockApi({
+      '/api/users': [ANNA, BRAM],
+      '/api/settings': makeSettings(),
+      '/api/rooms': [makeRoom({ _id: 'r1', name: 'Woonkamer' })],
+      '/api/tasks': [makeTask({ _id: 't1', name: 'Huishoudtaak', roomId: 'r1' })],
+      '/api/occurrences': () => db,
+    });
+    renderWithProviders(<WeekPage now={NOW} />);
+    fireEvent.click(await screen.findByRole('button', { name: /Afgelopen 3 dagen/ }));
+    expect(await screen.findByRole('button', { name: 'Afwas ongedaan maken' })).toBeInTheDocument();
+    expect(screen.getByText('Ramen')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Ramen ongedaan maken' })).not.toBeInTheDocument();
+  });
+
   it("asks how to complete another person's task and can take it over", async () => {
     const fetchMock = setup();
     renderWithProviders(<WeekPage now={NOW} />);

@@ -6,7 +6,10 @@ import { COLLECTIONS } from './db.ts';
 import { occurrencesCollection } from './occurrences.ts';
 
 export interface ResetStatisticsResult {
+  /** Occurrences before the boundary. */
   deletedOccurrences: number;
+  /** Recorded extra work and one-off tasks removed by a restart from today, because they have no planned state to return to. */
+  deletedRecorded: number;
   resetOccurrences: number;
   resetTasks: number;
   deletedPastCycles: number;
@@ -58,7 +61,8 @@ export async function resetStatisticsData(
   const deletedPastCycles = await ctx.db.collection(COLLECTIONS.cycles).deleteMany({ index: { $lt: boundaryCycle } });
 
   const result: ResetStatisticsResult = {
-    deletedOccurrences: deletedOccurrences.deletedCount + deletedRecorded.deletedCount,
+    deletedOccurrences: deletedOccurrences.deletedCount,
+    deletedRecorded: deletedRecorded.deletedCount,
     resetOccurrences: resetOccurrences.modifiedCount,
     resetTasks: resetTasks.modifiedCount,
     deletedPastCycles: deletedPastCycles.deletedCount,

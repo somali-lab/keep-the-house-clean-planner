@@ -245,13 +245,19 @@ describe('POST /api/occurrences (done now)', () => {
     expect(nobody.writes).toEqual([]);
   });
 
-  it('does not warn about a planned occurrence when work is recorded as done', async () => {
+  it('warns about a planned occurrence when work is recorded as done, and leaves the planned one alone', async () => {
     t.clock.set('2026-09-16T13:30:00.000Z');
     const task = await createTask('Planten water geven');
     expect((await post({ taskId: task, date: '2026-09-16' })).statusCode).toBe(201);
-    const res = await post({ taskId: task, date: '2026-09-16', done: true });
+    const res = await post({ taskId: task, date: '2026-09-16', done: true, requestId: key(60) });
     expect(res.statusCode).toBe(201);
-    expect(res.json<Body>().warnings).toEqual([]);
+    expect(res.json<Body>().warnings).toEqual([
+      expect.objectContaining({ code: 'task_already_planned', details: { taskId: task, date: '2026-09-16' } }),
+    ]);
+    expect(await occurrencesOf(task, 'open')).toHaveLength(1);
+    // A replay of the same key returns the stored record without a new warning.
+    const replay = await post({ taskId: task, date: '2026-09-16', done: true, requestId: key(60) });
+    expect(replay.statusCode).toBe(200);
   });
 });
 
@@ -321,5 +327,22 @@ describe('POST /api/occurrences/:id/retract', () => {
 
     expect((await retract('0123456789abcdef01234567')).statusCode).toBe(404);
     expect((await retract(generated!._id.toHexString(), {})).statusCode).toBe(400);
+  });
+
+  it('only retracts work of today: a record of an earlier day is refused and stays', async () => {
+    t.clock.set('2026-09-16T16:00:00.000Z');
+    const task = await createTask('Plinten afnemen');
+    const recorded = (await post({ taskId: task, date: '2026-09-16', done: true, requestId: key(50) })).json<OccurrenceView>();
+
+    // The next day it is history: retracting is an undo of today's work, and older completions need an administrator.
+    t.clock.set('2026-09-17T08:00:00.000Z');
+    const refused = await captureWrites(t, () => retract(recorded._id, asProfile(p2)));
+    expect(refused.result.statusCode).toBe(409);
+    expect(refused.result.json()).toMatchObject({ code: 'retract_not_today' });
+    expect(refused.writes).toEqual([]);
+    expect(await occurrencesOf(task, 'done')).toHaveLength(1);
+    expect(await lastCompletedAt(task)).not.toBeNull();
+
+    t.clock.set(DEFAULT_TEST_NOW);
   });
 });

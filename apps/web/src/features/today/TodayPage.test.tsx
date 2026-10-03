@@ -270,7 +270,9 @@ describe('TodayPage', () => {
     expect(within(dialog).getByRole('radio', { name: 'Extra keer voor een bestaande taak' })).toBeChecked();
     expect(within(dialog).getByRole('radio', { name: 'Eenmalige taak (komt niet in de takenlijst)' })).toBeInTheDocument();
     await waitFor(() => expect(within(within(dialog).getByLabelText('Taak')).getAllByRole('option')).toHaveLength(2));
-    fireEvent.change(within(dialog).getByLabelText('Taak'), { target: { value: 't2' } });
+    fireEvent.change(within(dialog).getByLabelText('Taak', { selector: 'select' }), { target: { value: 't2' } });
+    // Badkamer is still open in today's plan: checking that off is the default, an extra one is the alternative.
+    fireEvent.click(await within(dialog).findByRole('radio', { name: 'Toch een extra keer registreren' }));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Vastleggen' }));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
@@ -288,10 +290,32 @@ describe('TodayPage', () => {
     const snackbar = screen.getByRole('status');
     expect(snackbar).toHaveTextContent('"Badkamer" is vastgelegd.');
 
+    const refetchesBefore = (url: string) => fetchMock.mock.calls.filter(([u]) => u === url).length;
+    const [tasksBefore] = [refetchesBefore('/api/tasks')];
     fireEvent.click(within(snackbar).getByRole('button', { name: 'Ongedaan maken' }));
     await waitFor(() => expect(db.some((o) => o._id === 'o-recorded')).toBe(false));
+    // The retract also refreshes what the deleted work had fed: the tasks (lastCompletedAt).
+    await waitFor(() => expect(refetchesBefore('/api/tasks')).toBeGreaterThan(tasksBefore));
     expect(patchBodies(fetchMock, 'o-recorded')).toEqual([]);
     await waitFor(() => expect(screen.queryByRole('region', { name: 'Afgerond' })).not.toBeInTheDocument());
+  });
+
+  it('checks off the planned task from the dialog and offers undo as an uncomplete', async () => {
+    const fetchMock = setup();
+    renderWithProviders(<TodayPage now={NOW} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Werk vastleggen' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Gedaan werk vastleggen' });
+    await waitFor(() => expect(within(within(dialog).getByLabelText('Taak', { selector: 'select' })).getAllByRole('option')).toHaveLength(2));
+    fireEvent.change(within(dialog).getByLabelText('Taak', { selector: 'select' }), { target: { value: 't2' } });
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Afvinken' }));
+
+    await waitFor(() => expect(db.find((o) => o._id === 'o-mine')?.status).toBe('done'));
+    expect(patchBodies(fetchMock, 'o-mine')).toEqual([{ action: 'complete', completedBy: ANNA._id }]);
+    expect(fetchMock.mock.calls.filter(([u, init]) => u === '/api/occurrences' && (init as RequestInit | undefined)?.method === 'POST')).toEqual([]);
+    const snackbar = await screen.findByRole('status');
+    expect(snackbar).toHaveTextContent('"Badkamer" afgevinkt.');
+    fireEvent.click(within(snackbar).getByRole('button', { name: 'Ongedaan maken' }));
+    await waitFor(() => expect(db.find((o) => o._id === 'o-mine')?.status).toBe('open'));
   });
 
   it('marks recorded extra work with an Extra badge, and its undo retracts instead of uncompleting', async () => {

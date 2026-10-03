@@ -1,11 +1,14 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+import { resetRequestKeys } from '../../api/requestKey.ts';
 import { ANNA, BRAM, mockApi, storeProfile } from '../../test/fixtures.ts';
 import { makeRoom, makeSettings, makeTask, renderWithProviders } from '../../test/render.tsx';
 import type { DueItemView } from './api.ts';
 import { DuePage, spokenDate } from './DuePage.tsx';
 
 const NOW = new Date('2026-09-16T08:00:00Z'); // Wednesday
+
+afterEach(() => resetRequestKeys());
 
 const item = (overrides: Partial<DueItemView> & Pick<DueItemView, 'taskId' | 'taskName' | 'state'>): DueItemView => ({
   roomId: 'r1',

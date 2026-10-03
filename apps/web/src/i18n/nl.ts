@@ -548,6 +548,13 @@ export const nl = {
   'recordWork.error.doneBy': 'Kies wie het gedaan heeft.',
   'recordWork.error.failed': 'Vastleggen is niet gelukt. Probeer het opnieuw.',
   'recordWork.recorded': '"{task}" is vastgelegd.',
+  'recordWork.checkOff': 'Afvinken',
+  'recordWork.planned.notice': '"{task}" staat vandaag nog open in het plan.',
+  'recordWork.planned.checkOff': 'Vink de geplande taak af',
+  'recordWork.planned.checkOffHint': 'Zo komt er één uitvoering in de geschiedenis, geen twee.',
+  'recordWork.planned.extra': 'Toch een extra keer registreren',
+  'recordWork.planned.extraHint': 'De geplande taak blijft open staan.',
+  'recordWork.error.summary': 'Er mist nog iets. Controleer de gemarkeerde velden.',
 
   'week.overview': 'Weekoverzicht',
   'week.title': 'Weekoverzicht',

@@ -187,11 +187,20 @@ export async function deleteCompletedOccurrence(ctx: AuditContext, id: ObjectId)
   await refreshLastCompletedAt(ctx, current.taskId, id);
 }
 
-/** Undo of recorded work: an audited delete (reason retract) that also restores lastCompletedAt. */
+/**
+ * Undo of recorded work: an audited delete (reason retract) that also restores lastCompletedAt.
+ * It is an undo, not a correction: only work of today can be retracted by any profile. Deleting
+ * older completions stays an administrator's correction (DELETE /occurrences/:id).
+ */
 export async function retractOccurrence(ctx: AuditContext, id: ObjectId): Promise<void> {
   const current = await requireOccurrence(ctx, id);
   if (current.origin !== 'adhoc' || !current.recordedDone || current.status !== 'done') {
     throw new HttpError(409, 'not_retractable', 'Only recorded extra work can be retracted');
+  }
+  const settings = await getSettings(ctx.db);
+  if (!settings) throw new HttpError(500, 'settings_missing');
+  if (toDayKey(current.date, settings.timezone) !== today(settings.timezone, ctx.clock.now())) {
+    throw new HttpError(409, 'retract_not_today', 'Only work recorded today can be retracted');
   }
   // A concurrent retract already removed it: the same answer as a second retract.
   const deleted = await retractRecordedOccurrence(ctx, id);
@@ -441,15 +450,14 @@ export async function createAdhocOccurrence(ctx: AuditContext, input: AdhocOccur
   const now = ctx.clock.now();
   const date = fromDayKey(input.date, settings.timezone);
   const warnings: ApiWarning[] = [];
-  if (!done) {
-    const planned = await findOccurrences(ctx.db, { taskId: task._id, status: 'open', date });
-    if (planned.length > 0) {
-      warnings.push({
-        code: 'task_already_planned',
-        message: 'This task is already planned on that day',
-        details: { taskId: task._id.toHexString(), date: input.date },
-      });
-    }
+  // Also when recording it as done: the client can then offer to check off the planned occurrence instead.
+  const planned = await findOccurrences(ctx.db, { taskId: task._id, status: 'open', date });
+  if (planned.length > 0) {
+    warnings.push({
+      code: 'task_already_planned',
+      message: 'This task is already planned on that day',
+      details: { taskId: task._id.toHexString(), date: input.date },
+    });
   }
 
   const doc: OccurrenceDoc = {

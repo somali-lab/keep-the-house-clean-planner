@@ -1,8 +1,11 @@
 import { requestKeySchema } from '@huishoudplanner/shared/schemas/occurrences';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { REQUEST_KEY_LENGTH, createRequestKey } from './requestKey.ts';
+import { REQUEST_KEY_LENGTH, createRequestKey, releaseRequestKey, requestKeyFor, resetRequestKeys } from './requestKey.ts';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  resetRequestKeys();
+});
 
 describe('createRequestKey', () => {
   it('produces keys the server accepts', () => {
@@ -34,5 +37,20 @@ describe('createRequestKey', () => {
     };
     vi.stubGlobal('crypto', { getRandomValues });
     expect(requestKeySchema.safeParse(createRequestKey()).success).toBe(true);
+  });
+});
+
+describe('requestKeyFor', () => {
+  it('gives one intent the same key until it is released, and different intents different keys', () => {
+    const first = requestKeyFor('extra:t1:2026-09-16:u1');
+    expect(requestKeyFor('extra:t1:2026-09-16:u1')).toBe(first);
+    expect(requestKeyFor('extra:t2:2026-09-16:u1')).not.toBe(first);
+
+    releaseRequestKey('extra:t1:2026-09-16:u1');
+    expect(requestKeyFor('extra:t1:2026-09-16:u1')).not.toBe(first);
+  });
+
+  it('is a valid key the server accepts', () => {
+    expect(requestKeySchema.safeParse(requestKeyFor('x')).success).toBe(true);
   });
 });
