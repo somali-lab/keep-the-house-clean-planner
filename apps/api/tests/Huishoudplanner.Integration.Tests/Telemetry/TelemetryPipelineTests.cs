@@ -126,7 +126,8 @@ public sealed class TelemetryPipelineTests
         }
 
         tracer.ForceFlush();
-        var exported = spans.Should().ContainSingle().Subject;
+        // AppTelemetry.Source is process-wide: other hosts in the same test run may export spans into this list too.
+        var exported = spans.Where(s => s.OperationName == "redaction-probe").Should().ContainSingle().Subject;
         exported.TagObjects.Select(t => t.Key).Should().BeEquivalentTo(["http.request.header.accept"]);
     }
 
