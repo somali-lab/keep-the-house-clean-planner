@@ -11,6 +11,11 @@
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12" />
   </ItemGroup>
 
+  <ItemGroup Label="Architecture fixtures (deliberately violating types, never shipped)">
+    <PackageVersion Include="QuestPDF" Version="2026.9.1" />
+    <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.10.1" />
+  </ItemGroup>
+
   <ItemGroup Label="Tests">
     <PackageVersion Include="xunit.v3.mtp-v2" Version="4.0.1" />
     <PackageVersion Include="AwesomeAssertions" Version="9.6.0" />
@@ -18,6 +23,8 @@
     <PackageVersion Include="Testcontainers.MongoDb" Version="4.15.0" />
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.12" />
     <PackageVersion Include="TngTech.ArchUnitNET.xUnitV3" Version="0.13.4" />
+    <!-- Same version ArchUnitNET brings; the IL call rules use it directly. -->
+    <PackageVersion Include="Mono.Cecil" Version="0.11.6" />
   </ItemGroup>
 
 </Project>

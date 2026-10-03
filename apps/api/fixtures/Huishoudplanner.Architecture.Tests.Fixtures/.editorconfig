@@ -1,0 +1,4 @@
+[*.cs]
+# One file per verdict (Bad / Good) with one block per ring namespace, so block-scoped namespaces are intended here.
+csharp_style_namespace_declarations = block_scoped:suggestion
+file_scoped_namespaces = false:suggestion

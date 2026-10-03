@@ -14,6 +14,11 @@
 
   <ItemGroup>
     <PackageReference Include="TngTech.ArchUnitNET.xUnitV3" />
+    <PackageReference Include="Mono.Cecil" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\fixtures\Huishoudplanner.Architecture.Tests.Fixtures\Huishoudplanner.Architecture.Tests.Fixtures.csproj" />
   </ItemGroup>
 
 </Project>
