@@ -70,6 +70,12 @@ internal sealed class ChatClientPort(
 
             return Fail(activity, "unreachable", ex is ModelUnavailableException ? ex.Message : $"{label} could not be reached");
         }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Not an infrastructure failure: a bug. Counted and marked on the span, then it propagates unchanged.
+            Fail(activity, "error", "unexpected failure");
+            throw;
+        }
     }
 
     private PortError Fail(Activity? activity, string outcome, string message)

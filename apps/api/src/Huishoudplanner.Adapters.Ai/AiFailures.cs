@@ -39,8 +39,6 @@ internal static class AiFailures
                     return result.Status;
                 case HttpRequestException { StatusCode: { } status }:
                     return (int)status;
-                case HttpRequestException { Message: var message } when TryStatusInMessage(message, out var parsed):
-                    return parsed;
                 default:
                     break;
             }
@@ -60,19 +58,5 @@ internal static class AiFailures
         }
 
         return false;
-    }
-
-    private static bool TryStatusInMessage(string message, out int status)
-    {
-        // OllamaSharp reports a failed request as an HttpRequestException without a StatusCode in some versions.
-        status = 0;
-        var marker = message.IndexOf('(');
-        if (marker < 0)
-        {
-            return false;
-        }
-
-        var digits = new string(message.Skip(marker + 1).TakeWhile(char.IsDigit).ToArray());
-        return int.TryParse(digits, out status) && Enum.IsDefined((HttpStatusCode)status);
     }
 }

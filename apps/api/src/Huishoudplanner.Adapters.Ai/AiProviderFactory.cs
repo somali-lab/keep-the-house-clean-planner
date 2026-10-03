@@ -72,23 +72,12 @@ public static class AiProviderFactory
         }
 
         var model = options.Model ?? DefaultAnthropicModel;
-        // The SDK retries once on transient failures, like the Node client; the port's timeout bounds the whole call.
         if (!string.IsNullOrWhiteSpace(options.BaseUrl) && !Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out _))
         {
             return Misconfigured(options, InvalidUrl);
         }
 
-        // Everything is explicit so the SDK never reads ANTHROPIC_* variables of the host on its own.
-        var sdk = new AnthropicClient
-        {
-            ApiKey = options.ApiKey,
-            BaseUrl = string.IsNullOrWhiteSpace(options.BaseUrl) ? DefaultAnthropicEndpoint : options.BaseUrl.TrimEnd('/'),
-            MaxRetries = 1,
-            Timeout = timeout,
-            HttpClient = NewHttpClient(hooks, keepAuthorization: true),
-        };
-
-        return new ChatClientPort("anthropic", "Anthropic API", sdk.AsIChatClient(model), o => Map(o, DefaultMaxTokens), timeout);
+        return new ChatClientPort("anthropic", "Anthropic API", AnthropicClientFor(options, hooks).AsIChatClient(model), o => Map(o, DefaultMaxTokens), timeout);
     }
 
     private static ForChattingWithAModel CreateOpenAi(AiProviderOptions options, AiProviderHooks? hooks, TimeSpan timeout)
@@ -104,12 +93,7 @@ public static class AiProviderFactory
         }
 
         var hasKey = !string.IsNullOrEmpty(options.ApiKey);
-        var clientOptions = new OpenAIClientOptions
-        {
-            Endpoint = endpoint,
-            Transport = new HttpClientPipelineTransport(NewHttpClient(hooks, keepAuthorization: hasKey)),
-            RetryPolicy = new ClientRetryPolicy(0),
-        };
+        var clientOptions = OpenAiClientOptions(endpoint, NewHttpClient(hooks, keepAuthorization: hasKey));
         // Without a key the handler strips the Authorization header, so a keyless local server is not sent a bogus token.
         var chat = new ChatClient(options.Model, new ApiKeyCredential(hasKey ? options.ApiKey! : "not-configured"), clientOptions);
         return new ChatClientPort("openai-compatible", "AI provider", new NoContentGuard(chat.AsIChatClient()),
@@ -152,6 +136,28 @@ public static class AiProviderFactory
             },
             timeout);
     }
+
+    /// <summary>
+    /// Everything is explicit so the SDK never reads ANTHROPIC_* variables of the host. The SDK retries once on transient
+    /// failures like the Node client; it has no timeout of its own, the port's token bounds the whole call (per request).
+    /// </summary>
+    internal static AnthropicClient AnthropicClientFor(AiProviderOptions options, AiProviderHooks? hooks) => new()
+    {
+        ApiKey = options.ApiKey,
+        BaseUrl = string.IsNullOrWhiteSpace(options.BaseUrl) ? DefaultAnthropicEndpoint : options.BaseUrl.TrimEnd('/'),
+        MaxRetries = 1,
+        Timeout = Timeout.InfiniteTimeSpan,
+        HttpClient = NewHttpClient(hooks, keepAuthorization: true),
+    };
+
+    /// <summary>No retries and no pipeline network timeout (System.ClientModel defaults to 100 s); the port bounds the call.</summary>
+    internal static OpenAIClientOptions OpenAiClientOptions(Uri endpoint, HttpClient http) => new()
+    {
+        Endpoint = endpoint,
+        Transport = new HttpClientPipelineTransport(http),
+        RetryPolicy = new ClientRetryPolicy(0),
+        NetworkTimeout = Timeout.InfiniteTimeSpan,
+    };
 
     private static UnavailableChat Misconfigured(AiProviderOptions options, string detail) =>
         new(AiProviderOptions.WireName(options.Type), AiUnavailableReason.Misconfigured, detail);

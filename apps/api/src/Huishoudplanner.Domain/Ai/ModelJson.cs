@@ -12,6 +12,9 @@ public static partial class ModelJson
 {
     public const string NotJsonMessage = "The AI answer was not valid JSON";
 
+    // JSON.parse has no depth limit of its own; the .NET default of 64 would reject answers Node accepts.
+    private static readonly JsonDocumentOptions ParseOptions = new() { MaxDepth = 512 };
+
     [GeneratedRegex(@"^\s*```(?:json)?\s*([\s\S]*?)\s*```\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
     private static partial Regex Fence();
 
@@ -19,15 +22,15 @@ public static partial class ModelJson
     public static OneOf<JsonElement, NotJson> Extract(string raw)
     {
         ArgumentNullException.ThrowIfNull(raw);
-        var fenced = Fence().Match(raw);
-        var text = fenced.Success ? fenced.Groups[1].Value : raw;
         try
         {
-            using var document = JsonDocument.Parse(text);
+            var fenced = Fence().Match(raw);
+            using var document = JsonDocument.Parse(fenced.Success ? fenced.Groups[1].Value : raw, ParseOptions);
             return document.RootElement.Clone();
         }
-        catch (JsonException)
+        catch (Exception ex) when (ex is JsonException or RegexMatchTimeoutException)
         {
+            // A fence that takes too long to match is treated like any other unusable answer.
             return new NotJson(NotJsonMessage);
         }
     }

@@ -46,3 +46,24 @@ public class ModelJsonTests
         element.GetArrayLength().Should().Be(3);
     }
 }
+
+public class ModelJsonRobustnessTests
+{
+    [Fact]
+    public void Extract_accepts_nesting_deeper_than_the_default_json_depth()
+    {
+        var raw = new string('[', 100) + new string(']', 100);
+
+        ModelJson.Extract(raw).IsT0.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Extract_never_throws_on_a_long_unterminated_fence()
+    {
+        var raw = "```json\n" + new string('x', 200_000) + "\n``` trailing";
+
+        var act = () => ModelJson.Extract(raw);
+
+        act.Should().NotThrow();
+    }
+}
