@@ -20,13 +20,52 @@ import {
   weekIndexFor,
 } from '../packages/shared/src/cycle.ts';
 import {
+  BADGE_IMAGE_TYPES,
+  MAX_BADGE_DESCRIPTION_LENGTH,
+  MAX_BADGE_IMAGE_BYTES,
+  MAX_BADGE_NAME_LENGTH,
+  MAX_BADGE_RULE_TASKS,
+  MAX_BADGE_THRESHOLD,
+  MAX_BADGES,
+  MAX_ON_TIME_WEEKS_THRESHOLD,
+  MIN_BADGE_NAME_LENGTH,
+} from '../packages/shared/src/badges.ts';
+import {
   bonusAmountsOn,
+  MAX_BONUS_POINTS,
+  MIN_BONUS_POINTS,
   sameBonusAmounts,
   scheduleWithAmounts,
   type BonusAmounts,
   type BonusScheduleRow,
 } from '../packages/shared/src/bonuses.ts';
 import { computeDue, dueState, type DueTaskInput } from '../packages/shared/src/due.ts';
+import {
+  DEFAULT_CURRENCY_CODE,
+  defaultPointsForDuration,
+  MAX_CENTS_PER_POINT,
+  MAX_REDEMPTION_NOTE_LENGTH,
+  MAX_TASK_POINTS,
+  MIN_CENTS_PER_POINT,
+  MIN_TASK_POINTS,
+} from '../packages/shared/src/points.ts';
+import {
+  MAX_REWARD_GOAL_POINTS,
+  MIN_REWARD_GOAL_POINTS,
+  REWARD_EGG_COUNT,
+} from '../packages/shared/src/rewards.ts';
+import { CYCLE_DAYS, CYCLE_WEEKS } from '../packages/shared/src/cycle.ts';
+import {
+  MAX_POINTS_CORRECTIONS,
+  MAX_POINTS_ENTRIES_RANGE_DAYS,
+} from '../packages/shared/src/schemas/points.ts';
+import {
+  DEFAULT_AI_TIMEOUT_SECONDS,
+  MAX_AI_TIMEOUT_SECONDS,
+  MIN_AI_TIMEOUT_SECONDS,
+} from '../packages/shared/src/schemas/settings.ts';
+import { MAX_BROWSER_NOTIFICATION_TIMES } from '../packages/shared/src/schemas/users.ts';
+import { PLAN_WEEKS } from '../packages/shared/src/validation/plan.ts';
 import { DEFAULT_INTERVALS, type Interval } from '../packages/shared/src/schemas/intervals.ts';
 import {
   addDays,
@@ -915,7 +954,90 @@ const bonusesModule: ModuleSpec = {
   ],
 };
 
-export const MODULES: ModuleSpec[] = [timeModule, cycleModule, dueModule, bonusesModule];
+// ---------------------------------------------------------------------------------------
+// limits (GET /api/v2/meta/limits)
+// ---------------------------------------------------------------------------------------
+
+/**
+ * Every limit and default of the API as one flat object keyed `group.name`, the same names the endpoint
+ * publishes (the C# test flattens the JSON document of the endpoint and compares). Values with an exported
+ * constant in packages/shared come from it; the ones that exist only inline in a zod schema are written here
+ * with the schema they are copied from. `calendar.maxRangeDays` is new in v2 and has no TypeScript source:
+ * it is pinned to the 53 weeks of MAX_POINTS_ENTRIES_RANGE_DAYS on purpose.
+ */
+const limitsDocument = (): Json => ({
+  'calendar.cycleDays': CYCLE_DAYS,
+  'calendar.cycleWeeks': CYCLE_WEEKS,
+  'calendar.planWeeks': PLAN_WEEKS,
+  'calendar.maxRangeDays': MAX_POINTS_ENTRIES_RANGE_DAYS,
+  // schemas/occurrences.ts one-off name .max(120); schemas/intervals.ts key .max(32); schemas/occurrences.ts skip reason .max(500)
+  'tasks.minPoints': MIN_TASK_POINTS,
+  'tasks.maxPoints': MAX_TASK_POINTS,
+  'tasks.minDurationMinutes': 1,
+  'tasks.oneOffNameMaxLength': 120,
+  'tasks.intervalKeyMaxLength': 32,
+  'tasks.skipReasonMaxLength': 500,
+  'points.minCentsPerPoint': MIN_CENTS_PER_POINT,
+  'points.maxCentsPerPoint': MAX_CENTS_PER_POINT,
+  'points.maxRedemptionNoteLength': MAX_REDEMPTION_NOTE_LENGTH,
+  'points.maxEntriesRangeDays': MAX_POINTS_ENTRIES_RANGE_DAYS,
+  'points.maxCorrections': MAX_POINTS_CORRECTIONS,
+  'bonuses.minPoints': MIN_BONUS_POINTS,
+  'bonuses.maxPoints': MAX_BONUS_POINTS,
+  'rewards.minGoalPoints': MIN_REWARD_GOAL_POINTS,
+  'rewards.maxGoalPoints': MAX_REWARD_GOAL_POINTS,
+  'rewards.eggCount': REWARD_EGG_COUNT,
+  'badges.minNameLength': MIN_BADGE_NAME_LENGTH,
+  'badges.maxNameLength': MAX_BADGE_NAME_LENGTH,
+  'badges.maxDescriptionLength': MAX_BADGE_DESCRIPTION_LENGTH,
+  'badges.maxImageBytes': MAX_BADGE_IMAGE_BYTES,
+  'badges.imageTypes': [...BADGE_IMAGE_TYPES],
+  'badges.maxThreshold': MAX_BADGE_THRESHOLD,
+  'badges.maxOnTimeWeeksThreshold': MAX_ON_TIME_WEEKS_THRESHOLD,
+  'badges.maxBadges': MAX_BADGES,
+  'badges.maxRuleTasks': MAX_BADGE_RULE_TASKS,
+  'notifications.maxBrowserTimes': MAX_BROWSER_NOTIFICATION_TIMES,
+  // schemas/ai.ts aiConstraintsSchema .max(2000); schemas/settings.ts aiPromptsSchema .max(8000), aiPromptTemplateSchema .max(20000)
+  'ai.minTimeoutSeconds': MIN_AI_TIMEOUT_SECONDS,
+  'ai.maxTimeoutSeconds': MAX_AI_TIMEOUT_SECONDS,
+  'ai.constraintsMaxLength': 2000,
+  'ai.promptMaxLength': 8000,
+  'ai.promptTemplateMaxLength': 20000,
+  // schemas/auditLog.ts limit .min(1).max(200).default(50); schemas/stats.ts cycles .min(1).max(26).default(4)
+  'audit.defaultPageSize': 50,
+  'audit.maxPageSize': 200,
+  'statistics.defaultCycles': 4,
+  'statistics.maxCycles': 26,
+  'defaults.currencyCode': DEFAULT_CURRENCY_CODE,
+  'defaults.aiTimeoutSeconds': DEFAULT_AI_TIMEOUT_SECONDS,
+  'defaults.intervals': DEFAULT_INTERVALS.map((i) => ({ ...i })),
+});
+
+const limitsModule: ModuleSpec = {
+  module: 'limits',
+  functions: {
+    limits: fn(() => limitsDocument(), [['all limits and defaults of the endpoint', {}]]),
+    defaultPointsForDuration: fn(
+      (i: { minutes: number }) => defaultPointsForDuration(i.minutes),
+      [
+        ['one point per minute', { minutes: 45 }],
+        ['smallest duration', { minutes: 1 }],
+        ['floor of one point', { minutes: 0 }],
+        ['negative duration floors at one', { minutes: -5 }],
+        ['exactly the maximum', { minutes: 1000 }],
+        ['capped at the maximum', { minutes: 5000 }],
+      ],
+    ),
+  },
+};
+
+export const MODULES: ModuleSpec[] = [
+  timeModule,
+  cycleModule,
+  dueModule,
+  limitsModule,
+  bonusesModule,
+];
 
 /** Runs every case through the real TypeScript function. */
 export function buildVectors(): VectorFile[] {

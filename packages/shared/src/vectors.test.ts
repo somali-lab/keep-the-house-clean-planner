@@ -5,9 +5,12 @@ import { buildVectors, MODULES, serializeVectors, VECTORS_DIR } from '../../../s
 import * as bonuses from './bonuses.ts';
 import * as cycle from './cycle.ts';
 import * as due from './due.ts';
+import { defaultPointsForDuration } from './points.ts';
 import * as time from './time.ts';
 
-const SOURCES: Record<string, Record<string, unknown>> = { time, cycle, due, bonuses };
+// limits: the constants are a single generated document (the function named limits stands for it), plus the one rule of points.ts.
+const limits = { limits: () => undefined, defaultPointsForDuration };
+const SOURCES: Record<string, Record<string, unknown>> = { time, cycle, due, limits, bonuses };
 
 /** Exported values that are constants or types of the module, not functions to port. */
 const EXPORTED_FUNCTIONS = (source: Record<string, unknown>) =>
