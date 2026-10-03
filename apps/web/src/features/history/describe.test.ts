@@ -292,6 +292,18 @@ describe('badges (ADR-0014)', () => {
     expect(entityName(award({ action: 'create', after: { badgeId: 'b1', personId: BRAM } }), names)).toBe('Toiletjuffrouw');
   });
 
+  it('uses the name carried in the entry when the badge no longer exists', () => {
+    const award = entry({ entity: 'badgeAward', entityId: 'w1', action: 'delete', before: { badgeId: 'gone', personId: BRAM }, meta: { reason: 'uncomplete', badgeName: 'Oude badge' } });
+    expect(describeEntry(award, names)).toEqual(['Bram is de badge Oude badge kwijt']);
+    const summary = entry({
+      entity: 'badgeAward',
+      entityId: '000000000000000000000003',
+      action: 'recompute',
+      meta: { trigger: 'badge', created: 0, updated: 0, removed: 1, changes: [{ key: 'k', badgeId: 'gone', badgeName: 'Oude badge', personId: BRAM, change: 'removed' }], changesTotal: 1 },
+    });
+    expect(describeEntry(summary, names)).toContain('Bram is de badge Oude badge kwijt');
+  });
+
   it('lists who earned or lost which badge in a reconciliation, and how many more there are', () => {
     const lines = describeEntry(
       entry({

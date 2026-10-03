@@ -1,5 +1,6 @@
 import {
   evaluateBadgeRule,
+  ruleCovers,
   MAX_POINTS_CORRECTIONS,
   type BadgeExecution,
   type BadgeRule,
@@ -47,6 +48,17 @@ export function toBadgeRule(rule: BadgeRuleDoc): BadgeRule {
 
 const hex = (id: ObjectId): string => id.toHexString();
 
+export interface BadgeEvalOptions {
+  /**
+   * The task of the execution that changed (null for a one-off task), when it is known: a badge whose rule
+   * does not cover it cannot have changed, so its executions are not loaded and its awards are left alone.
+   * Undefined means unknown, and everything is evaluated.
+   */
+  taskId?: ObjectId | null;
+  /** Names of badges that no longer exist (a deleted one), so the history of their withdrawn awards keeps the name. */
+  badgeNames?: ReadonlyMap<string, string>;
+}
+
 /**
  * Makes the awards of the given people (everybody when `personIds` is null) match the data (ADR-0014):
  * a person holds a badge exactly while the done executions credited to them, or their on-time week
@@ -59,12 +71,30 @@ const hex = (id: ObjectId): string => id.toHexString();
  * reconciliation and the execution sync do) or through `reconcileBadges`. A run that changes nothing
  * writes and audits nothing.
  */
-export async function evaluateBadgeAwards(ctx: AuditContext, personIds: ObjectId[] | null, audit: BadgeEvalAudit): Promise<BadgeEvalResult> {
+export async function evaluateBadgeAwards(
+  ctx: AuditContext,
+  personIds: ObjectId[] | null,
+  audit: BadgeEvalAudit,
+  options: BadgeEvalOptions = {},
+): Promise<BadgeEvalResult> {
   const result: BadgeEvalResult = { created: 0, updated: 0, removed: 0 };
-  const badges = await listBadges(ctx.db, { active: true });
-  const stored = await badgeAwardsCollection(ctx.db)
-    .find(personIds ? { personId: { $in: personIds } } : {})
-    .toArray();
+  const everyBadge = await listBadges(ctx.db);
+  const names = new Map<string, string>([...(options.badgeNames ?? []), ...everyBadge.map((badge) => [hex(badge._id), badge.name] as const)]);
+  const active = everyBadge.filter((badge) => badge.active);
+  // A badge that cannot have been affected by the changed task is neither evaluated nor touched.
+  const untouched = new Set<string>();
+  if (options.taskId !== undefined) {
+    const taskId = options.taskId === null ? null : hex(options.taskId);
+    for (const badge of active) {
+      if (badge.rule.type !== 'onTimeWeeks' && !ruleCovers(toBadgeRule(badge.rule), taskId)) untouched.add(hex(badge._id));
+    }
+  }
+  const badges = active.filter((badge) => !untouched.has(hex(badge._id)));
+  const stored = (
+    await badgeAwardsCollection(ctx.db)
+      .find(personIds ? { personId: { $in: personIds } } : {})
+      .toArray()
+  ).filter((award) => !untouched.has(hex(award.badgeId)));
   if (badges.length === 0 && stored.length === 0) return result;
 
   const executionsOf = new Map<string, BadgeExecution[]>();
@@ -109,7 +139,7 @@ export async function evaluateBadgeAwards(ctx: AuditContext, personIds: ObjectId
   }
   for (const [key, current] of storedByKey) if (!expected.has(key)) changes.deletes.push(current);
 
-  const applied = await applyBadgeAwardChanges(ctx, changes, audit.mode === 'each' ? { reason: audit.reason } : null);
+  const applied = await applyBadgeAwardChanges(ctx, changes, names, audit.mode === 'each' ? { reason: audit.reason } : null);
   result.created = applied.filter((change) => change.change === 'created').length;
   result.updated = applied.filter((change) => change.change === 'updated').length;
   result.removed = applied.filter((change) => change.change === 'removed').length;
@@ -127,6 +157,7 @@ async function recordSummary(
   const changes = [...applied].sort(byKey).map((change) => ({
     key: change.key,
     badgeId: change.badgeId,
+    badgeName: change.badgeName,
     personId: change.personId,
     change: change.change,
   }));

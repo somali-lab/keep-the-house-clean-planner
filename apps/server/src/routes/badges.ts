@@ -22,6 +22,15 @@ import { notFound, parseOrThrow } from '../http/errors.ts';
 import { activeQuerySchema, parseIdParam } from '../http/params.ts';
 import { auditContext, requireAdmin } from '../identity/index.ts';
 
+/** Whether an If-None-Match header (a list of entity tags, weak ones and * included) names the bytes with this hash. */
+export function matchesETag(header: string | undefined, hash: string): boolean {
+  if (!header) return false;
+  return header.split(',').some((part) => {
+    const tag = part.trim();
+    return tag === '*' || tag.replace(/^W\//, '') === `"${hash}"`;
+  });
+}
+
 /** Reads need no profile, as everywhere else; every write is an administrator's (ADR-0014). */
 export const badgeRoutes: FastifyPluginAsync = async (app) => {
   app.get('/badges', async (request) => {
@@ -58,12 +67,15 @@ export const badgeRoutes: FastifyPluginAsync = async (app) => {
     const badge = await findBadgeById(app.deps.db, parseIdParam(request.params));
     if (!badge?.image) throw notFound('badge image');
     const etag = `"${badge.image.hash}"`;
+    // Only an address that carries the hash of these bytes may be cached for good; any other address revalidates.
+    const version = (request.query as { v?: unknown } | undefined)?.v;
+    const versioned = typeof version === 'string' && version.length >= 12 && badge.image.hash.startsWith(version);
     reply
       .header('ETag', etag)
-      .header('Cache-Control', 'public, max-age=31536000, immutable')
+      .header('Cache-Control', versioned ? 'public, max-age=31536000, immutable' : 'no-cache')
       .header('X-Content-Type-Options', 'nosniff')
       .header('Content-Security-Policy', "default-src 'none'; sandbox");
-    if (request.headers['if-none-match'] === etag) return reply.status(304).send();
+    if (matchesETag(request.headers['if-none-match'], badge.image.hash)) return reply.status(304).send();
     return reply.type(badge.image.contentType).send(imageBytes(badge.image));
   });
 

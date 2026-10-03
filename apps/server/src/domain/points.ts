@@ -117,12 +117,15 @@ export function syncExecutionPoints(
 
 async function syncNow(ctx: AuditContext, occurrenceId: ObjectId, reason: PointsSyncReason): Promise<SyncOutcome> {
   const settings = await getSettings(ctx.db);
-  if (!settings) return 'unchanged';
   const occurrence = await findOccurrenceById(ctx.db, occurrenceId);
-  const expected = occurrence ? expectedExecutionEntry(occurrence, settings.timezone) : null;
   const key = executionKey(occurrenceId);
   const stored = await findPointEntryByKey(ctx.db, key);
-  const outcome = await syncLedgerEntry(ctx, key, expected, stored, { occurrenceId, reason });
+  // Without settings the ledger cannot be dated and is left alone; the badges do not need the timezone and are still evaluated.
+  let outcome: SyncOutcome = 'unchanged';
+  if (settings) {
+    const expected = occurrence ? expectedExecutionEntry(occurrence, settings.timezone) : null;
+    outcome = await syncLedgerEntry(ctx, key, expected, stored, { occurrenceId, reason });
+  }
   await syncBadgesAfter(ctx, occurrence, stored, reason);
   return outcome;
 }
@@ -152,7 +155,7 @@ async function syncLedgerEntry(
  * Re-evaluates the badges of the person the change is about (ADR-0014): the person the execution is
  * credited to now and the one its ledger entry belonged to. An undo, a retract or a correction of work
  * that earned no ledger entry (a task of 0 points) does not say who held it before, so then everybody is
- * evaluated. A failure is logged and never fails the check-off that caused it; the nightly run repairs it.
+ * evaluated. Only the badges whose rule covers the task of the execution are looked at. A failure is logged and never fails the check-off that caused it; the nightly run repairs it.
  */
 async function syncBadgesAfter(
   ctx: AuditContext,
@@ -166,7 +169,9 @@ async function syncBadgesAfter(
     for (const id of [stored?.personId, credited]) if (id) people.set(id.toHexString(), id);
     const everybody = !stored && reason !== 'complete' && reason !== 'recorded';
     if (!everybody && people.size === 0) return;
-    await evaluateBadgeAwards(ctx, everybody ? null : [...people.values()], { mode: 'each', reason });
+    // The task is known from the occurrence, or from the ledger entry of an occurrence that is gone.
+    const taskId = occurrence ? occurrence.taskId : stored ? stored.taskId : undefined;
+    await evaluateBadgeAwards(ctx, everybody ? null : [...people.values()], { mode: 'each', reason }, taskId === undefined ? {} : { taskId });
   } catch (err) {
     ctx.log.error({ err, occurrenceId: occurrence?._id.toHexString() }, 'badge evaluation failed');
   }
@@ -455,6 +460,17 @@ async function reconcileNow(ctx: AuditContext, trigger: PointsRecomputeTrigger):
   }
   result.skipped = skippedIds.size;
 
+  // Step 5: the badge awards (ADR-0014), derived from the executions and the on-time week bonuses that are now final.
+  // They have their own summary entry, so the points summary and its result keep their shape. It runs also when the bonus
+  // step failed, and a failure of its own is rethrown only after the points summary is recorded, like the bonus failure.
+  let badgeFailure: { error: unknown } | null = null;
+  try {
+    await evaluateBadgeAwards(ctx, null, { mode: 'summary', trigger });
+  } catch (error) {
+    ctx.log.error({ err: error, trigger }, 'badge reconciliation failed');
+    badgeFailure = { error };
+  }
+
   if (
     result.tasksDefaulted + result.snapshotsSet + result.created + result.updated + result.removed + result.bonusesCreated + result.bonusesRemoved >
     0
@@ -462,10 +478,7 @@ async function reconcileNow(ctx: AuditContext, trigger: PointsRecomputeTrigger):
     await record(ctx, { entity: 'points', entityId: POINTS_LEDGER_ID, action: 'recompute', meta: { ...result } });
   }
   if (bonusFailure) throw bonusFailure.error;
-
-  // Step 5: the badge awards (ADR-0014), derived from the executions and the on-time week bonuses that are now final.
-  // They have their own summary entry, so the points summary and its result keep their shape.
-  await evaluateBadgeAwards(ctx, null, { mode: 'summary', trigger });
+  if (badgeFailure) throw badgeFailure.error;
   return result;
 }
 

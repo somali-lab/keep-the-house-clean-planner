@@ -8,13 +8,15 @@ import type {
   OccurrenceView,
 } from '@huishoudplanner/shared';
 import type { LightMyRequestResponse } from 'fastify';
-import { ObjectId } from 'mongodb';
+import { ObjectId, type CommandStartedEvent } from 'mongodb';
 import { afterEach, describe, expect, it } from 'vitest';
 import { findActivePlan } from '../src/data/cyclePlans.ts';
 import { COLLECTIONS } from '../src/data/db.ts';
 import type { UserDoc } from '../src/data/users.ts';
 import { listBadgeAwards } from '../src/data/badges.ts';
-import { reconcilePoints } from '../src/domain/points.ts';
+import { findCreditedExecutions } from '../src/data/occurrences.ts';
+import { reconcilePoints, syncExecutionPoints } from '../src/domain/points.ts';
+import { importData, parseImport, type ExportFile } from '../src/domain/transfer.ts';
 import { captureWrites } from './helpers/audit.ts';
 import { imageInput, JPEG_BYTES, PNG_BYTES, SVG_BYTES, WEBP_BYTES } from './helpers/badgeImages.ts';
 import { asProfile, seededRoom, seededUsers } from './helpers/http.ts';
@@ -716,5 +718,277 @@ describe('statistics reset', () => {
     f.t.clock.set('2026-09-23T12:00:00.000Z');
     expect((await f.call('DELETE', '/api/stats?before=2026-09-20')).statusCode).toBe(200);
     expect(await holders(f, badge._id)).toEqual({});
+  });
+});
+
+describe('deleting a task (ADR-0014)', () => {
+  it('removes the task from the rules that name it, keeps the badge editable and the export importable', async () => {
+    const f = await fixture();
+    const both = await f.addBadge({ name: 'Twee taken', rule: executions([f.toilet, f.mop], 5) });
+    const only = await f.addBadge({ name: 'Eén taak', rule: executions([f.toilet], 1) });
+    await f.completeAt('2026-09-16T08:00:00.000Z', await f.occurrence('2026-09-16', f.toilet));
+    expect(Object.keys(await holders(f, only._id))).toEqual(['p1']);
+
+    const deleted = await f.call('DELETE', `/api/tasks/${f.toilet}`);
+    expect(deleted.statusCode, deleted.body).toBe(200);
+
+    const badges = (await f.t.app.inject({ method: 'GET', url: '/api/badges' })).json<BadgesResponse>().badges;
+    const twoNow = badges.find((b) => b._id === both._id)!;
+    const oneNow = badges.find((b) => b._id === only._id)!;
+    expect(twoNow.rule).toEqual({ type: 'executions', taskIds: [f.mop], threshold: 5 });
+    expect(twoNow.active).toBe(true);
+    // A rule that named tasks and names none now is switched off: an empty list would count every task.
+    expect(oneNow.rule).toEqual({ type: 'executions', taskIds: [], threshold: 1 });
+    expect(oneNow.active).toBe(false);
+    expect(await holders(f, only._id)).toEqual({});
+    const updates = (await badgeAudit(f.t, 'badge')).filter((e) => e.action === 'update');
+    expect(updates).toHaveLength(2);
+    expect(updates.every((e) => (e.meta as { reason: string }).reason === 'task_deleted')).toBe(true);
+
+    // Both badges can still be saved, and the export imports again.
+    expect((await f.call('PATCH', `/api/badges/${both._id}`, { name: 'Nog steeds' })).statusCode).toBe(200);
+    expect((await f.call('PATCH', `/api/badges/${only._id}`, { active: true, rule: executions([f.mop], 1) })).statusCode).toBe(200);
+    const exported = (await f.t.app.inject({ method: 'GET', url: '/api/export/json' })).json<ExportFile>();
+    const target = await createTestApp({ seed: false });
+    apps.push(target);
+    await importData(target.systemCtx(), parseImport(exported));
+    expect(await target.db.collection(COLLECTIONS.badges).countDocuments()).toBe(2);
+  });
+
+  it('drops tasks that do not exist from a rule, but refuses a rule that names only such tasks', async () => {
+    const f = await fixture();
+    const gone = new ObjectId().toHexString();
+    const badge = await f.addBadge({ name: 'Half', rule: executions([f.toilet, gone], 2) });
+    expect(badge.rule).toEqual({ type: 'executions', taskIds: [f.toilet], threshold: 2 });
+    const refused = await f.call('PATCH', `/api/badges/${badge._id}`, { rule: executions([gone], 2) });
+    expect(refused.statusCode).toBe(400);
+  });
+});
+
+/** Counts the aggregations over the occurrences while `run` runs: that is how the executions of people are read. */
+async function occurrenceReads(t: TestApp, run: () => Promise<unknown>): Promise<number> {
+  let count = 0;
+  const listener = (event: CommandStartedEvent) => {
+    if (event.databaseName === t.dbName && event.commandName === 'aggregate' && event.command.aggregate === COLLECTIONS.occurrences) count += 1;
+  };
+  t.client.on('commandStarted', listener);
+  try {
+    await run();
+  } finally {
+    t.client.off('commandStarted', listener);
+  }
+  return count;
+}
+
+describe('finding the executions of a person', () => {
+  it('gives the same answer for a few people as for everybody, by the credit rule', async () => {
+    const f = await fixture();
+    await f.completeAt('2026-09-16T08:00:00.000Z', await f.occurrence('2026-09-16', f.toilet)); // person 1 did their own work
+    await f.completeAt('2026-09-17T08:00:00.000Z', await f.occurrence('2026-09-17', f.mop), { action: 'complete', completedBy: f.p1._id.toHexString() }, f.p2); // done for person 1 by person 2
+    await f.completeAt('2026-09-17T09:00:00.000Z', await f.occurrence('2026-09-17', f.toilet), { action: 'complete', takeOver: true }, f.p1); // taken over by person 1
+    // Old data without completedBy is credited to the assignee.
+    const old = await f.occurrence('2026-09-18', f.free);
+    await f.t.db.collection(COLLECTIONS.occurrences).updateOne({ _id: new ObjectId(old) }, { $set: { status: 'done', completedBy: null, assigneeId: f.p2._id } });
+    const key = (docs: { _id: ObjectId; personId: ObjectId }[]) => docs.map((d) => `${d._id.toHexString()}:${d.personId.toHexString()}`).sort();
+    const everybody = await findCreditedExecutions(f.t.db, null);
+    expect(everybody.length).toBeGreaterThanOrEqual(4);
+    for (const people of [[f.p1._id], [f.p2._id], [f.p1._id, f.p2._id]]) {
+      const subset = await findCreditedExecutions(f.t.db, people);
+      expect(key(subset)).toEqual(key(everybody.filter((doc) => people.some((p) => p.equals(doc.personId)))));
+    }
+    expect((await findCreditedExecutions(f.t.db, [new ObjectId()])).length).toBe(0);
+  });
+
+  it('has indexes on the person and the status', async () => {
+    const f = await fixture();
+    const keys = (await f.t.db.collection(COLLECTIONS.occurrences).indexes()).map((index) => JSON.stringify(index.key));
+    expect(keys).toContain(JSON.stringify({ completedBy: 1, status: 1 }));
+    expect(keys).toContain(JSON.stringify({ assigneeId: 1, status: 1 }));
+  });
+
+  it('reads no executions for a check-off of a task that no rule covers, and still awards the badge that is covered', async () => {
+    const f = await fixture();
+    const badge = await f.addBadge({ name: 'Dweilen', rule: executions([f.mop], 1) });
+    const toilet = await f.occurrence('2026-09-16', f.toilet);
+    const mop = await f.occurrence('2026-09-16', f.mop);
+    // The toilet is not covered by the badge on the mop: nothing is read.
+    expect(await occurrenceReads(f.t, () => f.completeAt('2026-09-16T08:00:00.000Z', toilet))).toBe(0);
+    expect(await holders(f, badge._id)).toEqual({});
+    expect(await occurrenceReads(f.t, () => f.completeAt('2026-09-16T09:00:00.000Z', mop))).toBe(1);
+    expect(await holders(f, badge._id)).toEqual({ p1: '2026-09-16T09:00:00.000Z' });
+  });
+
+  it('reads no executions for a badge that does not count them, neither at a check-off nor for the progress', async () => {
+    const f = await fixture();
+    await f.addBadge({ name: 'Op tijd', rule: { type: 'onTimeWeeks', threshold: 2 } });
+    const id = await f.occurrence('2026-09-16', f.toilet);
+    expect(await occurrenceReads(f.t, () => f.completeAt('2026-09-16T08:00:00.000Z', id))).toBe(0);
+    expect(await occurrenceReads(f.t, () => f.t.app.inject({ method: 'GET', url: `/api/badges/progress?personId=${f.p1._id.toHexString()}` }))).toBe(0);
+  });
+
+  it('still revokes and awards correctly when only the covering badges are evaluated', async () => {
+    const f = await fixture();
+    const mopBadge = await f.addBadge({ name: 'Dweilen', rule: executions([f.mop], 1) });
+    const toiletBadge = await f.addBadge({ name: 'Toilet', rule: executions([f.toilet], 1) });
+    const mop = await f.occurrence('2026-09-16', f.mop);
+    const toilet = await f.occurrence('2026-09-16', f.toilet);
+    await f.completeAt('2026-09-16T08:00:00.000Z', mop);
+    await f.completeAt('2026-09-16T09:00:00.000Z', toilet);
+    expect(Object.keys(await holders(f, mopBadge._id))).toEqual(['p1']);
+    expect(Object.keys(await holders(f, toiletBadge._id))).toEqual(['p1']);
+    await f.completeAt('2026-09-16T10:00:00.000Z', toilet, { action: 'uncomplete' });
+    expect(await holders(f, toiletBadge._id)).toEqual({});
+    expect(await holders(f, mopBadge._id)).toEqual({ p1: '2026-09-16T08:00:00.000Z' });
+  });
+});
+
+describe('failures of the badge reconciliation', () => {
+  /** An active badge whose rule cannot be read makes every evaluation throw. */
+  async function breakBadges(f: Fixture) {
+    const now = new Date('2026-09-16T08:00:00.000Z');
+    await f.t.db
+      .collection(COLLECTIONS.badges)
+      .insertOne({ _id: new ObjectId(), name: 'Kapot', description: '', rule: { type: 'executions', threshold: 1 }, active: true, createdAt: now, updatedAt: now } as never);
+  }
+
+  it('never fails a badge change, a task deletion or a statistics reset whose own write is committed', async () => {
+    const f = await fixture();
+    await f.completeAt('2026-09-16T08:00:00.000Z', await f.occurrence('2026-09-16', f.toilet));
+    await breakBadges(f);
+    const created = await f.call('POST', '/api/badges', { name: 'Nieuw', rule: executions([], 1) });
+    expect(created.statusCode, created.body).toBe(201);
+    const id = created.json<Badge>()._id;
+    expect((await f.call('PATCH', `/api/badges/${id}`, { rule: executions([f.mop], 2) })).statusCode).toBe(200);
+    expect((await f.call('POST', '/api/badges/examples', { language: 'nl' })).statusCode).toBe(200);
+    expect((await f.call('DELETE', `/api/badges/${id}`)).statusCode).toBe(200);
+    expect((await f.call('DELETE', `/api/tasks/${f.vacuum}`)).statusCode).toBe(200);
+    expect((await f.call('DELETE', '/api/stats')).statusCode).toBe(200);
+  });
+
+  it('records the points summary first and then rethrows when the badge step fails', async () => {
+    const f = await fixture();
+    await f.completeAt('2026-09-16T08:00:00.000Z', await f.occurrence('2026-09-16', f.toilet));
+    await breakBadges(f);
+    const now = new Date('2026-09-16T08:00:00.000Z');
+    await f.t.db.collection(COLLECTIONS.pointEntries).insertOne({
+      _id: new ObjectId(),
+      key: `execution:${new ObjectId().toHexString()}`,
+      kind: 'execution',
+      personId: f.p1._id,
+      amount: 2,
+      date: now,
+      weekStart: now,
+      occurrenceId: null,
+      taskId: null,
+      titleSnapshot: 'Verdwaald',
+      source: 'live',
+      createdAt: now,
+      updatedAt: now,
+    });
+    await expect(reconcilePoints(f.t.systemCtx(), 'nightly')).rejects.toThrow(TypeError);
+    const summaries = await f.t.db.collection(COLLECTIONS.auditLog).find({ entity: 'points', action: 'recompute' }).toArray();
+    expect(summaries).toHaveLength(1);
+    expect(summaries[0]!.meta).toMatchObject({ removed: 1 });
+  });
+
+  it('runs the badge step even when the bonus step failed, and rethrows the bonus failure', async () => {
+    const f = await fixture();
+    const badge = await f.addBadge({ name: 'Toilet', rule: executions([f.toilet], 1) });
+    await f.completeAt('2026-09-16T08:00:00.000Z', await f.occurrence('2026-09-16', f.toilet));
+    await f.t.db.collection(COLLECTIONS.badgeAwards).deleteMany({});
+    // An anchor that is not a Monday makes the cycle calculation of the bonus step throw.
+    await f.t.db.collection(COLLECTIONS.settings).updateOne({}, { $set: { cycleAnchorDate: '2026-09-15' } });
+    await expect(reconcilePoints(f.t.systemCtx(), 'nightly')).rejects.toThrow(RangeError);
+    expect(Object.keys(await holders(f, badge._id))).toEqual(['p1']);
+    expect((await badgeAudit(f.t)).at(-1)).toMatchObject({ action: 'recompute', meta: { trigger: 'nightly', created: 1 } });
+  });
+
+  it('still evaluates the badges of a check-off when there are no settings', async () => {
+    const f = await fixture();
+    const badge = await f.addBadge({ name: 'Toilet', rule: executions([f.toilet], 1) });
+    const id = await f.occurrence('2026-09-16', f.toilet);
+    await f.completeAt('2026-09-16T08:00:00.000Z', id);
+    await f.t.db.collection(COLLECTIONS.badgeAwards).deleteMany({});
+    await f.t.db.collection(COLLECTIONS.settings).deleteMany({});
+    await syncExecutionPoints(f.t.systemCtx(), new ObjectId(id), 'correction');
+    expect(Object.keys(await holders(f, badge._id))).toEqual(['p1']);
+  });
+});
+
+describe('a no-op save, the badge limit and names in the history', () => {
+  it('writes nothing when the tasks of a rule are saved again in another order, also for a badge stored unordered', async () => {
+    const f = await fixture();
+    const badge = await f.addBadge({ name: 'Orde', rule: executions([f.toilet, f.mop], 3) });
+    const unordered = [f.toilet, f.mop].map((id) => new ObjectId(id)).sort((a, b) => b.toHexString().localeCompare(a.toHexString()));
+    await f.t.db.collection(COLLECTIONS.badges).updateOne({ _id: new ObjectId(badge._id) }, { $set: { 'rule.taskIds': unordered } });
+    const same = await captureWrites(f.t, () => f.call('PATCH', `/api/badges/${badge._id}`, { rule: executions([f.mop, f.toilet], 3) }));
+    expect(same.result.statusCode).toBe(200);
+    expect(same.writes).toEqual([]);
+    expect(same.auditInserts).toBe(0);
+  });
+
+  it('stores the tasks of an example in the stable order', async () => {
+    const f = await fixture();
+    const room = (await seededRoom(f.t, 'Toilet'))._id.toHexString();
+    const second = await f.call('POST', '/api/tasks', { name: 'WC poetsen', roomId: room, intervalKey: '1w', durationMinutes: 5 });
+    const created = (await f.call('POST', '/api/badges/examples', { language: 'nl' })).json<AddExampleBadgesResponse>().created;
+    const ids = (created.find((b) => b.exampleKey === 'example:toilet')!.rule as { taskIds: string[] }).taskIds;
+    expect(ids).toEqual([f.toilet, second.json<{ _id: string }>()._id].sort());
+  });
+
+  it('caps the number of badges at 100', async () => {
+    const f = await fixture();
+    const now = new Date('2026-09-16T08:00:00.000Z');
+    await f.t.db.collection(COLLECTIONS.badges).insertMany(
+      Array.from({ length: 100 }, (_, i) => ({ _id: new ObjectId(), name: `Badge ${i}`, description: '', rule: { type: 'onTimeWeeks', threshold: 1 }, active: false, createdAt: now, updatedAt: now })) as never[],
+    );
+    const refused = await f.call('POST', '/api/badges', { name: 'Te veel', rule: executions([], 1) });
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json()).toMatchObject({ code: 'badge_limit', limit: 100 });
+    expect((await f.call('POST', '/api/badges/examples', { language: 'nl' })).statusCode).toBe(409);
+    expect(await f.t.db.collection(COLLECTIONS.badges).countDocuments()).toBe(100);
+  });
+
+  it('carries the badge name in the award entries and in the summary, also after the badge was deleted', async () => {
+    const f = await fixture();
+    const badge = await f.addBadge({ name: 'Toiletjuffrouw', rule: executions([f.toilet], 1) });
+    await f.completeAt('2026-09-16T08:00:00.000Z', await f.occurrence('2026-09-16', f.toilet));
+    expect((await badgeAudit(f.t)).find((e) => e.action === 'create')).toMatchObject({ meta: { reason: 'complete', badgeName: 'Toiletjuffrouw' } });
+
+    expect((await f.call('DELETE', `/api/badges/${badge._id}`)).statusCode).toBe(200);
+    const summary = (await badgeAudit(f.t)).at(-1)!;
+    expect(summary).toMatchObject({ action: 'recompute', meta: { trigger: 'badge', removed: 1, changes: [{ change: 'removed', badgeName: 'Toiletjuffrouw' }] } });
+  });
+});
+
+describe('caching and validating the image', () => {
+  it('lets only an address with the hash of the bytes be cached for good', async () => {
+    const f = await fixture();
+    const badge = await f.addBadge({ name: 'Plaatje', rule: executions([], 1), image: imageInput(PNG_BYTES, 'image/png') });
+    const base = `/api/badges/${badge._id}/image`;
+    const hashPrefix = badge.image!.hash.slice(0, 12);
+    const cache = async (url: string) => (await f.t.app.inject({ method: 'GET', url })).headers['cache-control'];
+    expect(await cache(`${base}?v=${hashPrefix}`)).toBe('public, max-age=31536000, immutable');
+    expect(await cache(base)).toBe('no-cache');
+    expect(await cache(`${base}?v=000000000000`)).toBe('no-cache');
+    expect(await cache(`${base}?v=abc`)).toBe('no-cache');
+    // The bytes and the ETag are served either way.
+    const plain = await f.t.app.inject({ method: 'GET', url: base });
+    expect(plain.statusCode).toBe(200);
+    expect(plain.headers.etag).toBe(`"${badge.image!.hash}"`);
+  });
+
+  it('reads If-None-Match as a list of tags, weak ones and * included', async () => {
+    const f = await fixture();
+    const badge = await f.addBadge({ name: 'Plaatje', rule: executions([], 1), image: imageInput(PNG_BYTES, 'image/png') });
+    const etag = `"${badge.image!.hash}"`;
+    const status = async (header: string) => (await f.t.app.inject({ method: 'GET', url: badge.image!.url, headers: { 'if-none-match': header } })).statusCode;
+    expect(await status(etag)).toBe(304);
+    expect(await status(`W/${etag}`)).toBe(304);
+    expect(await status(`"other", ${etag}`)).toBe(304);
+    expect(await status(`"other",W/${etag} , "third"`)).toBe(304);
+    expect(await status('*')).toBe(304);
+    expect(await status('"other"')).toBe(200);
+    expect(await status(`"${badge.image!.hash}x"`)).toBe(200);
   });
 });

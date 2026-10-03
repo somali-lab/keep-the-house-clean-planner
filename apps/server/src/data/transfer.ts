@@ -1,6 +1,6 @@
 import { MongoBulkWriteError, type Db, type Document } from 'mongodb';
 import { COLLECTIONS } from './db.ts';
-import { clearBadgeAwards } from './badges.ts';
+import { clearBadgeAwards, countBadges } from './badges.ts';
 import { clearPointEntries, countRedemptions } from './points.ts';
 
 /**
@@ -43,6 +43,8 @@ export interface ReplaceResult {
   removedPointEntries: number;
   /** The redemptions among them: a file of version 4 or older has none to put back (ADR-0013). */
   removedRedemptions: number;
+  /** The badges that existed before the import replaced them; a file older than version 6 has none to put back (ADR-0014). */
+  removedBadges: number;
   /** Badge awards that were dropped; the caller rebuilds them from the imported data (ADR-0014). */
   removedBadgeAwards: number;
 }
@@ -55,6 +57,7 @@ export interface ReplaceResult {
  */
 export async function replaceAllCollections(db: Db, docs: TransferDocs): Promise<ReplaceResult> {
   const replaced = {} as Record<ReplacedCollection, number>;
+  const removedBadges = await countBadges(db);
   for (const name of TRANSFER_COLLECTIONS) {
     // The ledger is handled below: only the redemptions come from the file.
     if (name === COLLECTIONS.auditLog || name === COLLECTIONS.pointEntries) continue;
@@ -87,5 +90,5 @@ export async function replaceAllCollections(db: Db, docs: TransferDocs): Promise
       duplicates = writeErrors.length;
     }
   }
-  return { replaced, auditAdded: audit.length - duplicates, removedPointEntries, removedRedemptions, removedBadgeAwards };
+  return { replaced, auditAdded: audit.length - duplicates, removedPointEntries, removedRedemptions, removedBadges, removedBadgeAwards };
 }

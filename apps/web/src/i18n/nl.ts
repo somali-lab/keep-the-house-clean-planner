@@ -1164,6 +1164,8 @@ export const nl = {
   'badges.none': 'Er zijn nog geen badges.',
   'badges.imageChoose': 'Afbeelding kiezen',
   'badges.list': 'Overzicht van badges',
+  'settings.data.badgesWarning': 'Dit bestand is van een oudere versie (versie {version}) en bevat geen badges. De {count} badges die er nu zijn, met hun afbeeldingen, worden door deze import verwijderd.',
+  'settings.data.badgesAck': 'Ik begrijp dat {count} badges verloren gaan',
 } as const satisfies Partial<Record<MessageKey, string>>;
 
 function message(key: MessageKey): string {

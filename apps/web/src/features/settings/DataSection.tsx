@@ -52,6 +52,7 @@ export function DataSection() {
   const [message, setMessage] = useState<Message>(null);
   const resetExecution = useResetStatistics();
   const [acknowledged, setAcknowledged] = useState(false);
+  const [acknowledgedBadges, setAcknowledgedBadges] = useState(false);
 
   // A file older than version 5 has no redemptions, so importing it removes the ones that exist (ADR-0013).
   const olderFile = pending !== null && pending.version !== null && pending.version < 5;
@@ -63,11 +64,26 @@ export function DataSection() {
     gcTime: 0,
   });
   const lostRedemptions = olderFile ? (redemptions.data ?? 0) : 0;
-  const waitingForCount = olderFile && redemptions.isPending;
+
+  // A file older than version 6 has no badges, so importing it removes the ones that exist (ADR-0014).
+  const olderThanBadges = pending !== null && pending.version !== null && pending.version < 6;
+  const badges = useQuery({
+    queryKey: ['badges', 'count'],
+    queryFn: async () => (await api.get<{ badges: unknown[] }>('/api/badges')).data.badges.length,
+    enabled: olderThanBadges,
+    retry: false,
+    gcTime: 0,
+  });
+  const lostBadges = olderThanBadges ? (badges.data ?? 0) : 0;
+  const waitingForCount = (olderFile && redemptions.isPending) || (olderThanBadges && badges.isPending);
+  const needsAcknowledgement = (lostRedemptions > 0 && !acknowledged) || (lostBadges > 0 && !acknowledgedBadges);
 
   const runImport = useMutation({
-    mutationFn: ({ body, acknowledgeRedemptions }: { body: Record<string, unknown>; acknowledgeRedemptions: boolean }) =>
-      api.post(`/api/import/json?mode=replace&confirm=true${acknowledgeRedemptions ? '&acknowledgeRedemptions=true' : ''}`, body),
+    mutationFn: ({ body, acknowledgeRedemptions, acknowledgeBadges }: { body: Record<string, unknown>; acknowledgeRedemptions: boolean; acknowledgeBadges: boolean }) =>
+      api.post(
+        `/api/import/json?mode=replace&confirm=true${acknowledgeRedemptions ? '&acknowledgeRedemptions=true' : ''}${acknowledgeBadges ? '&acknowledgeBadges=true' : ''}`,
+        body,
+      ),
     onSuccess: async () => {
       setPending(null);
       setMessage({ kind: 'status', text: t('settings.data.imported') });
@@ -95,6 +111,7 @@ export function DataSection() {
       return;
     }
     setAcknowledged(false);
+    setAcknowledgedBadges(false);
     setPending(parsed);
   };
 
@@ -216,6 +233,23 @@ export function DataSection() {
               </label>
             </div>
           )}
+          {lostBadges > 0 && (
+            <div className="flex flex-col gap-2 rounded-lg border border-destructive/40 bg-background/60 p-3">
+              <p role="alert" className="flex items-start gap-2 font-semibold text-destructive">
+                <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                {format('settings.data.badgesWarning', { version: pending.version ?? '?', count: lostBadges })}
+              </p>
+              <label className="flex items-center gap-2 text-sm font-semibold">
+                <input
+                  type="checkbox"
+                  className="size-4 shrink-0 accent-primary"
+                  checked={acknowledgedBadges}
+                  onChange={(event) => setAcknowledgedBadges(event.target.checked)}
+                />
+                {format('settings.data.badgesAck', { count: lostBadges })}
+              </label>
+            </div>
+          )}
           {runImport.isPending && (
             <p role="status" className="text-sm font-semibold text-muted-foreground">
               {t('settings.data.importing')}
@@ -228,8 +262,14 @@ export function DataSection() {
             <Button
               type="button"
               variant="destructive"
-              disabled={runImport.isPending || waitingForCount || (lostRedemptions > 0 && !acknowledged)}
-              onClick={() => runImport.mutate({ body: pending.body, acknowledgeRedemptions: lostRedemptions > 0 && acknowledged })}
+              disabled={runImport.isPending || waitingForCount || needsAcknowledgement}
+              onClick={() =>
+                runImport.mutate({
+                  body: pending.body,
+                  acknowledgeRedemptions: lostRedemptions > 0 && acknowledged,
+                  acknowledgeBadges: lostBadges > 0 && acknowledgedBadges,
+                })
+              }
             >
               {t('settings.data.confirm')}
             </Button>

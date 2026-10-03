@@ -19,6 +19,8 @@ export type BadgeImageType = (typeof BADGE_IMAGE_TYPES)[number];
 /** Largest threshold of an executions or minutes rule, and of an on-time-weeks rule. */
 export const MAX_BADGE_THRESHOLD = 100_000;
 export const MAX_ON_TIME_WEEKS_THRESHOLD = 1000;
+/** Most badges that can exist; a household has a handful. */
+export const MAX_BADGES = 100;
 /** Most tasks one rule can name. */
 export const MAX_BADGE_RULE_TASKS = 500;
 

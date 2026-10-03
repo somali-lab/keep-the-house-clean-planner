@@ -210,6 +210,58 @@ describe('import', () => {
     expect(await listBadgeAwards(target.db)).toEqual([]);
   });
 
+  it('drops tasks the file does not have from a badge rule, orders the rest, and deactivates a rule that is left without tasks (ADR-0014)', async () => {
+    const taskId = (file.collections.badges[0]!.rule as { taskIds: { $oid: string }[] }).taskIds[0]!;
+    const gone = { $oid: new ObjectId().toHexString() };
+    const dangling = structuredClone(file);
+    (dangling.collections.badges[0]!.rule as { taskIds: unknown[] }).taskIds = [gone, taskId, { $oid: '00000000000000000000000a' }];
+    // The second badge names only a task that is not in the file.
+    Object.assign(dangling.collections.badges[1]!, { active: true });
+    dangling.collections.badges[1]!.rule = { type: 'executions', taskIds: [gone], threshold: 1 };
+    const target = await freshApp({ seed: false });
+    await importData(target.systemCtx(), parseImport(dangling));
+    const [first, second] = (await readAllCollections(target.db)).badges as unknown as { rule: { taskIds: ObjectId[] }; active: boolean }[];
+    expect(first!.rule.taskIds.map(String)).toEqual([taskId.$oid]);
+    expect(first!.active).toBe(true);
+    expect(second!.rule.taskIds).toEqual([]);
+    expect(second!.active).toBe(false);
+    // Exporting again gives a file that imports.
+    const again = (await target.app.inject({ method: 'GET', url: '/api/export/json' })).json<ExportFile>();
+    expect(() => parseImport(again)).not.toThrow();
+  });
+
+  it('refuses a file older than version 6 while badges exist, until it is acknowledged, and records how many were removed', async () => {
+    const target = await freshApp();
+    await importData(target.systemCtx(), parseImport(file));
+    // The file brought its own users: the administrator of the source now exists here.
+    const [actor] = await seededUsers(source);
+    const old = asVersion5(file);
+    const attempt = await captureWrites(target, () =>
+      target.app.inject({ method: 'POST', url: importUrl, headers: asProfile(actor), payload: old as unknown as Record<string, unknown> }),
+    );
+    expect(attempt.result.statusCode).toBe(409);
+    expect(attempt.result.json()).toMatchObject({ code: 'badges_would_be_removed', count: 2 });
+    expect(attempt.writes).toEqual([]);
+    expect(await target.db.collection('badges').countDocuments()).toBe(2);
+
+    const accepted = await target.app.inject({ method: 'POST', url: importUrl + '&acknowledgeBadges=true', headers: asProfile(actor), payload: old as unknown as Record<string, unknown> });
+    expect(accepted.statusCode, accepted.body).toBe(200);
+    expect(accepted.json()).toMatchObject({ removedBadges: 2, removedBadgeAwards: 1 });
+    const imported = await target.db.collection('auditLog').find({ entity: 'import' }).sort({ _id: -1 }).limit(1).toArray();
+    expect(imported[0]).toMatchObject({ after: { removedBadges: 2, removedBadgeAwards: 1 } });
+    expect(await target.db.collection('badges').countDocuments()).toBe(0);
+  });
+
+  it('needs no acknowledgement for a version 6 file or when there are no badges', async () => {
+    const target = await freshApp();
+    const [actor] = await seededUsers(source);
+    const post = (payload: ExportFile) => target.app.inject({ method: 'POST', url: importUrl, headers: asProfile(actor), payload: payload as unknown as Record<string, unknown> });
+    await importData(target.systemCtx(), parseImport(asVersion5(file)));
+    expect((await post(asVersion5(file))).statusCode).toBe(200); // no badges to lose
+    expect((await post(file)).statusCode).toBe(200);
+    expect((await post(file)).statusCode).toBe(200); // a version 6 file replaces its own badges
+  });
+
   it('imports a version-1 file, which has no recordedDone or requestId, unchanged', async () => {
     const legacy = asVersion1(file);
     const parsed = parseImport(legacy);
@@ -253,6 +305,7 @@ describe('import', () => {
       auditAdded: snapshot.auditLog.length,
       removedPointEntries: 0,
       removedRedemptions: 0,
+      removedBadges: 0,
       removedBadgeAwards: 0,
     });
 
@@ -322,11 +375,11 @@ describe('import', () => {
         { field: 'collections.badges', message: 'required' },
       ],
       [
-        'a badge rule that names a task which is not in the file',
+        'a badge rule with a task id that is not an id',
         (f) => {
-          (f.collections.badges[0]!.rule as { taskIds: unknown[] }).taskIds = [{ $oid: new ObjectId().toHexString() }];
+          (f.collections.badges[0]!.rule as { taskIds: unknown[] }).taskIds = ['0123456789abcdef01234567'];
         },
-        { field: 'collections.badges.0.rule.taskIds.0', message: 'unknown_task' },
+        { field: 'collections.badges.0.rule.taskIds.0', message: 'expected_object_id' },
       ],
       [
         'a badge image whose bytes do not match its hash',

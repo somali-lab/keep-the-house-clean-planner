@@ -27,6 +27,7 @@ import { BSON, Binary, ObjectId, type Db, type Document } from 'mongodb';
 import { z } from 'zod';
 import type { AuditContext } from '../audit/context.ts';
 import { record } from '../audit/record.ts';
+import { countBadges } from '../data/badges.ts';
 import { countRedemptions } from '../data/points.ts';
 import { SETTINGS_ID } from '../data/settings.ts';
 import { reconcilePoints, reconcilePointsSafely } from './points.ts';
@@ -249,14 +250,29 @@ function redemptionIssues(redemptions: Document[], users: Document[]): FieldIssu
 }
 
 /**
- * Badges that cannot be put back: a rule that names a task which is not in the file, an image whose bytes are not
+ * Brings the badges of a file in line with its tasks (ADR-0014): a task the file does not have (it was deleted before an
+ * older export) is dropped from the rule, the tasks of a rule are put in a stable order, and a rule that named tasks and
+ * names none left is deactivated, because an empty list would count every task.
+ */
+function reconcileBadgeTasks(badges: Document[], tasks: Document[]): Document[] {
+  const known = new Set(tasks.map((task) => String(task._id)));
+  return badges.map((doc) => {
+    const rule = doc.rule as Document | undefined;
+    if (!rule || !Array.isArray(rule.taskIds) || !rule.taskIds.every((id: unknown) => id instanceof ObjectId)) return doc;
+    const kept = (rule.taskIds as ObjectId[]).filter((id) => known.has(String(id))).sort((a, b) => (a.toHexString() < b.toHexString() ? -1 : 1));
+    const emptied = rule.taskIds.length > 0 && kept.length === 0;
+    return { ...doc, rule: { ...rule, taskIds: kept }, ...(emptied ? { active: false } : {}) };
+  });
+}
+
+/**
+ * Badges that cannot be put back: a rule with a task id that is not an id, an image whose bytes are not
  * what the file says they are (size, hash, a real PNG, JPEG or WebP of the declared type; an SVG is refused), or a
  * duplicate example key, which would violate a unique index. Replacing the data deletes first and inserts after, so
  * such a file has to be refused before anything is written (ADR-0014).
  */
-function badgeIssues(badges: Document[], tasks: Document[]): FieldIssue[] {
+function badgeIssues(badges: Document[]): FieldIssue[] {
   const issues: FieldIssue[] = [];
-  const known = new Set(tasks.map((task) => String(task._id)));
   const exampleKeys = new Set<string>();
   badges.forEach((doc, i) => {
     const path = `collections.badges.${i}`;
@@ -264,7 +280,6 @@ function badgeIssues(badges: Document[], tasks: Document[]): FieldIssue[] {
     if (Array.isArray(rule.taskIds)) {
       rule.taskIds.forEach((id: unknown, j: number) => {
         if (!(id instanceof ObjectId)) issues.push({ field: `${path}.rule.taskIds.${j}`, message: 'expected_object_id' });
-        else if (!known.has(String(id))) issues.push({ field: `${path}.rule.taskIds.${j}`, message: 'unknown_task' });
       });
     }
     if (typeof doc.exampleKey === 'string') {
@@ -368,7 +383,10 @@ export function parseImport(body: unknown, now: Date = new Date()): ParsedImport
   }
   issues.push(...bonusScheduleIssues(docs.settings[0], now));
   // The keys are built from typed values, so check them only once every document has the right types.
-  if (issues.length === 0) issues.push(...duplicateKeyIssues(docs.occurrences), ...redemptionIssues(docs.pointEntries, docs.users), ...badgeIssues(docs.badges, docs.tasks));
+  if (issues.length === 0) {
+    docs.badges = reconcileBadgeTasks(docs.badges, docs.tasks);
+    issues.push(...duplicateKeyIssues(docs.occurrences), ...redemptionIssues(docs.pointEntries, docs.users), ...badgeIssues(docs.badges));
+  }
   if (issues.length > 0) throw new HttpError(400, 'validation_error', 'Invalid import file', issues);
   return { schemaVersion: envelope.schemaVersion, exportedAt: envelope.exportedAt, docs };
 }
@@ -381,6 +399,14 @@ export type ImportResult = ReplaceResult;
  */
 export async function redemptionsLostByImport(db: Db, parsed: ParsedImport): Promise<number> {
   return parsed.schemaVersion < 5 ? countRedemptions(db) : 0;
+}
+
+/**
+ * The badges an import would remove without bringing any back: a file older than version 6 has none (ADR-0014). Zero for
+ * a version 6 file, which carries its own badges and replaces them like any other collection.
+ */
+export async function badgesLostByImport(db: Db, parsed: ParsedImport): Promise<number> {
+  return parsed.schemaVersion < 6 ? countBadges(db) : 0;
 }
 
 /**
@@ -404,6 +430,7 @@ export async function importData(
       auditAdded: result.auditAdded,
       removedPointEntries: result.removedPointEntries,
       removedRedemptions: result.removedRedemptions,
+      removedBadges: result.removedBadges,
       removedBadgeAwards: result.removedBadgeAwards,
     },
     meta: { mode: 'replace', schemaVersion: parsed.schemaVersion, exportedAt: parsed.exportedAt },

@@ -51,6 +51,15 @@ export const BADGE_AWARDS_LEDGER_ID = new ObjectId('000000000000000000000003');
 export const badgesCollection = (db: Db) => db.collection<BadgeDoc>(COLLECTIONS.badges);
 export const badgeAwardsCollection = (db: Db) => db.collection<BadgeAwardDoc>(COLLECTIONS.badgeAwards);
 
+/** Ids in a stable order, so the tasks of a rule compare as a set. */
+export function sortedIds(ids: ObjectId[]): ObjectId[] {
+  return [...ids].sort((a, b) => (a.toHexString() < b.toHexString() ? -1 : a.toHexString() > b.toHexString() ? 1 : 0));
+}
+
+export function countBadges(db: Db): Promise<number> {
+  return badgesCollection(db).countDocuments();
+}
+
 export const badgeAwardKey = (badgeId: ObjectId, personId: ObjectId): string =>
   `badge:${badgeId.toHexString()}:${personId.toHexString()}`;
 
@@ -82,7 +91,7 @@ export function badgeAuditView(doc: BadgeDoc): Record<string, unknown> {
     name: doc.name,
     description: doc.description,
     active: doc.active,
-    rule: doc.rule,
+    rule: doc.rule.type === 'onTimeWeeks' ? doc.rule : { ...doc.rule, taskIds: sortedIds(doc.rule.taskIds) },
     exampleKey: doc.exampleKey ?? null,
     image: doc.image ? { contentType: doc.image.contentType, size: doc.image.size, hash: doc.image.hash } : null,
   };
@@ -132,7 +141,7 @@ export interface BadgeUpdate {
 }
 
 /** Null when the badge does not exist. A patch that changes nothing writes and audits nothing. */
-export async function updateBadge(ctx: AuditContext, id: ObjectId, patch: BadgePatch): Promise<BadgeUpdate | null> {
+export async function updateBadge(ctx: AuditContext, id: ObjectId, patch: BadgePatch, meta?: Record<string, unknown>): Promise<BadgeUpdate | null> {
   const before = await findBadgeById(ctx.db, id);
   if (!before) return null;
   const next: BadgeDoc = { ...before, ...patch };
@@ -145,7 +154,7 @@ export async function updateBadge(ctx: AuditContext, id: ObjectId, patch: BadgeP
     { returnDocument: 'after' },
   );
   if (!after) return null;
-  await record(ctx, { entity: 'badge', entityId: id, action: 'update', ...diff });
+  await record(ctx, { entity: 'badge', entityId: id, action: 'update', ...diff, ...(meta ? { meta } : {}) });
   return { before, after, affectsAwards: 'rule' in diff.after || 'active' in diff.after };
 }
 
@@ -156,6 +165,28 @@ export async function deleteBadge(ctx: AuditContext, id: ObjectId): Promise<Badg
   const { before } = diffFields(badgeAuditView(deleted), {}, { ignore: [] });
   await record(ctx, { entity: 'badge', entityId: id, action: 'delete', before });
   return deleted;
+}
+
+/**
+ * A deleted task leaves the rules that named it (ADR-0014): its id is removed, and a rule that named tasks
+ * and now names none is deactivated, because an empty list would count every task. Each change is an audited
+ * badge update. Returns whether any badge changed, so the caller recomputes the awards.
+ */
+export async function removeTaskFromBadges(ctx: AuditContext, taskId: ObjectId): Promise<boolean> {
+  const affected = await badgesCollection(ctx.db).find({ 'rule.taskIds': taskId }).toArray();
+  let changed = false;
+  for (const badge of affected) {
+    if (badge.rule.type === 'onTimeWeeks') continue;
+    const taskIds = badge.rule.taskIds.filter((id) => !id.equals(taskId));
+    const update = await updateBadge(
+      ctx,
+      badge._id,
+      { rule: { ...badge.rule, taskIds }, ...(taskIds.length === 0 ? { active: false } : {}) },
+      { reason: 'task_deleted', taskId },
+    );
+    if (update?.affectsAwards) changed = true;
+  }
+  return changed;
 }
 
 export function listBadgeAwards(db: Db, filter: { personId?: ObjectId; badgeId?: ObjectId } = {}): Promise<BadgeAwardDoc[]> {
@@ -172,6 +203,8 @@ export interface AppliedBadgeAwardChange {
   change: 'created' | 'updated' | 'removed';
   key: string;
   badgeId: ObjectId;
+  /** The badge's name at that moment, so history can still name a badge that was deleted since. */
+  badgeName: string;
   personId: ObjectId;
   awardedAt: Date;
 }
@@ -188,19 +221,21 @@ const AWARD_AUDIT_IGNORE = ['_id', 'createdAt', 'updatedAt'];
 export async function applyBadgeAwardChanges(
   ctx: AuditContext,
   changes: BadgeAwardChanges,
+  names: ReadonlyMap<string, string>,
   audit: { reason: string } | null,
 ): Promise<AppliedBadgeAwardChange[]> {
   const collection = badgeAwardsCollection(ctx.db);
   const applied: AppliedBadgeAwardChange[] = [];
-  const meta = audit ? { reason: audit.reason } : undefined;
+  const metaOf = (badgeId: ObjectId) => ({ reason: audit!.reason, badgeName: names.get(badgeId.toHexString()) ?? '' });
+  const nameOf = (badgeId: ObjectId) => names.get(badgeId.toHexString()) ?? '';
 
   for (const current of changes.deletes) {
     const deleted = await collection.findOneAndDelete({ _id: current._id, awardedAt: current.awardedAt });
     if (!deleted) continue;
-    applied.push({ change: 'removed', key: deleted.key, badgeId: deleted.badgeId, personId: deleted.personId, awardedAt: deleted.awardedAt });
+    applied.push({ change: 'removed', key: deleted.key, badgeId: deleted.badgeId, badgeName: nameOf(deleted.badgeId), personId: deleted.personId, awardedAt: deleted.awardedAt });
     if (audit) {
       const { before } = diffFields({ ...deleted }, {}, { ignore: AWARD_AUDIT_IGNORE });
-      await record(ctx, { entity: 'badgeAward', entityId: deleted._id, action: 'delete', before, meta: { ...meta } });
+      await record(ctx, { entity: 'badgeAward', entityId: deleted._id, action: 'delete', before, meta: metaOf(deleted.badgeId) });
     }
   }
   for (const { current, awardedAt } of changes.updates) {
@@ -210,10 +245,10 @@ export async function applyBadgeAwardChanges(
       { returnDocument: 'after' },
     );
     if (!after) continue;
-    applied.push({ change: 'updated', key: after.key, badgeId: after.badgeId, personId: after.personId, awardedAt: after.awardedAt });
+    applied.push({ change: 'updated', key: after.key, badgeId: after.badgeId, badgeName: nameOf(after.badgeId), personId: after.personId, awardedAt: after.awardedAt });
     if (audit) {
       const diff = diffFields({ ...current }, { ...after }, { ignore: AWARD_AUDIT_IGNORE });
-      await record(ctx, { entity: 'badgeAward', entityId: after._id, action: 'update', ...diff, meta: { ...meta, badgeId: after.badgeId, personId: after.personId } });
+      await record(ctx, { entity: 'badgeAward', entityId: after._id, action: 'update', ...diff, meta: { ...metaOf(after.badgeId), badgeId: after.badgeId, personId: after.personId } });
     }
   }
   for (const { badgeId, personId, awardedAt } of changes.inserts) {
@@ -225,10 +260,10 @@ export async function applyBadgeAwardChanges(
       if (err instanceof MongoServerError && err.code === 11000) continue;
       throw err;
     }
-    applied.push({ change: 'created', key: doc.key, badgeId, personId, awardedAt });
+    applied.push({ change: 'created', key: doc.key, badgeId, badgeName: nameOf(badgeId), personId, awardedAt });
     if (audit) {
       const { after } = diffFields({}, { ...doc }, { ignore: AWARD_AUDIT_IGNORE });
-      await record(ctx, { entity: 'badgeAward', entityId: doc._id, action: 'create', after, meta: { ...meta } });
+      await record(ctx, { entity: 'badgeAward', entityId: doc._id, action: 'create', after, meta: metaOf(badgeId) });
     }
   }
   return applied;

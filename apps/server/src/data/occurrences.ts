@@ -301,9 +301,14 @@ export interface CreditedExecutionDoc {
  * credited for is left out. The credit rule is the one of the points ledger (ADR-0011).
  */
 export function findCreditedExecutions(db: Db, personIds: ObjectId[] | null): Promise<CreditedExecutionDoc[]> {
+  // For a few people the first stage matches on the indexed fields (completedBy or assigneeId with status), so a
+  // check-off does not scan every done occurrence; the credit rule is applied to what it returns.
+  const first = personIds
+    ? { status: 'done' as const, $or: [{ completedBy: { $in: personIds } }, { completedBy: null, assigneeId: { $in: personIds } }] }
+    : { status: 'done' as const };
   return occurrencesCollection(db)
     .aggregate<CreditedExecutionDoc>([
-      { $match: { status: 'done' } },
+      { $match: first },
       { $addFields: { personId: { $ifNull: ['$completedBy', '$assigneeId'] } } },
       { $match: { personId: personIds ? { $in: personIds } : { $ne: null } } },
       { $project: { taskId: 1, durationMinutesSnapshot: 1, completedAt: 1, date: 1, personId: 1 } },

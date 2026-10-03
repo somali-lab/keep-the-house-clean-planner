@@ -45,8 +45,9 @@ export function actorName(entry: AuditEntry, names: NameLookup): string {
 }
 
 function badgeNameOf(entry: AuditEntry, names: NameLookup): string {
+  // The name travels in the entry, so it is still known after the badge was deleted; the lookup serves older entries.
   const id = str(entry.after.badgeId) ?? str(entry.before.badgeId) ?? str(entry.meta?.badgeId);
-  return (id ? names.badges?.get(id) : undefined) ?? t('history.unknownEntity');
+  return str(entry.meta?.badgeName) ?? (id ? names.badges?.get(id) : undefined) ?? t('history.unknownEntity');
 }
 
 export function entityName(entry: AuditEntry, names: NameLookup): string {
@@ -225,7 +226,7 @@ function badgeChangeLines(meta: Json, names: NameLookup): string[] {
   const lines = changes.map((change) =>
     format(change.change === 'removed' ? 'history.action.badgeChangeRemoved' : change.change === 'updated' ? 'history.action.badgeChangeUpdated' : 'history.action.badgeChangeCreated', {
       person: formatValue('personId', change.personId, names),
-      badge: (str(change.badgeId) ? names.badges?.get(str(change.badgeId)!) : undefined) ?? t('history.unknownEntity'),
+      badge: str(change.badgeName) ?? (str(change.badgeId) ? names.badges?.get(str(change.badgeId)!) : undefined) ?? t('history.unknownEntity'),
     }),
   );
   const total = typeof meta.changesTotal === 'number' ? meta.changesTotal : changes.length;

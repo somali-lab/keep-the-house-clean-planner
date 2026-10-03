@@ -1060,4 +1060,6 @@ export const en = {
   "badges.none": "There are no badges yet.",
   "badges.imageChoose": "Choose image",
   "badges.list": "Overview of badges",
+  "settings.data.badgesWarning": "This file is from an older version (version {version}) and has no badges. The {count} badges that exist now, with their pictures, will be removed by this import.",
+  "settings.data.badgesAck": "I understand that {count} badges will be lost",
 } as const;

@@ -33,6 +33,9 @@ export const INDEXES: Record<CollectionName, IndexDescription[]> = {
     { key: { date: 1, assigneeId: 1 } },
     { key: { status: 1, date: 1 } },
     { key: { taskId: 1, completedAt: -1 } },
+    // ADR-0014: the executions credited to a person are found through the person and the status.
+    { key: { completedBy: 1, status: 1 } },
+    { key: { assigneeId: 1, status: 1 } },
     {
       key: { cycleId: 1, taskId: 1, plannedDate: 1 },
       name: GENERATED_SLOT_INDEX,
