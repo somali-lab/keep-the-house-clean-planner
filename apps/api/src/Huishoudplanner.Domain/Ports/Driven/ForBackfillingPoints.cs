@@ -18,6 +18,9 @@ public interface ForBackfillingPoints
     /// <summary>Every done occurrence, reduced to what the ledger needs; a row whose date cannot be read has no date.</summary>
     Task<OneOf<IReadOnlyList<ExecutionSource>, PortError>> FindDoneOccurrencesAsync(CancellationToken cancellationToken);
 
+    /// <summary>Every occurrence, whatever its status, reduced to the eight fields the bonus rules need (ADR-0012); a row that cannot be read is returned as such.</summary>
+    Task<OneOf<IReadOnlyList<BonusSource>, PortError>> FindBonusOccurrencesAsync(CancellationToken cancellationToken);
+
     /// <summary>The points and duration of every task, for the snapshot backfill.</summary>
     Task<OneOf<IReadOnlyList<TaskPointValue>, PortError>> FindTaskPointValuesAsync(CancellationToken cancellationToken);
 

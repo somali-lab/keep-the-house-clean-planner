@@ -6,6 +6,7 @@ using Huishoudplanner.Domain.Ports.Driven;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using OneOf;
+using BonusStatus = Huishoudplanner.Domain.Bonuses.OccurrenceStatus;
 
 namespace Huishoudplanner.Adapters.Mongo.Points;
 
@@ -62,6 +63,59 @@ internal sealed class MongoPointsBackfillStore : ForBackfillingPoints
             return Failed("read the done occurrences", e);
         }
     }
+
+    public async Task<OneOf<IReadOnlyList<BonusSource>, PortError>> FindBonusOccurrencesAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var filter = new BsonDocument();
+            var find = MongoTransactionContext.Session is { } session ? occurrences.Find(session, filter) : occurrences.Find(filter);
+            var documents = await find
+                .Project(new BsonDocument
+                {
+                    { "status", 1 }, { "plannedDate", 1 }, { "date", 1 }, { "recordedDone", 1 }, { "assigneeId", 1 },
+                    { "periodOwnerId", 1 }, { "completedBy", 1 }, { "completedAt", 1 },
+                })
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+            return OneOf<IReadOnlyList<BonusSource>, PortError>.FromT0([.. documents.Select(ToBonusSource)]);
+        }
+        catch (Exception e) when (IsFailure(e))
+        {
+            return Failed("read the occurrences for the bonuses", e);
+        }
+    }
+
+    private static BonusSource ToBonusSource(BsonDocument document)
+    {
+        var status = document.TryGetValue("status", out var s) && s.IsString
+            ? s.AsString switch
+            {
+                "open" => BonusStatus.Open,
+                "done" => BonusStatus.Done,
+                "skipped" => BonusStatus.Skipped,
+                _ => (BonusStatus?)null,
+            }
+            : null;
+        // A completion instant that is present but is no date makes the row unreadable (Node throws on it), like an unknown status.
+        var hasCompletion = document.TryGetValue("completedAt", out var completion) && !completion.IsBsonNull;
+        var completedAt = hasCompletion ? Instant(completion!) : null;
+        var hasFrozen = document.TryGetValue("periodOwnerId", out var frozen);
+        return new BonusSource(
+            ObjectIdConverter.ToHex(document["_id"].AsObjectId),
+            hasCompletion && completedAt is null ? null : status,
+            document.TryGetValue("plannedDate", out var planned) ? Instant(planned) : null,
+            document.TryGetValue("date", out var date) ? Instant(date) : null,
+            document.TryGetValue("recordedDone", out var recorded) && recorded.IsBoolean && recorded.AsBoolean,
+            Id(document, "assigneeId"),
+            hasFrozen,
+            hasFrozen && frozen!.IsObjectId ? ObjectIdConverter.ToHex(frozen.AsObjectId) : null,
+            Id(document, "completedBy"),
+            completedAt);
+    }
+
+    private static DateTimeOffset? Instant(BsonValue value) =>
+        value.IsValidDateTime ? new DateTimeOffset(value.ToUniversalTime(), TimeSpan.Zero) : null;
 
     public async Task<OneOf<IReadOnlyList<TaskPointValue>, PortError>> FindTaskPointValuesAsync(CancellationToken cancellationToken)
     {

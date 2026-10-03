@@ -42,6 +42,9 @@ internal sealed class FakePointEntryStore : ForStoringPointEntries
 
     public PortError? WriteFailure { get; set; }
 
+    /// <summary>Fails only the bonus read and write, so the execution part of a run can commit.</summary>
+    public PortError? BonusFailure { get; set; }
+
     /// <summary>Runs once, just before the next bulk write looks at the stored entries: a live sync that landed after the reconciliation read.</summary>
     public Action? ConcurrentWriteBeforeNextBulk { get; set; }
 
@@ -171,6 +174,60 @@ internal sealed class FakePointEntryStore : ForStoringPointEntries
         return Task.FromResult<OneOf<AppliedPointEntryChanges, PortError>>(new AppliedPointEntryChanges(created, updated, removed));
     }
 
+    public Task<OneOf<IReadOnlyList<PointEntry>, PortError>> FindBonusEntriesAsync(CancellationToken cancellationToken)
+    {
+        if ((BonusFailure ?? Failure) is { } failure)
+        {
+            return Task.FromResult<OneOf<IReadOnlyList<PointEntry>, PortError>>(failure);
+        }
+
+        return Task.FromResult(OneOf<IReadOnlyList<PointEntry>, PortError>.FromT0([.. Items.Where(e => e.Kind is PointEntryKind.BonusWeekDone or PointEntryKind.BonusWeekOnTime or PointEntryKind.BonusCycleDone or PointEntryKind.BonusCycleOnTime)]));
+    }
+
+    /// <summary>Runs once, just before the next bonus write: another writer changed an entry after the reconciliation read it.</summary>
+    public Action? ConcurrentWriteBeforeNextBonusWrite { get; set; }
+
+    public int BonusBulkWrites { get; private set; }
+
+    public Task<OneOf<AppliedBonusChanges, PortError>> ApplyBonusChangesAsync(BonusEntryChanges changes, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        if ((BonusFailure ?? WriteFailure ?? Failure) is { } failure)
+        {
+            return Task.FromResult<OneOf<AppliedBonusChanges, PortError>>(failure);
+        }
+
+        if (ConcurrentWriteBeforeNextBonusWrite is { } race)
+        {
+            ConcurrentWriteBeforeNextBonusWrite = null;
+            race();
+        }
+
+        BonusBulkWrites++;
+        var removed = new List<string>();
+        foreach (var delete in changes.Deletes)
+        {
+            if (Items.RemoveAll(e => SameAsRead(e, delete)) > 0)
+            {
+                removed.Add(delete.Key);
+            }
+        }
+
+        var created = new List<string>();
+        foreach (var insert in changes.Inserts)
+        {
+            if (Items.Any(e => e.Key == insert.Key))
+            {
+                continue;
+            }
+
+            Items.Add(new PointEntry(NextId(), insert.Key, insert.Kind, insert.PersonId, insert.Amount, insert.Date, insert.WeekStart, insert.PeriodStart, null, null, string.Empty, PointEntrySource.Recompute, null, null, null, at, at));
+            created.Add(insert.Key);
+        }
+
+        Writes += created.Count + removed.Count;
+        return Task.FromResult<OneOf<AppliedBonusChanges, PortError>>(new AppliedBonusChanges(created, removed));
+    }
+
     public Task<OneOf<IReadOnlyList<PointTotal>, PortError>> SumByPersonAsync(DateTimeOffset? from, DateTimeOffset? toExclusive, CancellationToken cancellationToken)
     {
         if (Failure is { } failure)
@@ -252,6 +309,35 @@ internal sealed class FakeBackfill(FakeOccurrenceStore occurrences) : ForBackfil
             .Select(o => ExecutionSource.From(o) with { Date = UnreadableIds.Contains(o.Id) ? null : o.Date })
             .ToList();
         return OneOf<IReadOnlyList<ExecutionSource>, PortError>.FromT0(done);
+    }
+
+    /// <summary>Occurrences whose status, plan day or completion cannot be read as such, for the bonus step.</summary>
+    public HashSet<string> UnreadableBonusIds { get; } = [];
+
+    public Task<OneOf<IReadOnlyList<BonusSource>, PortError>> FindBonusOccurrencesAsync(CancellationToken cancellationToken)
+    {
+        if (Failure is { } failure)
+        {
+            return Task.FromResult<OneOf<IReadOnlyList<BonusSource>, PortError>>(failure);
+        }
+
+        var sources = occurrences.Items.Select(o => new BonusSource(
+            o.Id,
+            UnreadableBonusIds.Contains(o.Id) ? null : o.Status switch
+            {
+                OccurrenceStatus.Done => Huishoudplanner.Domain.Bonuses.OccurrenceStatus.Done,
+                OccurrenceStatus.Skipped => Huishoudplanner.Domain.Bonuses.OccurrenceStatus.Skipped,
+                _ => Huishoudplanner.Domain.Bonuses.OccurrenceStatus.Open,
+            },
+            o.PlannedDate,
+            o.Date,
+            o.RecordedDone,
+            o.AssigneeId,
+            o.HasPeriodOwner,
+            o.PeriodOwnerId,
+            o.CompletedBy,
+            o.CompletedAt)).ToList();
+        return Task.FromResult(OneOf<IReadOnlyList<BonusSource>, PortError>.FromT0(sources));
     }
 
     public Task<OneOf<IReadOnlyList<TaskPointValue>, PortError>> FindTaskPointValuesAsync(CancellationToken cancellationToken) =>

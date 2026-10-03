@@ -40,6 +40,16 @@ public enum PointsRecomputeTrigger
     Admin,
 }
 
+/// <summary>
+/// Which transaction of a reconciliation wrote a summary entry: the execution entries and the field migration, or the bonuses. Node wrote one
+/// combined entry; here the bonus step is a transaction of its own, so a failing bonus step never undoes the executions.
+/// </summary>
+public enum PointsRecomputeStep
+{
+    Executions,
+    Bonuses,
+}
+
 /// <summary>The wire names stored and published, identical to the Node server's.</summary>
 public static class PointNames
 {
@@ -103,6 +113,13 @@ public static class PointNames
         _ => throw new ArgumentOutOfRangeException(nameof(reason)),
     };
 
+    public static string ToWire(PointsRecomputeStep step) => step switch
+    {
+        PointsRecomputeStep.Executions => "executions",
+        PointsRecomputeStep.Bonuses => "bonuses",
+        _ => throw new ArgumentOutOfRangeException(nameof(step)),
+    };
+
     public static string ToWire(PointsRecomputeTrigger trigger) => trigger switch
     {
         PointsRecomputeTrigger.Startup => "startup",
@@ -115,8 +132,9 @@ public static class PointNames
 
 /// <summary>
 /// One entry of the points ledger (requirements 3, <c>pointEntries</c>; ADR-0011). An entry of kind <see cref="PointEntryKind.Execution"/> is a pure
-/// function of one occurrence. The bonus kinds (slice 4.2) and the redemption (slice 4.3) are read and listed like any other entry but are never
-/// written by the execution sync or the reconciliation of an execution. Dates are the instants of local midnight in the household timezone.
+/// function of one occurrence. The bonus kinds (ADR-0012) are written only by the bonus step of the reconciliation, the redemption (slice 4.3) by
+/// its own writer; both are read and listed like any other entry but are never written by the execution sync or the reconciliation of an
+/// execution. Dates are the instants of local midnight in the household timezone.
 /// </summary>
 public sealed record PointEntry(
     string Id,
