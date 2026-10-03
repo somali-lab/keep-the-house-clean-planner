@@ -5,6 +5,7 @@ using Huishoudplanner.Domain.Occurrences;
 using Huishoudplanner.Domain.Points;
 using Huishoudplanner.Domain.Ports.Driven;
 using Huishoudplanner.Domain.Ports.Driving;
+using Huishoudplanner.Domain.Settings;
 using Huishoudplanner.Domain.Users;
 using OneOf;
 
@@ -12,7 +13,7 @@ namespace Huishoudplanner.Application.Points;
 
 /// <summary>
 /// The points ledger use cases (requirements 4.12, ADR-0011): the live sync of one execution entry, the reconciliation of the whole ledger and
-/// the two reads. Port of <c>domain/points.ts</c> for the execution entries; the bonus step (slice 4.2), the redemptions (4.3) and the badge step
+/// the two reads. Port of <c>domain/points.ts</c> for the execution entries and the bonuses; the redemptions (4.3) and the badge step
 /// (4.5) join the same reconciliation later.
 /// </summary>
 /// <remarks>
@@ -250,8 +251,8 @@ public sealed class PointsService(
     }
 
     /// <summary>
-    /// Steps 1 to 3 of <c>reconcileNow</c>: migrate the fields (tasks without points, done occurrences without a snapshot), compute the expected
-    /// entry of every done occurrence and apply the differences in bulk. The stored entries are read before the occurrences, and every change is a
+    /// Steps 1 to 4 of <c>reconcileNow</c>: migrate the fields (tasks without points, done occurrences without a snapshot), compute the expected
+    /// entry of every done occurrence and apply the differences in bulk, then the week and cycle bonuses. The stored entries are read before the occurrences, and every change is a
     /// compare-and-set on the entry that was read, so a check-off that lands meanwhile is never undone. Everything is read again when a concurrent
     /// transaction wins a write conflict and the attempt runs again.
     /// </summary>
@@ -282,6 +283,12 @@ public sealed class PointsService(
         if (unreadable.IsT1)
         {
             return Abort<PointsRecomputeResult>(unreadable.AsT1);
+        }
+
+        var storedBonuses = await entries.FindBonusEntriesAsync(ct).ConfigureAwait(false);
+        if (storedBonuses.IsT1)
+        {
+            return Abort<PointsRecomputeResult>(storedBonuses.AsT1);
         }
 
         // Step 1: migrate the fields. Both writes filter on the missing field, so a second run matches nothing.
@@ -335,6 +342,17 @@ public sealed class PointsService(
             applied = writtenEntries.AsT0;
         }
 
+        // Step 4: the week and cycle bonuses (ADR-0012), inserted or deleted, never updated.
+        var bonuses = await ReconcileBonusesAsync(read.AsT0, zone, storedBonuses.AsT0, now, ct).ConfigureAwait(false);
+        if (bonuses.IsT1)
+        {
+            return Abort<PointsRecomputeResult>(bonuses.AsT1);
+        }
+
+        var (bonusPlan, bonusReport) = bonuses.AsT0;
+        var skipped = new HashSet<string>(plan.SkippedIds, StringComparer.Ordinal);
+        skipped.UnionWith(bonusPlan.SkippedIds);
+
         var (listed, total, truncated) = PointsReconciliation.LimitCorrections(plan.Corrections);
         result = result with
         {
@@ -344,10 +362,15 @@ public sealed class PointsService(
             Updated = applied.Updated,
             Removed = applied.Removed,
             Unattributed = plan.Unattributed,
-            Skipped = plan.SkippedIds.Count + unreadable.AsT0.WithoutKey,
+            Skipped = skipped.Count + unreadable.AsT0.WithoutKey,
             Corrections = listed,
             CorrectionsTotal = total,
             CorrectionsTruncated = truncated,
+            BonusesCreated = bonusReport.Created,
+            BonusesRemoved = bonusReport.Removed,
+            BonusChanges = bonusReport.Listed,
+            BonusChangesTotal = bonusReport.Total,
+            BonusChangesTruncated = bonusReport.Truncated,
         };
 
         // One summary for the whole run; a run that changes nothing writes and audits nothing (ADR-0004).
@@ -361,6 +384,46 @@ public sealed class PointsService(
         }
 
         return TransactionOutcome.Commit<OneOf<PointsRecomputeResult, PortError>>(result);
+    }
+
+    /// <summary>
+    /// Step 4 of <c>reconcileNow</c> (ADR-0012): reads every occurrence, plans the week and cycle bonuses that must exist and applies the
+    /// differences. A bonus has one writer, this reconciliation: no live sync touches it.
+    /// </summary>
+    private async Task<OneOf<(BonusPlan Plan, BonusReport Report), PortError>> ReconcileBonusesAsync(
+        HouseholdSettings household, TimeZoneInfo zone, IReadOnlyList<PointEntry> storedBonuses, DateTimeOffset now, CancellationToken ct)
+    {
+        if (!DayKeys.IsMonday(household.CycleAnchorDate))
+        {
+            // The cycle calculation is undefined; the whole run is rolled back rather than half applied.
+            return new PortError("points.bonus_anchor_invalid: the cycle anchor is not a Monday, so the bonuses cannot be evaluated.");
+        }
+
+        var sources = await backfill.FindBonusOccurrencesAsync(ct).ConfigureAwait(false);
+        if (sources.IsT1)
+        {
+            return sources.AsT1;
+        }
+
+        var plan = PointsReconciliation.PlanBonuses(
+            storedBonuses,
+            sources.AsT0,
+            new BonusSettings(household.CycleAnchorDate, household.BonusSchedule ?? [], household.BonusFloor),
+            zone,
+            DayKeys.ToDayKey(now, zone));
+        var applied = AppliedBonusChanges.None;
+        if (!plan.Changes.IsEmpty)
+        {
+            var written = await entries.ApplyBonusChangesAsync(plan.Changes, now, ct).ConfigureAwait(false);
+            if (written.IsT1)
+            {
+                return written.AsT1;
+            }
+
+            applied = written.AsT0;
+        }
+
+        return (plan, PointsReconciliation.Describe(plan, applied));
     }
 
     private static TransactionOutcome<OneOf<T, PortError>> Abort<T>(PortError error) =>

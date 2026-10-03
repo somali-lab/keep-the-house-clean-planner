@@ -8,7 +8,7 @@ namespace Huishoudplanner.Application.Tests.Points;
 
 /// <summary>
 /// The reconciliation (ADR-0011): <c>points-reconcile.test.ts</c>. Monday 2026-09-14 is the first day of cycle 0; the task is 30 minutes (30 points
-/// by default). The week and cycle bonus step (slice 4.2), the badge step (4.5), the statistics reset (5.1) and the import (7.x) are not here.
+/// by default). The bonus step is in <c>PointsBonusReconcileTests</c>; the badge step (4.5), the statistics reset (5.1) and the import (7.x) are not here.
 /// </summary>
 public sealed class PointsReconcileTests
 {
@@ -406,18 +406,17 @@ public sealed class PointsReconcileTests
     // ---- the executions of one person are never mixed with the other kinds
 
     [Fact]
-    public async Task Recompute_neverReadsUpdatesOrDeletesAnEntryOfAnotherKind()
+    public async Task Recompute_neverReadsUpdatesOrDeletesABookedRedemption()
     {
         var w = new PointsWorld();
         PointEntry Other(PointEntryKind kind, int amount) => new(w.Ledger.NextId(), "other:" + kind, kind, w.Occ.P1.Id, amount, OccurrenceWorld.At("2026-09-20"), OccurrenceWorld.At("2026-09-14"),
             null, null, null, string.Empty, PointEntrySource.Live, null, null, null, OccurrenceWorld.Now, OccurrenceWorld.Now);
-        var bonus = Other(PointEntryKind.BonusWeekDone, 10);
         var redemption = Other(PointEntryKind.Redemption, -5);
-        w.Ledger.Items.AddRange([bonus, redemption]);
+        w.Ledger.Items.Add(redemption);
 
         var result = await Run(w);
 
         result.Should().BeEquivalentTo(new { Created = 0, Updated = 0, Removed = 0 });
-        w.Ledger.Items.Should().BeEquivalentTo([bonus, redemption]);
+        w.Ledger.Items.Should().BeEquivalentTo([redemption]);
     }
 }

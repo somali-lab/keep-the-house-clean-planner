@@ -6,12 +6,12 @@ public sealed record PointsHolding(string PersonId, int Amount);
 /// <summary>An execution entry that was changed or removed because it had drifted from its occurrence; <see cref="To"/> is <see langword="null"/> when it was removed.</summary>
 public sealed record PointsCorrection(string Key, PointsHolding From, PointsHolding? To);
 
-/// <summary>A week or cycle bonus that was created or removed (slice 4.2); the summary carries the shape already so the audit entry never changes.</summary>
+/// <summary>A week or cycle bonus that was created or removed by the reconciliation (ADR-0012); <paramref name="Change"/> is <c>created</c> or <c>removed</c>.</summary>
 public sealed record PointsBonusChange(string Key, string PersonId, int Amount, string Change);
 
 /// <summary>
 /// What one reconciliation did (<c>PointsRecomputeResult</c>): the answer of <c>POST /points/recompute</c> and the <c>meta</c> of its one summary audit
-/// entry (requirements 4.9). The bonus members are zero until slice 4.2 adds the bonus step.
+/// entry (requirements 4.9). The bonus members come from step 4, the bonuses (ADR-0012).
 /// </summary>
 public sealed record PointsRecomputeResult(
     PointsRecomputeTrigger Trigger,

@@ -11,8 +11,8 @@ namespace Huishoudplanner.Domain.Ports.Driven;
 /// The points ledger (collection <c>pointEntries</c>, shared with the Node server; ADR-0011). The writes only run inside
 /// <see cref="ForRunningTransactions"/> (a live sync together with its audit entry, a reconciliation together with its summary); called outside
 /// a transaction they write nothing and return a <see cref="PortError"/> whose message starts with <c>pointEntries.no_transaction</c>. Reads join
-/// the running transaction when there is one. Only entries of kind <see cref="PointEntryKind.Execution"/> are written here: the bonus entries
-/// (slice 4.2) and the redemptions (slice 4.3) have their own writers, and the other kinds are read and listed all the same.
+/// the running transaction when there is one. Execution entries are written one by one (live sync) or in bulk (reconciliation), bonus entries only in bulk by the reconciliation
+/// (ADR-0012); the redemptions (slice 4.3) will have their own writer, and every kind is read and listed all the same.
 /// </summary>
 public interface ForStoringPointEntries
 {
@@ -43,6 +43,16 @@ public interface ForStoringPointEntries
     /// next run sees it again. Only what really happened is counted.
     /// </summary>
     Task<OneOf<AppliedPointEntryChanges, PortError>> ApplyChangesAsync(PointEntryChanges changes, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>Every stored week and cycle bonus entry (ADR-0012), the set the bonus step of a reconciliation compares with the expected bonuses.</summary>
+    Task<OneOf<IReadOnlyList<PointEntry>, PortError>> FindBonusEntriesAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Applies the bonus differences of a reconciliation (ADR-0012): the deletes first, then the inserts, as bulk writes. Inserted entries get source
+    /// <c>recompute</c> and both timestamps <paramref name="at"/>. A delete is a compare-and-set on the entry as it was read. What was done is read back, so
+    /// only the writes that happened are in the result. No per-entry audit entry: the reconciliation records one summary.
+    /// </summary>
+    Task<OneOf<AppliedBonusChanges, PortError>> ApplyBonusChangesAsync(BonusEntryChanges changes, DateTimeOffset at, CancellationToken cancellationToken);
 
     /// <summary>The sums per person of the entries dated in [<paramref name="from"/>, <paramref name="toExclusive"/>) (both optional: the whole ledger without a range).</summary>
     Task<OneOf<IReadOnlyList<PointTotal>, PortError>> SumByPersonAsync(DateTimeOffset? from, DateTimeOffset? toExclusive, CancellationToken cancellationToken);

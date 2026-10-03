@@ -115,7 +115,7 @@ public static class PointNames
 
 /// <summary>
 /// One entry of the points ledger (requirements 3, <c>pointEntries</c>; ADR-0011). An entry of kind <see cref="PointEntryKind.Execution"/> is a pure
-/// function of one occurrence. The bonus kinds (slice 4.2) and the redemption (slice 4.3) are read and listed like any other entry but are never
+/// function of one occurrence. The bonus kinds (ADR-0012) are written only by the bulk step of the reconciliation, the redemption (slice 4.3) by its own writer; both are read and listed like any other entry but are never
 /// written by the execution sync or the reconciliation of an execution. Dates are the instants of local midnight in the household timezone.
 /// </summary>
 public sealed record PointEntry(
