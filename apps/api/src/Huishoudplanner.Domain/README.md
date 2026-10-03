@@ -22,3 +22,23 @@ Names map 1:1 to `packages/shared/src/time.ts` and `cycle.ts`.
 
 Error mapping of the TypeScript `RangeError`: unparsable day key is `FormatException`; unknown timezone, invalid time of
 day, non-Monday anchor and out-of-range weekday or week index are `ArgumentOutOfRangeException`.
+
+## Due (`Huishoudplanner.Domain.Due`)
+
+Port of `packages/shared/src/due.ts`; the scheduling "hybrid" half. Pure: the caller passes `today` as a day key and the timezone.
+
+| TypeScript                                       | C#                                                                                                |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| `DUE_RATIO`, `OVERDUE_RATIO`                     | `DueCalculator.DueRatio`, `OverdueRatio` (`const double`)                                         |
+| `DEFAULT_INTERVALS`                              | `DueCalculator.DefaultIntervals` (`IReadOnlyList<Interval>`)                                      |
+| `DueState` (`'ok'`, `'due'`, `'overdue'`)        | `enum DueState { Ok, Due, Overdue }`                                                              |
+| `dueState(ratio)`                                | `DueCalculator.DueStateOf(ratio)`                                                                 |
+| `DueTaskInput` (`_id`, `lastCompletedAt: Date`)  | `DueTaskInput(Id, Active, IntervalKey, DateTimeOffset? LastCompletedAt, DateOnly InitialDueDate)` |
+| `Interval`                                       | `Interval(Key, Label, int? PerCycle, PeriodDays)`                                                 |
+| `DueResult`                                      | `DueResult(TaskId, DaysSince, PeriodDays, double Ratio, State)`                                   |
+| `computeDue(tasks, intervals, today, tz)`        | `DueCalculator.ComputeDue(tasks, intervals, DateOnly today, TimeZoneInfo tz)`                     |
+
+Differences: the timezone has no default (pass `DayKeys.FindZone(DayKeys.AppTimezone)`); the final tie-break by task id is
+`StringComparer.Ordinal` where TypeScript used `localeCompare`; an interval with `PeriodDays == 0` is skipped like an unknown
+key (TypeScript skipped it through `!periodDays`). `ComputeDue` throws nothing itself; an invalid day key or timezone
+fails earlier, in `DayKeys.Parse` / `FindZone`.
