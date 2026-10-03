@@ -11,4 +11,39 @@
     <ProjectReference Include="..\..\src\Huishoudplanner.Adapters.Jobs\Huishoudplanner.Adapters.Jobs.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Scalar.AspNetCore" />
+    <!-- Build-time OpenAPI generation only: never flows to consumers or the published output. -->
+    <PackageReference Include="Microsoft.Extensions.ApiDescription.Server">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <!--
+    dotnet build of the Host writes the OpenAPI document to apps/api/openapi/v2.json (plan section 4.1), the reviewed
+    source of the generated TypeScript client. The CI job openapi-drift and OpenApiDocumentTests fail when it is stale.
+  -->
+  <PropertyGroup>
+    <OpenApiGenerateDocuments>true</OpenApiGenerateDocuments>
+    <OpenApiDocumentsDirectory>$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '..', '..', 'openapi'))</OpenApiDocumentsDirectory>
+    <OpenApiGenerateDocumentsOptions>--document-name v2 --file-name v2</OpenApiGenerateDocumentsOptions>
+  </PropertyGroup>
+
+  <!--
+    The tool skips generation while the Host assembly is older than its cache, but an endpoint described in Adapters.Http
+    changes the document without recompiling the Host. Dropping the cache makes every Host build regenerate the document.
+  -->
+  <Target Name="AlwaysGenerateOpenApiDocument" BeforeTargets="GenerateOpenApiDocuments">
+    <Delete Files="$(_OpenApiDocumentsCache)" />
+  </Target>
+
+  <!-- The tool names a non-default document <file-name>_<document-name>.json; the checked-in file is plainly v2.json. -->
+  <Target Name="NameOpenApiDocument" AfterTargets="GenerateOpenApiDocuments">
+    <PropertyGroup>
+      <_GeneratedOpenApiDocument>$(OpenApiDocumentsDirectory)v2_v2.json</_GeneratedOpenApiDocument>
+    </PropertyGroup>
+    <Move SourceFiles="$(_GeneratedOpenApiDocument)" DestinationFiles="$(OpenApiDocumentsDirectory)v2.json" Condition="Exists('$(_GeneratedOpenApiDocument)')" />
+  </Target>
+
 </Project>

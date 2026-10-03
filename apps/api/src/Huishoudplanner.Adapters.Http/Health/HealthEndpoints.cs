@@ -1,3 +1,4 @@
+using Huishoudplanner.Adapters.Http.OpenApi;
 using Huishoudplanner.Domain.Ports.Driving;
 
 namespace Huishoudplanner.Adapters.Http.Health;
@@ -21,7 +22,14 @@ public static class HealthEndpoints
             var report = await health.GetReportAsync(cancellationToken);
             var body = new HealthResponse(report.IsHealthy ? "ok" : "error", version.Value, report.DatabaseReachable ? "ok" : "error");
             return Results.Json(body, statusCode: report.IsHealthy ? StatusCodes.Status200OK : StatusCodes.Status503ServiceUnavailable);
-        });
+        })
+        .WithName("getHealth")
+        .WithTags(OpenApiSetup.HealthTag)
+        .WithSummary("Reports whether the service and its database are reachable.")
+        .WithDescription("Answers 200 when the database answers a ping and 503 when it does not; both carry the same body shape.")
+        .Produces<HealthResponse>(StatusCodes.Status200OK)
+        .Produces<HealthResponse>(StatusCodes.Status503ServiceUnavailable)
+        .ProducesProblem(StatusCodes.Status500InternalServerError);
         return routes;
     }
 }

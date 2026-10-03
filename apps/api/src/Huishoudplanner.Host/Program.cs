@@ -9,7 +9,8 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 });
 
 builder.Configuration.AddLegacyEnvironmentAliases();
-builder.Services.AddAppOptions(builder.Configuration);
+// Build-time OpenAPI generation has no configuration: skip the startup validation (see BuildTimeGeneration).
+builder.Services.AddAppOptions(builder.Configuration, validateOnStart: !BuildTimeGeneration.IsRunning);
 builder.Services.AddApiServices();
 
 var app = builder.Build();
