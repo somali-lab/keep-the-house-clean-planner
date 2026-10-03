@@ -19,7 +19,7 @@ import { auditContext, requireAdmin } from '../identity/index.ts';
 /**
  * The API always returns the bonus schedule and the conversion from points to currency; a missing
  * list means no bonuses, a missing currency means EUR, a missing factor means 0 and missing goals mean both are
- * automatic (ADR-0012, ADR-0013, ADR-0015).
+ * automatic (ADR-0012, requirements 4.12).
  */
 function withDefaults<T extends { bonusSchedule?: unknown; currencyCode?: string; centsPerPoint?: number; rewardGoals?: RewardGoals }>(settings: T) {
   return {
@@ -57,10 +57,10 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
     // The amounts apply from today on: the server turns them into a schedule row, and equal amounts write nothing (ADR-0012).
     const { periodBonuses, ...rest } = input;
     const patch: Parameters<typeof updateSettings>[1] = { ...rest };
-    // A conversion equal to the one in force (a missing value is the default) is a no-op: it writes and audits nothing (ADR-0013).
+    // A conversion equal to the one in force (a missing value is the default) is a no-op: it writes and audits nothing (requirements 4.12).
     if (patch.currencyCode === (current.currencyCode ?? DEFAULT_CURRENCY_CODE)) delete patch.currencyCode;
     if (patch.centsPerPoint === (current.centsPerPoint ?? 0)) delete patch.centsPerPoint;
-    // The goals of the reward meter equal to the ones in force (a missing value is automatic for both) are a no-op too (ADR-0015).
+    // The goals of the reward meter equal to the ones in force (a missing value is automatic for both) are a no-op too (requirements 4.12).
     if (patch.rewardGoals && sameRewardGoals(patch.rewardGoals, current.rewardGoals ?? NO_REWARD_GOALS)) delete patch.rewardGoals;
     let basedOn: { rows: BonusScheduleRow[] | undefined } | undefined;
     if (periodBonuses) {

@@ -36,7 +36,7 @@ export const INDEXES: Record<CollectionName, IndexDescription[]> = {
     // ADR-0014: the executions credited to a person are found through the person and the status.
     { key: { completedBy: 1, status: 1 } },
     { key: { assigneeId: 1, status: 1 } },
-    // ADR-0015: the work planned for a period is found by the day it was planned for.
+    // requirements 4.12: the work planned for a period is found by the day it was planned for.
     { key: { plannedDate: 1 } },
     {
       key: { cycleId: 1, taskId: 1, plannedDate: 1 },
@@ -57,7 +57,7 @@ export const INDEXES: Record<CollectionName, IndexDescription[]> = {
     { key: { key: 1 }, name: 'pointEntries_key_unique', unique: true },
     { key: { personId: 1, date: -1 } },
     { key: { date: 1 } },
-    // ADR-0013: a redemption booked twice with the same request key is one booking.
+    // requirements 4.12: a redemption booked twice with the same request key is one booking.
     {
       key: { requestId: 1 },
       name: 'pointEntries_request_id_unique',

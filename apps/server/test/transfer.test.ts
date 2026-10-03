@@ -96,7 +96,7 @@ beforeAll(async () => {
     payload: { action: 'complete' },
   });
   expect(done.statusCode, done.body).toBe(200);
-  // The goals of the reward meter are part of the settings and travel with them (ADR-0015).
+  // The goals of the reward meter are part of the settings and travel with them (requirements 4.12).
   const goals = await source.app.inject({ method: 'PATCH', url: '/api/settings', headers, payload: { rewardGoals: { weekPoints: 12, cyclePoints: null } } });
   expect(goals.statusCode, goals.body).toBe(200);
   // Two badges: one with a PNG for the task (earned, the person did it) and an inactive one with a JPEG for all tasks (ADR-0014).

@@ -71,7 +71,7 @@ export function makeBadgeImage(id: string): NonNullable<Badge['image']> {
   return { contentType: 'image/png', size: 70, hash: 'a'.repeat(64), url: `/api/badges/${id}/image?v=aaaaaaaaaaaa` };
 }
 
-/** The progress of the reward meter as the API returns it (ADR-0015): a week with 3 of 4 points earned. */
+/** The progress of the reward meter as the API returns it (requirements 4.12): a week with 3 of 4 points earned. */
 export function makeProgress(overrides: Partial<PointsProgressResponse> = {}): PointsProgressResponse {
   return {
     personId: ANNA._id,

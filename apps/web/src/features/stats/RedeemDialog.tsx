@@ -23,7 +23,7 @@ interface RedeemDialogProps {
 }
 
 /**
- * Redeems points (ADR-0013): a person gives up points for a payout or a reward. Everybody redeems for the
+ * Redeems points (requirements 4.12): a person gives up points for a payout or a reward. Everybody redeems for the
  * active profile; an administrator can pick anyone. The dialog shows what the points are worth when the
  * household set a conversion, and cannot book more than the balance (the server checks that too).
  */

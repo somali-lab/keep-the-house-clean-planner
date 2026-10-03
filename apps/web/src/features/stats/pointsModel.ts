@@ -88,7 +88,7 @@ export function parseWholePoints(text: string): number | null {
 
 /**
  * Checks the redeem form against the balance that is available: at least 1 point, at most the balance
- * (the server refuses a booking that would make the balance negative, ADR-0013) and a note of at most 200
+ * (the server refuses a booking that would make the balance negative, requirements 4.12) and a note of at most 200
  * characters. The note is trimmed, like the server does.
  */
 export function buildRedemption(form: RedeemForm, balance: number): RedeemResult {
@@ -108,7 +108,7 @@ export function redemptionCents(text: string, centsPerPoint: number): number | n
   return points === null || points < 1 || centsPerPoint <= 0 ? null : pointsToCents(points, centsPerPoint);
 }
 
-/** The owner can undo a redemption on the day it was booked; an administrator at any time (ADR-0013). */
+/** The owner can undo a redemption on the day it was booked; an administrator at any time (requirements 4.12). */
 export function canUndoRedemption(
   entry: { kind: string; personId: string; date: string },
   profile: { _id: string; role: string } | null,

@@ -54,7 +54,7 @@ function currencyLabel(code: string): string {
 }
 
 /**
- * The conversion from points to money (ADR-0013), for administrators: a currency and the cents one point is
+ * The conversion from points to money (requirements 4.12), for administrators: a currency and the cents one point is
  * worth. With 0 no money is shown anywhere. A redemption keeps the value at the moment it was booked, so
  * changing this never rewrites an earlier payout.
  */

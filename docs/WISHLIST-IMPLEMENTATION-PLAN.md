@@ -322,9 +322,9 @@ meerdere dagen met een datamodelwijziging.
 | P09 — About en projectinformatie | Draft-PR | S | — | [PR #59](https://github.com/somali-lab/keep-the-house-clean-planner/pull/59); About-pagina met releasemoment uit de releasecommit. |
 | P10a — Punten per uitvoering | Draft-PR | L | — | [PR #63](https://github.com/somali-lab/keep-the-house-clean-planner/pull/63), gestapeld op #61; ADR-0011 (Proposed). |
 | P10b — Week- en cyclusbonussen | Draft-PR | M | — | [PR #64](https://github.com/somali-lab/keep-the-house-clean-planner/pull/64), gestapeld op #63; ADR-0012 (Proposed). |
-| P10c — Omrekening en inwisselen | Draft-PR | M | — | [PR #65](https://github.com/somali-lab/keep-the-house-clean-planner/pull/65), gestapeld op #64; ADR-0013 (Proposed). |
+| P10c — Omrekening en inwisselen | Draft-PR | M | — | [PR #65](https://github.com/somali-lab/keep-the-house-clean-planner/pull/65), gestapeld op #64; ADR-0011 (Proposed; inwisselingen staan in de vereisten). |
 | P11 — Badges | Draft-PR | M | — | [PR #66](https://github.com/somali-lab/keep-the-house-clean-planner/pull/66), gestapeld op #65; ADR-0014 (Proposed). |
-| P12 — Beloningsmeter | Draft-PR | M | — | [PR #67](https://github.com/somali-lab/keep-the-house-clean-planner/pull/67), gestapeld op #66; ADR-0015 (Proposed); badge-indeling nog af te stemmen. |
+| P12 — Beloningsmeter | Draft-PR | M | — | [PR #67](https://github.com/somali-lab/keep-the-house-clean-planner/pull/67), gestapeld op #66; vereisten 4.12 (geen ADR); badge-indeling nog af te stemmen. |
 
 ### P00 — Meet en herstel de CI-doorlooptijd
 

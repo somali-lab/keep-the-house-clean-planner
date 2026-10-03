@@ -5,7 +5,7 @@ import { clearPointEntries, countRedemptions } from './points.ts';
 
 /**
  * Every collection in an export, in the order they are replaced on import. `pointEntries` holds only
- * the redemptions: they are booked, so they cannot be derived; every other ledger entry is rebuilt (ADR-0013).
+ * the redemptions: they are booked, so they cannot be derived; every other ledger entry is rebuilt (ADR-0011).
  * `badges` holds the badge definitions with their images; the awards are derived and rebuilt (ADR-0014).
  */
 export const TRANSFER_COLLECTIONS = [
@@ -41,7 +41,7 @@ export interface ReplaceResult {
   auditAdded: number;
   /** Entries of the points ledger that were dropped; the caller rebuilds the derived entries. */
   removedPointEntries: number;
-  /** The redemptions among them: a file of version 4 or older has none to put back (ADR-0013). */
+  /** The redemptions among them: a file of version 4 or older has none to put back (requirements 4.12). */
   removedRedemptions: number;
   /** The badges that existed before the import replaced them; a file older than version 6 has none to put back (ADR-0014). */
   removedBadges: number;
@@ -68,7 +68,7 @@ export async function replaceAllCollections(db: Db, docs: TransferDocs): Promise
   }
 
   // The derived part of the ledger is not exported: the old ledger is dropped, the booked redemptions of the file
-  // are put back, and the caller rebuilds the rest from the new occurrences (ADR-0011, ADR-0013).
+  // are put back, and the caller rebuilds the rest from the new occurrences (ADR-0011).
   const removedRedemptions = await countRedemptions(db);
   const removedPointEntries = await clearPointEntries(db);
   const redemptions = docs[COLLECTIONS.pointEntries];

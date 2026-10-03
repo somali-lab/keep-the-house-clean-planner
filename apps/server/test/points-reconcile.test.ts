@@ -300,7 +300,7 @@ describe('import rebuilds the ledger', () => {
     expect((await call('PATCH', `/api/occurrences/${await occurrence('2026-09-14')}`, { action: 'complete' })).statusCode).toBe(200);
     const file = (await t.app.inject({ method: 'GET', url: '/api/export/json' })).json<ExportFile>();
     expect(file.schemaVersion).toBe(6);
-    // Only booked redemptions travel in the file; the executions and bonuses are rebuilt on import (ADR-0013).
+    // Only booked redemptions travel in the file; the executions and bonuses are rebuilt on import (requirements 4.12).
     expect(file.collections.pointEntries).toEqual([]);
     expect(file.collections.tasks[0]).toHaveProperty('points');
     expect(file.collections.occurrences.some((o) => o.pointsSnapshot === 30)).toBe(true);

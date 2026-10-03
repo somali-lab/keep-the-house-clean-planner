@@ -14,7 +14,7 @@ export interface ResetStatisticsResult {
   resetOccurrences: number;
   resetTasks: number;
   deletedPastCycles: number;
-  /** Entries of the points ledger that went with the history: executions, bonuses (ADR-0011, ADR-0012) and redemptions (ADR-0013). */
+  /** Entries of the points ledger that went with the history: executions, bonuses (ADR-0011, ADR-0012) and redemptions (requirements 4.12). */
   removedPointEntries: number;
   /** The redemptions among `removedPointEntries`. */
   removedRedemptions: number;
@@ -68,7 +68,7 @@ export async function resetStatisticsData(
       .updateMany({ lastCompletedAt: { $ne: null } }, { $set: { lastCompletedAt: null, updatedAt: ctx.clock.now() } });
   }
   // The ledger follows the history it is derived from: starting over removes every derived entry (executions and bonuses), a purge those dated before the boundary.
-  // Redemptions are booked, not derived, but they go with the history too: starting over removes all of them, a purge those dated before the boundary (ADR-0013).
+  // Redemptions are booked, not derived, but they go with the history too: starting over removes all of them, a purge those dated before the boundary (requirements 4.12).
   const ledgerBoundary = options.restartFromToday ? undefined : boundary;
   const removedDerived = await deleteDerivedPointEntries(ctx.db, ledgerBoundary);
   const removedRedemptions = await deleteRedemptions(ctx.db, ledgerBoundary);

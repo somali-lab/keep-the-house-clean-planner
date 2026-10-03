@@ -1,7 +1,7 @@
 import { periodDayOf, periodOwnerOf, type BonusOccurrence, type Period } from './bonuses.ts';
 
 /**
- * The reward meter (ADR-0015): pure rules over day keys and string ids. A period is the calendar week or the
+ * The reward meter (requirements 4.12): pure rules over day keys and string ids. A period is the calendar week or the
  * cycle of `bonuses.ts`; the earned points come from the ledger and the goal is either set by an administrator
  * or the points of the work planned for the person.
  */
@@ -13,7 +13,7 @@ export const MAX_REWARD_GOAL_POINTS = 100_000;
 /** Eggs in the basket when the meter is full: one egg per 10%. */
 export const REWARD_EGG_COUNT = 10;
 
-/** The goals an administrator can set; `null` means the goal is automatic (ADR-0015). */
+/** The goals an administrator can set; `null` means the goal is automatic (requirements 4.12). */
 export interface RewardGoals {
   weekPoints: number | null;
   cyclePoints: number | null;
@@ -38,7 +38,7 @@ export interface AutomaticGoal {
 }
 
 /**
- * The automatic goal of a person (ADR-0015): the points of the work planned for them in the period. The owner
+ * The automatic goal of a person (requirements 4.12): the points of the work planned for them in the period. The owner
  * is the one of the bonuses (`periodOwnerId`, else the assignee) and the day that places an occurrence in a
  * period is its planned day, so overdue work dragged to today still belongs to the week it was planned in and
  * work somebody else did stays in the owner's goal. Recorded extra work was never planned and is left out;

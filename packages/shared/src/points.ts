@@ -11,7 +11,7 @@ export function defaultPointsForDuration(minutes: number): number {
   return Math.min(MAX_TASK_POINTS, Math.max(1, Math.round(minutes)));
 }
 
-/** Smallest and largest conversion factor from points to currency, in cents per point (ADR-0013). 0 means no money is shown. */
+/** Smallest and largest conversion factor from points to currency, in cents per point (requirements 4.12). 0 means no money is shown. */
 export const MIN_CENTS_PER_POINT = 0;
 export const MAX_CENTS_PER_POINT = 10000;
 

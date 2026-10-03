@@ -26,7 +26,7 @@ export function parseRewardGoal(text: string): number | null | undefined {
 const toText = (goal: number | null | undefined) => (goal === null || goal === undefined ? '' : String(goal));
 
 /**
- * The goals of the reward meter (ADR-0015), for administrators: points per week and per cycle. An empty field
+ * The goals of the reward meter (requirements 4.12), for administrators: points per week and per cycle. An empty field
  * means an automatic goal, the points of the work planned for each person; 0 means no goal for that period.
  */
 export function RewardGoalsSection({ settings }: { settings: Settings }) {

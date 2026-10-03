@@ -8,7 +8,7 @@ import { daysBetween, isDayKey } from '../time.ts';
 /** Points value of a task: an integer from 0 to 100; 0 means the task earns no points (ADR-0011). */
 export const taskPointsSchema = z.number().int().min(MIN_TASK_POINTS).max(MAX_TASK_POINTS);
 
-/** `execution` and the four bonus kinds are derived from the occurrences; `redemption` is booked by a person (ADR-0013). */
+/** `execution` and the four bonus kinds are derived from the occurrences; `redemption` is booked by a person (requirements 4.12). */
 export const pointEntryKindSchema = z.enum(['execution', ...BONUS_KINDS, 'redemption']);
 export type PointEntryKind = z.infer<typeof pointEntryKindSchema>;
 
@@ -34,11 +34,11 @@ export const pointEntryViewSchema = z.object({
   occurrenceId: objectIdSchema.nullable(),
   taskId: objectIdSchema.nullable(),
   titleSnapshot: z.string(),
-  /** Free text of a redemption; null for a derived entry (ADR-0013). */
+  /** Free text of a redemption; null for a derived entry (requirements 4.12). */
   note: z.string().nullable(),
-  /** Currency of the household when a redemption was booked; null for a derived entry (ADR-0013). */
+  /** Currency of the household when a redemption was booked; null for a derived entry (requirements 4.12). */
   currencyCodeSnapshot: z.string().regex(/^[A-Z]{3}$/).nullable(),
-  /** Cents one point was worth when a redemption was booked; null for a derived entry (ADR-0013). */
+  /** Cents one point was worth when a redemption was booked; null for a derived entry (requirements 4.12). */
   centsPerPointSnapshot: z.number().int().min(0).max(MAX_CENTS_PER_POINT).nullable(),
   source: pointEntrySourceSchema,
   createdAt: isoDateTimeSchema,
@@ -76,7 +76,7 @@ export const pointsEntriesQuerySchema = z
   });
 export type PointsEntriesQuery = z.infer<typeof pointsEntriesQuerySchema>;
 
-/** The money values of a balance, in whole cents at the factor in force now; present only when points are worth money (ADR-0013). */
+/** The money values of a balance, in whole cents at the factor in force now; present only when points are worth money (requirements 4.12). */
 export const balanceMoneySchema = z.object({
   earned: z.number().int(),
   redeemed: z.number().int(),
@@ -90,7 +90,7 @@ export const personBalanceSchema = z.object({
   points: z.number().int(),
   /** Points of executions and bonuses in the range. */
   earned: z.number().int(),
-  /** Points redeemed in the range, as a positive number (ADR-0013). */
+  /** Points redeemed in the range, as a positive number (requirements 4.12). */
   redeemed: z.number().int().min(0),
   /** Money of earned, redeemed and the balance; null while a point is worth nothing. */
   money: balanceMoneySchema.nullable(),
@@ -167,7 +167,7 @@ export const pointsRecomputeResultSchema = z.object({
 });
 export type PointsRecomputeResult = z.infer<typeof pointsRecomputeResultSchema>;
 
-/** Books a redemption: the person (an administrator may name anyone, everybody else only themselves) gives up points (ADR-0013). */
+/** Books a redemption: the person (an administrator may name anyone, everybody else only themselves) gives up points (requirements 4.12). */
 export const createRedemptionInputSchema = z.object({
   /** Defaults to the active profile. */
   personId: objectIdSchema.optional(),
@@ -180,14 +180,14 @@ export const createRedemptionInputSchema = z.object({
 });
 export type CreateRedemptionInput = z.infer<typeof createRedemptionInputSchema>;
 
-/** The periods of the reward meter: the calendar week or the four-week cycle of today (ADR-0015). */
+/** The periods of the reward meter: the calendar week or the four-week cycle of today (requirements 4.12). */
 export const rewardPeriodSchema = z.enum(['week', 'cycle']);
 export type RewardPeriod = z.infer<typeof rewardPeriodSchema>;
 
 export const pointsProgressQuerySchema = z.object({ personId: objectIdSchema, period: rewardPeriodSchema });
 export type PointsProgressQuery = z.infer<typeof pointsProgressQuerySchema>;
 
-/** Progress of one person towards the goal of the current week or cycle (ADR-0015). */
+/** Progress of one person towards the goal of the current week or cycle (requirements 4.12). */
 export const pointsProgressResponseSchema = z.object({
   personId: objectIdSchema,
   period: rewardPeriodSchema,

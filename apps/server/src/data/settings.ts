@@ -37,11 +37,11 @@ export interface SettingsDoc {
   bonusSchedule?: BonusScheduleRow[];
   /** Boundary of the last statistics reset: periods that start before this day earn no bonus (ADR-0012). */
   bonusFloor?: string;
-  /** ISO 4217 currency points are converted to (ADR-0013); missing means EUR. */
+  /** ISO 4217 currency points are converted to (requirements 4.12); missing means EUR. */
   currencyCode?: string;
-  /** Cents one point is worth (ADR-0013), 0 to 10000; missing means 0, no money shown. */
+  /** Cents one point is worth (requirements 4.12), 0 to 10000; missing means 0, no money shown. */
   centsPerPoint?: number;
-  /** Goals of the reward meter (ADR-0015); missing means both are automatic. */
+  /** Goals of the reward meter (requirements 4.12); missing means both are automatic. */
   rewardGoals?: RewardGoals;
   createdAt: Date;
   updatedAt: Date;

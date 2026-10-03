@@ -13,7 +13,7 @@ import { createTestApp, type TestApp } from './helpers/testApp.ts';
 import type { UserDoc } from '../src/data/users.ts';
 
 /**
- * ADR-0013: a redemption is a booked ledger entry with a negative amount. The tests earn points with
+ * requirements 4.12: a redemption is a booked ledger entry with a negative amount. The tests earn points with
  * recorded one-off work (1 point per minute), then book and undo redemptions through the HTTP API.
  * Today is Wednesday 16 September 2026.
  */

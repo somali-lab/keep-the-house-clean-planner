@@ -25,7 +25,7 @@ export const pointsRoutes: FastifyPluginAsync = async (app) => {
     return pointEntriesOfPerson(app.deps.db, parseOrThrow(pointsEntriesQuerySchema, request.query));
   });
 
-  /** Progress of one person towards the goal of this week or cycle, for the reward meter (ADR-0015). Needs no profile. */
+  /** Progress of one person towards the goal of this week or cycle, for the reward meter (requirements 4.12). Needs no profile. */
   app.get('/points/progress', async (request) => {
     return pointsProgress(app.deps.db, app.deps.clock, parseOrThrow(pointsProgressQuerySchema, request.query));
   });
@@ -35,11 +35,11 @@ export const pointsRoutes: FastifyPluginAsync = async (app) => {
     return reconcilePoints(auditContext(request), 'admin');
   });
 
-  /** How many redemptions exist: the import screen warns that an older file removes them (ADR-0013). Needs no profile. */
+  /** How many redemptions exist: the import screen warns that an older file removes them (requirements 4.12). Needs no profile. */
   app.get('/points/redemptions/count', async () => ({ count: await countRedemptions(app.deps.db) }));
 
   /**
-   * Books a redemption (ADR-0013): a person gives up points for themselves, an administrator for anyone.
+   * Books a redemption (requirements 4.12): a person gives up points for themselves, an administrator for anyone.
    * 201 for a new booking, 200 when a repeated requestId replays the stored one, 409 when the balance is too low.
    */
   app.post('/points/redemptions', { preHandler: requireActor }, async (request, reply) => {
