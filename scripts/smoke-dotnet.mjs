@@ -3,7 +3,7 @@
  * Docker smoke test of the .NET image. Builds docker/Dockerfile.dotnet and starts it with a throwaway
  * single-node Mongo replica set through docker-compose.yml plus docker/docker-compose.dotnet-smoke.yml, under its own
  * project name, port, image tag and volumes (so a real installation is never touched), checks health, the web app and
- * the Problem Details error shape, and always removes the stack and its volumes again.
+ * the Problem Details error shape and a rendered PDF, and always removes the stack and its volumes again.
  * Usage: node scripts/smoke-dotnet.mjs   (SMOKE_PORT overrides the port, default 3200)
  */
 import { spawn, spawnSync } from 'node:child_process';
@@ -126,6 +126,21 @@ async function checks() {
     type.startsWith('application/problem+json'),
     `content-type is application/problem+json (got ${type})`,
   );
+
+  step('GET /api/v2/export/pdf/due renders a PDF (fontconfig and a font are in the image)');
+  const pdf = await fetch(`${BASE_URL}/api/v2/export/pdf/due`);
+  const pdfBytes = Buffer.from(await pdf.arrayBuffer());
+  assert(pdf.status === 200, `pdf export answers 200 (got ${pdf.status})`);
+  const pdfType = pdf.headers.get('content-type') ?? '';
+  assert(pdfType.startsWith('application/pdf'), `content-type is application/pdf (got ${pdfType})`);
+  assert(
+    /^attachment; filename="achterstand-\d{4}-\d{2}-\d{2}\.pdf"$/.test(
+      pdf.headers.get('content-disposition') ?? '',
+    ),
+    `content-disposition names the file (got ${pdf.headers.get('content-disposition')})`,
+  );
+  assert(pdfBytes.subarray(0, 5).toString('latin1') === '%PDF-', 'the body starts with %PDF-');
+  console.log(`  ${pdfBytes.length} bytes`);
 }
 
 for (const signal of ['SIGINT', 'SIGTERM']) {

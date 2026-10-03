@@ -3,6 +3,7 @@ using Huishoudplanner.Adapters.Http.CyclePlans;
 using Huishoudplanner.Adapters.Http.Cycles;
 using Huishoudplanner.Adapters.Http.Due;
 using Huishoudplanner.Adapters.Http.Promotion;
+using Huishoudplanner.Adapters.Http.Export;
 using Huishoudplanner.Adapters.Http.Health;
 using Huishoudplanner.Adapters.Http.Statistics;
 using Huishoudplanner.Adapters.Http.Occurrences;
@@ -62,6 +63,7 @@ public static class OpenApiSetup
                 new() { Name = TaskEndpoints.TasksTag, Description = "The recurring household tasks: everyone reads them, planners create, change, deactivate and bulk-change them." },
                 new() { Name = DueEndpoints.DueTag, Description = "The due engine: every active task ranked by how far it has drifted past its interval." },
                 new() { Name = PromoteEndpoints.PromoteTag, Description = "Promote suggestions: slots of the active plan whose occurrences keep being moved the same way." },
+                new() { Name = ExportEndpoints.ExportTag, Description = "Printable PDF sheets: the week schedule, a single day, the due list and the task list. Everyone downloads them." },
                 new() { Name = CyclePlanEndpoints.CyclePlansTag, Description = "The four-week cycle plans: everyone reads and compares them, planners create, change, delete, save slots and validate." },
                 new() { Name = CycleEndpoints.CyclesTag, Description = "The generated four-week cycles: a read-only list, created by generation only." },
                 new() { Name = OccurrenceEndpoints.OccurrencesTag, Description = "What actually happened on a day: everyone reads the occurrences; members complete, uncomplete, skip, reschedule, assign and claim them, administrators correct or delete a completion." },

@@ -138,6 +138,18 @@ public sealed class EndpointPolicyAuditTests
     }
 
     [Fact]
+    public void ThePdfExports_stayOpenLikeTheNodeRoutes()
+    {
+        using var factory = ApiFactory.WithoutDatabase();
+
+        var exports = EndpointsOf(factory).Where(e => e.RoutePattern.RawText?.StartsWith("/api/v2/export/pdf/", StringComparison.Ordinal) == true).ToList();
+
+        exports.Select(e => e.RoutePattern.RawText).Should().BeEquivalentTo(
+            "/api/v2/export/pdf/schedule", "/api/v2/export/pdf/day", "/api/v2/export/pdf/due", "/api/v2/export/pdf/tasks");
+        exports.SelectMany(e => e.Metadata.GetOrderedMetadata<IAuthorizeData>()).Should().BeEmpty("routes/export.ts has no guard");
+    }
+
+    [Fact]
     public void TheAudit_flagsAnUnprotectedWrite_andAnUnprotectedProtectedRead()
     {
         using var factory = ApiFactory.WithoutDatabase().WithEndpoints(routes =>
