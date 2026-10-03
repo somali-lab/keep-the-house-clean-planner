@@ -153,6 +153,25 @@ public class AppOptionsTests
         options.NotifyToken.Should().Be("t");
     }
 
+    [Theory]
+    [InlineData("/foo")]
+    [InlineData("ftp://host/x")]
+    [InlineData("mailto:a@b.c")]
+    [InlineData("host:8080")]
+    public void Load_notifyUrlWithoutHttpScheme_fails(string url)
+    {
+        FailureMessage(("NOTIFY_URL", url)).Should().Contain("NOTIFY_URL");
+    }
+
+    [Fact]
+    public void Load_dotNetEnvironmentVariable_isFallbackBeforeNodeEnv()
+    {
+        Load(("DOTNET_ENVIRONMENT", "Development"), ("NODE_ENV", "production")).Environment
+            .Should().Be(AppEnvironment.Development);
+        Load(("ASPNETCORE_ENVIRONMENT", "Test"), ("DOTNET_ENVIRONMENT", "Development")).Environment
+            .Should().Be(AppEnvironment.Test);
+    }
+
     [Fact]
     public void Load_unknownNotifyType_fails()
     {

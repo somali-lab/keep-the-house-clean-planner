@@ -12,11 +12,12 @@ namespace Huishoudplanner.Host.Configuration;
 /// <remarks>
 /// Renames (plan 3.7): NODE_ENV is now ASPNETCORE_ENVIRONMENT and LOG_LEVEL is now
 /// Logging__LogLevel__Default. The old names are still read as aliases (the new name wins when both
-/// are set) until the switch is documented, then they are dropped. WEB_DIST_DIR keeps its meaning.
+/// are set; DOTNET_ENVIRONMENT sits between them for the environment) until the switch is documented, then they are dropped. WEB_DIST_DIR keeps its meaning.
 /// </remarks>
 public static partial class AppOptionsBinder
 {
     private const string EnvironmentKey = "ASPNETCORE_ENVIRONMENT";
+    private const string DotNetEnvironmentKey = "DOTNET_ENVIRONMENT";
     private const string LegacyEnvironmentKey = "NODE_ENV";
     private const string LogLevelKey = "Logging:LogLevel:Default";
     private const string LegacyLogLevelKey = "LOG_LEVEL";
@@ -52,7 +53,9 @@ public static partial class AppOptionsBinder
 
         string? Get(string key) => Unset(configuration[key]);
 
-        var environmentKey = Get(EnvironmentKey) is not null ? EnvironmentKey : LegacyEnvironmentKey;
+        var environmentKey = Get(EnvironmentKey) is not null ? EnvironmentKey
+            : Get(DotNetEnvironmentKey) is not null ? DotNetEnvironmentKey
+            : LegacyEnvironmentKey;
         var environmentOk = true;
         if (Get(environmentKey) is { } rawEnvironment)
         {
@@ -159,13 +162,15 @@ public static partial class AppOptionsBinder
 
         if (Get("NOTIFY_URL") is { } rawNotifyUrl)
         {
-            if (Uri.TryCreate(rawNotifyUrl, UriKind.Absolute, out _))
+            // config.ts accepts any URL with a scheme; notification targets are http(s) only, so stricter on purpose.
+            if (Uri.TryCreate(rawNotifyUrl, UriKind.Absolute, out var notifyUri)
+                && (notifyUri.Scheme == Uri.UriSchemeHttp || notifyUri.Scheme == Uri.UriSchemeHttps))
             {
                 options.NotifyUrl = rawNotifyUrl;
             }
             else
             {
-                issues.Add("NOTIFY_URL: must be an absolute URL");
+                issues.Add("NOTIFY_URL: must be an absolute http or https URL");
             }
         }
 
@@ -222,7 +227,7 @@ public static partial class AppOptionsBinder
     {
         ArgumentNullException.ThrowIfNull(getVariable);
         if (Unset(getVariable(EnvironmentKey)) is not null
-            || Unset(getVariable("DOTNET_ENVIRONMENT")) is not null
+            || Unset(getVariable(DotNetEnvironmentKey)) is not null
             || Unset(getVariable(LegacyEnvironmentKey)) is not { } legacy
             || !TryParseEnvironment(legacy, out var environment))
         {
