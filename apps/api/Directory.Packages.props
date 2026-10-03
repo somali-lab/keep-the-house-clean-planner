@@ -16,6 +16,12 @@
     <PackageVersion Include="Scalar.AspNetCore" Version="2.17.13" />
   </ItemGroup>
 
+  <ItemGroup Label="Production (Adapters.Ai: model providers, plan section 3.9)">
+    <PackageVersion Include="Anthropic" Version="12.53.0" />
+    <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.10.1" />
+    <PackageVersion Include="OllamaSharp" Version="5.5.0" />
+  </ItemGroup>
+
   <ItemGroup Label="Production (Host only: OpenTelemetry, plan section 3.6)">
     <PackageVersion Include="OpenTelemetry" Version="1.19.1" />
     <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.19.1" />
