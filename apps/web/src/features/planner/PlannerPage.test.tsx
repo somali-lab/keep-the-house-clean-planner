@@ -583,3 +583,119 @@ describe('PlannerPage — activation', () => {
     expect(activate).toBeDisabled();
   });
 });
+
+describe('PlannerPage — AI drafts', () => {
+  const ACTIVE = makePlan({ _id: 'p1', name: 'Standaard', active: true });
+  const DRAFT = makePlan({
+    _id: 'p-ai',
+    name: 'AI-voorstel 2026-09-16',
+    draft: true,
+    source: 'ai',
+    proposalId: 'prop-1',
+    rationale: ['Week 1 rustig.', 'Week 2 meer badkamer.', 'Week 3 ramen.', 'Week 4 gelijk verdeeld.'],
+  });
+  const aiSettings = makeSettings({ aiProvider: { type: 'mock' } });
+  const proposeButton = () => screen.findByRole('button', { name: 'Voorstel maken' });
+
+  it('selects the new draft automatically after a proposal and announces it', async () => {
+    let plans = [ACTIVE];
+    setup([], {
+      '/api/settings': aiSettings,
+      '/api/cycle-plans': () => plans,
+      'POST /api/ai/propose-plan': () => {
+        plans = [ACTIVE, DRAFT];
+        return { planId: 'p-ai', proposalId: 'prop-1', warnings: [], rationale: DRAFT.rationale };
+      },
+    });
+    renderWithProviders(<PlannerPage />);
+    await openPlanManagement();
+    fireEvent.click(await proposeButton());
+
+    const announcement = await screen.findByText('AI-concept aangemaakt en hieronder geopend. Je actieve plan is niet gewijzigd.');
+    expect(announcement).toHaveAttribute('role', 'status');
+    expect(await screen.findByRole('region', { name: 'AI-concept' })).toBeInTheDocument();
+    // The normal plan view is shown for the draft, where it can be activated or deleted.
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Voorstel maken' })).not.toBeInTheDocument());
+    fireEvent.click(within(await screen.findByRole('region', { name: 'AI-concept' })).getByRole('button', { name: 'Plannen beheren' }));
+    expect(await screen.findByLabelText('Plan')).toHaveValue('p-ai');
+    expect(screen.getByRole('button', { name: 'Dit plan activeren' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Plan verwijderen' })).toBeEnabled();
+  });
+
+  it('shows the AI draft card with rationale and, right after creation, the warnings', async () => {
+    let plans = [ACTIVE];
+    setup([], {
+      '/api/settings': aiSettings,
+      '/api/cycle-plans': () => plans,
+      'POST /api/ai/propose-plan': () => {
+        plans = [ACTIVE, DRAFT];
+        return {
+          planId: 'p-ai',
+          proposalId: 'prop-1',
+          warnings: [{ code: 'interval_mismatch', taskId: 't1', placed: 1, required: 4 }],
+          rationale: DRAFT.rationale,
+        };
+      },
+    });
+    renderWithProviders(<PlannerPage />);
+    expect(screen.queryByRole('region', { name: 'AI-concept' })).not.toBeInTheDocument();
+    await openPlanManagement();
+    fireEvent.click(await proposeButton());
+
+    const card = await screen.findByRole('region', { name: 'AI-concept' });
+    expect(card).toHaveTextContent('Je actieve plan verandert pas als je dit concept activeert');
+    await waitFor(() => expect(card).toHaveFocus());
+    expect(within(card).getByText('Week 2 meer badkamer.')).toBeInTheDocument();
+    expect(within(card).getByText('Aandachtspunten')).toBeInTheDocument();
+    expect(within(card).getByText('1 van 4 keer gepland.')).toBeInTheDocument();
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+
+    // Warnings and the announcement only belong to the moment of creation; the rationale stays with the draft.
+    fireEvent.click(within(card).getByRole('button', { name: 'Plannen beheren' }));
+    fireEvent.change(await screen.findByLabelText('Plan'), { target: { value: 'p1' } });
+    expect(screen.queryByRole('region', { name: 'AI-concept' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/AI-concept aangemaakt/)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Plan'), { target: { value: 'p-ai' } });
+    const again = await screen.findByRole('region', { name: 'AI-concept' });
+    expect(within(again).getByText('Week 4 gelijk verdeeld.')).toBeInTheDocument();
+    expect(within(again).queryByText('Aandachtspunten')).not.toBeInTheDocument();
+  });
+
+  it('shows no AI card for a former AI plan that is no longer a draft', async () => {
+    setup([
+      makePlan({ _id: 'p1', name: 'Standaard', active: true }),
+      { ...DRAFT, draft: false },
+      { ...DRAFT, _id: 'p-ai-active', active: true, draft: false },
+    ]);
+    renderWithProviders(<PlannerPage />);
+    await openPlanManagement();
+    fireEvent.change(await screen.findByLabelText('Plan'), { target: { value: 'p-ai' } });
+
+    expect(await screen.findByRole('note')).toHaveTextContent('Dit is een conceptplan');
+    expect(screen.queryByRole('region', { name: 'AI-concept' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the selection and shows the validation error when the proposal is rejected', async () => {
+    const fetchMock = setup([ACTIVE, DRAFT], {
+      '/api/settings': aiSettings,
+    });
+    const mocked = fetchMock.getMockImplementation()!;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) =>
+        String(input) === '/api/ai/propose-plan'
+          ? new Response(JSON.stringify({ code: 'ai_invalid_plan', errors: ['assignee_unavailable (slot 0)'] }), { status: 422 })
+          : mocked(input, init),
+      ),
+    );
+    renderWithProviders(<PlannerPage />);
+    await openPlanManagement();
+    fireEvent.change(await screen.findByLabelText('Plan'), { target: { value: 'p1' } });
+    fireEvent.click(await proposeButton());
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Het voorstel voldeed niet aan de regels, ook niet na een tweede poging.');
+    expect(screen.getByLabelText('Plan')).toHaveValue('p1');
+    expect(screen.queryByRole('region', { name: 'AI-concept' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/AI-concept aangemaakt/)).not.toBeInTheDocument();
+  });
+});

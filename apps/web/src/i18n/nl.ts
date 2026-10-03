@@ -322,6 +322,12 @@ export const nl = {
   'planner.noPlan': 'Er is nog geen plan.',
   'planner.inactivePlanNotice':
     'Dit is een conceptplan. De taken hierin verschijnen niet in Weekoverzicht of Mijn taken totdat je dit plan activeert.',
+  'planner.aiDraft.title': 'AI-concept',
+  'planner.aiDraft.body':
+    'Dit plan is door de AI gemaakt. Je actieve plan verandert pas als je dit concept activeert; de taken verschijnen dan pas in Weekoverzicht en Mijn taken. Pas het hieronder aan, of activeer (je ziet eerst wat er verandert) of verwijder het via Plannen beheren.',
+  'planner.aiDraft.rationale': 'Toelichting van de AI',
+  'planner.aiDraft.warnings': 'Aandachtspunten',
+  'planner.aiDraftOpened': 'AI-concept aangemaakt en hieronder geopend. Je actieve plan is niet gewijzigd.',
 
   'today.mine': 'Mijn taken',
   'today.unclaimed': 'Nog niet opgepakt',

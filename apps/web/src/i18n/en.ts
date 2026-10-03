@@ -275,6 +275,12 @@ export const en = {
   "planner.noPlan": "No plan yet.",
   "planner.inactivePlanNotice":
     "This is a draft plan. Its tasks will not appear in Week overview or My tasks until you activate this plan.",
+  "planner.aiDraft.title": "AI Draft",
+  "planner.aiDraft.body":
+    "The AI made this plan. Your active plan does not change until you activate this draft, and its tasks will not appear in Week overview or My tasks before then. Edit it below, or activate (you see what changes first) or delete it through Manage plans.",
+  "planner.aiDraft.rationale": "AI Rationale",
+  "planner.aiDraft.warnings": "Warnings",
+  "planner.aiDraftOpened": "AI draft created and opened below. Your active plan is unchanged.",
   "today.mine": "My tasks",
   "today.unclaimed": "Unclaimed",
   "today.others": "From other people",

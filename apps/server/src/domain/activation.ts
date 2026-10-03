@@ -22,7 +22,9 @@ export async function activatePlan(ctx: AuditContext, planId: ObjectId, previewT
     throw new HttpError(409, 'stale_activation_preview', 'Activation preview is no longer current');
   }
   const runId = randomUUID();
-  const plan = await setActivePlan(ctx, planId, { runId });
+  // An AI draft that is activated through the normal flow stops being a draft too, so it never reads as one later.
+  const existing = await findPlanById(ctx.db, planId);
+  const plan = await setActivePlan(ctx, planId, { runId }, existing?.draft ? { changes: { draft: false } } : {});
   if (!plan) throw new HttpError(404, 'not_found', 'cycle plan not found');
   const systemCtx: AuditContext = { ...ctx, source: 'system' };
   const result = await replaceUpcomingOccurrences(systemCtx, plan, runId);
