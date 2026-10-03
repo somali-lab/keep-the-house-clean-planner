@@ -105,7 +105,12 @@ describe('TodayPage', () => {
     expect(within(section('Taken van Bram de Vries')).getByText('Stofzuigen')).toBeInTheDocument();
     expect(screen.queryByText('Badkamer')).not.toBeInTheDocument();
 
+    // Only the everyone view switches to two columns on wide screens.
+    expect(screen.getByTestId('today-sections')).not.toHaveClass('lg:columns-2');
+    fireEvent.change(screen.getByLabelText('Filter op persoon'), { target: { value: 'unassigned' } });
+    expect(screen.getByTestId('today-sections')).not.toHaveClass('lg:columns-2');
     fireEvent.change(screen.getByLabelText('Filter op persoon'), { target: { value: 'all' } });
+    expect(screen.getByTestId('today-sections')).toHaveClass('lg:columns-2');
     expect(sectionTitles()).toEqual(['Mijn taken', 'Nog niet opgepakt', 'Van anderen', 'Achterstallig']);
     expect(within(section('Nog niet opgepakt')).getByText('Wastafel')).toBeInTheDocument();
     expect(within(section('Van anderen')).getByText('Stofzuigen')).toBeInTheDocument();
@@ -118,14 +123,18 @@ describe('TodayPage', () => {
 
   it('persists the selected person and can reset it to the active profile', async () => {
     setup();
-    const firstRender = renderWithProviders(<TodayPage now={NOW} />);
+    const firstRender = renderWithProviders(<TodayPage now={NOW} />, { headerReset: true });
     await screen.findByRole('heading', { name: 'Mijn taken' });
+    // The person filter starts at its default, so the header reset has nothing to do.
+    expect(screen.getByRole('button', { name: 'Filters van dit scherm resetten' })).toBeDisabled();
     fireEvent.change(screen.getByLabelText('Filter op persoon'), { target: { value: BRAM._id } });
     firstRender.unmount();
-    renderWithProviders(<TodayPage now={NOW} />);
+    renderWithProviders(<TodayPage now={NOW} />, { headerReset: true });
     expect(await screen.findByLabelText('Filter op persoon')).toHaveValue(BRAM._id);
-    fireEvent.click(screen.getByRole('button', { name: 'Filter herstellen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Filters van dit scherm resetten' }));
     expect(screen.getByLabelText('Filter op persoon')).toHaveValue(ANNA._id);
+    expect(screen.getByText('Filters gereset')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Filters van dit scherm resetten' })).toBeDisabled();
   });
 
   it('shows the cycle week and browses to tomorrow and the day after tomorrow', async () => {

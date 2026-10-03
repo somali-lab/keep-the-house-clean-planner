@@ -3,6 +3,7 @@ import { CalendarRange, Hourglass, ListChecks, Settings, Sun, type LucideIcon } 
 import { NavLink, Navigate, Route, Routes } from 'react-router';
 import { Button } from '@/components/ui/button';
 import { AppVersion } from '@/components/AppVersion';
+import { FilterResetButton } from '@/components/FilterReset';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { ThemeSwitcher } from '@/components/ThemeSwitcher';
 import { cn } from '@/lib/utils';
@@ -32,18 +33,20 @@ const TABS: { path: string; label: MessageKey; icon: LucideIcon }[] = [
 export function MobileLayout({ onOpenManagement }: { onOpenManagement: () => void }) {
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-2 border-b bg-background/85 px-4 backdrop-blur">
+      <header className="sticky top-0 z-20 flex min-h-16 flex-wrap items-center justify-between gap-x-2 gap-y-1 border-b bg-background/85 px-2 py-1 backdrop-blur sm:px-4">
         <div className="flex min-w-0 items-center gap-2">
           <ProfileSwitcher />
-          <AppVersion className="shrink-0" />
+          {/* Phones have no room for the version next to the header controls; it stays available to screen readers. */}
+          <AppVersion className="shrink-0 max-sm:sr-only" />
         </div>
-        <div className="flex items-center gap-1">
+        <div className="ml-auto flex items-center gap-0.5 sm:gap-1">
+          <FilterResetButton className="max-sm:size-9" />
           <LanguageSwitcher />
           <ThemeSwitcher />
           <Button
             variant="ghost"
             size="icon-lg"
-            className="rounded-full text-muted-foreground"
+            className="rounded-full text-muted-foreground max-sm:size-9"
             aria-label={t('layout.openManagement')}
             title={t('layout.openManagement')}
             onClick={onOpenManagement}

@@ -18,6 +18,7 @@ import {
   UserRound,
   Users,
 } from 'lucide-react';
+import { useFilterReset } from '@/components/FilterReset';
 import { NativeSelect } from '@/components/NativeSelect';
 import { PageHeader } from '@/components/PageHeader';
 import { Badge } from '@/components/ui/badge';
@@ -83,6 +84,7 @@ export function TasksPage() {
   const { activeUsers, profile } = useProfile();
   const [showInactive, setShowInactive, resetInactive] = usePersistedFilter('tasks.showInactive', profile?._id ?? null, false);
   const [roomFilter, setRoomFilter, resetRoom] = usePersistedFilter('tasks.room', profile?._id ?? null, 'all');
+  useFilterReset(() => { resetRoom(); resetInactive(); }, showInactive || roomFilter !== 'all');
   const [editing, setEditing] = useState<Editing>(null);
   const [deleting, setDeleting] = useState<Task | null>(null);
   const [collapsedRooms, setCollapsedRooms] = useState<Set<string> | null>(null);
@@ -201,9 +203,6 @@ export function TasksPage() {
               />
               {t('tasks.showInactive')}
             </label>
-            <Button type="button" variant="outline" onClick={() => { resetRoom(); resetInactive(); }}>
-              {t('tasks.resetFilters')}
-            </Button>
             <Button
               type="button"
               onClick={() => {

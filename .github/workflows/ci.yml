@@ -56,9 +56,30 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Chromium for PDF tests
+      # PDF rendering launches headless Chromium, which only needs the headless shell.
+      - name: Cache Playwright browsers
+        id: playwright-cache
         if: matrix.project == 'server'
-        run: npx playwright install --with-deps chromium
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-shell-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Chromium for PDF tests
+        if: matrix.project == 'server' && steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps --only-shell chromium
+
+      - name: Install Chromium system dependencies
+        if: matrix.project == 'server' && steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      # mongodb-memory-server downloads a MongoDB binary on first use.
+      - name: Cache MongoDB test binary
+        if: matrix.project == 'server'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/mongodb-binaries
+          key: mongodb-binaries-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
 
       - name: Run project tests
         run: npx vitest run --project ${{ matrix.project }}

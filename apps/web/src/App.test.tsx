@@ -36,6 +36,18 @@ describe('app shell', () => {
     expect(window.location.pathname).toBe('/');
   });
 
+  it('puts the filter reset directly left of the language switch in the overview header', async () => {
+    setViewportWidth(375);
+    render(<App queryClient={testQueryClient()} />);
+    const reset = await screen.findByRole('button', { name: 'Filters van dit scherm resetten' });
+    const language = screen.getByRole('group', { name: 'Taal' });
+    expect(reset.closest('header')).toBe(language.closest('header'));
+    // Only the (visually hidden) status region sits between the button and the language switch.
+    expect(reset.nextElementSibling?.nextElementSibling).toBe(language);
+    // The overview screen with default filters has nothing to reset yet.
+    expect(reset).toBeDisabled();
+  });
+
   it('makes the focused standard view directly accessible on wide screens', async () => {
     setViewportWidth(1280);
     window.history.replaceState(null, '', '/today');
@@ -109,6 +121,50 @@ describe('app shell', () => {
     expect(screen.getByRole('link', { name: 'Planner' })).toHaveAttribute('aria-current', 'page');
 
     fireEvent.click(screen.getByRole('button', { name: 'Terug naar overzicht' }));
+    expect(await screen.findByRole('heading', { name: 'Weekoverzicht' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/');
+  });
+
+  it('puts the filter reset directly left of the language switch in the management header', async () => {
+    setViewportWidth(1280);
+    window.history.replaceState(null, '', '/manage/settings');
+    render(<App queryClient={testQueryClient()} />);
+    const reset = await screen.findByRole('button', { name: 'Filters van dit scherm resetten' });
+    const language = screen.getByRole('group', { name: 'Taal' });
+    expect(reset.closest('header')).toBe(language.closest('header'));
+    expect(reset.nextElementSibling?.nextElementSibling).toBe(language);
+    // A screen without filters never enables the button.
+    expect(reset).toBeDisabled();
+  });
+
+  it('resets only the filters of the screen on display and names the button in English', async () => {
+    setViewportWidth(1280);
+    const key = (name: string) => `huishoudplanner.filters.${ANNA._id}.${name}`;
+    window.localStorage.setItem(key('tasks.room'), '"r1"');
+    window.localStorage.setItem(key('stats.period'), '{"unit":"cycles","count":4}');
+    window.history.replaceState(null, '', '/manage/statistics');
+    render(<App queryClient={testQueryClient()} />);
+
+    const reset = await screen.findByRole('button', { name: 'Filters van dit scherm resetten' });
+    await waitFor(() => expect(reset).toBeEnabled());
+    fireEvent.click(reset);
+    await waitFor(() => expect(reset).toBeDisabled());
+    expect(window.localStorage.getItem(key('stats.period'))).toBeNull();
+    expect(window.localStorage.getItem(key('tasks.room'))).toBe('"r1"');
+    expect(screen.getByText('Filters gereset')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Engels' }));
+    expect(await screen.findByRole('button', { name: "Reset This Screen's Filters" })).toBeDisabled();
+  });
+
+  it('returns from any management page to the week overview with the Home button', async () => {
+    setViewportWidth(1280);
+    window.history.replaceState(null, '', '/manage/statistics');
+    render(<App queryClient={testQueryClient()} />);
+
+    const home = await screen.findByRole('button', { name: 'Home: naar het weekoverzicht' });
+    expect(screen.getByRole('navigation', { name: 'Hoofdmenu' })).toHaveTextContent('Statistiek');
+    fireEvent.click(home);
     expect(await screen.findByRole('heading', { name: 'Weekoverzicht' })).toBeInTheDocument();
     expect(window.location.pathname).toBe('/');
   });

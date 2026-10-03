@@ -311,9 +311,10 @@ describe('PlannerPage — budgets and pool', () => {
         slots: [slot('t1', 0, 1, ANNA._id), slot('t2', 0, 1, BRAM._id)],
       }),
     ]);
-    renderWithProviders(<PlannerPage />);
+    renderWithProviders(<PlannerPage />, { headerReset: true });
 
     const search = await screen.findByRole('searchbox', { name: 'Zoek taken' });
+    expect(screen.getByRole('button', { name: 'Filters van dit scherm resetten' })).toBeDisabled();
     const pool = screen.getByRole('complementary', { name: 'Nog in te plannen' });
     const annaCell = screen.getByTestId(`cell:0:1:${ANNA._id}`);
     const bramCell = screen.getByTestId(`cell:0:1:${BRAM._id}`);
@@ -338,7 +339,7 @@ describe('PlannerPage — budgets and pool', () => {
       'Totaal 70 min',
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Filters wissen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Filters van dit scherm resetten' }));
     expect(within(annaCell).getByText('Badkamer')).toBeInTheDocument();
     expect(within(pool).getByText('Ramen')).toBeInTheDocument();
   });

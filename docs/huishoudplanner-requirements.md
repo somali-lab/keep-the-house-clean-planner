@@ -189,6 +189,7 @@ dismissedPromotions: [ ... ]
 ### 4.4 Daily use
 
 - A today view lists the open occurrences for the selected profile, then the other members', then overdue items, and can be filtered per profile.
+- When the today view shows everyone, its groups sit in two columns on screens wide enough for two readable columns; narrower screens keep one column.
 - The view can browse forward a day or two without leaving the day-oriented layout, and shows which cycle week the day belongs to.
 - No backlog is shown from before the cycle anchor date; there is nothing to be behind on yet.
 - Complete and undo. Undo restores the previous status.
@@ -199,7 +200,7 @@ dismissedPromotions: [ ... ]
 - A week overview is the default landing view at every screen width, shows the whole week with drag-to-reschedule, and can collapse past days.
 - The week overview can search by part of a task name and optionally show the cycle-week number on its cards.
 - My tasks groups its sliding 1-, 2-, or 4-week period into seven-day blocks starting today. Each block shows its date range; each task shows its own cycle-week number even when a block crosses a cycle boundary.
-- Filter choices throughout the app survive a hard reload. A person can visibly reset them, and one household member's saved choices are not silently applied to another member.
+- Filter choices throughout the app survive a hard reload. A single icon button in the top header, directly left of the language switch, resets the filters of the screen the person is on (today, week, my tasks, planner, tasks, statistics, completions and history) to their defaults and leaves the saved filters of every other screen untouched. It is disabled when the current screen has no filters or all of them are at their defaults, it has an accessible name and tooltip, and it announces the reset to assistive technology. One household member's saved choices are not silently applied to another member.
 - "Done just now" creates an ad-hoc occurrence for a task that was not planned today. At most one ad-hoc occurrence per task per day, and only within a cycle that has been generated.
 
 ### 4.5 Due engine
@@ -319,7 +320,9 @@ The fridge is a legitimate output device. The schedule must work without a phone
 
 - A compact overview is the default at every screen width: the week grid, the day view, the overdue list and the task list.
 - Management screens — planner, tasks, distribution, statistics, history, completions and settings — live behind a separate management area and are reachable from anywhere.
+- The overview and the management area switch with a button in the same top-right spot: a management button in the overview, and a Home button in management that always returns to the week overview. The management side menu stays available.
 - The settings screen is organised in tabs so that cycle, intervals, AI, notifications, appearance and maintenance stay separable.
+- An About page, reachable for every role from the management menu, shows the running version, the date and time of the latest release labelled as such, and links to the license and the changelog that belong to the running build. A local build that is not a release shows no release date.
 
 ### 7.2 Interaction
 
