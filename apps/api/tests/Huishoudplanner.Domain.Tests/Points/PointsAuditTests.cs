@@ -127,9 +127,11 @@ public sealed class PointsAuditTests
         (entry.Entity, entry.Action, entry.EntityId, entry.Actor).Should().Be((AuditEntity.Points, AuditAction.Recompute, "000000000000000000000002", AuditActor.System));
         (entry.Before.Count, entry.After.Count).Should().Be((0, 0));
         entry.Meta!.Keys.Should().BeEquivalentTo(
-            "trigger", "tasksDefaulted", "snapshotsSet", "created", "updated", "removed", "unattributed", "skipped", "corrections", "correctionsTotal",
+            "trigger", "step", "tasksDefaulted", "snapshotsSet", "created", "updated", "removed", "unattributed", "skipped", "corrections", "correctionsTotal",
             "correctionsTruncated", "bonusesCreated", "bonusesRemoved", "bonusChanges", "bonusChangesTotal", "bonusChangesTruncated");
         entry.Meta["trigger"].Should().Be(new AuditString("nightly"));
+        entry.Meta["step"].Should().Be(new AuditString("executions"));
+        PointsAudit.ForRecompute(AuditActor.System, result, PointsRecomputeStep.Bonuses).Meta!["step"].Should().Be(new AuditString("bonuses"));
         entry.Meta["created"].Should().Be(new AuditInteger(3));
         entry.Meta["correctionsTruncated"].Should().Be(new AuditBool(false));
         var corrections = ((AuditArray)entry.Meta["corrections"]!).Items;

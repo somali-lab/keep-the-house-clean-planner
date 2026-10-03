@@ -1,3 +1,4 @@
+using Huishoudplanner.Domain.Bonuses;
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Points;
 using Huishoudplanner.Domain.Ports.Driven;
@@ -222,6 +223,78 @@ internal sealed class MongoPointEntryStore : ForStoringPointEntries
         }
     }
 
+    public async Task<OneOf<IReadOnlyList<PointEntry>, PortError>> FindBonusEntriesAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var filter = new BsonDocument("kind", new BsonDocument("$in", new BsonArray(BonusKinds.All.Select(k => k.ToLedgerKind()))));
+            var find = MongoTransactionContext.Session is { } session ? entries.Find(session, filter) : entries.Find(filter);
+            var documents = await find.Sort(Sort).ToListAsync(cancellationToken).ConfigureAwait(false);
+            return OneOf<IReadOnlyList<PointEntry>, PortError>.FromT0([.. documents.Select(ToEntry).OfType<PointEntry>()]);
+        }
+        catch (Exception e) when (IsFailure(e))
+        {
+            return Failed("read the bonus entries", e);
+        }
+    }
+
+    public async Task<OneOf<AppliedBonusChanges, PortError>> ApplyBonusChangesAsync(BonusEntryChanges changes, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(changes);
+        if (MongoTransactionContext.Session is not { IsInTransaction: true } session)
+        {
+            return NoTransaction();
+        }
+
+        // The deletes first (compare-and-set on the entry as it was read), then the inserts, in one ordered bulk write.
+        var models = new List<WriteModel<BsonDocument>>();
+        var deleted = new List<(string Key, ObjectId Id)>();
+        foreach (var delete in changes.Deletes)
+        {
+            if (SameAsRead(delete) is { } filter && ObjectIdConverter.TryParse(delete.Id, out var id))
+            {
+                filter.Add("key", delete.Key);
+                models.Add(new DeleteOneModel<BsonDocument>(filter));
+                deleted.Add((delete.Key, id));
+            }
+        }
+
+        var inserted = new List<(string Key, ObjectId Id)>();
+        foreach (var insert in changes.Inserts)
+        {
+            var id = ObjectId.GenerateNewId();
+            models.Add(new InsertOneModel<BsonDocument>(ToDocument(id, insert, at)));
+            inserted.Add((insert.Key, id));
+        }
+
+        if (models.Count == 0)
+        {
+            return AppliedBonusChanges.None;
+        }
+
+        try
+        {
+            await entries.BulkWriteAsync(session, models, new BulkWriteOptions { IsOrdered = true }, cancellationToken).ConfigureAwait(false);
+            // Read back what is there, so only the writes that happened are reported.
+            var ids = deleted.Concat(inserted).Select(p => p.Id).ToList();
+            var present = (await entries.Find(session, Builders<BsonDocument>.Filter.In("_id", ids)).Project(new BsonDocument("_id", 1)).ToListAsync(cancellationToken).ConfigureAwait(false))
+                .Select(d => d["_id"].AsObjectId).ToHashSet();
+            return new AppliedBonusChanges(
+                [.. inserted.Where(p => present.Contains(p.Id)).Select(p => p.Key)],
+                [.. deleted.Where(p => !present.Contains(p.Id)).Select(p => p.Key)]);
+        }
+        catch (MongoBulkWriteException e) when (e.WriteErrors.Any(w => w.Category == ServerErrorCategory.DuplicateKey))
+        {
+            // Inside a transaction a duplicate key aborts it: the attempt reruns and reads the entry that is there now.
+            e.AddErrorLabel(TransientLabel);
+            throw;
+        }
+        catch (Exception e) when (IsFailure(e))
+        {
+            return Failed("apply the bonuses", e);
+        }
+    }
+
     public async Task<OneOf<IReadOnlyList<PointTotal>, PortError>> SumByPersonAsync(DateTimeOffset? from, DateTimeOffset? toExclusive, CancellationToken cancellationToken)
     {
         var date = new BsonDocument();
@@ -358,6 +431,24 @@ internal sealed class MongoPointEntryStore : ForStoringPointEntries
         { "taskId", fields.TaskId is { } task ? ObjectIdConverter.Parse(task) : BsonNull.Value },
         { "titleSnapshot", fields.TitleSnapshot },
         { "source", PointNames.ToWire(source) },
+        { "createdAt", new BsonDateTime(at.UtcDateTime) },
+        { "updatedAt", new BsonDateTime(at.UtcDateTime) },
+    };
+
+    private static BsonDocument ToDocument(ObjectId id, BonusEntryInsert insert, DateTimeOffset at) => new()
+    {
+        { "_id", id },
+        { "key", insert.Key },
+        { "kind", PointNames.ToWire(insert.Kind) },
+        { "personId", ObjectIdConverter.Parse(insert.PersonId) },
+        { "amount", insert.Amount },
+        { "date", new BsonDateTime(insert.Date.UtcDateTime) },
+        { "weekStart", new BsonDateTime(insert.WeekStart.UtcDateTime) },
+        { "periodStart", new BsonDateTime(insert.PeriodStart.UtcDateTime) },
+        { "occurrenceId", BsonNull.Value },
+        { "taskId", BsonNull.Value },
+        { "titleSnapshot", string.Empty },
+        { "source", PointNames.ToWire(PointEntrySource.Recompute) },
         { "createdAt", new BsonDateTime(at.UtcDateTime) },
         { "updatedAt", new BsonDateTime(at.UtcDateTime) },
     };

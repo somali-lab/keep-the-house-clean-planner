@@ -1075,6 +1075,170 @@
         }
       }
     },
+    "/api/v2/promote-suggestions/apply": {
+      "post": {
+        "tags": [
+          "Promote"
+        ],
+        "summary": "Moves one slot of the active plan to the suggested weekday, and person when given (planners).",
+        "description": "Changes one slot of the ACTIVE plan and is validated like a slot save: a hard error (for example the new weekday is unavailable for the assignee) is refused with 422 invalid_plan, carrying errors, issues, warnings and summary, and nothing changes. A plan that is not the active one answers 409 plan_not_active, a slot that is no longer in the plan 404 slot_not_found. The plan change is audited with meta.promotedFrom (the old position), toWeekday and, when given, toAssigneeId. Like a slot save of the active plan it synchronises the upcoming occurrences in the same transaction (audited with the system as source) and answers like PUT /cycle-plans/{id}/slots: the plan, the warnings, the summary and synchronized. Answers 500 settings_missing when the installation has no settings.",
+        "operationId": "applyPromoteSuggestion",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyPromotionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanSlotsSavedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/promote-suggestions/dismiss": {
+      "post": {
+        "tags": [
+          "Promote"
+        ],
+        "summary": "Dismisses a suggestion until there is newer evidence (planners).",
+        "description": "Appends the dismissal to the settings (an earlier dismissal of the same slot and target is replaced, so only the newest evidence counts); the change is audited as a settings update. Dismissing what is already stored writes and audits nothing. Answers 500 settings_missing when the installation has no settings.",
+        "operationId": "dismissPromoteSuggestion",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DismissPromotionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromoteDismissedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/export/pdf/schedule": {
       "get": {
         "tags": [
@@ -5396,6 +5560,64 @@
           }
         }
       },
+      "ApplyPromotionRequest": {
+        "required": [
+          "planId",
+          "taskId",
+          "weekIndex",
+          "weekday",
+          "toWeekday",
+          "toAssigneeId"
+        ],
+        "type": "object",
+        "properties": {
+          "planId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "taskId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "weekIndex": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "weekday": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "toWeekday": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "toAssigneeId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "AssignOccurrenceRequest": {
         "required": [
           "assigneeId"
@@ -6941,6 +7163,71 @@
           },
           "lastEvidenceId": {
             "type": "string"
+          }
+        }
+      },
+      "DismissPromotionRequest": {
+        "required": [
+          "planId",
+          "taskId",
+          "weekIndex",
+          "weekday",
+          "toWeekday",
+          "toAssigneeId",
+          "lastEvidenceId"
+        ],
+        "type": "object",
+        "properties": {
+          "planId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "taskId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "weekIndex": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "weekday": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "toWeekday": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "toAssigneeId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "lastEvidenceId": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -8792,6 +9079,17 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "PromoteDismissedResponse": {
+        "required": [
+          "dismissed"
+        ],
+        "type": "object",
+        "properties": {
+          "dismissed": {
+            "type": "boolean"
           }
         }
       },

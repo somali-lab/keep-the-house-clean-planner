@@ -331,4 +331,72 @@ public sealed class MongoPointStoresTests(MongoContainerFixture mongo)
         sources[broken.ToString()].Date.Should().BeNull();
         values.Should().ContainSingle().Which.Should().Be(new TaskPointValue(task.ToString(), null, 45));
     }
+
+    // ---- the bonus entries (ADR-0012)
+
+    [Fact]
+    public async Task Bonus_writesOutsideATransactionAreRefusedAndWriteNothing()
+    {
+        await using var h = await PointsHarness.StartAsync(mongo);
+        var entries = h.Services.GetRequiredService<ForStoringPointEntries>();
+
+        var refused = await entries.ApplyBonusChangesAsync(new BonusEntryChanges([], []), At, Ct);
+
+        refused.AsT1.Message.Should().StartWith("pointEntries.no_transaction");
+        (await h.EntriesAsync()).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Bonus_insertsTheDocumentOfTheNodeServerAndReadsOnlyTheBonusKinds()
+    {
+        await using var h = await PointsHarness.StartAsync(mongo);
+        var entries = h.Services.GetRequiredService<ForStoringPointEntries>();
+        await h.InsertExecutionEntryAsync(h.P1, "2026-09-14", 30);
+        await h.InsertOtherEntryAsync(h.P1, "2026-09-18", -5, "redemption");
+        var key = $"bonus_week_done:{h.P1}:2026-09-14";
+        var insert = new BonusEntryInsert(key, PointEntryKind.BonusWeekDone, h.P1.ToString(), 5, Day("2026-09-20"), Day("2026-09-14"), Day("2026-09-14"));
+
+        var applied = await InTransaction(h, ct => entries.ApplyBonusChangesAsync(new BonusEntryChanges([insert], []), At, ct));
+
+        applied.AsT0.Should().BeEquivalentTo(new AppliedBonusChanges([key], []));
+        var document = (await h.EntriesAsync("bonus_week_done")).Single();
+        document.Names.Should().BeEquivalentTo("_id", "key", "kind", "personId", "amount", "date", "weekStart", "periodStart", "occurrenceId", "taskId", "titleSnapshot", "source", "createdAt", "updatedAt");
+        (document["key"].AsString, document["amount"].AsInt32, document["occurrenceId"], document["taskId"], document["titleSnapshot"].AsString, document["source"].AsString)
+            .Should().Be((key, 5, BsonNull.Value, BsonNull.Value, string.Empty, "recompute"));
+        (document["date"], document["weekStart"], document["periodStart"], document["createdAt"]).Should().Be((PointsHarness.Midnight("2026-09-20"), PointsHarness.Midnight("2026-09-14"), PointsHarness.Midnight("2026-09-14"), new BsonDateTime(At.UtcDateTime)));
+        (await entries.FindBonusEntriesAsync(Ct)).AsT0.Should().ContainSingle().Which.Key.Should().Be(key);
+    }
+
+    [Fact]
+    public async Task Bonus_aDeleteThatMissedItsCompareAndSetIsNotReportedAndTheEntryStays()
+    {
+        await using var h = await PointsHarness.StartAsync(mongo);
+        var entries = h.Services.GetRequiredService<ForStoringPointEntries>();
+        var (stale, gone) = (await h.InsertOtherEntryAsync(h.P1, "2026-09-20", 5, "bonus_week_done"), await h.InsertOtherEntryAsync(h.P1, "2026-09-20", 3, "bonus_week_ontime"));
+        var read = (await entries.FindBonusEntriesAsync(Ct)).AsT0.ToDictionary(e => e.Id);
+        // Somebody changed the first entry after it was read: the compare-and-set misses.
+        await h.Ledger.UpdateOneAsync(new BsonDocument("_id", stale), new BsonDocument("$set", new BsonDocument("amount", 99)), cancellationToken: Ct);
+
+        var applied = await InTransaction(h, ct => entries.ApplyBonusChangesAsync(new BonusEntryChanges([], [read[stale.ToString()], read[gone.ToString()]]), At, ct));
+
+        applied.AsT0.Should().BeEquivalentTo(new AppliedBonusChanges([], [read[gone.ToString()].Key]));
+        (await h.EntriesAsync("bonus_week_done")).Single()["amount"].AsInt32.Should().Be(99);
+        (await h.EntriesAsync("bonus_week_ontime")).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Bonus_aDeleteAndTheInsertOfTheSameKeyInOneWriteReplacesTheEntry()
+    {
+        await using var h = await PointsHarness.StartAsync(mongo);
+        var entries = h.Services.GetRequiredService<ForStoringPointEntries>();
+        var id = await h.InsertOtherEntryAsync(h.P1, "2026-09-20", 5, "bonus_week_done");
+        var old = (await entries.FindBonusEntriesAsync(Ct)).AsT0.Single();
+        var insert = new BonusEntryInsert(old.Key, PointEntryKind.BonusWeekDone, h.P1.ToString(), 7, Day("2026-09-20"), Day("2026-09-14"), Day("2026-09-20"));
+
+        var applied = await InTransaction(h, ct => entries.ApplyBonusChangesAsync(new BonusEntryChanges([insert], [old]), At, ct));
+
+        applied.AsT0.Should().BeEquivalentTo(new AppliedBonusChanges([old.Key], [old.Key])); // one removed (the old document) and one created (the new one), both with the same key
+        var now = (await h.EntriesAsync("bonus_week_done")).Single();
+        (now["_id"] == id, now["amount"].AsInt32).Should().Be((false, 7));
+    }
 }
