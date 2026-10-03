@@ -46,3 +46,21 @@ Differences: the timezone has no default (pass `DayKeys.FindZone(DayKeys.AppTime
 `StringComparer.Ordinal` where TypeScript used `localeCompare`; an interval with `PeriodDays == 0` is skipped like an unknown
 key (TypeScript skipped it through `!periodDays`). `ComputeDue` throws nothing itself; an invalid day key or timezone
 fails earlier, in `DayKeys.Parse` / `FindZone`.
+
+## Settings (`Huishoudplanner.Domain.Settings`)
+
+The singleton settings document (id `000000000000000000000001`). `HouseholdSettings` mirrors `apps/server/src/data/settings.ts`: optional values stay `null` when they are not stored and mean their default for the API (`SettingsDefaults`: EUR, 0 cents per point, automatic goals, no bonuses). There is no API key in it: `AI_API_KEY` is configuration only.
+
+| TypeScript                                                  | C#                                                                                                                                      |
+| ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `Settings`, `SettingsDoc`                                   | `HouseholdSettings` (stored), `SettingsView` (what `GET` returns: defaults, `BonusesInForce`, rows with `StartsInFuture`)               |
+| `UpdateSettingsInput`                                       | `SettingsPatch` (what a client may send), `SettingsChanges` (what a write sets)                                                         |
+| `updateSettingsInputSchema` rules                           | `SettingsRules.Validate` (field paths and message codes as zod; the JSON shape is read in the HTTP adapter)                             |
+| `bonusAmountsOn`, `sameBonusAmounts`, `scheduleWithAmounts` | `BonusSchedule.AmountsOn`, `SameAmounts`, `WithAmounts` (golden vectors `bonuses.json`; the period and set rules follow with slice 4.2) |
+| `DEFAULT_AI_PROMPTS`, `DEFAULT_INTERVALS`, seed             | `SettingsDefaults.AiPrompts`, `DueCalculator.DefaultIntervals`, `SettingsDefaults.ForNewInstallation`, `WithThreePerWeek`               |
+| `isTwoDecimalCurrency`, `Intl.supportedValuesOf`            | `Currencies.HasTwoDecimals`, `IsKnown` (from the region data of the platform)                                                           |
+| `diffFields` of a settings update                           | `SettingsAudit.ToAudit` (the audit value tree of a settings document) with `ChangeSet`                                                  |
+
+Driving ports `ISettingsService` (read, patch) and `ISettingsSeedService`; driven ports `ForStoringSettings` (read, set fields, insert once) and `ForCheckingIntervalUsage` (the interval keys tasks use, an interim read until the task slice). `IntervalInUse(Keys)` is the `409 interval_in_use` value.
+
+Differences: the Node compare-and-set on the stored schedule is replaced by the transaction that reads, checks and writes (a retried attempt recomputes the row), and `bonus_schedule_conflict` is the runner's exhausted write conflict on a patch that sets amounts.
