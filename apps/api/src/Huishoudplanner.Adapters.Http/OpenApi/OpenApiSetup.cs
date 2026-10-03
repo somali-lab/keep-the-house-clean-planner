@@ -19,6 +19,8 @@ public static class OpenApiSetup
 
     public const string RoomsTag = "Rooms";
 
+    public const string AuditTag = "Audit";
+
     public static IServiceCollection AddOpenApiDocument(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -41,6 +43,7 @@ public static class OpenApiSetup
                 new() { Name = MetaTag, Description = "Limits and defaults the web app reads once per session." },
                 new() { Name = CalendarTag, Description = "Cycle, week and ISO week of calendar days." },
                 new() { Name = RoomsTag, Description = "The rooms of the house: everyone reads them, administrators create, change and delete them." },
+                new() { Name = AuditTag, Description = "The history of changes: everyone reads it, administrators clear it." },
             };
             return Task.CompletedTask;
         }));
