@@ -2,6 +2,8 @@
 # Mongo into the single-node replica set the .NET application expects (ADR-0021). Never used by a real installation.
 services:
   app:
+    # The base file loads .env; the smoke must only see the explicit values below, never a developer's real settings.
+    env_file: !reset []
     build:
       dockerfile: docker/Dockerfile.dotnet
     environment:

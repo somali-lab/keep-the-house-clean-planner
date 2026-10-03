@@ -6,7 +6,7 @@
  * the Problem Details error shape, and always removes the stack and its volumes again.
  * Usage: node scripts/smoke-dotnet.mjs   (SMOKE_PORT overrides the port, default 3200)
  */
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -19,30 +19,46 @@ const SERVICES = ['app', 'mongo'];
 
 const composeEnv = { ...process.env, APP_PORT: PORT, APP_IMAGE_TAG: 'smoke-dotnet' };
 
+const composeArgs = (args) => [
+  'compose',
+  '-p',
+  PROJECT,
+  '-f',
+  'docker-compose.yml',
+  '-f',
+  'docker/docker-compose.dotnet-smoke.yml',
+  ...args,
+];
+
 function compose(args, { capture = false } = {}) {
-  const result = spawnSync(
-    'docker',
-    [
-      'compose',
-      '-p',
-      PROJECT,
-      '-f',
-      'docker-compose.yml',
-      '-f',
-      'docker/docker-compose.dotnet-smoke.yml',
-      ...args,
-    ],
-    {
-      cwd: ROOT,
-      env: composeEnv,
-      stdio: capture ? ['ignore', 'pipe', 'inherit'] : 'inherit',
-      encoding: 'utf8',
-    },
-  );
+  const result = spawnSync('docker', composeArgs(args), {
+    cwd: ROOT,
+    env: composeEnv,
+    stdio: capture ? ['ignore', 'pipe', 'inherit'] : 'inherit',
+    encoding: 'utf8',
+  });
   if (result.error) throw result.error;
   if (result.status !== 0)
     throw new Error(`docker compose ${args.join(' ')} exited with code ${result.status}`);
   return result.stdout ?? '';
+}
+
+let upProcess;
+/** The long `up --build` runs asynchronously so a SIGINT/SIGTERM handler can still run while it builds. */
+function composeUp(args) {
+  return new Promise((resolvePromise, reject) => {
+    upProcess = spawn('docker', composeArgs(args), {
+      cwd: ROOT,
+      env: composeEnv,
+      stdio: 'inherit',
+    });
+    upProcess.on('error', reject);
+    upProcess.on('exit', (code) =>
+      code === 0
+        ? resolvePromise()
+        : reject(new Error(`docker compose ${args.join(' ')} exited with code ${code}`)),
+    );
+  });
 }
 
 const step = (message) => console.log(`\n> ${message}`);
@@ -112,10 +128,24 @@ async function checks() {
   );
 }
 
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.on(signal, () => {
+    console.error(`
+Received ${signal}: removing the smoke stack`);
+    upProcess?.kill();
+    try {
+      compose(['down', '-v', '--remove-orphans']);
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+    }
+    process.exit(130);
+  });
+}
+
 let failed = false;
 try {
   step('docker compose up -d --build (app, mongo)');
-  compose(['up', '-d', '--build', ...SERVICES]);
+  await composeUp(['up', '-d', '--build', ...SERVICES]);
   step('waiting until the app is healthy');
   await waitHealthy();
   await checks();
