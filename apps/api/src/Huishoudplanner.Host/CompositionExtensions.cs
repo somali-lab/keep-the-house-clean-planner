@@ -64,6 +64,7 @@ public static class CompositionExtensions
         services.AddNotifications();
         services.AddAuditLog();
         services.AddPoints();
+        services.AddRewardProgress();
         services.AddStatistics();
         services.AddJobs();
         return services;
@@ -86,6 +87,7 @@ public static class CompositionExtensions
         app.MapGeneration();
         app.MapOccurrences();
         app.MapPoints();
+        app.MapRewardProgress();
         app.MapAuditEndpoints();
         app.MapStatistics();
         app.MapJobs();

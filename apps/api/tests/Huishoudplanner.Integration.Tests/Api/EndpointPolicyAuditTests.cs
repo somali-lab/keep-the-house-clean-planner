@@ -136,6 +136,7 @@ public sealed class EndpointPolicyAuditTests
     [Theory]
     [InlineData("/api/v2/points/balances")]
     [InlineData("/api/v2/points/entries")]
+    [InlineData("/api/v2/points/progress")]
     public void ThePointsReads_stayOpenLikeTheNodeRoutes(string route)
     {
         using var factory = ApiFactory.WithoutDatabase();
