@@ -38,6 +38,6 @@ test('keeps task search and cycle-week choice after a hard reload', async ({ pag
   await expect(page.getByRole('textbox', { name: 'Zoek taken' })).toHaveValue('etage');
   await expect(page.getByRole('button', { name: 'Toon cyclusweek' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByTestId(`day:${TODAY}`)).toContainText('Étage dweilen');
-  await page.getByRole('button', { name: 'Filters wissen' }).click();
+  await page.getByRole('button', { name: 'Filters van dit scherm resetten' }).click();
   await expect(page.getByRole('textbox', { name: 'Zoek taken' })).toHaveValue('');
 });

@@ -9,6 +9,7 @@ import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
 import { render } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { MemoryRouter } from 'react-router';
+import { FilterResetButton, FilterResetProvider } from '@/components/FilterReset';
 import { ProfileProvider } from '../identity/index.ts';
 import { testQueryClient } from './fixtures.ts';
 
@@ -75,15 +76,27 @@ export function makeSettings(overrides: Partial<Settings> = {}): Settings {
   };
 }
 
-/** Renders a page with query client, profile context and an in-memory router. */
+/**
+ * Renders a page with query client, profile context and an in-memory router. Pages register their
+ * filter reset with the shared provider; pass `headerReset` to also render the header's reset button.
+ */
 export function renderWithProviders(
   ui: ReactElement,
-  { route = '/', queryClient = testQueryClient() }: { route?: string; queryClient?: QueryClient } = {},
+  {
+    route = '/',
+    queryClient = testQueryClient(),
+    headerReset = false,
+  }: { route?: string; queryClient?: QueryClient; headerReset?: boolean } = {},
 ) {
   const result = render(
     <QueryClientProvider client={queryClient}>
       <ProfileProvider>
-        <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
+        <FilterResetProvider>
+          <MemoryRouter initialEntries={[route]}>
+            {headerReset && <FilterResetButton />}
+            {ui}
+          </MemoryRouter>
+        </FilterResetProvider>
       </ProfileProvider>
     </QueryClientProvider>,
   );

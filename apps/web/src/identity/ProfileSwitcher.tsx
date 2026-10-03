@@ -48,7 +48,12 @@ export function ProfileSwitcher({ sidebar = false, compact = false }: { sidebar?
         })}
       </div>
       <span
-        className={cn('min-w-0 max-w-full text-sm leading-tight', sidebar && 'text-center', compact && 'visually-hidden')}
+        className={cn(
+          'min-w-0 max-w-full text-sm leading-tight',
+          sidebar && 'text-center',
+          compact && 'visually-hidden',
+          !sidebar && 'max-sm:sr-only',
+        )}
         aria-live="polite"
       >
         <span className="visually-hidden">{t('profile.current')}: </span>

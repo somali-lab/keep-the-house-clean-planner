@@ -3,6 +3,7 @@ import { weekIndexFor } from '@huishoudplanner/shared/cycle';
 import { ChevronLeft, ChevronRight, Sun, TriangleAlert, Undo2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { EmptyState } from '@/components/EmptyState';
+import { useFilterReset } from '@/components/FilterReset';
 import { NativeSelect } from '@/components/NativeSelect';
 import { PageHeader } from '@/components/PageHeader';
 import { Badge } from '@/components/ui/badge';
@@ -49,9 +50,11 @@ export function TodayPage({ now }: { now?: Date }) {
   const timezone = settings.data?.timezone ?? 'Europe/Amsterdam';
   const todayKey = dayKeyInZone(now ?? new Date(), timezone);
   const [dayOffset, setDayOffset] = useState(0);
+  const defaultPersonFilter = profile?._id ?? getActiveProfileId() ?? 'all';
   const [personFilter, setPersonFilter, resetPersonFilter] = usePersistedFilter(
-    'today.person', profile?._id ?? null, profile?._id ?? getActiveProfileId() ?? 'all',
+    'today.person', profile?._id ?? null, defaultPersonFilter,
   );
+  useFilterReset(resetPersonFilter, personFilter !== defaultPersonFilter);
   const selectedDay = addDaysKey(todayKey, dayOffset);
   const from = addDaysKey(todayKey, -OVERDUE_LOOKBACK_DAYS);
   const occurrences = useOccurrences(from, selectedDay, settings.isSuccess);
@@ -199,9 +202,6 @@ export function TodayPage({ now }: { now?: Date }) {
           {activeUsers.map((user) => <option key={user._id} value={user._id}>{user.name}</option>)}
           <option value="unassigned">{t('today.anyone')}</option>
         </NativeSelect>
-        <Button type="button" variant="outline" onClick={resetPersonFilter}>
-          {t('today.resetFilters')}
-        </Button>
       </div>
       <PromoteBanner />
       {failed && (

@@ -80,13 +80,14 @@ describe('TasksPage — grouping', () => {
   });
 
   it('filters the list by room', async () => {
-    renderWithProviders(<TasksPage />);
+    renderWithProviders(<TasksPage />, { headerReset: true });
+    expect(await screen.findByRole('button', { name: 'Filters van dit scherm resetten' })).toBeDisabled();
     fireEvent.change(await screen.findByLabelText('Filter op ruimte'), { target: { value: 'r2' } });
     const sections = screen.getAllByRole('region');
     expect(sections).toHaveLength(1);
     expect(within(sections[0]!).getByRole('heading', { level: 2 })).toHaveTextContent('Badkamer');
     expect(screen.queryByText('Aanrecht')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Filters herstellen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Filters van dit scherm resetten' }));
     expect(screen.getByLabelText('Filter op ruimte')).toHaveValue('all');
   });
 

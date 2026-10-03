@@ -200,7 +200,7 @@ dismissedPromotions: [ ... ]
 - A week overview is the default landing view at every screen width, shows the whole week with drag-to-reschedule, and can collapse past days.
 - The week overview can search by part of a task name and optionally show the cycle-week number on its cards.
 - My tasks groups its sliding 1-, 2-, or 4-week period into seven-day blocks starting today. Each block shows its date range; each task shows its own cycle-week number even when a block crosses a cycle boundary.
-- Filter choices throughout the app survive a hard reload. A person can visibly reset them, and one household member's saved choices are not silently applied to another member.
+- Filter choices throughout the app survive a hard reload. A single icon button in the top header, directly left of the language switch, resets the filters of the screen the person is on (today, week, my tasks, planner, tasks, statistics and completions) to their defaults and leaves the saved filters of every other screen untouched. It is disabled when the current screen has no filters or all of them are at their defaults, it has an accessible name and tooltip, and it announces the reset to assistive technology. One household member's saved choices are not silently applied to another member.
 - "Done just now" creates an ad-hoc occurrence for a task that was not planned today. At most one ad-hoc occurrence per task per day, and only within a cycle that has been generated.
 
 ### 4.5 Due engine
