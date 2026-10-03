@@ -667,17 +667,17 @@ All configuration is supplied through environment variables; nothing is baked in
 | --- | --- |
 | `MONGO_URL` | Database connection. Required. |
 | `PORT` | HTTP port, a whole number from 1 to 65535. Default 3000. |
-| `NODE_ENV` | Runtime mode: `development`, `production` or `test`. Default `production`. |
+| `ASPNETCORE_ENVIRONMENT` | Runtime mode: `development`, `production` or `test`, case-insensitive. Default `production`. The former name `NODE_ENV` is still read as an alias; the new name wins when both are set. |
 | `TZ_APP` | Household timezone used for all calendar reasoning, and copied into the settings when they are first created. Default `Europe/Amsterdam`. |
 | `SEED_USERS` | Profiles created on an empty database: a JSON array of `{ "name", "color" }` (a non-empty name and a `#rrggbb` colour) with at least one entry. Default: two users, "Persoon 1" and "Persoon 2". |
-| `LOG_LEVEL` | Log verbosity: `fatal`, `error`, `warn`, `info`, `debug`, `trace` or `silent`. Default `info`. |
+| `Logging__LogLevel__Default` | Log verbosity: `fatal`, `error`, `warn`, `info`, `debug`, `trace` or `silent` (the .NET names such as `Warning` also work). Default `info`. The former name `LOG_LEVEL` is still read as an alias; the new name wins when both are set. |
 | `AUDIT_RETENTION_DAYS` | Age in days after which audit entries are removed, a whole number of at least 1. Unset means indefinite, and the manual audit-retention job then answers `{ status: 'disabled' }`. |
 | `AI_API_KEY` | Credential for the configured AI provider. |
 | `NOTIFY_TYPE` | `none`, `ntfy` or `homeassistant`. |
 | `NOTIFY_URL` | Target for notifications. Required unless the type is `none`. |
 | `NOTIFY_TOKEN` | Credential for the notification target. |
 | `DISABLE_SCHEDULER` | `true` disables background jobs. Default `false`. |
-| `APP_FAKE_NOW` | An ISO instant with offset that freezes the application clock. Only allowed when `NODE_ENV=test`; any other mode refuses to start. |
+| `APP_FAKE_NOW` | An ISO instant with offset that freezes the application clock. Only allowed when `ASPNETCORE_ENVIRONMENT=test`; any other mode refuses to start. |
 | `WEB_DIST_DIR` | Location of the built frontend. |
 
 An empty variable is read as unset. Invalid configuration fails at startup with a message naming the offending variables and never echoing their values.
