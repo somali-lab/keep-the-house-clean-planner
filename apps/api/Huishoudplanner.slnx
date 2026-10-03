@@ -10,6 +10,9 @@
     <Project Path="src/Huishoudplanner.Domain/Huishoudplanner.Domain.csproj" />
     <Project Path="src/Huishoudplanner.Host/Huishoudplanner.Host.csproj" />
   </Folder>
+  <Folder Name="/fixtures/">
+    <Project Path="fixtures/Huishoudplanner.Architecture.Tests.Fixtures/Huishoudplanner.Architecture.Tests.Fixtures.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Huishoudplanner.Application.Tests/Huishoudplanner.Application.Tests.csproj" />
     <Project Path="tests/Huishoudplanner.Architecture.Tests/Huishoudplanner.Architecture.Tests.csproj" />
