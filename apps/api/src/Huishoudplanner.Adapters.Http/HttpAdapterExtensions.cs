@@ -64,18 +64,17 @@ public static class HttpAdapterExtensions
         return app;
     }
 
-    /// <summary>Fails at startup, not on the first request, when the composition root forgot the user port that identity needs.</summary>
+    /// <summary>
+    /// Fails at startup, not on the first request, when the composition root forgot the user port that identity needs.
+    /// Only the registration is checked, nothing is constructed: build-time OpenAPI generation starts the host without configuration.
+    /// </summary>
     private static void RequireUserPort(IServiceProvider services)
     {
-        using var scope = services.CreateScope();
-        try
-        {
-            _ = scope.ServiceProvider.GetRequiredService<ForResolvingActors>();
-        }
-        catch (InvalidOperationException ex)
+        var registered = services.GetService<IServiceProviderIsService>()?.IsService(typeof(ForFindingUsers)) ?? true;
+        if (!registered)
         {
             throw new InvalidOperationException(
-                "AddHttpAdapter needs a registration of ForFindingUsers (or another ForResolvingActors) from the composition root.", ex);
+                "AddHttpAdapter needs a registration of ForFindingUsers from the composition root.");
         }
     }
 }
