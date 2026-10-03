@@ -19,6 +19,13 @@ import {
   slotDate,
   weekIndexFor,
 } from '../packages/shared/src/cycle.ts';
+import {
+  bonusAmountsOn,
+  sameBonusAmounts,
+  scheduleWithAmounts,
+  type BonusAmounts,
+  type BonusScheduleRow,
+} from '../packages/shared/src/bonuses.ts';
 import { computeDue, dueState, type DueTaskInput } from '../packages/shared/src/due.ts';
 import { DEFAULT_INTERVALS, type Interval } from '../packages/shared/src/schemas/intervals.ts';
 import {
@@ -79,6 +86,8 @@ interface FunctionSpec {
 interface ModuleSpec {
   module: string;
   functions: Record<string, FunctionSpec>;
+  /** Exported functions of the source module that have no vectors yet (their slice is not built); the drift test lists them. */
+  pending?: string[];
 }
 
 const TZ = 'Europe/Amsterdam';
@@ -775,7 +784,138 @@ const dueModule: ModuleSpec = {
   },
 };
 
-export const MODULES: ModuleSpec[] = [timeModule, cycleModule, dueModule];
+// ---------------------------------------------------------------------------------------
+// bonuses (slice 1.3 ports the schedule rules; the period and set rules follow with slice 4.2)
+// ---------------------------------------------------------------------------------------
+
+const amounts = (
+  weekDone: number,
+  weekOnTime: number,
+  cycleDone: number,
+  cycleOnTime: number,
+): BonusAmounts => ({
+  weekDone,
+  weekOnTime,
+  cycleDone,
+  cycleOnTime,
+});
+const row = (from: string, a: BonusAmounts): BonusScheduleRow => ({ from, ...a });
+const ALL_AMOUNTS = amounts(5, 3, 20, 10);
+const OTHER_AMOUNTS = amounts(1, 2, 3, 4);
+const ZERO_AMOUNTS = amounts(0, 0, 0, 0);
+const TWO_ROWS = [row('2026-09-16', ALL_AMOUNTS), row('2026-09-30', OTHER_AMOUNTS)];
+
+const bonusesModule: ModuleSpec = {
+  module: 'bonuses',
+  functions: {
+    bonusAmountsOn: fn(
+      (i: { schedule: BonusScheduleRow[]; day: string }) => ({
+        ...bonusAmountsOn(i.schedule, i.day),
+      }),
+      [
+        ['an empty schedule gives all zero', { schedule: [], day: '2026-09-16' }],
+        ['before the first row all amounts are zero', { schedule: TWO_ROWS, day: '2026-09-15' }],
+        ['on the day of the first row it applies', { schedule: TWO_ROWS, day: '2026-09-16' }],
+        ['between two rows the earlier one applies', { schedule: TWO_ROWS, day: '2026-09-29' }],
+        ['on the day of the second row it applies', { schedule: TWO_ROWS, day: '2026-09-30' }],
+        ['after the last row it keeps applying', { schedule: TWO_ROWS, day: '2027-01-01' }],
+        [
+          'an unsorted schedule still finds the last row on or before the day',
+          { schedule: [TWO_ROWS[1]!, TWO_ROWS[0]!], day: '2026-10-05' },
+        ],
+        [
+          'a row with all zero amounts is in force like any other',
+          {
+            schedule: [row('2026-09-16', ALL_AMOUNTS), row('2026-09-30', ZERO_AMOUNTS)],
+            day: '2026-10-01',
+          },
+        ],
+      ],
+    ),
+    sameBonusAmounts: fn(
+      (i: { a: BonusAmounts; b: BonusAmounts }) => sameBonusAmounts(i.a, i.b),
+      [
+        ['equal amounts', { a: ALL_AMOUNTS, b: { ...ALL_AMOUNTS } }],
+        ['one amount differs', { a: ALL_AMOUNTS, b: { ...ALL_AMOUNTS, cycleOnTime: 11 } }],
+        ['all zero equals all zero', { a: ZERO_AMOUNTS, b: ZERO_AMOUNTS }],
+      ],
+    ),
+    scheduleWithAmounts: fn(
+      (i: { schedule: BonusScheduleRow[]; amounts: BonusAmounts; today: string }) =>
+        scheduleWithAmounts(i.schedule, i.amounts, i.today) as unknown as Json,
+      [
+        [
+          'amounts equal to the ones in force change nothing, also all zero on an empty schedule',
+          { schedule: [], amounts: ZERO_AMOUNTS, today: '2026-09-16' },
+        ],
+        [
+          'first amounts become a row from today',
+          { schedule: [], amounts: ALL_AMOUNTS, today: '2026-09-16' },
+        ],
+        [
+          'the same amounts again change nothing',
+          { schedule: [row('2026-09-16', ALL_AMOUNTS)], amounts: ALL_AMOUNTS, today: '2026-09-16' },
+        ],
+        [
+          'the same amounts on a later day change nothing',
+          { schedule: [row('2026-09-16', ALL_AMOUNTS)], amounts: ALL_AMOUNTS, today: '2026-09-20' },
+        ],
+        [
+          'other amounts replace the row that starts today',
+          {
+            schedule: [row('2026-09-16', ALL_AMOUNTS)],
+            amounts: amounts(6, 3, 20, 10),
+            today: '2026-09-16',
+          },
+        ],
+        [
+          'other amounts on a later day add a row and keep the earlier one',
+          {
+            schedule: [row('2026-09-16', ALL_AMOUNTS)],
+            amounts: OTHER_AMOUNTS,
+            today: '2026-09-30',
+          },
+        ],
+        [
+          'switching a kind off is a row with a zero',
+          { schedule: TWO_ROWS, amounts: amounts(1, 2, 3, 0), today: '2026-09-30' },
+        ],
+        [
+          'a row that starts in the future is kept and sorted behind the new row',
+          {
+            schedule: [row('2026-10-15', OTHER_AMOUNTS)],
+            amounts: ALL_AMOUNTS,
+            today: '2026-09-16',
+          },
+        ],
+        [
+          'amounts equal to the ones in force but a future row exists change nothing',
+          {
+            schedule: [row('2026-09-16', ALL_AMOUNTS), row('2026-10-15', OTHER_AMOUNTS)],
+            amounts: ALL_AMOUNTS,
+            today: '2026-09-20',
+          },
+        ],
+      ],
+    ),
+  },
+  pending: [
+    'isBonusKind',
+    'weekOf',
+    'cycleOf',
+    'periodEnded',
+    'onTimeCutoff',
+    'periodDayOf',
+    'periodOwnerOf',
+    'creditedOf',
+    'placementsOf',
+    'evaluateSet',
+    'bonusKey',
+    'expectedBonusEntries',
+  ],
+};
+
+export const MODULES: ModuleSpec[] = [timeModule, cycleModule, dueModule, bonusesModule];
 
 /** Runs every case through the real TypeScript function. */
 export function buildVectors(): VectorFile[] {

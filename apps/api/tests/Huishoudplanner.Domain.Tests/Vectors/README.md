@@ -11,8 +11,8 @@ file differs from what the TypeScript functions return today.
 
 ## Files
 
-One file per TypeScript module: `time.json`, `cycle.json`, `due.json`. Later slices add
-`bonuses.json`, `points.json`, `badges.json`, `rewards.json` and `validation.json` in the same format.
+One file per TypeScript module: `time.json`, `cycle.json`, `due.json`, `bonuses.json` (the schedule rules: `bonusAmountsOn`, `sameBonusAmounts`, `scheduleWithAmounts`; the period and set rules follow with slice 4.2 and are listed as `pending` in `scripts/vectors.ts`). Later slices add
+`points.json`, `badges.json`, `rewards.json` and `validation.json` in the same format.
 
 ## Format
 
