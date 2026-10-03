@@ -537,9 +537,9 @@ public sealed class PointsBonusEndpointTests(MongoContainerFixture mongo)
     // ---- writing the bonuses
 
     [Fact]
-    public async Task Writing_aCycleAnchorThatIsNoMondayFailsTheWholeRunAndLeavesTheLedgerAsItWas()
+    public async Task Writing_aCycleAnchorThatIsNoMondaySkipsTheBonusStepWhileTheExecutionPartCommits()
     {
-        // The Node server audited what steps 1 to 3 had changed and then rethrew; here one run is one transaction, so nothing of it stays.
+        // The Node server audited what steps 1 to 3 had changed and then rethrew; here the bonus step is a transaction of its own and is skipped.
         await using var h = await BonusHarness.StartAsync(mongo);
         await h.DoTheWeekAsync();
         var now = DateTime.Parse("2026-09-21T01:00:00Z", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AdjustToUniversal);
@@ -555,13 +555,14 @@ public sealed class PointsBonusEndpointTests(MongoContainerFixture mongo)
         // An anchor that is not a Monday makes the cycle calculation of step 4 impossible.
         await h.Settings.UpdateOneAsync(FilterDefinition<BsonDocument>.Empty, new BsonDocument("$set", new BsonDocument("cycleAnchorDate", "2026-09-15")), cancellationToken: Ct);
         h.Clock.Set("2026-09-21T01:00:00.000Z");
-        var before = await h.FingerprintAsync();
+
 
         var response = await h.SendAsync(HttpMethod.Post, "/api/v2/points/recompute", null, h.Admin);
 
-        ((int)response.Status).Should().BeGreaterThanOrEqualTo(500, response.Body.ToString());
-        (await h.FingerprintAsync()).Should().Be(before);
-        (await h.Ledger.CountDocumentsAsync(new BsonDocument("titleSnapshot", "Verdwaald"), cancellationToken: Ct)).Should().Be(1);
+        response.Status.Should().Be(HttpStatusCode.OK, response.Body.ToString());
+        (response.Body.GetProperty("removed").GetInt32(), response.Body.GetProperty("bonusesCreated").GetInt32()).Should().Be((1, 0));
+        (await h.RecomputeAuditAsync()).Should().ContainSingle().Which["meta"]["step"].AsString.Should().Be("executions");
+        (await h.Ledger.CountDocumentsAsync(new BsonDocument("titleSnapshot", "Verdwaald"), cancellationToken: Ct)).Should().Be(0, "the drift of the execution part is repaired");
         (await h.BonusesAsync()).Should().BeEmpty();
     }
 }

@@ -81,7 +81,7 @@ public sealed class PointsReconcileEndpointTests(MongoContainerFixture mongo)
         var meta = summary["meta"].AsBsonDocument;
         (meta["trigger"].AsString, meta["tasksDefaulted"].AsInt32, meta["snapshotsSet"].AsInt32, meta["created"].AsInt32, meta["unattributed"].AsInt32).Should().Be(("admin", 1, 5, 4, 1));
         meta.Names.Should().BeEquivalentTo(
-            "trigger", "tasksDefaulted", "snapshotsSet", "created", "updated", "removed", "unattributed", "skipped", "corrections", "correctionsTotal",
+            "trigger", "step", "tasksDefaulted", "snapshotsSet", "created", "updated", "removed", "unattributed", "skipped", "corrections", "correctionsTotal",
             "correctionsTruncated", "bonusesCreated", "bonusesRemoved", "bonusChanges", "bonusChangesTotal", "bonusChangesTruncated");
         // The per-entry audit entries of a backfill are not written; the summary stands for all of them.
         (await h.PointsAuditAsync("create")).Should().BeEmpty();

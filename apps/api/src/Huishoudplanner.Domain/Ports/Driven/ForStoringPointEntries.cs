@@ -11,8 +11,9 @@ namespace Huishoudplanner.Domain.Ports.Driven;
 /// The points ledger (collection <c>pointEntries</c>, shared with the Node server; ADR-0011). The writes only run inside
 /// <see cref="ForRunningTransactions"/> (a live sync together with its audit entry, a reconciliation together with its summary); called outside
 /// a transaction they write nothing and return a <see cref="PortError"/> whose message starts with <c>pointEntries.no_transaction</c>. Reads join
-/// the running transaction when there is one. Execution entries are written one by one (live sync) or in bulk (reconciliation), bonus entries only in bulk by the reconciliation
-/// (ADR-0012); the redemptions (slice 4.3) will have their own writer, and every kind is read and listed all the same.
+/// the running transaction when there is one. Execution entries are written one by one (live sync) or in bulk (reconciliation), bonus entries
+/// only in bulk by the bonus step of the reconciliation (ADR-0012); the redemptions (slice 4.3) will have their own writer, and every kind is
+/// read and listed all the same.
 /// </summary>
 public interface ForStoringPointEntries
 {

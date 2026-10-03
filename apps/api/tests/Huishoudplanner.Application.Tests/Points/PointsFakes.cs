@@ -42,6 +42,9 @@ internal sealed class FakePointEntryStore : ForStoringPointEntries
 
     public PortError? WriteFailure { get; set; }
 
+    /// <summary>Fails only the bonus read and write, so the execution part of a run can commit.</summary>
+    public PortError? BonusFailure { get; set; }
+
     /// <summary>Runs once, just before the next bulk write looks at the stored entries: a live sync that landed after the reconciliation read.</summary>
     public Action? ConcurrentWriteBeforeNextBulk { get; set; }
 
@@ -173,7 +176,7 @@ internal sealed class FakePointEntryStore : ForStoringPointEntries
 
     public Task<OneOf<IReadOnlyList<PointEntry>, PortError>> FindBonusEntriesAsync(CancellationToken cancellationToken)
     {
-        if (Failure is { } failure)
+        if ((BonusFailure ?? Failure) is { } failure)
         {
             return Task.FromResult<OneOf<IReadOnlyList<PointEntry>, PortError>>(failure);
         }
@@ -188,7 +191,7 @@ internal sealed class FakePointEntryStore : ForStoringPointEntries
 
     public Task<OneOf<AppliedBonusChanges, PortError>> ApplyBonusChangesAsync(BonusEntryChanges changes, DateTimeOffset at, CancellationToken cancellationToken)
     {
-        if ((WriteFailure ?? Failure) is { } failure)
+        if ((BonusFailure ?? WriteFailure ?? Failure) is { } failure)
         {
             return Task.FromResult<OneOf<AppliedBonusChanges, PortError>>(failure);
         }

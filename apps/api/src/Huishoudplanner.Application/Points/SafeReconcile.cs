@@ -22,6 +22,11 @@ public static partial class SafeReconcile
             var result = await points.RecomputeAsync(actor, trigger, cancellationToken).ConfigureAwait(false);
             if (result.TryPickT0(out var done, out var failure))
             {
+                if (done.BonusStepSkipped)
+                {
+                    LogBonusSkipped(logger, PointNames.ToWire(trigger));
+                }
+
                 return done;
             }
 
@@ -34,6 +39,9 @@ public static partial class SafeReconcile
             return null;
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Points reconciliation ({Trigger}) skipped the bonuses: the cycle anchor is not a Monday")]
+    private static partial void LogBonusSkipped(ILogger logger, string trigger);
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Points reconciliation failed ({Trigger}): {Reason}")]
     private static partial void LogFailed(ILogger logger, string trigger, string reason);

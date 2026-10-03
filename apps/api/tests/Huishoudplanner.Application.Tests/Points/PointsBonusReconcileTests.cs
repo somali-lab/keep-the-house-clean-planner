@@ -40,6 +40,10 @@ public sealed class PointsBonusReconcileTests
     private static async Task<PointsRecomputeResult> Run(PointsWorld w, PointsRecomputeTrigger trigger = PointsRecomputeTrigger.Nightly) =>
         (await w.Service.RecomputeAsync(AuditActor.System, trigger, Ct)).AsT0;
 
+    /// <summary>The summary entries of the bonus transaction (<c>step: bonuses</c>); the execution transaction writes its own.</summary>
+    private static List<AuditEntry> BonusSummaries(PointsWorld w) =>
+        [.. w.PointsAudit(AuditAction.Recompute).Where(e => e.Meta!["step"] is AuditString { Value: "bonuses" })];
+
     /// <summary>A readable view of the stored bonuses: kind, person, first day of the period and amount, in a stable order.</summary>
     private static List<string> Bonuses(PointsWorld w)
     {
@@ -60,7 +64,7 @@ public sealed class PointsBonusReconcileTests
 
         result.Should().BeEquivalentTo(new { Created = 2, BonusesCreated = 4, BonusesRemoved = 0, BonusChangesTotal = 4, BonusChangesTruncated = false });
         Bonuses(w).Should().HaveCount(4);
-        var summary = w.PointsAudit(AuditAction.Recompute).Should().ContainSingle().Subject;
+        var summary = BonusSummaries(w).Should().ContainSingle().Subject;
         summary.Meta!["bonusesCreated"].Should().Be(new AuditInteger(4));
         summary.Meta!["bonusChangesTotal"].Should().Be(new AuditInteger(4));
         // The people inside the summary are hexadecimal strings, not object ids.
@@ -144,7 +148,7 @@ public sealed class PointsBonusReconcileTests
         var late = await Run(w);
         late.Should().BeEquivalentTo(new { BonusesCreated = 1, BonusesRemoved = 0 });
         Bonuses(w).Should().Contain("bonus_week_done p1 2026-09-14 5").And.NotContain("bonus_week_ontime p1 2026-09-14 3");
-        w.PointsAudit(AuditAction.Recompute).Should().HaveCount(3);
+        BonusSummaries(w).Should().HaveCount(3);
     }
 
     [Fact]
@@ -257,19 +261,57 @@ public sealed class PointsBonusReconcileTests
     }
 
     [Fact]
-    public async Task Recompute_aCycleAnchorThatIsNoMondayRollsTheWholeRunBack()
+    public async Task Recompute_aCycleAnchorThatIsNoMondaySkipsOnlyTheBonusStep_theExecutionPartCommitsAndTheResultSaysSo()
     {
         var w = World();
         TheWeek(w);
         w.Occ.SettingsStore.Document = w.Occ.SettingsStore.Document! with { CycleAnchorDate = new DateOnly(2026, 9, 15) };
-        w.Done(w.Occ.Weekly, "2026-09-16", w.Occ.P1, w.Occ.P1);
+
+        var result = await Run(w);
+
+        result.Should().BeEquivalentTo(new { Created = 2, BonusesCreated = 0, BonusStepSkipped = true });
+        w.Ledger.Items.Should().HaveCount(2).And.OnlyContain(e => e.Kind == PointEntryKind.Execution);
+        var summary = w.PointsAudit(AuditAction.Recompute).Should().ContainSingle().Subject;
+        summary.Meta!["step"].Should().Be(new AuditString("executions"));
+        // The next run is as quiet as ever, and the nightly and startup reconciles succeed.
+        (await Run(w, PointsRecomputeTrigger.Startup)).BonusStepSkipped.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Recompute_aFailingBonusStepKeepsTheCommittedExecutionPartAndReturnsTheFailureToTheCaller()
+    {
+        var w = World();
+        TheWeek(w);
+        w.Ledger.BonusFailure = new Huishoudplanner.Domain.Errors.PortError("pointEntries.failed: bonuses down");
 
         var failed = await w.Service.RecomputeAsync(AuditActor.System, PointsRecomputeTrigger.Nightly, Ct);
 
         failed.IsT2.Should().BeTrue();
-        failed.AsT2.Message.Should().StartWith("points.bonus_anchor_invalid");
-        w.Ledger.Items.Should().BeEmpty("the execution entries of the same run are rolled back with the bonuses");
-        w.PointsAudit().Should().BeEmpty();
+        failed.AsT2.Message.Should().StartWith(Huishoudplanner.Application.Points.PointsService.BonusStepFailed).And.Contain("bonuses down");
+        w.Ledger.Items.Should().HaveCount(2).And.OnlyContain(e => e.Kind == PointEntryKind.Execution);
+        var summary = w.PointsAudit(AuditAction.Recompute).Should().ContainSingle().Subject;
+        (summary.Meta!["step"], summary.Meta["created"], summary.Meta["bonusesCreated"]).Should().Be((new AuditString("executions"), new AuditInteger(2), new AuditInteger(0)));
+
+        // The bonus step runs again at the next run, and then writes its own summary entry.
+        w.Ledger.BonusFailure = null;
+        var next = await Run(w);
+        next.Should().BeEquivalentTo(new { Created = 0, BonusesCreated = 4 });
+        var summaries = w.PointsAudit(AuditAction.Recompute).ToList();
+        summaries.Should().HaveCount(2);
+        summaries[1].Meta!["step"].Should().Be(new AuditString("bonuses"));
+        summaries[1].Meta!["bonusesCreated"].Should().Be(new AuditInteger(4));
+    }
+
+    [Fact]
+    public async Task Recompute_theBonusAndTheExecutionChangesOfOneRunAreTwoSummaries_andTheAnswerCarriesBoth()
+    {
+        var w = World();
+        TheWeek(w);
+
+        var result = await Run(w);
+
+        result.Should().BeEquivalentTo(new { Created = 2, BonusesCreated = 4, BonusStepSkipped = false });
+        w.PointsAudit(AuditAction.Recompute).Select(e => ((AuditString)e.Meta!["step"]!).Value).Should().Equal("executions", "bonuses");
     }
 
     [Fact]
@@ -286,11 +328,11 @@ public sealed class PointsBonusReconcileTests
 
         Bonuses(w).Should().Equal(before);
         w.Ledger.BonusBulkWrites.Should().Be(bonusWrites);
-        w.PointsAudit(AuditAction.Recompute).Should().ContainSingle();
+        BonusSummaries(w).Should().ContainSingle();
     }
 
     [Fact]
-    public async Task Recompute_aFailingBonusReadIsAPortErrorAndWritesNothing()
+    public async Task Recompute_aFailingOccurrenceReadIsAPortErrorAndWritesNothing()
     {
         var w = World();
         TheWeek(w);

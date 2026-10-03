@@ -37,6 +37,9 @@ public sealed class PointsService(
 {
     private const int UserPageSize = 200;
 
+    /// <summary>The start of the message when the bonus step failed after the execution part of the run was committed.</summary>
+    public const string BonusStepFailed = "points.bonus_step_failed: the execution entries are reconciled, the bonus step failed. ";
+
     // ---- reads
 
     public async Task<OneOf<PointsBalances, ValidationErrors, SettingsMissing, PortError>> BalancesAsync(DateOnly? fromDay, DateOnly? toDay, CancellationToken cancellationToken)
@@ -239,10 +242,43 @@ public sealed class PointsService(
         try
         {
             var ran = await transactions.RunAsync(ct => ReconcileCoreAsync(actor, trigger, ct), cancellationToken).ConfigureAwait(false);
-            return ran.Match<OneOf<PointsRecomputeResult, ConflictError, PortError>>(
-                inner => inner.Match<OneOf<PointsRecomputeResult, ConflictError, PortError>>(result => result, error => error),
-                conflict => conflict,
-                error => error);
+            if (!ran.TryPickT0(out var inner, out var runFailure))
+            {
+                return runFailure.Match<OneOf<PointsRecomputeResult, ConflictError, PortError>>(conflict => conflict, error => error);
+            }
+
+            if (!inner.TryPickT0(out var execution, out var executionFailure))
+            {
+                return executionFailure;
+            }
+
+            // The execution part is committed. The bonus step is a second transaction: when it fails the caller gets the failure, and the
+            // execution entries, the defaulted task points and the snapshots stay as they are (a partial success, repaired by the next run).
+            var bonusRan = await transactions.RunAsync(ct => BonusCoreAsync(actor, trigger, ct), cancellationToken).ConfigureAwait(false);
+            if (!bonusRan.TryPickT0(out var bonusInner, out var bonusRunFailure))
+            {
+                return bonusRunFailure.Match<OneOf<PointsRecomputeResult, ConflictError, PortError>>(
+                    conflict => conflict,
+                    error => new PortError(BonusStepFailed + error.Message));
+            }
+
+            if (!bonusInner.TryPickT0(out var bonus, out var bonusFailure))
+            {
+                return new PortError(BonusStepFailed + bonusFailure.Message);
+            }
+
+            var skipped = new HashSet<string>(execution.SkippedIds, StringComparer.Ordinal);
+            skipped.UnionWith(bonus.SkippedIds);
+            return execution.Result with
+            {
+                Skipped = skipped.Count + execution.WithoutKey,
+                BonusesCreated = bonus.Report.Created,
+                BonusesRemoved = bonus.Report.Removed,
+                BonusChanges = bonus.Report.Listed,
+                BonusChangesTotal = bonus.Report.Total,
+                BonusChangesTruncated = bonus.Report.Truncated,
+                BonusStepSkipped = bonus.Skipped,
+            };
         }
         finally
         {
@@ -256,18 +292,18 @@ public sealed class PointsService(
     /// compare-and-set on the entry that was read, so a check-off that lands meanwhile is never undone. Everything is read again when a concurrent
     /// transaction wins a write conflict and the attempt runs again.
     /// </summary>
-    private async Task<TransactionOutcome<OneOf<PointsRecomputeResult, PortError>>> ReconcileCoreAsync(AuditActor actor, PointsRecomputeTrigger trigger, CancellationToken ct)
+    private async Task<TransactionOutcome<OneOf<ExecutionStep, PortError>>> ReconcileCoreAsync(AuditActor actor, PointsRecomputeTrigger trigger, CancellationToken ct)
     {
         var result = PointsRecomputeResult.Empty(trigger);
         var read = await settings.GetAsync(ct).ConfigureAwait(false);
         if (read.IsT2)
         {
-            return Abort<PointsRecomputeResult>(read.AsT2);
+            return Abort<ExecutionStep>(read.AsT2);
         }
 
         if (read.IsT1)
         {
-            return TransactionOutcome.Commit<OneOf<PointsRecomputeResult, PortError>>(result);
+            return TransactionOutcome.Commit<OneOf<ExecutionStep, PortError>>(new ExecutionStep(result, new HashSet<string>(), 0));
         }
 
         var zone = DayKeys.FindZone(read.AsT0.Timezone);
@@ -276,33 +312,27 @@ public sealed class PointsService(
         var stored = await entries.FindExecutionEntriesAsync(ct).ConfigureAwait(false);
         if (stored.IsT1)
         {
-            return Abort<PointsRecomputeResult>(stored.AsT1);
+            return Abort<ExecutionStep>(stored.AsT1);
         }
 
         var unreadable = await entries.FindUnreadableExecutionEntriesAsync(ct).ConfigureAwait(false);
         if (unreadable.IsT1)
         {
-            return Abort<PointsRecomputeResult>(unreadable.AsT1);
-        }
-
-        var storedBonuses = await entries.FindBonusEntriesAsync(ct).ConfigureAwait(false);
-        if (storedBonuses.IsT1)
-        {
-            return Abort<PointsRecomputeResult>(storedBonuses.AsT1);
+            return Abort<ExecutionStep>(unreadable.AsT1);
         }
 
         // Step 1: migrate the fields. Both writes filter on the missing field, so a second run matches nothing.
         var defaulted = await backfill.DefaultMissingTaskPointsAsync(ct).ConfigureAwait(false);
         if (defaulted.IsT1)
         {
-            return Abort<PointsRecomputeResult>(defaulted.AsT1);
+            return Abort<ExecutionStep>(defaulted.AsT1);
         }
 
         var migrated = new HashSet<string>(defaulted.AsT0.TaskIds, StringComparer.Ordinal);
         var doneRead = await backfill.FindDoneOccurrencesAsync(ct).ConfigureAwait(false);
         if (doneRead.IsT1)
         {
-            return Abort<PointsRecomputeResult>(doneRead.AsT1);
+            return Abort<ExecutionStep>(doneRead.AsT1);
         }
 
         var done = doneRead.AsT0;
@@ -312,14 +342,14 @@ public sealed class PointsService(
             var taskRead = await backfill.FindTaskPointValuesAsync(ct).ConfigureAwait(false);
             if (taskRead.IsT1)
             {
-                return Abort<PointsRecomputeResult>(taskRead.AsT1);
+                return Abort<ExecutionStep>(taskRead.AsT1);
             }
 
             var writes = ExecutionPoints.MissingSnapshots(done, taskRead.AsT0.ToDictionary(t => t.Id, StringComparer.Ordinal), migrated);
             var written = await backfill.SetMissingSnapshotsAsync(writes, ct).ConfigureAwait(false);
             if (written.IsT1)
             {
-                return Abort<PointsRecomputeResult>(written.AsT1);
+                return Abort<ExecutionStep>(written.AsT1);
             }
 
             snapshotsSet = written.AsT0;
@@ -336,22 +366,11 @@ public sealed class PointsService(
             var writtenEntries = await entries.ApplyChangesAsync(plan.Changes, now, ct).ConfigureAwait(false);
             if (writtenEntries.IsT1)
             {
-                return Abort<PointsRecomputeResult>(writtenEntries.AsT1);
+                return Abort<ExecutionStep>(writtenEntries.AsT1);
             }
 
             applied = writtenEntries.AsT0;
         }
-
-        // Step 4: the week and cycle bonuses (ADR-0012), inserted or deleted, never updated.
-        var bonuses = await ReconcileBonusesAsync(read.AsT0, zone, storedBonuses.AsT0, now, ct).ConfigureAwait(false);
-        if (bonuses.IsT1)
-        {
-            return Abort<PointsRecomputeResult>(bonuses.AsT1);
-        }
-
-        var (bonusPlan, bonusReport) = bonuses.AsT0;
-        var skipped = new HashSet<string>(plan.SkippedIds, StringComparer.Ordinal);
-        skipped.UnionWith(bonusPlan.SkippedIds);
 
         var (listed, total, truncated) = PointsReconciliation.LimitCorrections(plan.Corrections);
         result = result with
@@ -362,15 +381,10 @@ public sealed class PointsService(
             Updated = applied.Updated,
             Removed = applied.Removed,
             Unattributed = plan.Unattributed,
-            Skipped = skipped.Count + unreadable.AsT0.WithoutKey,
+            Skipped = plan.SkippedIds.Count + unreadable.AsT0.WithoutKey,
             Corrections = listed,
             CorrectionsTotal = total,
             CorrectionsTruncated = truncated,
-            BonusesCreated = bonusReport.Created,
-            BonusesRemoved = bonusReport.Removed,
-            BonusChanges = bonusReport.Listed,
-            BonusChangesTotal = bonusReport.Total,
-            BonusChangesTruncated = bonusReport.Truncated,
         };
 
         // One summary for the whole run; a run that changes nothing writes and audits nothing (ADR-0004).
@@ -379,34 +393,61 @@ public sealed class PointsService(
             var recorded = await audit.RecordAsync(PointsAudit.ForRecompute(actor, result), ct).ConfigureAwait(false);
             if (recorded.IsT1)
             {
-                return Abort<PointsRecomputeResult>(recorded.AsT1);
+                return Abort<ExecutionStep>(recorded.AsT1);
             }
         }
 
-        return TransactionOutcome.Commit<OneOf<PointsRecomputeResult, PortError>>(result);
+        return TransactionOutcome.Commit<OneOf<ExecutionStep, PortError>>(new ExecutionStep(result, plan.SkippedIds, unreadable.AsT0.WithoutKey));
     }
 
+    /// <summary>What the bonus transaction did: the report, the occurrences it could not read, and whether the whole step was skipped.</summary>
+    private sealed record BonusStep(BonusReport Report, IReadOnlySet<string> SkippedIds, bool Skipped);
+
+    /// <summary>The execution transaction (steps 1 to 3): its result with the bonus fields at 0, and what the final answer needs of it.</summary>
+    private sealed record ExecutionStep(PointsRecomputeResult Result, IReadOnlySet<string> SkippedIds, int WithoutKey);
+
     /// <summary>
-    /// Step 4 of <c>reconcileNow</c> (ADR-0012): reads every occurrence, plans the week and cycle bonuses that must exist and applies the
-    /// differences. A bonus has one writer, this reconciliation: no live sync touches it.
+    /// Step 4 of <c>reconcileNow</c> (ADR-0012), in a transaction of its own after the execution entries were committed: reads the stored bonuses and
+    /// every occurrence, plans the week and cycle bonuses that must exist and applies the differences. A bonus has one writer, this
+    /// reconciliation: no live sync touches it. A change writes its own summary entry (<c>step: bonuses</c>); no change writes nothing. A cycle
+    /// anchor that is no Monday makes the cycle calculation undefined: the step is skipped, not failed.
     /// </summary>
-    private async Task<OneOf<(BonusPlan Plan, BonusReport Report), PortError>> ReconcileBonusesAsync(
-        HouseholdSettings household, TimeZoneInfo zone, IReadOnlyList<PointEntry> storedBonuses, DateTimeOffset now, CancellationToken ct)
+    private async Task<TransactionOutcome<OneOf<BonusStep, PortError>>> BonusCoreAsync(AuditActor actor, PointsRecomputeTrigger trigger, CancellationToken ct)
     {
+        var read = await settings.GetAsync(ct).ConfigureAwait(false);
+        if (read.IsT2)
+        {
+            return Abort<BonusStep>(read.AsT2);
+        }
+
+        if (read.IsT1)
+        {
+            return TransactionOutcome.Commit<OneOf<BonusStep, PortError>>(new BonusStep(BonusReport.None, new HashSet<string>(), false));
+        }
+
+        var household = read.AsT0;
         if (!DayKeys.IsMonday(household.CycleAnchorDate))
         {
-            // The cycle calculation is undefined; the whole run is rolled back rather than half applied.
-            return new PortError("points.bonus_anchor_invalid: the cycle anchor is not a Monday, so the bonuses cannot be evaluated.");
+            return TransactionOutcome.Commit<OneOf<BonusStep, PortError>>(new BonusStep(BonusReport.None, new HashSet<string>(), true));
+        }
+
+        var zone = DayKeys.FindZone(household.Timezone);
+        var now = Now();
+        // The ledger is read before the occurrences: an entry written in between is then unknown to this run.
+        var storedBonuses = await entries.FindBonusEntriesAsync(ct).ConfigureAwait(false);
+        if (storedBonuses.IsT1)
+        {
+            return Abort<BonusStep>(storedBonuses.AsT1);
         }
 
         var sources = await backfill.FindBonusOccurrencesAsync(ct).ConfigureAwait(false);
         if (sources.IsT1)
         {
-            return sources.AsT1;
+            return Abort<BonusStep>(sources.AsT1);
         }
 
         var plan = PointsReconciliation.PlanBonuses(
-            storedBonuses,
+            storedBonuses.AsT0,
             sources.AsT0,
             new BonusSettings(household.CycleAnchorDate, household.BonusSchedule ?? [], household.BonusFloor),
             zone,
@@ -417,13 +458,32 @@ public sealed class PointsService(
             var written = await entries.ApplyBonusChangesAsync(plan.Changes, now, ct).ConfigureAwait(false);
             if (written.IsT1)
             {
-                return written.AsT1;
+                return Abort<BonusStep>(written.AsT1);
             }
 
             applied = written.AsT0;
         }
 
-        return (plan, PointsReconciliation.Describe(plan, applied));
+        var report = PointsReconciliation.Describe(plan, applied);
+        if (report.Created + report.Removed > 0)
+        {
+            var summary = PointsRecomputeResult.Empty(trigger) with
+            {
+                Skipped = plan.SkippedIds.Count,
+                BonusesCreated = report.Created,
+                BonusesRemoved = report.Removed,
+                BonusChanges = report.Listed,
+                BonusChangesTotal = report.Total,
+                BonusChangesTruncated = report.Truncated,
+            };
+            var recorded = await audit.RecordAsync(PointsAudit.ForRecompute(actor, summary, PointsRecomputeStep.Bonuses), ct).ConfigureAwait(false);
+            if (recorded.IsT1)
+            {
+                return Abort<BonusStep>(recorded.AsT1);
+            }
+        }
+
+        return TransactionOutcome.Commit<OneOf<BonusStep, PortError>>(new BonusStep(report, plan.SkippedIds, false));
     }
 
     private static TransactionOutcome<OneOf<T, PortError>> Abort<T>(PortError error) =>

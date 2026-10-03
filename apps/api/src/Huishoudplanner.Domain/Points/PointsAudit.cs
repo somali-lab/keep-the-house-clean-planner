@@ -81,11 +81,12 @@ public static class PointsAudit
     }
 
     /// <summary>The one summary entry of a reconciliation that changed something (requirements 4.9): the result as <c>meta</c>.</summary>
-    public static AuditEntry ForRecompute(AuditActor actor, PointsRecomputeResult result)
+    public static AuditEntry ForRecompute(AuditActor actor, PointsRecomputeResult result, PointsRecomputeStep step = PointsRecomputeStep.Executions)
     {
         ArgumentNullException.ThrowIfNull(result);
         var meta = AuditObject.Of(
             ("trigger", PointNames.ToWire(result.Trigger)),
+            ("step", PointNames.ToWire(step)),
             ("tasksDefaulted", result.TasksDefaulted),
             ("snapshotsSet", result.SnapshotsSet),
             ("created", result.Created),

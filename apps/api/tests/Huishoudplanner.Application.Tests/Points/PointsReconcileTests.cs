@@ -386,7 +386,7 @@ public sealed class PointsReconcileTests
         b.AsT0.Should().BeEquivalentTo(new { Created = 0, Updated = 0, Removed = 0, SnapshotsSet = 0 });
         w.Ledger.Items.Should().HaveCount(3);
         w.PointsAudit(AuditAction.Recompute).Should().ContainSingle();
-        w.Transactions.Runs.Should().Be(2);
+        w.Transactions.Runs.Should().Be(4, "each run is an execution transaction and a bonus transaction");
     }
 
     [Fact]

@@ -182,7 +182,6 @@ public static class PointsReconciliation
     private static bool SameBonus(PointEntry stored, BonusEntryInsert want) =>
         stored.PersonId == want.PersonId && stored.Amount == want.Amount && stored.Date == want.Date && stored.PeriodStart == want.PeriodStart;
 
-
     /// <summary>The first <see cref="PointsRecomputeResult.MaxCorrections"/> corrections, with the total and whether the list was cut.</summary>
     public static (IReadOnlyList<PointsCorrection> Listed, int Total, bool Truncated) LimitCorrections(IReadOnlyList<PointsCorrection> corrections)
     {

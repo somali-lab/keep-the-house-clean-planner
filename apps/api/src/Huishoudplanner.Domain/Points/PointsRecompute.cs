@@ -29,8 +29,11 @@ public sealed record PointsRecomputeResult(
     int BonusesRemoved,
     IReadOnlyList<PointsBonusChange> BonusChanges,
     int BonusChangesTotal,
-    bool BonusChangesTruncated)
+    bool BonusChangesTruncated,
+    bool BonusStepSkipped = false)
 {
+    // BonusStepSkipped is only reported to the caller (logged, never audited): the cycle anchor was no Monday, so the bonuses were not evaluated.
+
     /// <summary>The audit summary and the answer list at most this many corrections (<c>MAX_POINTS_CORRECTIONS</c>).</summary>
     public const int MaxCorrections = 100;
 
