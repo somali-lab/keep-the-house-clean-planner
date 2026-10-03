@@ -106,6 +106,16 @@ public sealed class EndpointPolicyAuditTests
     }
 
     [Fact]
+    public void TheDueList_staysOpenLikeTheNodeRoute()
+    {
+        using var factory = ApiFactory.WithoutDatabase();
+
+        var due = EndpointsOf(factory).Single(e => e.RoutePattern.RawText == "/api/v2/due");
+
+        due.Metadata.GetOrderedMetadata<IAuthorizeData>().Should().BeEmpty("routes/due.ts has no guard");
+    }
+
+    [Fact]
     public void TheAudit_flagsAnUnprotectedWrite_andAnUnprotectedProtectedRead()
     {
         using var factory = ApiFactory.WithoutDatabase().WithEndpoints(routes =>
