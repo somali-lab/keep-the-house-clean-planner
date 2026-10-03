@@ -21,6 +21,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     private readonly List<Action<IServiceCollection>> overrides = [];
 
     private readonly List<ILoggerProvider> logProviders = [];
+    private string? webDistDir;
 
     private ApiFactory(string mongoUrl) => this.mongoUrl = mongoUrl;
 
@@ -45,6 +46,14 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         return this;
     }
 
+    /// <summary>Serves the web app from this directory (<c>WEB_DIST_DIR</c>).</summary>
+    public ApiFactory WithWebDist(string directory)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(directory);
+        webDistDir = directory;
+        return this;
+    }
+
     /// <summary>Replaces the registration of a driven port with a fake.</summary>
     public ApiFactory WithPort<TPort>(TPort fake)
         where TPort : class
@@ -59,6 +68,11 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         ArgumentNullException.ThrowIfNull(builder);
         builder.UseEnvironment("Test");
         builder.UseSetting("MONGO_URL", mongoUrl);
+        if (webDistDir is not null)
+        {
+            builder.UseSetting("WEB_DIST_DIR", webDistDir);
+        }
+
         builder.ConfigureLogging(logging => logProviders.ForEach(p => logging.AddProvider(p)));
         builder.ConfigureTestServices(services =>
         {
