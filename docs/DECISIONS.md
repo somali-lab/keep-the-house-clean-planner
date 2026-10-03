@@ -10,3 +10,4 @@ The decision itself is never stored here. It goes straight to its permanent home
 - A choice the code already states on its own is not recorded at all.
 
 The list exists so the maintainer can see in one place what was decided without reading the whole diff. Once an entry has been reviewed it is removed, and this file is empty again.
+- Backend rewrite decisions D1–D16 (parallel build, MongoDB kept, API v2, thin web app, identity port, OTLP to Elastic, QuestPDF, skill-style hexagon, ObjectId ids, replica set) are recorded in [plans/dotnet-rewrite.md](plans/dotnet-rewrite.md) §2; the ADRs 0015–0020 follow in slice 0.1.
