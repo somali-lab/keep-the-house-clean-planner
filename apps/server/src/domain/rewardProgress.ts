@@ -20,7 +20,7 @@ import type { Clock } from '../clock.ts';
 import { findPlannedOccurrences } from '../data/occurrences.ts';
 import { sumEarnedPoints } from '../data/points.ts';
 import { getSettings } from '../data/settings.ts';
-import { listTasks } from '../data/tasks.ts';
+import { findTasksByIds } from '../data/tasks.ts';
 import { HttpError } from '../http/errors.ts';
 import { taskPoints, toBonusOccurrence } from './points.ts';
 
@@ -79,11 +79,14 @@ export async function pointsProgress(db: Db, clock: Clock, query: PointsProgress
  */
 async function plannedGoalOccurrences(db: Db, timezone: string, from: Date, to: Date): Promise<GoalOccurrence[]> {
   const docs = await findPlannedOccurrences(db, from, to);
-  const tasks = docs.some((doc) => doc.pointsSnapshot == null) ? new Map((await listTasks(db)).map((task) => [task._id.toHexString(), task])) : null;
+  // Only the tasks of work without a snapshot are read, and each once.
+  const needed = new Map<string, ObjectId>();
+  for (const doc of docs) if (doc.pointsSnapshot == null && doc.taskId) needed.set(doc.taskId.toHexString(), doc.taskId);
+  const tasks = new Map((await findTasksByIds(db, [...needed.values()])).map((task) => [task._id.toHexString(), task]));
   const items: GoalOccurrence[] = [];
   for (const doc of docs) {
     try {
-      const task = doc.taskId ? tasks?.get(doc.taskId.toHexString()) : undefined;
+      const task = doc.taskId ? tasks.get(doc.taskId.toHexString()) : undefined;
       const points = doc.pointsSnapshot ?? (task ? taskPoints(task) : defaultPointsForDuration(doc.durationMinutesSnapshot));
       items.push({ ...toBonusOccurrence(doc, timezone), points });
     } catch {

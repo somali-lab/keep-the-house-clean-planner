@@ -15,8 +15,8 @@ import { createTestApp, type TestApp } from './helpers/testApp.ts';
 /**
  * ADR-0015: GET /api/points/progress answers how far one person is towards the goal of the current week or cycle.
  * Monday 14 Sep 2026 is the first day of cycle 0 (14 Sep to 11 Oct) and the clock starts on Wednesday 16 Sep.
- * Stofzuigen (30 minutes, 3 points) is planned on Monday for person 1, Tuesday for person 2 and Wednesday for
- * nobody; Dweilen (10 minutes, 1 point) on Thursday of week 0 and Monday of week 1, both for person 1.
+ * Stofzuigen (3 minutes, 3 points) is planned on Monday for person 1, Tuesday for person 2 and Wednesday for
+ * nobody; Dweilen (1 minute, 1 point) on Thursday of week 0 and Monday of week 1, both for person 1.
  */
 const apps: TestApp[] = [];
 
@@ -53,7 +53,7 @@ async function fixture(): Promise<Fixture> {
     expect(res.statusCode, res.body).toBe(201);
     return res.json<{ _id: string }>()._id;
   };
-  const tasks = { stofzuigen: await makeTask('Stofzuigen', 'Woonkamer', 30), dweilen: await makeTask('Dweilen', 'Keuken', 10) };
+  const tasks = { stofzuigen: await makeTask('Stofzuigen', 'Woonkamer', 3), dweilen: await makeTask('Dweilen', 'Keuken', 1) };
   const plan = (await findActivePlan(t.db))!;
   const slots = [
     { taskId: tasks.stofzuigen, weekIndex: 0, weekday: 1, assigneeId: p1._id.toHexString() },

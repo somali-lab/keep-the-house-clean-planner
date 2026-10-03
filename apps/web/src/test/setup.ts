@@ -3,6 +3,7 @@ import { cleanup } from '@testing-library/react';
 import { afterEach, vi } from 'vitest';
 import { resetProfileStore } from '../identity/profileStore.ts';
 import { applyLanguage } from '../i18n/runtime.ts';
+import { resetCelebrationMemory } from '../features/reward/rewardModel.ts';
 
 afterEach(() => {
   cleanup();
@@ -11,6 +12,7 @@ afterEach(() => {
   window.localStorage.clear();
   applyLanguage('nl');
   resetProfileStore();
+  resetCelebrationMemory();
 });
 
 /** Sets the viewport width used by the matchMedia mock. */

@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { cn } from '@/lib/utils';
 import { chickenOffset, EGG_COUNT } from './rewardModel.ts';
 
@@ -29,12 +29,15 @@ export function RewardMeter({
   label,
   celebrating,
   reducedMotion,
+  onCelebrationEnd,
 }: {
   percent: number;
   eggs: number;
   label: string;
   celebrating: boolean;
   reducedMotion: boolean;
+  /** Called when the last egg has landed, so the page can stop treating the animation as running. */
+  onCelebrationEnd?: () => void;
 }) {
   const target = chickenOffset(percent);
   // The chicken starts at the beginning of the track and walks to its place, unless motion is not wanted.
@@ -57,6 +60,15 @@ export function RewardMeter({
       clearTimeout(stop);
     };
   }, [target, reducedMotion]);
+
+  // A native listener rather than `onAnimationEnd`, so the end is also seen where React has no animation events (tests).
+  const lastEgg = useRef<SVGGElement>(null);
+  useEffect(() => {
+    const egg = lastEgg.current;
+    if (!celebrating || !egg || !onCelebrationEnd) return;
+    egg.addEventListener('animationend', onCelebrationEnd);
+    return () => egg.removeEventListener('animationend', onCelebrationEnd);
+  }, [celebrating, onCelebrationEnd]);
 
   return (
     <svg
@@ -81,7 +93,12 @@ export function RewardMeter({
         {Array.from({ length: Math.min(EGG_COUNT, eggs) }, (_, index) => {
           const { x, y } = eggCentre(index);
           return (
-            <g key={`egg-${index}`} className="reward-egg" style={{ '--egg-index': index } as CSSProperties}>
+            <g
+              key={`egg-${index}`}
+              className="reward-egg"
+              style={{ '--egg-index': index } as CSSProperties}
+              ref={index === EGG_COUNT - 1 ? lastEgg : undefined}
+            >
               <ellipse cx={x} cy={y} rx="6.5" ry="8" fill="oklch(0.97 0.03 85)" stroke="var(--foreground)" strokeWidth="1.5" />
               <path d={`M${x - 3} ${y - 2}q2-3 4-2`} fill="none" stroke="var(--primary)" strokeWidth="1.5" strokeLinecap="round" />
             </g>

@@ -37,8 +37,20 @@ function browserStorage(): CelebrationStorage | null {
   }
 }
 
-/** Whether the animation of this period already played. Unreadable storage counts as not played. */
+/**
+ * The keys that played in this page, kept in memory as well: when storage is blocked or throws, a remount (the
+ * week/cycle toggle, another tab and back) still never plays the animation again; only a reload can.
+ */
+const playedInMemory = new Set<string>();
+
+/** Forgets what played in this page. Tests use it; the app never needs to. */
+export function resetCelebrationMemory(): void {
+  playedInMemory.clear();
+}
+
+/** Whether the animation of this period already played, here or (from storage) before. Unreadable storage is not an error. */
 export function wasCelebrated(key: string, storage: CelebrationStorage | null = browserStorage()): boolean {
+  if (playedInMemory.has(key)) return true;
   try {
     return storage?.getItem(key) != null;
   } catch {
@@ -46,13 +58,19 @@ export function wasCelebrated(key: string, storage: CelebrationStorage | null = 
   }
 }
 
-/** Remembers that the animation played. Without usable storage it stays in memory only, so a reload may play it again. */
+/** Remembers that the animation played, in memory and in storage; without usable storage a reload may play it again. */
 export function markCelebrated(key: string, storage: CelebrationStorage | null = browserStorage()): void {
+  playedInMemory.add(key);
   try {
     storage?.setItem(key, '1');
   } catch {
-    // The animation still plays only once while this page stays open.
+    // The memory above still keeps it from playing twice while this page stays open.
   }
+}
+
+/** True when the day is outside the period the progress was read for: the week or cycle rolled over and the data is stale. */
+export function periodRolledOver(progress: Pick<PointsProgressResponse, 'start' | 'end'>, todayKey: string): boolean {
+  return todayKey < progress.start || todayKey > progress.end;
 }
 
 /**

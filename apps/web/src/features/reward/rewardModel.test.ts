@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  periodRolledOver,
+  resetCelebrationMemory,
   celebrationKey,
   celebrationMode,
   chickenOffset,
@@ -48,6 +50,14 @@ describe('chickenOffset', () => {
   });
 });
 
+describe('periodRolledOver', () => {
+  it('is true only when the day lies outside the period that was read', () => {
+    const week = { start: '2026-09-14', end: '2026-09-20' };
+    expect(['2026-09-14', '2026-09-17', '2026-09-20'].map((day) => periodRolledOver(week, day))).toEqual([false, false, false]);
+    expect(['2026-09-13', '2026-09-21'].map((day) => periodRolledOver(week, day))).toEqual([true, true]);
+  });
+});
+
 describe('celebrationKey', () => {
   it('names the person, the period and its first day, so every period celebrates once', () => {
     expect(celebrationKey('a00000000000000000000001', 'week', '2026-09-14')).toBe('khc.rewardCelebrated.a00000000000000000000001.week.2026-09-14');
@@ -80,12 +90,18 @@ describe('the animation plays once per person and period', () => {
     expect(celebrationMode({ reached: true, alreadyCelebrated: false, reducedMotion: true })).toBe('static');
   });
 
-  it('copes with storage that is missing or throws: not remembered, never an error', () => {
+  it('copes with storage that is missing or throws: never an error, and remembered in memory for this page', () => {
     const failing = memoryStorage(true);
     expect(wasCelebrated('khc.rewardCelebrated.x', failing)).toBe(false);
     expect(() => markCelebrated('khc.rewardCelebrated.x', failing)).not.toThrow();
+    // Nothing reached storage, but a remount in this page still knows it played.
+    expect(wasCelebrated('khc.rewardCelebrated.x', failing)).toBe(true);
+    expect(wasCelebrated('khc.rewardCelebrated.x', null)).toBe(true);
+    expect(wasCelebrated('khc.rewardCelebrated.y', null)).toBe(false);
+    expect(() => markCelebrated('khc.rewardCelebrated.y', null)).not.toThrow();
+    expect(wasCelebrated('khc.rewardCelebrated.y', null)).toBe(true);
+    resetCelebrationMemory();
     expect(wasCelebrated('khc.rewardCelebrated.x', null)).toBe(false);
-    expect(() => markCelebrated('khc.rewardCelebrated.x', null)).not.toThrow();
   });
 
   it('reads and writes the real localStorage by default', () => {

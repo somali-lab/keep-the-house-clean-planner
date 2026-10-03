@@ -5,12 +5,12 @@ import type { ApiUser, AppServer } from './server.ts';
 const celebrated = (page: import('@playwright/test').Page, person: ApiUser) =>
   page.evaluate((id) => window.localStorage.getItem(`khc.rewardCelebrated.${id}.week.2026-09-14`), person._id);
 
-/** Anna has three tasks of 3 points today (30 minutes each); the goal she has without an explicit one is 9 points. */
+/** Anna has three tasks of 3 points today (3 minutes each); the goal she has without an explicit one is 9 points. */
 async function planThree(app: AppServer) {
   const anna = await app.user('Anna');
   await generateCycles(app, anna);
   for (const [name, room] of [['Stofzuigen', 'Woonkamer'], ['Dweilen', 'Keuken'], ['Ramen lappen', 'Woonkamer']] as const) {
-    const task = await createTask(app, anna, { name, room, intervalKey: '1w', durationMinutes: 30 });
+    const task = await createTask(app, anna, { name, room, intervalKey: '1w', durationMinutes: 3 });
     await planOn(app, anna, task, TODAY, anna);
   }
   return anna;
@@ -133,11 +133,17 @@ for (const width of [320, 375]) {
           label: element.textContent,
           inside: box.left >= 0 && box.right <= viewport,
           clipped: element.scrollWidth > element.clientWidth + 1,
+          // The label is one line: its text has a single client rectangle.
+          lines: (() => {
+            const range = document.createRange();
+            range.selectNodeContents(element.lastChild!);
+            return range.getClientRects().length;
+          })(),
         };
       }),
       width,
     );
-    for (const fit of fits) expect(fit, fit.label ?? '').toMatchObject({ inside: true, clipped: false });
+    for (const fit of fits) expect(fit, fit.label ?? '').toMatchObject({ inside: true, clipped: false, lines: 1 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`overview-${width}.png`) });
 

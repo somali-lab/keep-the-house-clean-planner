@@ -72,16 +72,16 @@ export function MobileLayout({ onOpenManagement }: { onOpenManagement: () => voi
       </main>
       <nav
         aria-label={t('nav.main')}
-        className="fixed inset-x-0 bottom-0 z-20 border-t bg-card/95 px-1 pt-2 sm:px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur"
+        className="fixed inset-x-0 bottom-0 z-20 border-t bg-card/95 px-0 pt-2 min-[360px]:px-1 sm:px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur"
       >
-        <div className="mx-auto grid max-w-xl grid-cols-5 gap-0.5 sm:gap-2">
+        <div className="mx-auto grid max-w-xl grid-cols-5 gap-0 min-[360px]:gap-0.5 sm:gap-2">
           {TABS.map(({ path, label, icon: Icon }) => (
             <NavLink
               key={path}
               to={path}
               className={({ isActive }) =>
                 cn(
-                  'flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-0.5 text-center text-[0.6875rem] leading-tight font-bold text-muted-foreground transition-colors [overflow-wrap:anywhere] hyphens-auto focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:text-xs',
+                  'flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-0 text-center text-[0.6875rem] leading-tight font-bold whitespace-nowrap text-muted-foreground transition-colors max-[359px]:text-[0.625rem] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:text-xs',
                   isActive && 'bg-primary/10 text-primary',
                 )
               }
