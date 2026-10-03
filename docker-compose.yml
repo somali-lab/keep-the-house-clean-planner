@@ -50,15 +50,24 @@ services:
         condition: service_healthy
     entrypoint: ['/bin/sh', '/usr/local/bin/huishoudplanner-backup']
 
+  # Single-node replica set: multi-document transactions need one (ADR-0021). The healthcheck initiates the set on
+  # first start, and converts an existing standalone volume the same way; it only reports healthy once this node is
+  # the primary. The member host name `mongo` is what the other containers resolve.
   mongo:
     image: mongo:8
     restart: unless-stopped
+    command: ['--replSet', 'rs0', '--bind_ip_all']
     volumes:
       - mongo-data:/data/db
     healthcheck:
-      test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping')"]
+      test:
+        - CMD
+        - mongosh
+        - --quiet
+        - --eval
+        - "try { quit(rs.status().myState === 1 ? 0 : 1) } catch (e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'mongo:27017' }] }); quit(1) }"
       interval: 5s
-      timeout: 5s
+      timeout: 10s
       retries: 20
       start_period: 10s
 

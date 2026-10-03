@@ -22,3 +22,7 @@ Names map 1:1 to `packages/shared/src/time.ts` and `cycle.ts`.
 
 Error mapping of the TypeScript `RangeError`: unparsable day key is `FormatException`; unknown timezone, invalid time of
 day, non-Monday anchor and out-of-range weekday or week index are `ArgumentOutOfRangeException`.
+
+## Ports and errors
+
+`Ports/Driven/ForRunningTransactions` runs a use case as one atomic unit (entity write plus audit entry, ADR-0021). The work delegate returns a `TransactionOutcome<T>`: `Commit(value)` or `Abort(value)` (roll back, still return the failure value). Results are `OneOf<T, ConflictError, PortError>`; see the interface remarks for retry, nesting and cancellation semantics. `PortError` messages never contain configuration values.
