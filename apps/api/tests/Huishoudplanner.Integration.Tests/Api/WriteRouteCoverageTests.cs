@@ -40,7 +40,27 @@ public sealed class WriteRouteCoverageTests(AuditCoverageHarness h) : IClassFixt
     /// </summary>
     private static readonly HashSet<string> DerivedCollections = [MongoCollections.PointEntries];
 
-    private enum Kind
+    /// <summary>
+    /// Which collection an audit entity records changes of. A non-derived collection written by a request must be covered by an entry of its entity,
+    /// or by the scenario declaring it in <c>Covers</c> (a summary entry that stands for many documents, such as the statistics reset). The import
+    /// entity is a summary of everything and has no collection of its own here. Limit: this checks that the collection is covered by some entry, not
+    /// that every document is.
+    /// </summary>
+    private static readonly Dictionary<string, string> EntityCollections = new()
+    {
+        ["user"] = MongoCollections.Users,
+        ["room"] = MongoCollections.Rooms,
+        ["task"] = MongoCollections.Tasks,
+        ["cyclePlan"] = MongoCollections.CyclePlans,
+        ["occurrence"] = MongoCollections.Occurrences,
+        ["cycle"] = MongoCollections.Cycles,
+        ["settings"] = MongoCollections.Settings,
+        ["points"] = MongoCollections.PointEntries,
+        ["badge"] = MongoCollections.Badges,
+        ["badgeAward"] = MongoCollections.BadgeAwards,
+    };
+
+    internal enum Kind
     {
         /// <summary>Changes state, so the request must write entity and audit entry (and repeat as a no-op where <c>Idempotent</c>).</summary>
         Audited,
@@ -52,9 +72,9 @@ public sealed class WriteRouteCoverageTests(AuditCoverageHarness h) : IClassFixt
         Unaudited,
     }
 
-    private sealed record Call(HttpMethod Method, string Url, object? Body, UserIdentity Actor);
+    internal sealed record Call(HttpMethod Method, string Url, object? Body, UserIdentity Actor);
 
-    private sealed record Scenario(
+    internal sealed record Scenario(
         string Route,
         Kind Kind,
         Func<AuditCoverageHarness, Task<Call>> Build,
@@ -62,9 +82,10 @@ public sealed class WriteRouteCoverageTests(AuditCoverageHarness h) : IClassFixt
         string? Action = null,
         string Source = "ui",
         bool Idempotent = false,
-        string? Reason = null);
+        string? Reason = null,
+        string[]? Covers = null);
 
-    private static Func<AuditCoverageHarness, Task<Call>> Fixed(Func<AuditCoverageHarness, Call> call) => harness => Task.FromResult(call(harness));
+    internal static Func<AuditCoverageHarness, Task<Call>> Fixed(Func<AuditCoverageHarness, Call> call) => harness => Task.FromResult(call(harness));
 
     private static async Task<string> CreateAsync(AuditCoverageHarness h, string url, object body, UserIdentity actor)
     {
@@ -165,14 +186,14 @@ public sealed class WriteRouteCoverageTests(AuditCoverageHarness h) : IClassFixt
             var (status, preview) = await h.SendAsync(HttpMethod.Get, $"/api/v2/cycle-plans/{copy}/activation-preview", null, h.Planner);
             status.Should().Be(HttpStatusCode.OK, preview.ToString());
             return new(HttpMethod.Post, $"/api/v2/cycle-plans/{copy}/activation", new { previewToken = preview.GetProperty("previewToken").GetString() }, h.Planner);
-        }, "cyclePlan", "activate", Idempotent: true),
+        }, "cyclePlan", "activate", Idempotent: true, Covers: [MongoCollections.Settings]), // the activation guard document (ADR-0008) lives in settings and is bookkeeping of the activation, not household state
 
         new("POST /api/v2/points/recompute", Kind.Audited, async h =>
         {
             await h.InsertStrayLedgerEntryAsync();
             return new(HttpMethod.Post, "/api/v2/points/recompute", null, h.Admin);
         }, "points", "recompute", Idempotent: true),
-        new("DELETE /api/v2/stats", Kind.Audited, Fixed(h => new(HttpMethod.Delete, "/api/v2/stats", null, h.Admin)), "settings", "reset"), // not idempotent by design (as in Node): a reset that finds nothing to reset still records its counts as one audit entry
+        new("DELETE /api/v2/stats", Kind.Audited, Fixed(h => new(HttpMethod.Delete, "/api/v2/stats", null, h.Admin)), "settings", "reset", Covers: [MongoCollections.Occurrences, MongoCollections.Tasks, MongoCollections.Cycles]), // one summary entry stands for every document the reset touches // not idempotent by design (as in Node): a reset that finds nothing to reset still records its counts as one audit entry
 
         // The only deliberately unaudited writes. Both only ever delete audit entries; neither may touch other state.
         new("POST /api/v2/jobs/audit-retention", Kind.Unaudited, Fixed(h => new(HttpMethod.Post, "/api/v2/jobs/audit-retention", null, h.Planner)),
@@ -207,12 +228,14 @@ public sealed class WriteRouteCoverageTests(AuditCoverageHarness h) : IClassFixt
     [Fact]
     public async Task EveryScenario_auditsEveryStateChange_writesOnlyInTheDataLayer_andARepeatWritesNothing()
     {
+        Scenarios.Last().Route.Should().Be("DELETE /api/v2/audit", "clearing the audit log must run last: it empties what the other scenarios assert on");
+        Scenarios.Select((s, i) => (s, i)).Where(t => t.s.Route == "DELETE /api/v2/audit").Should().ContainSingle();
         var failures = new List<string>();
         foreach (var scenario in Scenarios)
         {
             try
             {
-                failures.AddRange((await RunAsync(scenario)).Select(f => $"{scenario.Route}: {f}"));
+                failures.AddRange((await RunAsync(h, scenario)).Select(f => $"{scenario.Route}: {f}"));
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
@@ -223,7 +246,8 @@ public sealed class WriteRouteCoverageTests(AuditCoverageHarness h) : IClassFixt
         failures.Should().BeEmpty();
     }
 
-    private async Task<List<string>> RunAsync(Scenario scenario)
+    /// <summary>Runs one scenario and returns what is wrong with it (empty when it holds). Also used to prove that a bypassing write fails.</summary>
+    internal static async Task<List<string>> RunAsync(AuditCoverageHarness h, Scenario scenario)
     {
         var failures = new List<string>();
         var call = await scenario.Build(h);
@@ -269,6 +293,13 @@ public sealed class WriteRouteCoverageTests(AuditCoverageHarness h) : IClassFixt
                 if (writes.Count > 0 && writes.All(w => DerivedCollections.Contains(w.Collection)) && scenario.Entity != "points")
                 {
                     failures.Add($"only derived state was written ({Describe(writes)}); the primary change that causes it is missing or unaudited");
+                }
+
+                var covered = entries.Select(e => EntityCollections.GetValueOrDefault(e["entity"].AsString)).Concat(scenario.Covers ?? []).ToHashSet();
+                var uncovered = writes.Select(w => w.Collection).Distinct().Where(c => !DerivedCollections.Contains(c) && !covered.Contains(c)).ToList();
+                if (uncovered.Count > 0)
+                {
+                    failures.Add($"UNAUDITED WRITE: no audit entry covers the writes to {string.Join(", ", uncovered)} (entries: [{string.Join(", ", entries.Select(e => e["entity"].AsString))}])");
                 }
 
                 if (!entries.Any(e => e["entity"].AsString == scenario.Entity && e["action"].AsString == scenario.Action && e["source"].AsString == scenario.Source))

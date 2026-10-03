@@ -42,6 +42,9 @@ public sealed class AuditCoverageHarness : IAsyncLifetime
 
     public WriteCapture Capture { get; } = new();
 
+    /// <summary>Extra configuration of the host (for example a test-only endpoint); set before <see cref="InitializeAsync"/>.</summary>
+    public Func<ApiFactory, ApiFactory>? Configure { get; init; }
+
     public UserIdentity P1 { get; private set; } = null!;
 
     public UserIdentity P2 { get; private set; } = null!;
@@ -79,6 +82,7 @@ public sealed class AuditCoverageHarness : IAsyncLifetime
             .WithPort<TimeProvider>(Clock)
             .WithPort<ForSelectingAModel>(new TestModels(null))
             .WithWriteCapture(Capture);
+        factory = Configure?.Invoke(factory) ?? factory;
         Client = factory.CreateClient();
 
         await SeedPersonAsync(P1, "Persoon 1", []);

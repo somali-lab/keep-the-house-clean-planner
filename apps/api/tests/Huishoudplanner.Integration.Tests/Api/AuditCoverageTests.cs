@@ -1,4 +1,6 @@
 using System.Net;
+using Huishoudplanner.Adapters.Mongo;
+using Huishoudplanner.Domain.Ports.Driven;
 using Huishoudplanner.Integration.Tests.Fixtures;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -21,14 +23,29 @@ public sealed class AuditCoverageTests(MongoContainerFixture mongo)
     private static Task<UsersHost> Start(MongoContainerFixture mongo, WriteCapture capture) =>
         UsersHost.StartAsync(mongo, factory => factory.WithWriteCapture(capture).WithEndpoints(MapTestEndpoints));
 
-    /// <summary>A deliberately bad endpoint: it writes straight to a collection, around every audited store.</summary>
-    private static void MapTestEndpoints(IEndpointRouteBuilder routes) =>
+    /// <summary>Test-only endpoints: a write around the audit recording, and a write inside a transaction that is then rolled back.</summary>
+    private static void MapTestEndpoints(IEndpointRouteBuilder routes)
+    {
         routes.MapPost("/test/bypass", async (IMongoClient client, IConfiguration configuration) =>
         {
             var database = client.GetDatabase(MongoUrl.Create(configuration["MONGO_URL"]).DatabaseName);
             await database.GetCollection<BsonDocument>("rooms").InsertOneAsync(new BsonDocument { { "_id", ObjectId.GenerateNewId() }, { "name", "sneaky" } });
             return Results.Ok();
         });
+        routes.MapPost("/test/abort", async (IMongoClient client, IConfiguration configuration, ForRunningTransactions transactions, CancellationToken cancellationToken) =>
+        {
+            var database = client.GetDatabase(MongoUrl.Create(configuration["MONGO_URL"]).DatabaseName);
+            await transactions.RunAsync(
+                async ct =>
+                {
+                    await database.GetCollection<BsonDocument>("rooms").InsertOneAsync(
+                        MongoTransactionContext.Session!, new BsonDocument { { "_id", ObjectId.GenerateNewId() }, { "name", "rolled back" } }, cancellationToken: ct);
+                    return TransactionOutcome.Abort(0);
+                },
+                cancellationToken);
+            return Results.Ok();
+        });
+    }
 
     [Fact]
     public async Task ACreate_isAuditedWithActorSourceAndAllFieldsExceptTimestamps()
@@ -122,17 +139,42 @@ public sealed class AuditCoverageTests(MongoContainerFixture mongo)
     }
 
     [Fact]
-    public async Task AnAbortedTransaction_leavesNoWritesInTheCapture()
+    public async Task AnAbortedTransaction_isRolledBackAndLeavesNoWritesInTheCapture()
     {
         var capture = new WriteCapture();
         await using var host = await Start(mongo, capture);
         capture.Clear();
 
-        // The last admin cannot demote or deactivate themselves: rejected before or inside the transaction, so nothing may remain.
-        var response = await host.Send(HttpMethod.Patch, $"/api/v2/users/{host.AdminId}", host.AdminId, new { role = "member" });
+        var response = await host.Send(HttpMethod.Post, "/test/abort", host.AdminId);
 
-        response.StatusCode.Should().NotBe(HttpStatusCode.OK);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        capture.AbortedTransactions.Should().Be(1, "the endpoint wrote inside a transaction and rolled it back, which is what the capture must filter");
         capture.Writes().Should().BeEmpty();
         capture.AuditInserts().Should().Be(0);
+        (await host.Database.GetCollection<BsonDocument>("rooms").CountDocumentsAsync(new BsonDocument("name", "rolled back"), cancellationToken: Ct)).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task TheScenarioRunner_failsAScenarioWhoseRequestWritesAroundTheAuditRecording()
+    {
+        var harness = new AuditCoverageHarness(mongo) { Configure = factory => factory.WithEndpoints(MapTestEndpoints) };
+        await harness.InitializeAsync();
+        try
+        {
+            var bypass = new WriteRouteCoverageTests.Scenario(
+                "POST /test/bypass",
+                WriteRouteCoverageTests.Kind.Audited,
+                WriteRouteCoverageTests.Fixed(h => new WriteRouteCoverageTests.Call(HttpMethod.Post, "/test/bypass", null, h.Planner)),
+                "room",
+                "create");
+
+            var failures = await WriteRouteCoverageTests.RunAsync(harness, bypass);
+
+            failures.Should().Contain(f => f.Contains("UNAUDITED WRITE", StringComparison.Ordinal), "the coverage tests must fail on a write that bypasses the audit recording");
+        }
+        finally
+        {
+            await harness.DisposeAsync();
+        }
     }
 }
