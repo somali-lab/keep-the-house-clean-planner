@@ -27,6 +27,10 @@ day, non-Monday anchor and out-of-range weekday or week index are `ArgumentOutOf
 
 `Ports/Driven/ForRunningTransactions` runs a use case as one atomic unit (entity write plus audit entry, ADR-0021). The work delegate returns a `TransactionOutcome<T>`: `Commit(value)` or `Abort(value)` (roll back, still return the failure value). Results are `OneOf<T, ConflictError, PortError>`; see the interface remarks for retry, nesting and cancellation semantics. `PortError` messages never contain configuration values.
 
+## Users (`Huishoudplanner.Domain.Users`)
+
+The people of the household (requirements 2 and 3). `UserRules` owns what a valid person is (the limits of `packages/shared/src/schemas/users.ts`: `#rrggbb` colour, weekdays 0 to 6, non-negative minutes, at most six unique `HH:mm` notification moments), turns raw request values (`CreateUserInput`, `UpdateUserInput`, `BrowserNotificationsInput`) into `NewUser` / `UserPatch` or into field errors keyed by the Node dotted path, applies a patch, decides the last-administrator rule and shapes the audit object. Legacy documents read with defaults (`UserDefaults`): no role is an administrator, no daily maximum 480/480. Ports: driving `IUserService` and `IUserSeedService`, driven `ForStoringUsers`, `ForPreparingStorage` (startup) and the narrow identity lookup `ForFindingUsers`.
+
 ## Due (`Huishoudplanner.Domain.Due`)
 
 Port of `packages/shared/src/due.ts`; the scheduling "hybrid" half. Pure: the caller passes `today` as a day key and the timezone.

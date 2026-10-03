@@ -24,12 +24,34 @@ public sealed class EndpointPolicyAuditTests
         ["/api/v2/cycle-plans/{id}/activation-preview"] = AuthorizationPolicies.PlannerPolicy,
     };
 
+    /// <summary>Writing endpoints and the policy each must declare, by "METHOD pattern" (the Node route guards: requireAdmin, requireActor).</summary>
+    private static readonly Dictionary<string, string> ProtectedWrites = new()
+    {
+        ["POST /api/v2/users"] = AuthorizationPolicies.AdminPolicy,
+        ["PATCH /api/v2/users/{id}"] = AuthorizationPolicies.AdminPolicy,
+        ["PUT /api/v2/users/{id}/browser-notifications"] = AuthorizationPolicies.ActorPolicy,
+    };
+
     private static readonly string[] ReadMethods = [HttpMethods.Get, HttpMethods.Head, HttpMethods.Options];
 
     private static List<string> Violations(IEnumerable<RouteEndpoint> endpoints)
     {
         var violations = new List<string>();
-        foreach (var endpoint in endpoints)
+        var list = endpoints.ToList();
+        foreach (var (route, required) in ProtectedWrites)
+        {
+            var found = list.Where(e => $"{string.Join(",", e.Metadata.GetMetadata<HttpMethodMetadata>()?.HttpMethods ?? [])} {e.RoutePattern.RawText}" == route).ToList();
+            if (found.Count == 0)
+            {
+                violations.Add($"{route} is not mapped");
+            }
+            else if (!found.Any(e => e.Metadata.GetOrderedMetadata<IAuthorizeData>().Any(a => a.Policy == required)))
+            {
+                violations.Add($"{route} must require {required}");
+            }
+        }
+
+        foreach (var endpoint in list)
         {
             var pattern = endpoint.RoutePattern.RawText ?? "?";
             var methods = endpoint.Metadata.GetMetadata<HttpMethodMetadata>()?.HttpMethods ?? [];
