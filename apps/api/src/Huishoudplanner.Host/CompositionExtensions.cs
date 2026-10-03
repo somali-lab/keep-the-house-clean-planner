@@ -36,10 +36,10 @@ public static class CompositionExtensions
         services.AddSingleton<IMetaService, MetaService>();
         services.AddSingleton(sp => new HouseholdOptions(sp.GetRequiredService<IOptions<AppOptions>>().Value.Timezone));
         services.AddScoped<ICalendarService, CalendarService>();
-        services.TryAddSingleton<ForReadingCycleAnchor, PendingCycleAnchor>();
         services.AddMongoAdapter(sp => sp.GetRequiredService<IOptions<AppOptions>>().Value.MongoUrl);
         services.AddUsers();
         services.AddStartup();
+        services.AddSettings();
         services.AddRooms();
         services.AddNotifications();
         services.AddAuditLog();
@@ -56,6 +56,7 @@ public static class CompositionExtensions
         app.MapAuditEndpoints();
         app.MapMetaEndpoints();
         app.MapCalendarEndpoints();
+        app.MapSettings();
         if (app.Environment.IsDevelopment())
         {
             // The document at /openapi/v2.json and its Scalar UI at /scalar/v2 exist in Development only; the checked-in

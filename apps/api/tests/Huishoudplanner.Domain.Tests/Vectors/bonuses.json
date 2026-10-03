@@ -1,0 +1,576 @@
+{
+  "module": "bonuses",
+  "cases": [
+    {
+      "name": "an empty schedule gives all zero",
+      "function": "bonusAmountsOn",
+      "input": {
+        "schedule": [],
+        "day": "2026-09-16"
+      },
+      "expected": {
+        "weekDone": 0,
+        "weekOnTime": 0,
+        "cycleDone": 0,
+        "cycleOnTime": 0
+      }
+    },
+    {
+      "name": "before the first row all amounts are zero",
+      "function": "bonusAmountsOn",
+      "input": {
+        "schedule": [
+          {
+            "from": "2026-09-16",
+            "weekDone": 5,
+            "weekOnTime": 3,
+            "cycleDone": 20,
+            "cycleOnTime": 10
+          },
+          {
+            "from": "2026-09-30",
+            "weekDone": 1,
+            "weekOnTime": 2,
+            "cycleDone": 3,
+            "cycleOnTime": 4
+          }
+        ],
+        "day": "2026-09-15"
+      },
+      "expected": {
+        "weekDone": 0,
+        "weekOnTime": 0,
+        "cycleDone": 0,
+        "cycleOnTime": 0
+      }
+    },
+    {
+      "name": "on the day of the first row it applies",
+      "function": "bonusAmountsOn",
+      "input": {
+        "schedule": [
+          {
+            "from": "2026-09-16",
+            "weekDone": 5,
+            "weekOnTime": 3,
+            "cycleDone": 20,
+            "cycleOnTime": 10
+          },
+          {
+            "from": "2026-09-30",
+            "weekDone": 1,
+            "weekOnTime": 2,
+            "cycleDone": 3,
+            "cycleOnTime": 4
+          }
+        ],
+        "day": "2026-09-16"
+      },
+      "expected": {
+        "weekDone": 5,
+        "weekOnTime": 3,
+        "cycleDone": 20,
+        "cycleOnTime": 10
+      }
+    },
+    {
+      "name": "between two rows the earlier one applies",
+      "function": "bonusAmountsOn",
+      "input": {
+        "schedule": [
+          {
+            "from": "2026-09-16",
+            "weekDone": 5,
+            "weekOnTime": 3,
+            "cycleDone": 20,
+            "cycleOnTime": 10
+          },
+          {
+            "from": "2026-09-30",
+            "weekDone": 1,
+            "weekOnTime": 2,
+            "cycleDone": 3,
+            "cycleOnTime": 4
+          }
+        ],
+        "day": "2026-09-29"
+      },
+      "expected": {
+        "weekDone": 5,
+        "weekOnTime": 3,
+        "cycleDone": 20,
+        "cycleOnTime": 10
+      }
+    },
+    {
+      "name": "on the day of the second row it applies",
+      "function": "bonusAmountsOn",
+      "input": {
+        "schedule": [
+          {
+            "from": "2026-09-16",
+            "weekDone": 5,
+            "weekOnTime": 3,
+            "cycleDone": 20,
+            "cycleOnTime": 10
+          },
+          {
+            "from": "2026-09-30",
+            "weekDone": 1,
+            "weekOnTime": 2,
+            "cycleDone": 3,
+            "cycleOnTime": 4
+          }
+        ],
+        "day": "2026-09-30"
+      },
+      "expected": {
+        "weekDone": 1,
+        "weekOnTime": 2,
+        "cycleDone": 3,
+        "cycleOnTime": 4
+      }
+    },
+    {
+      "name": "after the last row it keeps applying",
+      "function": "bonusAmountsOn",
+      "input": {
+        "schedule": [
+          {
+            "from": "2026-09-16",
+            "weekDone": 5,
+            "weekOnTime": 3,
+            "cycleDone": 20,
+            "cycleOnTime": 10
+          },
+          {
+            "from": "2026-09-30",
+            "weekDone": 1,
+            "weekOnTime": 2,
+            "cycleDone": 3,
+            "cycleOnTime": 4
+          }
+        ],
+        "day": "2027-01-01"
+      },
+      "expected": {
+        "weekDone": 1,
+        "weekOnTime": 2,
+        "cycleDone": 3,
+        "cycleOnTime": 4
+      }
+    },
+    {
+      "name": "an unsorted schedule still finds the last row on or before the day",
+      "function": "bonusAmountsOn",
+      "input": {
+        "schedule": [
+          {
+            "from": "2026-09-30",
+            "weekDone": 1,
+            "weekOnTime": 2,
+            "cycleDone": 3,
+            "cycleOnTime": 4
+          },
+          {
+            "from": "2026-09-16",
+            "weekDone": 5,
+            "weekOnTime": 3,
+            "cycleDone": 20,
+            "cycleOnTime": 10
+          }
+        ],
+        "day": "2026-10-05"
+      },
+      "expected": {
+        "weekDone": 1,
+        "weekOnTime": 2,
+        "cycleDone": 3,
+        "cycleOnTime": 4
+      }
+    },
+    {
+      "name": "a row with all zero amounts is in force like any other",
+      "function": "bonusAmountsOn",
+      "input": {
+        "schedule": [
+          {
+            "from": "2026-09-16",
+            "weekDone": 5,
+            "weekOnTime": 3,
+            "cycleDone": 20,
+            "cycleOnTime": 10
+          },
+          {
+            "from": "2026-09-30",
+            "weekDone": 0,
+            "weekOnTime": 0,
+            "cycleDone": 0,
+            "cycleOnTime": 0
+          }
+        ],
+        "day": "2026-10-01"
+      },
+      "expected": {
+        "weekDone": 0,
+        "weekOnTime": 0,
+        "cycleDone": 0,
+        "cycleOnTime": 0
+      }
+    },
+    {
+      "name": "equal amounts",
+      "function": "sameBonusAmounts",
+      "input": {
+        "a": {
+          "weekDone": 5,
+          "weekOnTime": 3,
+          "cycleDone": 20,
+          "cycleOnTime": 10
+        },
+        "b": {
+          "weekDone": 5,
+          "weekOnTime": 3,
+          "cycleDone": 20,
+          "cycleOnTime": 10
+        }
+      },
+      "expected": true
+    },
+    {
+      "name": "one amount differs",
+      "function": "sameBonusAmounts",
+      "input": {
+        "a": {
+          "weekDone": 5,
+          "weekOnTime": 3,
+          "cycleDone": 20,
+          "cycleOnTime": 10
+        },
+        "b": {
+          "weekDone": 5,
+          "weekOnTime": 3,
+          "cycleDone": 20,
+          "cycleOnTime": 11
+        }
+      },
+      "expected": false
+    },
+    {
+      "name": "all zero equals all zero",
+      "function": "sameBonusAmounts",
+      "input": {
+        "a": {
+          "weekDone": 0,
+          "weekOnTime": 0,
+          "cycleDone": 0,
+          "cycleOnTime": 0
+        },
+        "b": {
+          "weekDone": 0,
+          "weekOnTime": 0,
+          "cycleDone": 0,
+          "cycleOnTime": 0
+        }
+      },
+      "expected": true
+    },
+    {
+      "name": "amounts equal to the ones in force change nothing, also all zero on an empty schedule",
+      "function": "scheduleWithAmounts",
+      "input": {
+        "schedule": [],
+        "amounts": {
+          "weekDone": 0,
+          "weekOnTime": 0,
+          "cycleDone": 0,
+          "cycleOnTime": 0
+        },
+        "today": "2026-09-16"
+      },
+      "expected": []
+    },
+    {
+      "name": "first amounts become a row from today",
+      "function": "scheduleWithAmounts",
+      "input": {
+        "schedule": [],
+        "amounts": {
+          "weekDone": 5,
+          "weekOnTime": 3,
+          "cycleDone": 20,
+          "cycleOnTime": 10
+        },
+        "today": "2026-09-16"
+      },
+      "expected": [
+        {
+          "from": "2026-09-16",
+          "weekDone": 5,
+          "weekOnTime": 3,
+          "cycleDone": 20,
+          "cycleOnTime": 10
+        }
+      ]
+    },
+    {
+      "name": "the same amounts again change nothing",
+      "function": "scheduleWithAmounts",
+      "input": {
+        "schedule": [
+          {
+            "from": "2026-09-16",
+            "weekDone": 5,
+            "weekOnTime": 3,
+            "cycleDone": 20,
+            "cycleOnTime": 10
+          }
+        ],
+        "amounts": {
+          "weekDone": 5,
+          "weekOnTime": 3,
+          "cycleDone": 20,
+          "cycleOnTime": 10
+        },
+        "today": "2026-09-16"
+      },
+      "expected": [
+        {
+          "from": "2026-09-16",
+          "weekDone": 5,
+          "weekOnTime": 3,
+          "cycleDone": 20,
+          "cycleOnTime": 10
+        }
+      ]
+    },
+    {
+      "name": "the same amounts on a later day change nothing",
+      "function": "scheduleWithAmounts",
+      "input": {
+        "schedule": [
+          {
+            "from": "2026-09-16",
+            "weekDone": 5,
+            "weekOnTime": 3,
+            "cycleDone": 20,
+            "cycleOnTime": 10
+          }
+        ],
+        "amounts": {
+          "weekDone": 5,
+          "weekOnTime": 3,
+          "cycleDone": 20,
+          "cycleOnTime": 10
+        },
+        "today": "2026-09-20"
+      },
+      "expected": [
+        {
+          "from": "2026-09-16",
+          "weekDone": 5,
+          "weekOnTime": 3,
+          "cycleDone": 20,
+          "cycleOnTime": 10
+        }
+      ]
+    },
+    {
+      "name": "other amounts replace the row that starts today",
+      "function": "scheduleWithAmounts",
+      "input": {
+        "schedule": [
+          {
+            "from": "2026-09-16",
+            "weekDone": 5,
+            "weekOnTime": 3,
+            "cycleDone": 20,
+            "cycleOnTime": 10
+          }
+        ],
+        "amounts": {
+          "weekDone": 6,
+          "weekOnTime": 3,
+          "cycleDone": 20,
+          "cycleOnTime": 10
+        },
+        "today": "2026-09-16"
+      },
+      "expected": [
+        {
+          "from": "2026-09-16",
+          "weekDone": 6,
+          "weekOnTime": 3,
+          "cycleDone": 20,
+          "cycleOnTime": 10
+        }
+      ]
+    },
+    {
+      "name": "other amounts on a later day add a row and keep the earlier one",
+      "function": "scheduleWithAmounts",
+      "input": {
+        "schedule": [
+          {
+            "from": "2026-09-16",
+            "weekDone": 5,
+            "weekOnTime": 3,
+            "cycleDone": 20,
+            "cycleOnTime": 10
+          }
+        ],
+        "amounts": {
+          "weekDone": 1,
+          "weekOnTime": 2,
+          "cycleDone": 3,
+          "cycleOnTime": 4
+        },
+        "today": "2026-09-30"
+      },
+      "expected": [
+        {
+          "from": "2026-09-16",
+          "weekDone": 5,
+          "weekOnTime": 3,
+          "cycleDone": 20,
+          "cycleOnTime": 10
+        },
+        {
+          "from": "2026-09-30",
+          "weekDone": 1,
+          "weekOnTime": 2,
+          "cycleDone": 3,
+          "cycleOnTime": 4
+        }
+      ]
+    },
+    {
+      "name": "switching a kind off is a row with a zero",
+      "function": "scheduleWithAmounts",
+      "input": {
+        "schedule": [
+          {
+            "from": "2026-09-16",
+            "weekDone": 5,
+            "weekOnTime": 3,
+            "cycleDone": 20,
+            "cycleOnTime": 10
+          },
+          {
+            "from": "2026-09-30",
+            "weekDone": 1,
+            "weekOnTime": 2,
+            "cycleDone": 3,
+            "cycleOnTime": 4
+          }
+        ],
+        "amounts": {
+          "weekDone": 1,
+          "weekOnTime": 2,
+          "cycleDone": 3,
+          "cycleOnTime": 0
+        },
+        "today": "2026-09-30"
+      },
+      "expected": [
+        {
+          "from": "2026-09-16",
+          "weekDone": 5,
+          "weekOnTime": 3,
+          "cycleDone": 20,
+          "cycleOnTime": 10
+        },
+        {
+          "from": "2026-09-30",
+          "weekDone": 1,
+          "weekOnTime": 2,
+          "cycleDone": 3,
+          "cycleOnTime": 0
+        }
+      ]
+    },
+    {
+      "name": "a row that starts in the future is kept and sorted behind the new row",
+      "function": "scheduleWithAmounts",
+      "input": {
+        "schedule": [
+          {
+            "from": "2026-10-15",
+            "weekDone": 1,
+            "weekOnTime": 2,
+            "cycleDone": 3,
+            "cycleOnTime": 4
+          }
+        ],
+        "amounts": {
+          "weekDone": 5,
+          "weekOnTime": 3,
+          "cycleDone": 20,
+          "cycleOnTime": 10
+        },
+        "today": "2026-09-16"
+      },
+      "expected": [
+        {
+          "from": "2026-09-16",
+          "weekDone": 5,
+          "weekOnTime": 3,
+          "cycleDone": 20,
+          "cycleOnTime": 10
+        },
+        {
+          "from": "2026-10-15",
+          "weekDone": 1,
+          "weekOnTime": 2,
+          "cycleDone": 3,
+          "cycleOnTime": 4
+        }
+      ]
+    },
+    {
+      "name": "amounts equal to the ones in force but a future row exists change nothing",
+      "function": "scheduleWithAmounts",
+      "input": {
+        "schedule": [
+          {
+            "from": "2026-09-16",
+            "weekDone": 5,
+            "weekOnTime": 3,
+            "cycleDone": 20,
+            "cycleOnTime": 10
+          },
+          {
+            "from": "2026-10-15",
+            "weekDone": 1,
+            "weekOnTime": 2,
+            "cycleDone": 3,
+            "cycleOnTime": 4
+          }
+        ],
+        "amounts": {
+          "weekDone": 5,
+          "weekOnTime": 3,
+          "cycleDone": 20,
+          "cycleOnTime": 10
+        },
+        "today": "2026-09-20"
+      },
+      "expected": [
+        {
+          "from": "2026-09-16",
+          "weekDone": 5,
+          "weekOnTime": 3,
+          "cycleDone": 20,
+          "cycleOnTime": 10
+        },
+        {
+          "from": "2026-10-15",
+          "weekDone": 1,
+          "weekOnTime": 2,
+          "cycleDone": 3,
+          "cycleOnTime": 4
+        }
+      ]
+    }
+  ]
+}

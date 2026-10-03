@@ -18,6 +18,7 @@ public static class OpenApiSetup
 
     public const string CalendarTag = "Calendar";
 
+    public const string SettingsTag = "Settings";
     public const string RoomsTag = "Rooms";
 
     public const string AuditTag = "Audit";
@@ -43,6 +44,7 @@ public static class OpenApiSetup
                 new() { Name = HealthTag, Description = "Liveness and database reachability, for load balancers and the container healthcheck." },
                 new() { Name = MetaTag, Description = "Limits and defaults the web app reads once per session." },
                 new() { Name = CalendarTag, Description = "Cycle, week and ISO week of calendar days." },
+                new() { Name = SettingsTag, Description = "Household settings: calendar, intervals, AI provider, bonuses, currency and reward goals." },
                 new() { Name = RoomsTag, Description = "The rooms of the house: everyone reads them, administrators create, change and delete them." },
                 new() { Name = AuditTag, Description = "The history of changes: everyone reads it, administrators clear it." },
                 new() { Name = UserEndpoints.UsersTag, Description = "The people of the household: list, create, change, and their browser notification moments." },

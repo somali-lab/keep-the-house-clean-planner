@@ -888,6 +888,108 @@
           }
         }
       }
+    },
+    "/api/v2/settings": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Returns the household settings.",
+        "description": "Missing optional values are delivered as their defaults: no bonus schedule, EUR, 0 cents per point and automatic reward goals. The bonus schedule rows carry startsInFuture and bonusesInForce holds the amounts in force today, so the client computes nothing. The AI API key is never part of the settings.",
+        "operationId": "getSettings",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Changes the given settings (administrators only).",
+        "description": "Every field is optional and only the given ones change; a patch that changes nothing writes and audits nothing. periodBonuses sets the four bonus amounts from today on: the server writes a schedule row, and a client never sends the schedule. Amounts, currency, cents per point and goals equal to the ones in force change nothing. Removing an interval that tasks use is 409 interval_in_use (with the blocked keys in keys); when concurrent writers keep winning a schedule write the answer is 409 bonus_schedule_conflict. The timezone, the week start and the AI API key cannot be set.",
+        "operationId": "updateSettings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -930,6 +1032,102 @@
           "promptTemplateMaxLength": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "AiPromptsDto": {
+        "required": [
+          "planProposal",
+          "planRebalance",
+          "taskSuggestions",
+          "planExplanation"
+        ],
+        "type": "object",
+        "properties": {
+          "planProposal": {
+            "type": "string"
+          },
+          "planRebalance": {
+            "type": "string"
+          },
+          "taskSuggestions": {
+            "type": "string"
+          },
+          "planExplanation": {
+            "type": "string"
+          }
+        }
+      },
+      "AiPromptTemplateDto": {
+        "required": [
+          "system",
+          "user"
+        ],
+        "type": "object",
+        "properties": {
+          "system": {
+            "type": "string"
+          },
+          "user": {
+            "type": "string"
+          }
+        }
+      },
+      "AiPromptTemplatesDto": {
+        "required": [
+          "planProposal",
+          "planRebalance",
+          "taskSuggestions",
+          "planExplanation"
+        ],
+        "type": "object",
+        "properties": {
+          "planProposal": {
+            "$ref": "#/components/schemas/AiPromptTemplateDto"
+          },
+          "planRebalance": {
+            "$ref": "#/components/schemas/AiPromptTemplateDto"
+          },
+          "taskSuggestions": {
+            "$ref": "#/components/schemas/AiPromptTemplateDto"
+          },
+          "planExplanation": {
+            "$ref": "#/components/schemas/AiPromptTemplateDto"
+          }
+        }
+      },
+      "AiProviderDto": {
+        "required": [
+          "type",
+          "endpoint",
+          "model",
+          "timeoutSeconds"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "endpoint": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "model": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "timeoutSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
               "integer",
               "string"
             ],
@@ -1121,6 +1319,49 @@
           }
         }
       },
+      "BonusAmountsDto": {
+        "required": [
+          "weekDone",
+          "weekOnTime",
+          "cycleDone",
+          "cycleOnTime"
+        ],
+        "type": "object",
+        "properties": {
+          "weekDone": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "weekOnTime": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "cycleDone": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "cycleOnTime": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "BonusLimits": {
         "type": "object",
         "properties": {
@@ -1139,6 +1380,58 @@
               "string"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "BonusScheduleRowDto": {
+        "required": [
+          "from",
+          "weekDone",
+          "weekOnTime",
+          "cycleDone",
+          "cycleOnTime",
+          "startsInFuture"
+        ],
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "format": "date"
+          },
+          "weekDone": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "weekOnTime": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "cycleDone": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "cycleOnTime": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "startsInFuture": {
+            "type": "boolean"
           }
         }
       },
@@ -1456,6 +1749,59 @@
           }
         }
       },
+      "DismissedPromotionDto": {
+        "required": [
+          "planId",
+          "taskId",
+          "weekIndex",
+          "weekday",
+          "toWeekday",
+          "toAssigneeId",
+          "lastEvidenceId"
+        ],
+        "type": "object",
+        "properties": {
+          "planId": {
+            "type": "string"
+          },
+          "taskId": {
+            "type": "string"
+          },
+          "weekIndex": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "weekday": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "toWeekday": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "toAssigneeId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "lastEvidenceId": {
+            "type": "string"
+          }
+        }
+      },
       "HealthResponse": {
         "required": [
           "status",
@@ -1594,6 +1940,40 @@
           }
         }
       },
+      "IntervalDto": {
+        "required": [
+          "key",
+          "label",
+          "perCycle",
+          "periodDays"
+        ],
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "perCycle": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "periodDays": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "NotificationLimits": {
         "type": "object",
         "properties": {
@@ -1690,6 +2070,33 @@
           }
         }
       },
+      "RewardGoalsDto": {
+        "required": [
+          "weekPoints",
+          "cyclePoints"
+        ],
+        "type": "object",
+        "properties": {
+          "weekPoints": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "cyclePoints": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "RewardLimits": {
         "type": "object",
         "properties": {
@@ -1782,6 +2189,144 @@
           },
           "virtual": {
             "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "SettingsResponse": {
+        "required": [
+          "id",
+          "cycleAnchorDate",
+          "weekStartsOn",
+          "timezone",
+          "vacationRanges",
+          "intervals",
+          "aiProvider",
+          "aiPrompts",
+          "aiPromptTemplates",
+          "completionControl",
+          "promoteThreshold",
+          "dismissedPromotions",
+          "bonusSchedule",
+          "bonusesInForce",
+          "bonusFloor",
+          "currencyCode",
+          "centsPerPoint",
+          "rewardGoals",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "cycleAnchorDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "weekStartsOn": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "vacationRanges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VacationRangeDto"
+            }
+          },
+          "intervals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IntervalDto"
+            }
+          },
+          "aiProvider": {
+            "$ref": "#/components/schemas/AiProviderDto"
+          },
+          "aiPrompts": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AiPromptsDto"
+              }
+            ]
+          },
+          "aiPromptTemplates": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AiPromptTemplatesDto"
+              }
+            ]
+          },
+          "completionControl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "promoteThreshold": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "dismissedPromotions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DismissedPromotionDto"
+            }
+          },
+          "bonusSchedule": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BonusScheduleRowDto"
+            }
+          },
+          "bonusesInForce": {
+            "$ref": "#/components/schemas/BonusAmountsDto"
+          },
+          "bonusFloor": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date"
+          },
+          "currencyCode": {
+            "type": "string"
+          },
+          "centsPerPoint": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "rewardGoals": {
+            "$ref": "#/components/schemas/RewardGoalsDto"
           },
           "createdAt": {
             "type": "string",
@@ -1901,6 +2446,130 @@
             "type": [
               "null",
               "boolean"
+            ]
+          }
+        }
+      },
+      "UpdateSettingsRequest": {
+        "required": [
+          "cycleAnchorDate",
+          "vacationRanges",
+          "intervals",
+          "aiProvider",
+          "aiPrompts",
+          "aiPromptTemplates",
+          "completionControl",
+          "promoteThreshold",
+          "periodBonuses",
+          "currencyCode",
+          "centsPerPoint",
+          "rewardGoals"
+        ],
+        "type": "object",
+        "properties": {
+          "cycleAnchorDate": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date"
+          },
+          "vacationRanges": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/VacationRangeDto"
+            }
+          },
+          "intervals": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/IntervalDto"
+            }
+          },
+          "aiProvider": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AiProviderDto"
+              }
+            ]
+          },
+          "aiPrompts": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AiPromptsDto"
+              }
+            ]
+          },
+          "aiPromptTemplates": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AiPromptTemplatesDto"
+              }
+            ]
+          },
+          "completionControl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "promoteThreshold": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "periodBonuses": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BonusAmountsDto"
+              }
+            ]
+          },
+          "currencyCode": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "centsPerPoint": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "rewardGoals": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RewardGoalsDto"
+              }
             ]
           }
         }
@@ -2073,6 +2742,23 @@
             "format": "date-time"
           }
         }
+      },
+      "VacationRangeDto": {
+        "required": [
+          "from",
+          "to"
+        ],
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "format": "date"
+          },
+          "to": {
+            "type": "string",
+            "format": "date"
+          }
+        }
       }
     }
   },
@@ -2088,6 +2774,10 @@
     {
       "name": "Calendar",
       "description": "Cycle, week and ISO week of calendar days."
+    },
+    {
+      "name": "Settings",
+      "description": "Household settings: calendar, intervals, AI provider, bonuses, currency and reward goals."
     },
     {
       "name": "Rooms",
