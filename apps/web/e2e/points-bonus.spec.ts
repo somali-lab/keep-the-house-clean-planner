@@ -20,7 +20,7 @@ test('an administrator sets the bonuses; after the week ends the Points tab show
   await card.getByLabel('Week: alles op tijd').fill('3');
   await card.getByRole('button', { name: 'Bonussen opslaan' }).click();
   await expect(card.getByRole('status')).toHaveText('Opgeslagen.');
-  await expect(card.getByText('Deze bedragen gelden sinds 16-09-2026.')).toBeVisible();
+  await expect(card.getByText(/^Deze bedragen gelden voor de week van 14-09-2026 en de cyclus van \d{2}-\d{2}-\d{4} en alles daarna\.$/)).toBeVisible();
   const settings = await app.api<{ bonusSchedule: unknown[] }>('GET', '/api/settings');
   expect(settings.bonusSchedule).toEqual([{ from: TODAY, weekDone: 5, weekOnTime: 3, cycleDone: 0, cycleOnTime: 0 }]);
 

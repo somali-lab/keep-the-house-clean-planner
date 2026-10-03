@@ -56,10 +56,23 @@ describe('BonusSection', () => {
     expect(within(form).getByLabelText('Week: alles op tijd')).toHaveValue(3);
     expect(within(form).getByLabelText('Cyclus: alles gedaan')).toHaveValue(20);
     expect(within(form).getByLabelText('Cyclus: alles op tijd')).toHaveValue(10);
-    expect(within(form).getByText('Deze bedragen gelden sinds 16-09-2026.')).toBeInTheDocument();
+    expect(within(form).getByText('Deze bedragen gelden voor de week van 14-09-2026 en de cyclus van 14-09-2026 en alles daarna.')).toBeInTheDocument();
     expect(within(form).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
-      'Vanaf 16-09-2026: week 5 gedaan en 3 op tijd, cyclus 20 gedaan en 10 op tijd',
-      'Vanaf 01-09-2026: week 4 gedaan en 2 op tijd, cyclus 10 gedaan en 5 op tijd',
+      'Geldt voor de week van 14-09-2026 en de cyclus van 14-09-2026 en alles daarna: week 5 gedaan en 3 op tijd, cyclus 20 gedaan en 10 op tijd',
+      'Geldt voor de week van 31-08-2026 en de cyclus van 17-08-2026 en alles daarna: week 4 gedaan en 2 op tijd, cyclus 10 gedaan en 5 op tijd',
+    ]);
+  });
+
+  it('explains that a row covers the week and the cycle that contain its date, whatever the weekday', async () => {
+    // A Sunday: the last day of the week that starts on 5 October, inside the cycle that starts on 28 September.
+    const schedule = [{ from: '2026-10-11', weekDone: 1, weekOnTime: 2, cycleDone: 3, cycleOnTime: 4 }];
+    const settings = makeSettings({ bonusSchedule: schedule, cycleAnchorDate: '2026-08-31' });
+    setup(ANNA._id, settings);
+    renderWithProviders(<BonusSection settings={settings} now={new Date('2026-10-12T08:00:00.000Z')} />);
+    const form = await screen.findByRole('form', { name: 'Bonussen' });
+    expect(within(form).getByText('Deze bedragen gelden voor de week van 05-10-2026 en de cyclus van 28-09-2026 en alles daarna.')).toBeInTheDocument();
+    expect(within(form).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+      'Geldt voor de week van 05-10-2026 en de cyclus van 28-09-2026 en alles daarna: week 1 gedaan en 2 op tijd, cyclus 3 gedaan en 4 op tijd',
     ]);
   });
 
@@ -70,10 +83,10 @@ describe('BonusSection', () => {
     const form = await screen.findByRole('form', { name: 'Bonussen' });
     expect(within(form).getByLabelText('Week: alles gedaan')).toHaveValue(5);
     const rows = within(form).getAllByRole('listitem');
-    expect(rows[0]).toHaveTextContent('Vanaf 20-09-2026');
+    expect(rows[0]).toHaveTextContent('Geldt voor de week van 14-09-2026 en de cyclus van 14-09-2026 en alles daarna');
     expect(rows[0]).toHaveTextContent('nog niet van kracht');
     expect(rows[1]).not.toHaveTextContent('nog niet van kracht');
-    expect(within(form).getByText('Deze bedragen gelden sinds 16-09-2026.')).toBeInTheDocument();
+    expect(within(form).getByText(/^Deze bedragen gelden voor de week van 14-09-2026 en de cyclus van 14-09-2026/)).toBeInTheDocument();
   });
 
   it('says so when someone else changed the amounts in the meantime', async () => {
