@@ -1,4 +1,5 @@
 import { cycleEnd, cycleIndexFor, cycleStart } from '@huishoudplanner/shared/cycle';
+import { MAX_REDEMPTION_NOTE_LENGTH, pointsToCents } from '@huishoudplanner/shared/points';
 import { addDays, isoWeek, mondayOf } from '@huishoudplanner/shared/time';
 import type { StatsPeriod } from './api.ts';
 
@@ -67,4 +68,52 @@ export function bonusLabelOfKey(key: string): BonusLabel | null {
   if (!kind || !periodStart || !BONUS_KIND_OF_KEY.has(kind) || !/^\d{4}-\d{2}-\d{2}$/.test(periodStart)) return null;
   const days = kind.startsWith('bonus_week') ? 6 : 27;
   return bonusLabel({ kind: kind as keyof typeof BONUS_LABEL_KEY, periodStart, date: addDays(periodStart, days) });
+}
+
+/** What is typed in the redeem dialog. */
+export interface RedeemForm {
+  points: string;
+  note: string;
+}
+
+export type RedeemField = 'points' | 'note';
+export type RedeemErrors = Partial<Record<RedeemField, 'redeem.error.points' | 'redeem.error.balance' | 'redeem.error.note'>>;
+export type RedeemResult = { ok: true; points: number; note: string } | { ok: false; errors: RedeemErrors };
+
+/** A whole number of points from the text of a field, or null when it is empty, fractional, negative or not a number. */
+export function parseWholePoints(text: string): number | null {
+  const trimmed = text.trim();
+  return /^\d{1,9}$/.test(trimmed) ? Number(trimmed) : null;
+}
+
+/**
+ * Checks the redeem form against the balance that is available: at least 1 point, at most the balance
+ * (the server refuses a booking that would make the balance negative, ADR-0013) and a note of at most 200
+ * characters. The note is trimmed, like the server does.
+ */
+export function buildRedemption(form: RedeemForm, balance: number): RedeemResult {
+  const errors: RedeemErrors = {};
+  const points = parseWholePoints(form.points);
+  if (points === null || points < 1) errors.points = 'redeem.error.points';
+  else if (points > balance) errors.points = 'redeem.error.balance';
+  const note = form.note.trim();
+  if (note.length > MAX_REDEMPTION_NOTE_LENGTH) errors.note = 'redeem.error.note';
+  if (Object.keys(errors).length > 0 || points === null) return { ok: false, errors };
+  return { ok: true, points, note };
+}
+
+/** The money a typed number of points is worth, in cents; null for an invalid number or while a point is worth nothing. */
+export function redemptionCents(text: string, centsPerPoint: number): number | null {
+  const points = parseWholePoints(text);
+  return points === null || points < 1 || centsPerPoint <= 0 ? null : pointsToCents(points, centsPerPoint);
+}
+
+/** The owner can undo a redemption on the day it was booked; an administrator at any time (ADR-0013). */
+export function canUndoRedemption(
+  entry: { kind: string; personId: string; date: string },
+  profile: { _id: string; role: string } | null,
+  todayKey: string,
+): boolean {
+  if (entry.kind !== 'redemption' || !profile) return false;
+  return profile.role === 'admin' || (entry.personId === profile._id && entry.date === todayKey);
 }

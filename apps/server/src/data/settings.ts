@@ -36,6 +36,10 @@ export interface SettingsDoc {
   bonusSchedule?: BonusScheduleRow[];
   /** Boundary of the last statistics reset: periods that start before this day earn no bonus (ADR-0012). */
   bonusFloor?: string;
+  /** ISO 4217 currency points are converted to (ADR-0013); missing means EUR. */
+  currencyCode?: string;
+  /** Cents one point is worth (ADR-0013), 0 to 10000; missing means 0, no money shown. */
+  centsPerPoint?: number;
   createdAt: Date;
   updatedAt: Date;
 }

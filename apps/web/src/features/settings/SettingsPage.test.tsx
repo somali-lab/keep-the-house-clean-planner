@@ -198,4 +198,12 @@ describe('SettingsPage — bonuses', () => {
     expect(await screen.findByRole('form', { name: 'Bonussen' })).toBeInTheDocument();
     expect(screen.getByLabelText('Week: alles gedaan')).toHaveValue(0);
   });
+
+  it('has the points value card under the bonuses for an administrator', async () => {
+    setup();
+    renderWithProviders(<SettingsPage initialTab="calendar" />);
+    expect(await screen.findByRole('form', { name: 'Puntenwaarde' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Valuta')).toHaveValue('EUR');
+    expect(screen.getByLabelText('Waarde van één punt (in centen)')).toHaveValue(0);
+  });
 });

@@ -1,13 +1,15 @@
 import { z } from 'zod';
 import { dayKeySchema, isoDateTimeSchema, objectIdSchema } from './common.ts';
+import { requestKeySchema } from './occurrences.ts';
 import { BONUS_KINDS } from '../bonuses.ts';
-import { MAX_TASK_POINTS, MIN_TASK_POINTS } from '../points.ts';
+import { MAX_CENTS_PER_POINT, MAX_REDEMPTION_NOTE_LENGTH, MAX_TASK_POINTS, MIN_TASK_POINTS } from '../points.ts';
 import { daysBetween, isDayKey } from '../time.ts';
 
 /** Points value of a task: an integer from 0 to 100; 0 means the task earns no points (ADR-0011). */
 export const taskPointsSchema = z.number().int().min(MIN_TASK_POINTS).max(MAX_TASK_POINTS);
 
-export const pointEntryKindSchema = z.enum(['execution', ...BONUS_KINDS]);
+/** `execution` and the four bonus kinds are derived from the occurrences; `redemption` is booked by a person (ADR-0013). */
+export const pointEntryKindSchema = z.enum(['execution', ...BONUS_KINDS, 'redemption']);
 export type PointEntryKind = z.infer<typeof pointEntryKindSchema>;
 
 /** The path that wrote the current value of a ledger entry. */
@@ -32,6 +34,10 @@ export const pointEntryViewSchema = z.object({
   occurrenceId: objectIdSchema.nullable(),
   taskId: objectIdSchema.nullable(),
   titleSnapshot: z.string(),
+  /** Free text of a redemption; null for a derived entry (ADR-0013). */
+  note: z.string().nullable(),
+  /** Cents one point was worth when a redemption was booked; null for a derived entry (ADR-0013). */
+  centsPerPointSnapshot: z.number().int().min(0).max(MAX_CENTS_PER_POINT).nullable(),
   source: pointEntrySourceSchema,
   createdAt: isoDateTimeSchema,
   updatedAt: isoDateTimeSchema,
@@ -68,10 +74,24 @@ export const pointsEntriesQuerySchema = z
   });
 export type PointsEntriesQuery = z.infer<typeof pointsEntriesQuerySchema>;
 
+/** The money values of a balance, in whole cents at the factor in force now; present only when points are worth money (ADR-0013). */
+export const balanceMoneySchema = z.object({
+  earned: z.number().int(),
+  redeemed: z.number().int(),
+  balance: z.number().int(),
+});
+export type BalanceMoney = z.infer<typeof balanceMoneySchema>;
+
 export const personBalanceSchema = z.object({
   personId: objectIdSchema,
-  /** Sum of the entries in the range; can be negative once redemptions exist. */
+  /** The balance: the sum of all entries in the range, so earned minus redeemed. Negative when work that was redeemed against is undone. */
   points: z.number().int(),
+  /** Points of executions and bonuses in the range. */
+  earned: z.number().int(),
+  /** Points redeemed in the range, as a positive number (ADR-0013). */
+  redeemed: z.number().int().min(0),
+  /** Money of earned, redeemed and the balance; null while a point is worth nothing. */
+  money: balanceMoneySchema.nullable(),
   /** Number of entries of kind execution in the range. */
   executions: z.number().int().min(0),
   /** Sum of the week and cycle bonus entries in the range; included in `points`. */
@@ -82,6 +102,10 @@ export type PersonBalance = z.infer<typeof personBalanceSchema>;
 export const pointsBalancesResponseSchema = z.object({
   from: dayKeySchema.nullable(),
   to: dayKeySchema.nullable(),
+  /** ISO 4217 code of the household currency. */
+  currencyCode: z.string(),
+  /** Cents one point is worth now; 0 means no money is shown. */
+  centsPerPoint: z.number().int().min(0).max(MAX_CENTS_PER_POINT),
   /** Every active user, also at 0, and every inactive user with entries in the range; in the order of the user list. */
   balances: z.array(personBalanceSchema),
 });
@@ -140,3 +164,16 @@ export const pointsRecomputeResultSchema = z.object({
   bonusChangesTruncated: z.boolean(),
 });
 export type PointsRecomputeResult = z.infer<typeof pointsRecomputeResultSchema>;
+
+/** Books a redemption: the person (an administrator may name anyone, everybody else only themselves) gives up points (ADR-0013). */
+export const createRedemptionInputSchema = z.object({
+  /** Defaults to the active profile. */
+  personId: objectIdSchema.optional(),
+  /** Points to redeem: at least 1 and at most the balance. */
+  points: z.number().int().min(1),
+  /** Optional remark, for example what the points were exchanged for. */
+  note: z.string().trim().max(MAX_REDEMPTION_NOTE_LENGTH).optional(),
+  /** Client idempotency key; a repeat of the same request replays the stored booking. */
+  requestId: requestKeySchema.optional(),
+});
+export type CreateRedemptionInput = z.infer<typeof createRedemptionInputSchema>;

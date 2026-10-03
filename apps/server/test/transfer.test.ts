@@ -108,7 +108,7 @@ describe('GET /api/export/json', () => {
   it('exports every collection as extended JSON with a schema version and a dated filename', () => {
     expect(exportResponse.statusCode).toBe(200);
     expect(exportResponse.headers['content-disposition']).toBe('attachment; filename="huishoudplanner-20260916.json"');
-    expect(file.schemaVersion).toBe(4);
+    expect(file.schemaVersion).toBe(5);
     expect(file.exportedAt).toBe('2026-09-16T08:00:00.000Z');
     expect(Object.keys(file.collections).sort()).toEqual([...TRANSFER_COLLECTIONS].sort());
     expect(file.collections.users[0]!._id).toEqual({ $oid: expect.stringMatching(/^[0-9a-f]{24}$/) });
@@ -176,6 +176,7 @@ describe('import', () => {
         cyclePlans: snapshot.cyclePlans.length,
         cycles: snapshot.cycles.length,
         occurrences: snapshot.occurrences.length,
+        pointEntries: 0,
       },
       auditAdded: snapshot.auditLog.length,
       removedPointEntries: 0,
@@ -189,7 +190,7 @@ describe('import', () => {
     expect(after.auditLog.filter((e) => e.entity === 'points' && e.action === 'recompute')).toHaveLength(1);
     const imports = after.auditLog.filter((e) => e.entity === 'import');
     expect(imports).toHaveLength(1);
-    expect(imports[0]).toMatchObject({ action: 'create', source: 'ui', meta: { mode: 'replace', schemaVersion: 4, exportedAt: file.exportedAt } });
+    expect(imports[0]).toMatchObject({ action: 'create', source: 'ui', meta: { mode: 'replace', schemaVersion: 5, exportedAt: file.exportedAt } });
     expect((imports[0]!.actorId as ObjectId).equals(actor._id)).toBe(true);
   });
 
@@ -222,7 +223,7 @@ describe('import', () => {
     });
 
     const cases: [string, (f: ExportFile) => void, FieldIssue][] = [
-      ['an unknown schema version', (f) => Object.assign(f, { schemaVersion: 5 }), { field: 'schemaVersion', message: expect.any(String) }],
+      ['an unknown schema version', (f) => Object.assign(f, { schemaVersion: 6 }), { field: 'schemaVersion', message: expect.any(String) }],
       ['an invalid field value', (f) => Object.assign(f.collections.users[0]!, { color: 'rood' }), { field: 'collections.users.0.color', message: 'invalid_color' }],
       ['a plain string where an ObjectId belongs', (f) => Object.assign(f.collections.tasks[0]!, { roomId: '0123456789abcdef01234567' }), { field: 'collections.tasks.0.roomId', message: 'expected_object_id' }],
       ['a plain string where a date belongs', (f) => Object.assign(f.collections.occurrences[0]!, { date: '2026-09-16T00:00:00.000Z' }), { field: 'collections.occurrences.0.date', message: 'expected_date' }],

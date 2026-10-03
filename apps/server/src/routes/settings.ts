@@ -1,4 +1,10 @@
-import { scheduleWithAmounts, toDayKey, updateSettingsInputSchema, type BonusScheduleRow } from '@huishoudplanner/shared';
+import {
+  DEFAULT_CURRENCY_CODE,
+  scheduleWithAmounts,
+  toDayKey,
+  updateSettingsInputSchema,
+  type BonusScheduleRow,
+} from '@huishoudplanner/shared';
 import type { FastifyPluginAsync } from 'fastify';
 import { getSettings, StaleBonusScheduleError, updateSettings } from '../data/settings.ts';
 import { intervalKeysInUse } from '../data/tasks.ts';
@@ -7,16 +13,24 @@ import { HttpError, notFound, parseOrThrow } from '../http/errors.ts';
 import { toApi } from '../http/serialize.ts';
 import { auditContext, requireAdmin } from '../identity/index.ts';
 
-/** The API always returns the bonus schedule; a missing list means no bonuses. */
-function withSchedule<T extends { bonusSchedule?: unknown }>(settings: T) {
-  return { ...settings, bonusSchedule: settings.bonusSchedule ?? [] };
+/**
+ * The API always returns the bonus schedule and the conversion from points to currency; a missing
+ * list means no bonuses, a missing currency means EUR and a missing factor means 0 (ADR-0012, ADR-0013).
+ */
+function withDefaults<T extends { bonusSchedule?: unknown; currencyCode?: string; centsPerPoint?: number }>(settings: T) {
+  return {
+    ...settings,
+    bonusSchedule: settings.bonusSchedule ?? [],
+    currencyCode: settings.currencyCode ?? DEFAULT_CURRENCY_CODE,
+    centsPerPoint: settings.centsPerPoint ?? 0,
+  };
 }
 
 export const settingsRoutes: FastifyPluginAsync = async (app) => {
   app.get('/settings', async () => {
     const settings = await getSettings(app.deps.db);
     if (!settings) throw notFound('settings');
-    return toApi(withSchedule(settings));
+    return toApi(withDefaults(settings));
   });
 
   app.patch('/settings', { preHandler: requireAdmin }, async (request) => {
@@ -38,6 +52,9 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
     // The amounts apply from today on: the server turns them into a schedule row, and equal amounts write nothing (ADR-0012).
     const { periodBonuses, ...rest } = input;
     const patch: Parameters<typeof updateSettings>[1] = { ...rest };
+    // A conversion equal to the one in force (a missing value is the default) is a no-op: it writes and audits nothing (ADR-0013).
+    if (patch.currencyCode === (current.currencyCode ?? DEFAULT_CURRENCY_CODE)) delete patch.currencyCode;
+    if (patch.centsPerPoint === (current.centsPerPoint ?? 0)) delete patch.centsPerPoint;
     let basedOn: { rows: BonusScheduleRow[] | undefined } | undefined;
     if (periodBonuses) {
       const today = toDayKey(app.deps.clock.now(), current.timezone);
@@ -60,6 +77,6 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       throw err;
     }
     if (!settings) throw notFound('settings');
-    return toApi(withSchedule(settings));
+    return toApi(withDefaults(settings));
   });
 };

@@ -8,7 +8,7 @@ import type {
   WorkloadResponse,
 } from '@huishoudplanner/shared';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it, onTestFinished } from 'vitest';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { ANNA, BRAM, makeUser, mockApi, storeProfile } from '../../test/fixtures.ts';
 import { makeRoom, makeSettings, makeTask, renderWithProviders } from '../../test/render.tsx';
 import { StatsPage } from './StatsPage.tsx';
@@ -429,14 +429,22 @@ describe('StatsPage', () => {
 describe('StatsPage: points', () => {
   const NOW = new Date('2026-09-16T08:00:00.000Z');
   const FORMER = makeUser({ _id: 'c00000000000000000000003', name: 'Carla', active: false });
+  /** A balance without redemptions or money. */
+  const bal = (personId: string, points: number, executions: number, bonusPoints = 0) => ({
+    personId,
+    points,
+    earned: points,
+    redeemed: 0,
+    money: null,
+    executions,
+    bonusPoints,
+  });
   const BALANCES: PointsBalancesResponse = {
     from: '2026-09-14',
     to: '2026-09-20',
-    balances: [
-      { personId: ANNA._id, points: 8, executions: 3, bonusPoints: 0 },
-      { personId: BRAM._id, points: 0, executions: 0, bonusPoints: 0 },
-      { personId: FORMER._id, points: 4, executions: 1, bonusPoints: 0 },
-    ],
+    currencyCode: 'EUR',
+    centsPerPoint: 0,
+    balances: [bal(ANNA._id, 8, 3), bal(BRAM._id, 0, 0), bal(FORMER._id, 4, 1)],
   };
   const entry = (id: string, personId: string, date: string, amount: number, title: string) => ({
     _id: id,
@@ -450,6 +458,8 @@ describe('StatsPage: points', () => {
     occurrenceId: id,
     taskId: null,
     titleSnapshot: title,
+    note: null,
+    centsPerPointSnapshot: null,
     source: 'live' as const,
     createdAt: '2026-09-16T08:00:00.000Z',
     updatedAt: '2026-09-16T08:00:00.000Z',
@@ -483,9 +493,9 @@ describe('StatsPage: points', () => {
 
     const balances = await within(section).findByRole('table', { name: 'Punten per persoon' });
     expect(within(balances).getAllByRole('row').slice(1).map((row) => row.textContent)).toEqual([
-      'Anna830',
-      'Bram de Vries000',
-      'Carla (inactief)410',
+      'Anna8300',
+      'Bram de Vries0000',
+      'Carla (inactief)4100',
     ]);
     const entries = await within(section).findByRole('table', { name: 'Posten van Anna' });
     expect(within(entries).getAllByRole('row').slice(1).map((row) => row.textContent)).toEqual([
@@ -554,14 +564,16 @@ describe('StatsPage: points', () => {
       pointsRoutes({
         from: '2026-09-14',
         to: '2026-09-20',
-        balances: [{ personId: ANNA._id, points: 41, executions: 1, bonusPoints: 38 }],
+        currencyCode: 'EUR',
+        centsPerPoint: 0,
+        balances: [bal(ANNA._id, 41, 1, 38)],
       }),
     );
     renderWithProviders(<StatsPage now={NOW} />);
     await selectStatsTab('Punten');
     const balances = await screen.findByRole('table', { name: 'Punten per persoon' });
-    expect(within(balances).getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual(['Persoon', 'Punten', 'Uitvoeringen', 'Bonus']);
-    expect(within(balances).getAllByRole('row')[1]!.textContent).toBe('Anna41138');
+    expect(within(balances).getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual(['Persoon', 'Saldo', 'Uitvoeringen', 'Bonus', 'Ingewisseld']);
+    expect(within(balances).getAllByRole('row')[1]!.textContent).toBe('Anna411380');
 
     const entries = await screen.findByRole('table', { name: 'Posten van Anna' });
     const rows = within(entries).getAllByRole('row').slice(1);
@@ -577,10 +589,154 @@ describe('StatsPage: points', () => {
     expect(rows[4]!.querySelector('svg')).toBeNull();
   });
 
+  describe('redemptions', () => {
+    const REDEMPTION_ID = 'd00000000000000000000001';
+    const redemption = (id: string, personId: string, date: string, amount: number, note: string | null, cents = 25): PointEntryView => ({
+      ...entry(id, personId, date, amount, ''),
+      key: `redemption:${id}`,
+      kind: 'redemption',
+      occurrenceId: null,
+      note,
+      centsPerPointSnapshot: cents,
+    });
+    const withEntries = (personId: string, entries: PointEntryView[]) => {
+      const original = ENTRIES[personId]!;
+      onTestFinished(() => {
+        ENTRIES[personId] = original;
+      });
+      ENTRIES[personId] = { entries };
+    };
+    const MONEY: PointsBalancesResponse = {
+      from: '2026-09-14',
+      to: '2026-09-20',
+      currencyCode: 'EUR',
+      centsPerPoint: 25,
+      balances: [
+        { ...bal(ANNA._id, 6, 3), earned: 10, redeemed: 4, money: { earned: 250, redeemed: 100, balance: 150 } },
+        { ...bal(BRAM._id, 0, 0), money: { earned: 0, redeemed: 0, balance: 0 } },
+      ],
+    };
+
+    it('adds the redeemed points to the balances, and the value of the balance when a point is worth money', async () => {
+      setup(WORKLOAD, pointsRoutes(MONEY));
+      renderWithProviders(<StatsPage now={NOW} />);
+      await selectStatsTab('Punten');
+      const balances = await screen.findByRole('table', { name: 'Punten per persoon' });
+      expect(within(balances).getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual([
+        'Persoon',
+        'Saldo',
+        'Uitvoeringen',
+        'Bonus',
+        'Ingewisseld',
+        'Waarde',
+      ]);
+      const row = within(balances).getAllByRole('row')[1]!;
+      expect(row).toHaveTextContent(/^Anna6304.*€\s1,50$/);
+    });
+
+    it('shows no value column while a point is worth nothing', async () => {
+      setup(WORKLOAD, pointsRoutes());
+      renderWithProviders(<StatsPage now={NOW} />);
+      await selectStatsTab('Punten');
+      const balances = await screen.findByRole('table', { name: 'Punten per persoon' });
+      expect(within(balances).queryByRole('columnheader', { name: 'Waarde' })).not.toBeInTheDocument();
+    });
+
+    it('lists a redemption with an icon, its note, the points and what they were worth then, and an undo button for an administrator', async () => {
+      withEntries(ANNA._id, [
+        redemption(REDEMPTION_ID, ANNA._id, '2026-09-16', -4, 'Pizza', 20),
+        redemption('d00000000000000000000002', ANNA._id, '2026-09-15', -1, null, 0),
+        entry('e00000000000000000000002', ANNA._id, '2026-09-14', 3, 'Stofzuigen'),
+      ]);
+      setup(WORKLOAD, pointsRoutes(MONEY));
+      renderWithProviders(<StatsPage now={NOW} />);
+      await selectStatsTab('Punten');
+      const entries = await screen.findByRole('table', { name: 'Posten van Anna' });
+      const rows = within(entries).getAllByRole('row').slice(1);
+      // The money is the factor at the time of booking (20 cents), not the one in force now (25).
+      expect(rows[0]!.textContent).toMatch(/^16 september 2026Ingewisseld: Pizza-4\s\(€\s0,80\)Ongedaan maken$/);
+      expect(rows[1]!.textContent).toBe('15 september 2026Ingewisseld-1Ongedaan maken');
+      expect(rows[2]!.textContent).toBe('14 september 2026Stofzuigen+3');
+      // Icon plus text, not colour alone.
+      expect(rows[0]!.querySelector('svg')).not.toBeNull();
+      expect(rows[2]!.querySelector('svg')).toBeNull();
+      expect(within(entries).getByRole('button', { name: 'Inwisseling van 4 punten ongedaan maken' })).toBeInTheDocument();
+    });
+
+    it('lets a member undo their own redemption of today only, and nobody else\'s', async () => {
+      withEntries(BRAM._id, [
+        redemption(REDEMPTION_ID, BRAM._id, '2026-09-16', -2, null),
+        redemption('d00000000000000000000002', BRAM._id, '2026-09-15', -1, null),
+      ]);
+      withEntries(ANNA._id, [redemption('d00000000000000000000003', ANNA._id, '2026-09-16', -3, null)]);
+      setup(WORKLOAD, pointsRoutes(MONEY));
+      storeProfile(BRAM._id);
+      renderWithProviders(<StatsPage now={NOW} />);
+      await selectStatsTab('Punten');
+      const own = await screen.findByRole('table', { name: 'Posten van Bram de Vries' });
+      expect(within(own).getAllByRole('button')).toHaveLength(1);
+      expect(within(own).getByRole('button', { name: 'Inwisseling van 2 punten ongedaan maken' })).toBeInTheDocument();
+      expect(within(own).queryByRole('button', { name: 'Inwisseling van 1 punten ongedaan maken' })).not.toBeInTheDocument();
+
+      fireEvent.change(screen.getByLabelText('Toon posten van'), { target: { value: ANNA._id } });
+      const other = await screen.findByRole('table', { name: 'Posten van Anna' });
+      expect(within(other).queryByRole('button')).not.toBeInTheDocument();
+    });
+
+    it('undoes a redemption and confirms it, and refetches the points', async () => {
+      withEntries(ANNA._id, [redemption(REDEMPTION_ID, ANNA._id, '2026-09-16', -4, 'Pizza')]);
+      const fetchMock = setup(WORKLOAD, {
+        ...pointsRoutes(MONEY),
+        [`DELETE /api/points/redemptions/${REDEMPTION_ID}`]: { deleted: true },
+      });
+      renderWithProviders(<StatsPage now={NOW} />);
+      await selectStatsTab('Punten');
+      const entries = await screen.findByRole('table', { name: 'Posten van Anna' });
+      fireEvent.click(within(entries).getByRole('button', { name: 'Inwisseling van 4 punten ongedaan maken' }));
+      expect(await screen.findByRole('status')).toHaveTextContent('De inwisseling is ongedaan gemaakt.');
+      expect(fetchMock.mock.calls.some(([u, init]) => u === `/api/points/redemptions/${REDEMPTION_ID}` && (init as RequestInit).method === 'DELETE')).toBe(true);
+      await waitFor(() => expect(pointsUrls(fetchMock).filter((u) => u.startsWith('/api/points/balances')).length).toBeGreaterThan(1));
+    });
+
+    it('says why when the server refuses to undo a redemption of an earlier day', async () => {
+      withEntries(ANNA._id, [redemption(REDEMPTION_ID, ANNA._id, '2026-09-16', -4, null)]);
+      storeProfile(ANNA._id);
+      setup(WORKLOAD, pointsRoutes(MONEY));
+      const original = globalThis.fetch;
+      vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) =>
+        init?.method === 'DELETE'
+          ? new Response(JSON.stringify({ code: 'redemption_locked' }), { status: 403 })
+          : original(input, init),
+      );
+      renderWithProviders(<StatsPage now={NOW} />);
+      await selectStatsTab('Punten');
+      const entries = await screen.findByRole('table', { name: 'Posten van Anna' });
+      fireEvent.click(within(entries).getByRole('button', { name: 'Inwisseling van 4 punten ongedaan maken' }));
+      expect(await screen.findByRole('alert')).toHaveTextContent('Een inwisseling kan alleen op de dag zelf ongedaan worden gemaakt');
+    });
+
+    it('opens the redeem dialog from the Redeem button and confirms the booking with the money it is worth', async () => {
+      setup(WORKLOAD, {
+        ...pointsRoutes(MONEY),
+        'POST /api/points/redemptions': { ...redemption(REDEMPTION_ID, ANNA._id, '2026-09-16', -4, null), amount: -4 },
+      });
+      renderWithProviders(<StatsPage now={NOW} />);
+      await selectStatsTab('Punten');
+      await screen.findByRole('table', { name: 'Punten per persoon' });
+      fireEvent.click(screen.getByRole('button', { name: 'Inwisselen' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Punten inwisselen' });
+      await within(dialog).findByText(/Beschikbaar saldo/);
+      fireEvent.change(within(dialog).getByLabelText('Aantal punten'), { target: { value: '4' } });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Inwisselen' }));
+      expect(await screen.findByText(/4 punten ingewisseld \(€\s1,00\)\./)).toBeInTheDocument();
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    });
+  });
+
   it('says so when nobody earned points in the period', async () => {
     setup(
       WORKLOAD,
-      pointsRoutes({ from: '2026-09-14', to: '2026-09-20', balances: [{ personId: ANNA._id, points: 0, executions: 0, bonusPoints: 0 }] }),
+      pointsRoutes({ from: '2026-09-14', to: '2026-09-20', currencyCode: 'EUR', centsPerPoint: 0, balances: [bal(ANNA._id, 0, 0)] }),
     );
     renderWithProviders(<StatsPage now={NOW} />);
     await selectStatsTab('Punten');

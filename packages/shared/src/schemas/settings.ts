@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { MAX_BONUS_POINTS, MIN_BONUS_POINTS } from '../bonuses.ts';
+import { MAX_CENTS_PER_POINT, MIN_CENTS_PER_POINT } from '../points.ts';
 import { isMonday } from '../time.ts';
 import { dayKeySchema, objectIdSchema, timestampsSchema, weekdaySchema } from './common.ts';
 import { intervalSchema } from './intervals.ts';
@@ -100,6 +101,19 @@ export const bonusScheduleSchema = z
   .array(bonusScheduleRowSchema)
   .refine((rows) => rows.every((row, i) => i === 0 || rows[i - 1]!.from < row.from), 'bonus_schedule_not_sorted');
 
+/** ISO 4217 code of the currency points are converted to (ADR-0013): three capitals that the runtime knows as a currency. */
+export const currencyCodeSchema = z
+  .string()
+  .regex(/^[A-Z]{3}$/, 'invalid_currency_code')
+  .refine((code) => {
+    // Without Intl.supportedValuesOf (older runtimes) the three-capital shape is all that can be checked.
+    const supported = (Intl as { supportedValuesOf?: (key: string) => string[] }).supportedValuesOf;
+    return supported ? supported('currency').includes(code) : true;
+  }, 'invalid_currency_code');
+
+/** Cents of currency one point is worth: an integer from 0 to 10000; 0 shows no money (ADR-0013). */
+export const centsPerPointSchema = z.number().int().min(MIN_CENTS_PER_POINT).max(MAX_CENTS_PER_POINT);
+
 export const settingsSchema = z
   .object({
     cycleAnchorDate: anchorDateSchema,
@@ -117,6 +131,10 @@ export const settingsSchema = z
     bonusSchedule: bonusScheduleSchema.optional(),
     /** Boundary of the last statistics reset: periods that start before this day earn no bonus (ADR-0012). */
     bonusFloor: dayKeySchema.optional(),
+    /** Currency of the conversion (ADR-0013); a missing value means EUR. The API always returns it. */
+    currencyCode: currencyCodeSchema.optional(),
+    /** Cents one point is worth (ADR-0013); a missing value means 0, no money shown. The API always returns it. */
+    centsPerPoint: centsPerPointSchema.optional(),
   })
   .extend(timestampsSchema.shape);
 export type Settings = z.infer<typeof settingsSchema>;
@@ -133,6 +151,9 @@ export const updateSettingsInputSchema = z
     promoteThreshold: z.number().int().min(2),
     /** The amounts that apply from today on; the server writes the schedule row (administrators only). */
     periodBonuses: bonusAmountsSchema,
+    /** The conversion from points to currency (administrators only, ADR-0013). */
+    currencyCode: currencyCodeSchema,
+    centsPerPoint: centsPerPointSchema,
   })
   .partial();
 export type UpdateSettingsInput = z.infer<typeof updateSettingsInputSchema>;

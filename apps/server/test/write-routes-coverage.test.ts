@@ -258,6 +258,25 @@ const SCENARIOS: Scenario[] = [
     },
   },
   {
+    // Recorded one-off work gives the administrator points to redeem; the booking itself is audited as a ledger create.
+    route: 'POST /api/points/redemptions',
+    audit: { entity: 'points', action: 'create', count: 1 },
+    prepare: async () => {
+      const earned = await call('POST', '/api/occurrences/one-off', { name: 'Extra klus', durationMinutes: 30, date: '2026-09-16', done: true });
+      expect(earned.statusCode, earned.body).toBe(201);
+    },
+    run: async () => {
+      const res = await call('POST', '/api/points/redemptions', { points: 2, note: 'Taart' });
+      ids.redemption = res.json<{ _id: string }>()._id;
+      return res;
+    },
+  },
+  {
+    route: 'DELETE /api/points/redemptions/:id',
+    audit: { entity: 'points', action: 'delete', count: 1 },
+    run: () => call('DELETE', `/api/points/redemptions/${ids.redemption}`),
+  },
+  {
     route: 'DELETE /api/stats',
     audit: { entity: 'settings', action: 'reset' },
     run: () => call('DELETE', '/api/stats'),

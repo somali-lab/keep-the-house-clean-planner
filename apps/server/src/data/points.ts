@@ -30,6 +30,12 @@ export interface PointEntryDoc {
   titleSnapshot: string;
   /** The path that wrote the current value. */
   source: PointEntrySource;
+  /** Redemptions only: free text, null when none (ADR-0013). */
+  note?: string | null;
+  /** Redemptions only: cents one point was worth when it was booked (ADR-0013). */
+  centsPerPointSnapshot?: number | null;
+  /** Redemptions only: idempotency key of the booking request (ADR-0013). */
+  requestId?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -49,7 +55,7 @@ export const pointEntriesCollection = (db: Db) => db.collection<PointEntryDoc>(C
 
 export const executionKey = (occurrenceId: ObjectId): string => `execution:${occurrenceId.toHexString()}`;
 
-/** Kinds that are derived from the occurrences; the statistics reset removes these and never another kind. */
+/** Kinds that are derived from the occurrences; a reconciliation manages these and never a booked kind (ADR-0013). */
 const DERIVED_KINDS: PointEntryKind[] = ['execution', ...BONUS_KINDS];
 
 export function findPointEntryByKey(db: Db, key: string): Promise<PointEntryDoc | null> {
@@ -192,6 +198,8 @@ export interface PointTotal {
   executions: number;
   /** Sum of the week and cycle bonus entries; part of `points`. */
   bonusPoints: number;
+  /** Points given up in redemptions, as a positive number; `points` already has them subtracted. */
+  redeemed: number;
 }
 
 /** Sum and counts of the entries per person; `range` bounds are `[from, to)` and both optional. */
@@ -206,9 +214,10 @@ export function sumPointEntries(db: Db, range: { from?: Date; to?: Date }): Prom
           points: { $sum: '$amount' },
           executions: { $sum: { $cond: [{ $eq: ['$kind', 'execution'] }, 1, 0] } },
           bonusPoints: { $sum: { $cond: [{ $in: ['$kind', [...BONUS_KINDS]] }, '$amount', 0] } },
+          redeemed: { $sum: { $cond: [{ $eq: ['$kind', 'redemption'] }, { $multiply: ['$amount', -1] }, 0] } },
         },
       },
-      { $project: { _id: 0, personId: '$_id', points: 1, executions: 1, bonusPoints: 1 } },
+      { $project: { _id: 0, personId: '$_id', points: 1, executions: 1, bonusPoints: 1, redeemed: 1 } },
     ])
     .toArray();
 }
@@ -297,4 +306,70 @@ export async function applyBonusEntryChanges(ctx: AuditContext, changes: BonusEn
     created: documents.filter((doc) => present.has(doc._id.toHexString())).map((doc) => doc.key),
     ...(error === undefined ? {} : { error }),
   };
+}
+
+/** A redemption: a booked ledger entry of a person giving up points (ADR-0013). Never derived, never touched by a reconciliation. */
+export type RedemptionDoc = PointEntryDoc & {
+  kind: 'redemption';
+  occurrenceId: null;
+  taskId: null;
+  note: string | null;
+  centsPerPointSnapshot: number;
+  requestId: string | null;
+};
+
+export const redemptionKey = (id: ObjectId): string => `redemption:${id.toHexString()}`;
+
+export function findRedemptionById(db: Db, id: ObjectId): Promise<RedemptionDoc | null> {
+  return pointEntriesCollection(db).findOne({ _id: id, kind: 'redemption' }) as Promise<RedemptionDoc | null>;
+}
+
+export function findRedemptionByRequestId(db: Db, requestId: string): Promise<RedemptionDoc | null> {
+  return pointEntriesCollection(db).findOne({ requestId, kind: 'redemption' }) as Promise<RedemptionDoc | null>;
+}
+
+/** The balance of one person over the whole ledger: the sum of every entry, redemptions included. */
+export async function sumPersonBalance(db: Db, personId: ObjectId): Promise<number> {
+  const [total] = await pointEntriesCollection(db)
+    .aggregate<{ points: number }>([{ $match: { personId } }, { $group: { _id: null, points: { $sum: '$amount' } } }])
+    .toArray();
+  return total?.points ?? 0;
+}
+
+/**
+ * Inserts a booked redemption and audits it. A duplicate request key (a concurrent booking of the
+ * same request won) is reported as `inserted: false`, writing and auditing nothing, so the caller can
+ * decide between replaying and conflicting.
+ */
+export async function insertRedemption(
+  ctx: AuditContext,
+  doc: RedemptionDoc,
+): Promise<{ inserted: true; doc: RedemptionDoc } | { inserted: false }> {
+  try {
+    await pointEntriesCollection(ctx.db).insertOne(doc);
+  } catch (err) {
+    if (err instanceof MongoServerError && err.code === 11000) return { inserted: false };
+    throw err;
+  }
+  const { after } = diffFields({}, { ...doc }, { ignore: AUDIT_IGNORE });
+  await record(ctx, { entity: 'points', entityId: doc._id, action: 'create', after, meta: { reason: 'redemption' } });
+  return { inserted: true, doc };
+}
+
+/** Removes a redemption and audits it. Returns null, writing and auditing nothing, when it is already gone. */
+export async function deleteRedemption(ctx: AuditContext, id: ObjectId): Promise<RedemptionDoc | null> {
+  const deleted = (await pointEntriesCollection(ctx.db).findOneAndDelete({ _id: id, kind: 'redemption' })) as RedemptionDoc | null;
+  if (!deleted) return null;
+  const { before } = diffFields({ ...deleted }, {}, { ignore: AUDIT_IGNORE });
+  await record(ctx, { entity: 'points', entityId: deleted._id, action: 'delete', before, meta: { reason: 'redemption_undone' } });
+  return deleted;
+}
+
+/**
+ * Removes the redemptions, or only those dated before `before` (the statistics reset, ADR-0013). The
+ * caller records them in its single reset audit entry. Returns the number removed.
+ */
+export async function deleteRedemptions(db: Db, before?: Date): Promise<number> {
+  const result = await pointEntriesCollection(db).deleteMany({ kind: 'redemption', ...(before ? { date: { $lt: before } } : {}) });
+  return result.deletedCount;
 }

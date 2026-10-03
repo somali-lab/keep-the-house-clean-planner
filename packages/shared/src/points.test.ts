@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultPointsForDuration, MAX_TASK_POINTS, MIN_TASK_POINTS } from './points.ts';
+import { defaultPointsForDuration, formatCents, MAX_CENTS_PER_POINT, MAX_TASK_POINTS, MIN_CENTS_PER_POINT, MIN_TASK_POINTS, pointsToCents } from './points.ts';
 
 describe('defaultPointsForDuration', () => {
   it.each([
@@ -27,5 +27,22 @@ describe('defaultPointsForDuration', () => {
 
   it('keeps the bounds of a task at 0..1000', () => {
     expect([MIN_TASK_POINTS, MAX_TASK_POINTS]).toEqual([0, 1000]);
+  });
+});
+
+describe('points to money (ADR-0013)', () => {
+  it('multiplies whole points with whole cents, never rounding', () => {
+    expect(pointsToCents(7, 25)).toBe(175);
+    expect(pointsToCents(0, 25)).toBe(0);
+    expect(pointsToCents(-4, 10)).toBe(-40);
+    expect(pointsToCents(1000, MAX_CENTS_PER_POINT)).toBe(10_000_000);
+    expect(MIN_CENTS_PER_POINT).toBe(0);
+  });
+
+  it('formats cents in the currency and locale with Intl', () => {
+    expect(formatCents(175, 'EUR', 'en-GB')).toBe('€1.75');
+    expect(formatCents(175, 'EUR', 'nl-NL').replaceAll('\u00a0', ' ')).toBe('€ 1,75');
+    expect(formatCents(-5, 'USD', 'en-US')).toBe('-$0.05');
+    expect(formatCents(150, 'JPY', 'en-US')).toContain('¥');
   });
 });

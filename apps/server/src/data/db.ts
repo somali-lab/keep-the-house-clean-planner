@@ -50,6 +50,13 @@ export const INDEXES: Record<CollectionName, IndexDescription[]> = {
     { key: { key: 1 }, name: 'pointEntries_key_unique', unique: true },
     { key: { personId: 1, date: -1 } },
     { key: { date: 1 } },
+    // ADR-0013: a redemption booked twice with the same request key is one booking.
+    {
+      key: { requestId: 1 },
+      name: 'pointEntries_request_id_unique',
+      unique: true,
+      partialFilterExpression: { requestId: { $type: 'string' } },
+    },
   ],
 };
 

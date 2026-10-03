@@ -183,6 +183,33 @@ describe('describeEntry for the points ledger', () => {
     ).toContain('Stofzuigen');
   });
 
+  it('reads a redemption as points exchanged, with the note, and says who booked it for someone else', () => {
+    const redemption = { kind: 'redemption', amount: -4, note: 'Pizza', personId: BRAM };
+    expect(describeEntry(points({ actorId: BRAM, action: 'create', after: redemption, meta: { reason: 'redemption' } }), names)).toEqual([
+      'Bram wisselde 4 punten in (Pizza)',
+    ]);
+    expect(describeEntry(points({ actorId: BRAM, action: 'create', after: { ...redemption, note: null } }), names)).toEqual(['Bram wisselde 4 punten in']);
+    expect(describeEntry(points({ actorId: ANNA, action: 'create', after: { ...redemption, note: null } }), names)).toEqual([
+      'Anna wisselde 4 punten in voor Bram',
+    ]);
+  });
+
+  it('reads taking a redemption back as undoing it', () => {
+    expect(
+      describeEntry(
+        points({ actorId: ANNA, action: 'delete', before: { kind: 'redemption', amount: -4, note: 'Pizza', personId: BRAM }, meta: { reason: 'redemption_undone' } }),
+        names,
+      ),
+    ).toEqual(['Anna maakte het inwisselen van 4 punten voor Bram ongedaan']);
+  });
+
+  it('labels the conversion settings', () => {
+    expect(describeEntry(entry({ entity: 'settings', entityId: 's1', before: { centsPerPoint: 0 }, after: { centsPerPoint: 10, currencyCode: 'USD' } }), names)).toEqual([
+      'Anna wijzigde waarde van een punt (centen) van de instellingen: 0 → 10',
+      'Anna wijzigde valuta van de instellingen: — → USD',
+    ]);
+  });
+
   it('describes a recomputation of the ledger', () => {
     expect(describeEntry(entry({ entity: 'points', action: 'recompute', actorId: SYSTEM_ACTOR_ID }), names)).toEqual([
       'Systeem berekende de punten opnieuw',
