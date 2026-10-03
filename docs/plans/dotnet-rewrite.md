@@ -250,7 +250,7 @@ Each phase ends in something demonstrable. Slices are small enough for one pull 
 ### Phase 5 — Statistics, history, promotion
 
 - [ ] 5.1 Statistics endpoints and the statistics reset. Port `stats.test.ts`, `stats-reset.test.ts`.
-- [ ] 5.2 Audit log read with cursor paging, clear, retention job. Port `audit-api.test.ts`, `audit-retention.test.ts`.
+- [x] 5.2 Audit log read with cursor paging, clear, retention job. Port `audit-api.test.ts`, `audit-retention.test.ts`.
 - [ ] 5.3 Promote suggestions. Port `promote.test.ts`.
 - [ ] 5.4 Audit coverage and write-route coverage tests over every v2 write endpoint (ADR-0004). Port `audit-coverage.test.ts`, `write-routes-coverage.test.ts`.
 
