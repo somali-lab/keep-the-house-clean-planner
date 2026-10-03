@@ -55,7 +55,7 @@ public sealed class PromoteServiceTests
 
         public FakePromotionEvidence Evidence { get; } = new();
 
-        public FakeSettingsStore Settings { get; } = new(SettingsSamples.Seeded());
+        public FakeSettingsStore Settings => Plans.Settings;
 
         public FixedClock Clock { get; } = new(new DateTimeOffset(2026, 10, 22, 8, 0, 0, TimeSpan.Zero));
 
@@ -70,7 +70,7 @@ public sealed class PromoteServiceTests
             Cycles.Items = [.. Enumerable.Range(0, 2).Select(i => new Cycle("c" + i.ToString(System.Globalization.CultureInfo.InvariantCulture), i, CalendarCycles.CycleStart(i, Anchor), CalendarCycles.CycleEnd(i, Anchor), Plan.Id, DateTimeOffset.UnixEpoch, "run"))];
         }
 
-        public PromoteService Service => new(Settings, Plans.Plans, Cycles, Plans.Tasks, Evidence, Clock);
+        public PromoteService Service => new(Settings, Plans.Plans, Cycles, Plans.Tasks, Evidence, Plans.Service, Plans.Transactions, Plans.Audit, Clock);
 
         /// <summary>An occurrence of the slot planned in <paramref name="cycle"/> and now on <paramref name="day"/> (local midnight in Amsterdam).</summary>
         public void Occurrence(string id, int cycle, DateOnly day, string? assignee = P1)

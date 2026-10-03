@@ -133,6 +133,11 @@ internal static class SettingsDocument
         {
             yield return new("rewardGoals", Goals(goals));
         }
+
+        if (changes.DismissedPromotions is { } dismissed)
+        {
+            yield return new("dismissedPromotions", new BsonArray(dismissed.Select(Promotion)));
+        }
     }
 
     public static DateOnly ReadAnchor(BsonDocument document) => Day(document["cycleAnchorDate"]);
