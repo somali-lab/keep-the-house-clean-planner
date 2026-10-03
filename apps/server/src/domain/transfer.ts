@@ -15,7 +15,7 @@ import { z } from 'zod';
 import type { AuditContext } from '../audit/context.ts';
 import { record } from '../audit/record.ts';
 import { SETTINGS_ID } from '../data/settings.ts';
-import { reconcilePoints } from './points.ts';
+import { reconcilePoints, reconcilePointsSafely } from './points.ts';
 import {
   readAllCollections,
   replaceAllCollections,
@@ -195,15 +195,20 @@ export type ImportResult = ReplaceResult;
  * points ledger from the imported occurrences (ADR-0011), which also fills in the points of an
  * older file. The rebuild writes its own summary entry when it changed anything.
  */
-export async function importData(ctx: AuditContext, parsed: ParsedImport): Promise<ImportResult> {
+export async function importData(
+  ctx: AuditContext,
+  parsed: ParsedImport,
+  reconcile: typeof reconcilePoints = reconcilePoints,
+): Promise<ImportResult> {
   const result = await replaceAllCollections(ctx.db, parsed.docs);
   await record(ctx, {
     entity: 'import',
     entityId: new ObjectId(),
     action: 'create',
-    after: { ...result.replaced, auditAdded: result.auditAdded },
+    after: { ...result.replaced, auditAdded: result.auditAdded, removedPointEntries: result.removedPointEntries },
     meta: { mode: 'replace', schemaVersion: parsed.schemaVersion, exportedAt: parsed.exportedAt },
   });
-  await reconcilePoints(ctx, 'import');
+  // The data is already replaced and audited: a failing rebuild is logged, and the nightly run repeats it.
+  await reconcilePointsSafely(ctx, 'import', reconcile);
   return result;
 }

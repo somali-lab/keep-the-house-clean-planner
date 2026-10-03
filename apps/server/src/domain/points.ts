@@ -4,6 +4,7 @@ import {
   fromDayKey,
   mondayOf,
   toDayKey,
+  MAX_POINTS_CORRECTIONS,
   type PointsBalancesQuery,
   type PointsBalancesResponse,
   type PointsCorrection,
@@ -124,6 +125,20 @@ function sameFields(a: PointEntryFields, b: PointEntryFields): boolean {
   );
 }
 
+/** Reconciliations never overlap in this process: a second run waits for the first one (ADR-0005: one process). */
+const reconcileQueues = new Map<string, Promise<unknown>>();
+
+function exclusively<T>(db: Db, run: () => Promise<T>): Promise<T> {
+  const queue = reconcileQueues.get(db.databaseName) ?? Promise.resolve();
+  const next = queue.then(run, run);
+  const tail = next.catch(() => undefined);
+  reconcileQueues.set(db.databaseName, tail);
+  void tail.then(() => {
+    if (reconcileQueues.get(db.databaseName) === tail) reconcileQueues.delete(db.databaseName);
+  });
+  return next;
+}
+
 /**
  * Makes the whole ledger match the occurrences (ADR-0011), idempotently. It migrates the fields
  * (tasks without points, done occurrences without a snapshot), computes the expected execution
@@ -131,8 +146,33 @@ function sameFields(a: PointEntryFields, b: PointEntryFields): boolean {
  * something writes one summary audit entry (`points` / `recompute`) and nothing per entry; a run
  * that changes nothing writes and audits nothing. Entries that are not of kind `execution` are
  * never touched. Without settings there is nothing to reconcile.
+ *
+ * Runs never overlap, the stored entries are read before the occurrences, and every change is a
+ * compare-and-set on the entry that was read, so a check-off that lands meanwhile is never undone.
+ * An occurrence that cannot be read (an invalid date) is skipped and counted, never fatal.
  */
-export async function reconcilePoints(ctx: AuditContext, trigger: PointsRecomputeTrigger): Promise<PointsRecomputeResult> {
+export function reconcilePoints(ctx: AuditContext, trigger: PointsRecomputeTrigger): Promise<PointsRecomputeResult> {
+  return exclusively(ctx.db, () => reconcileNow(ctx, trigger));
+}
+
+/**
+ * Runs the reconciliation for a caller that must not fail because of it (startup, the nightly
+ * job, an import): a failure is logged and answered with null.
+ */
+export async function reconcilePointsSafely(
+  ctx: AuditContext,
+  trigger: PointsRecomputeTrigger,
+  reconcile: typeof reconcilePoints = reconcilePoints,
+): Promise<PointsRecomputeResult | null> {
+  try {
+    return await reconcile(ctx, trigger);
+  } catch (err) {
+    ctx.log.error({ err, trigger }, 'points reconciliation failed');
+    return null;
+  }
+}
+
+async function reconcileNow(ctx: AuditContext, trigger: PointsRecomputeTrigger): Promise<PointsRecomputeResult> {
   const result: PointsRecomputeResult = {
     trigger,
     tasksDefaulted: 0,
@@ -141,21 +181,33 @@ export async function reconcilePoints(ctx: AuditContext, trigger: PointsRecomput
     updated: 0,
     removed: 0,
     unattributed: 0,
+    skipped: 0,
     corrections: [],
+    correctionsTotal: 0,
+    correctionsTruncated: false,
   };
   const settings = await getSettings(ctx.db);
   if (!settings) return result;
 
+  // Read the ledger before the occurrences: an entry written in between is then unknown to this
+  // run and is left alone, instead of being deleted as an entry without an occurrence.
+  const stored = new Map((await findPointEntries(ctx.db, { kind: 'execution' })).map((entry) => [entry.key, entry]));
+
   // Step 1: migrate the fields. Both writes filter on the missing field, so a second run matches nothing.
-  result.tasksDefaulted = await defaultMissingTaskPoints(ctx.db);
+  const defaulted = await defaultMissingTaskPoints(ctx.db);
+  result.tasksDefaulted = defaulted.count;
+  const migrated = new Set(defaulted.ids.map((id) => id.toHexString()));
   const done = await findDoneOccurrences(ctx.db);
   const unsnapshotted = done.filter((doc) => doc.pointsSnapshot == null);
   if (unsnapshotted.length > 0) {
-    // A task that no longer exists, and a one-off task, get the duration rule from the occurrence snapshot.
     const tasks = new Map((await listTasks(ctx.db)).map((task) => [task._id.toHexString(), task]));
     const snapshots = unsnapshotted.map((doc) => {
-      const task = doc.taskId ? tasks.get(doc.taskId.toHexString()) : undefined;
-      return { id: doc._id, points: task ? taskPoints(task) : defaultPointsForDuration(doc.durationMinutesSnapshot) };
+      const taskId = doc.taskId?.toHexString();
+      const task = taskId ? tasks.get(taskId) : undefined;
+      // A task that no longer exists, a one-off task and a task whose points this migration just
+      // filled in (it never had a value of its own) take the duration rule from the occurrence snapshot.
+      const useTask = task && taskId && !migrated.has(taskId);
+      return { id: doc._id, points: useTask ? taskPoints(task) : defaultPointsForDuration(doc.durationMinutesSnapshot) };
     });
     result.snapshotsSet = await setMissingPointsSnapshots(ctx.db, snapshots);
     // Continue with the values that were just written, without reading every done occurrence again.
@@ -163,14 +215,22 @@ export async function reconcilePoints(ctx: AuditContext, trigger: PointsRecomput
     for (const doc of unsnapshotted) doc.pointsSnapshot = written.get(doc._id.toHexString()) ?? null;
   }
 
-  // Step 2: the expected entry of every done occurrence, against every stored execution entry.
+  // Step 2: the expected entry of every done occurrence.
   const expected = new Map<string, PointEntryFields>();
+  const unreadable = new Set<string>();
   for (const occurrence of done) {
-    const fields = expectedExecutionEntry(occurrence, settings.timezone);
-    if (fields) expected.set(executionKey(occurrence._id), fields);
-    else if (!(occurrence.completedBy ?? occurrence.assigneeId) && (occurrence.pointsSnapshot ?? 0) >= 1) result.unattributed += 1;
+    const key = executionKey(occurrence._id);
+    try {
+      const fields = expectedExecutionEntry(occurrence, settings.timezone);
+      if (fields) expected.set(key, fields);
+      else if (!(occurrence.completedBy ?? occurrence.assigneeId) && (occurrence.pointsSnapshot ?? 0) >= 1) result.unattributed += 1;
+    } catch (err) {
+      // Old data can hold anything; one bad row must not stop the others. Its stored entry stays as it is.
+      ctx.log.warn({ err, occurrenceId: key }, 'points reconciliation skipped an unreadable occurrence');
+      unreadable.add(key);
+      result.skipped += 1;
+    }
   }
-  const stored = new Map((await findPointEntries(ctx.db, { kind: 'execution' })).map((entry) => [entry.key, entry]));
 
   // Step 3: the differences.
   const changes: PointEntryChanges = { inserts: [], updates: [], deletes: [] };
@@ -189,7 +249,7 @@ export async function reconcilePoints(ctx: AuditContext, trigger: PointsRecomput
     }
   }
   for (const [key, current] of stored) {
-    if (expected.has(key)) continue;
+    if (expected.has(key) || unreadable.has(key)) continue;
     changes.deletes.push(current);
     corrections.push({ key, from: { personId: current.personId.toHexString(), amount: current.amount }, to: null });
   }
@@ -197,7 +257,9 @@ export async function reconcilePoints(ctx: AuditContext, trigger: PointsRecomput
   result.created = applied.created;
   result.updated = applied.updated;
   result.removed = applied.removed;
-  result.corrections = corrections;
+  result.correctionsTotal = corrections.length;
+  result.correctionsTruncated = corrections.length > MAX_POINTS_CORRECTIONS;
+  result.corrections = corrections.slice(0, MAX_POINTS_CORRECTIONS);
 
   if (result.tasksDefaulted + result.snapshotsSet + result.created + result.updated + result.removed > 0) {
     await record(ctx, { entity: 'points', entityId: POINTS_LEDGER_ID, action: 'recompute', meta: { ...result } });

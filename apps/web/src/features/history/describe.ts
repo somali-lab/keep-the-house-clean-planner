@@ -69,7 +69,8 @@ export function entityName(entry: AuditEntry, names: NameLookup): string {
     case 'import':
       return t('history.entity.import');
     case 'points':
-      return str(after.titleSnapshot) ?? str(before.titleSnapshot) ?? unknown;
+      // An update only lists what changed, so the title also travels in the meta.
+      return str(after.titleSnapshot) ?? str(before.titleSnapshot) ?? str(entry.meta?.titleSnapshot) ?? unknown;
   }
 }
 
@@ -188,6 +189,18 @@ export function describeEntry(entry: AuditEntry, names: NameLookup): string[] {
         person: formatValue('personId', values.personId, names),
         amount: typeof values.amount === 'number' ? values.amount : '?',
         entity,
+      }),
+    ];
+  }
+
+  // A correction that moves a ledger entry to someone else reads as the points moving.
+  if (entry.entity === 'points' && entry.action === 'update' && typeof meta.amount === 'number' && 'personId' in before && 'personId' in after) {
+    return [
+      format('history.action.pointsMoved', {
+        amount: meta.amount,
+        entity,
+        from: formatValue('personId', before.personId, names),
+        to: formatValue('personId', after.personId, names),
       }),
     ];
   }

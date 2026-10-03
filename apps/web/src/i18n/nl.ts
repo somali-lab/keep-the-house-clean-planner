@@ -107,6 +107,7 @@ export const nl = {
   'history.action.recompute': '{actor} berekende de punten opnieuw',
   'history.action.pointsCreate': '{person} kreeg {amount} punten voor {entity}',
   'history.action.pointsDelete': '{person} verloor {amount} punten voor {entity}',
+  'history.action.pointsMoved': '{amount} punten voor {entity} gingen van {from} naar {to}',
 
   'completions.title': 'Gereedmeldingen beheren',
   'completions.explainer':
@@ -390,6 +391,8 @@ export const nl = {
   'completionChoice.title': 'Wie heeft “{task}” gedaan?',
   'completionChoice.description':
     'Deze taak staat op naam van {assignee}. De punten gaan naar wie de taak heeft gedaan: namens {assignee} afvinken geeft {assignee} de punten, zelf overnemen geeft jou de punten.',
+  'completionChoice.descriptionInactive':
+    'Deze taak staat op naam van {assignee}, die niet meer actief is. Afvinken namens {assignee} kan daarom niet. Als je de taak overneemt, krijg jij de punten.',
   'completionChoice.forAssignee': 'Namens {assignee} afvinken',
   'completionChoice.takeOver': 'Ik heb de taak overgenomen',
   'offline.pendingOne':

@@ -92,13 +92,15 @@ export async function updatePointEntry(
 ): Promise<boolean> {
   const diff = diffFields({ ...current }, { ...current, ...fields }, { ignore: [...AUDIT_IGNORE, 'source'] });
   if (isEmptyDiff(diff)) return false;
+  // The diff holds changed fields only, so the title and amount travel in the meta for the history feed.
+  const auditMeta = { ...meta, titleSnapshot: fields.titleSnapshot, amount: fields.amount };
   const after = await pointEntriesCollection(ctx.db).findOneAndUpdate(
     { _id: current._id },
     { $set: { ...fields, source, updatedAt: ctx.clock.now() } },
     { returnDocument: 'after' },
   );
   if (!after) return false;
-  await record(ctx, { entity: 'points', entityId: current._id, action: 'update', ...diff, meta: { ...meta } });
+  await record(ctx, { entity: 'points', entityId: current._id, action: 'update', ...diff, meta: auditMeta });
   return true;
 }
 
@@ -109,6 +111,11 @@ export async function deletePointEntry(ctx: AuditContext, current: PointEntryDoc
   const { before } = diffFields({ ...deleted }, {}, { ignore: AUDIT_IGNORE });
   await record(ctx, { entity: 'points', entityId: deleted._id, action: 'delete', before, meta: { ...meta } });
   return true;
+}
+
+/** Filter that only matches the entry while it still has the values that were read. */
+function sameAsRead(current: PointEntryDoc) {
+  return { _id: current._id, personId: current.personId, amount: current.amount, date: current.date };
 }
 
 export interface PointEntryChanges {
@@ -139,10 +146,11 @@ export async function applyPointEntryChanges(
         document: { _id: new ObjectId(), key, kind, ...fields, source: 'backfill' as const, createdAt: now, updatedAt: now },
       },
     })),
+    // Compare-and-set: an entry that a live sync changed after it was read is left alone; the next run sees it again.
     ...changes.updates.map(({ current, fields }) => ({
-      updateOne: { filter: { _id: current._id }, update: { $set: { ...fields, source: 'recompute' as const, updatedAt: now } } },
+      updateOne: { filter: sameAsRead(current), update: { $set: { ...fields, source: 'recompute' as const, updatedAt: now } } },
     })),
-    ...changes.deletes.map((current) => ({ deleteOne: { filter: { _id: current._id } } })),
+    ...changes.deletes.map((current) => ({ deleteOne: { filter: sameAsRead(current) } })),
   ];
   if (operations.length === 0) return { created: 0, updated: 0, removed: 0 };
   try {
@@ -191,7 +199,7 @@ export async function deleteExecutionPointEntries(db: Db, before?: Date): Promis
   return result.deletedCount;
 }
 
-/** Removes the whole ledger; an import rebuilds it from the imported occurrences. */
-export async function clearPointEntries(db: Db): Promise<void> {
-  await pointEntriesCollection(db).deleteMany({});
+/** Removes the whole ledger and returns how many entries went; an import rebuilds it from the imported occurrences. */
+export async function clearPointEntries(db: Db): Promise<number> {
+  return (await pointEntriesCollection(db).deleteMany({})).deletedCount;
 }

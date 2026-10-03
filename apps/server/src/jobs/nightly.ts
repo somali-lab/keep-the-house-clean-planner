@@ -6,7 +6,7 @@ import { runAuditRetention } from '../domain/auditRetention.ts';
 import { computeDueList, summarizeDue } from '../domain/due.ts';
 import { generateUpcoming, type GenerationResult } from '../domain/generation.ts';
 import { runMorningNotify } from '../domain/notify/morning.ts';
-import { reconcilePoints } from '../domain/points.ts';
+import { reconcilePointsSafely } from '../domain/points.ts';
 
 export interface NightlyResult {
   runId: string;
@@ -15,19 +15,33 @@ export interface NightlyResult {
   due: { due: number; overdue: number };
 }
 
+export interface NightlyOptions {
+  /**
+   * Reconcile the points ledger as well (default true). The manual route is open to planners, while
+   * the reconciliation is an administrator's action (POST /api/points/recompute), so it passes false.
+   */
+  reconcilePoints?: boolean;
+}
+
 /** Generates the current and next cycle, reconciles the points ledger, then logs the due-engine summary. Safe to run repeatedly. */
-export async function runNightly(ctx: AuditContext): Promise<NightlyResult> {
+export async function runNightly(ctx: AuditContext, options: NightlyOptions = {}): Promise<NightlyResult> {
   const runId = randomUUID();
   const { generated, removed } = await generateUpcoming(ctx, runId);
   // Repairs ledger drift (a crash between an occurrence write and its ledger write) within a day (ADR-0011).
-  const points = await reconcilePoints(ctx, 'nightly');
+  const points = options.reconcilePoints === false ? null : await reconcilePointsSafely(ctx, 'nightly');
   const { items } = await computeDueList(ctx.db, ctx.clock.now());
   const due = summarizeDue(items);
   ctx.log.info(
     {
       runId,
       removed,
-      points: { created: points.created, updated: points.updated, removed: points.removed, corrections: points.corrections.length },
+      points: points && {
+        created: points.created,
+        updated: points.updated,
+        removed: points.removed,
+        skipped: points.skipped,
+        corrections: points.correctionsTotal,
+      },
       generated: generated.map((g) => ({ cycleIndex: g.cycleIndex, inserted: g.inserted, skipped: g.skipped })),
       due,
     },

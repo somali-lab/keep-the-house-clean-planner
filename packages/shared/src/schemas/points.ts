@@ -35,6 +35,9 @@ export const pointEntryViewSchema = z.object({
 });
 export type PointEntryView = z.infer<typeof pointEntryViewSchema>;
 
+/** The audit summary and the recompute answer list at most this many corrections. */
+export const MAX_POINTS_CORRECTIONS = 100;
+
 /** Longest range, in calendar days, of one request for a person's ledger entries (53 weeks). */
 export const MAX_POINTS_ENTRIES_RANGE_DAYS = 371;
 
@@ -109,6 +112,11 @@ export const pointsRecomputeResultSchema = z.object({
   removed: z.number().int().min(0),
   /** Done occurrences with points but nobody to credit; they earn no entry. */
   unattributed: z.number().int().min(0),
-  corrections: z.array(pointsCorrectionSchema),
+  /** Done occurrences that could not be read (an invalid date, for example); they are left as they are. */
+  skipped: z.number().int().min(0),
+  /** The first corrections only, at most {@link MAX_POINTS_CORRECTIONS}; `correctionsTotal` counts all of them. */
+  corrections: z.array(pointsCorrectionSchema).max(MAX_POINTS_CORRECTIONS),
+  correctionsTotal: z.number().int().min(0),
+  correctionsTruncated: z.boolean(),
 });
 export type PointsRecomputeResult = z.infer<typeof pointsRecomputeResultSchema>;

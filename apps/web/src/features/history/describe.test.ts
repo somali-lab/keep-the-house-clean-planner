@@ -1,6 +1,6 @@
 import type { AuditEntry } from '@huishoudplanner/shared';
 import { describe, expect, it } from 'vitest';
-import { describeEntry, formatValue, SYSTEM_ACTOR_ID, type NameLookup } from './describe.ts';
+import { describeEntry, entityName, formatValue, SYSTEM_ACTOR_ID, type NameLookup } from './describe.ts';
 
 const ANNA = 'a00000000000000000000001';
 const BRAM = 'b00000000000000000000002';
@@ -163,6 +163,24 @@ describe('describeEntry for the points ledger', () => {
       'Anna wijzigde persoon van onbekend: Anna → Bram',
       'Anna wijzigde week van onbekend: 14-09-2026 → 21-09-2026',
     ]);
+  });
+
+  it('reads a correction that moves the entry as points moving, with the title and amount from the meta', () => {
+    const moved = points({
+      action: 'update',
+      before: { personId: ANNA, weekStart: '2026-09-14' },
+      after: { personId: BRAM, weekStart: '2026-09-21' },
+      meta: { occurrenceId: 'o1', reason: 'correction', titleSnapshot: 'Stofzuigen', amount: 3 },
+    });
+    expect(describeEntry(moved, names)).toEqual(['3 punten voor Stofzuigen gingen van Anna naar Bram']);
+    expect(entityName(moved, names)).toBe('Stofzuigen');
+    // A date-only correction keeps the generic lines but names the execution.
+    expect(
+      describeEntry(
+        points({ action: 'update', before: { date: '2026-09-14' }, after: { date: '2026-09-15' }, meta: { occurrenceId: 'o1', reason: 'correction', titleSnapshot: 'Stofzuigen', amount: 3 } }),
+        names,
+      )[0],
+    ).toContain('Stofzuigen');
   });
 
   it('describes a recomputation of the ledger', () => {

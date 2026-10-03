@@ -4,7 +4,7 @@ import { fixedClock, systemClock } from './clock.ts';
 import { ConfigError, loadConfig } from './config.ts';
 import { connectMongo, ensureIndexes } from './data/db.ts';
 import { backfillOccurrenceRoomSnapshots } from './data/occurrences.ts';
-import { reconcilePoints } from './domain/points.ts';
+import { reconcilePointsSafely } from './domain/points.ts';
 import { seed } from './domain/seed.ts';
 import { startScheduler } from './jobs/nightly.ts';
 
@@ -29,8 +29,9 @@ async function main(): Promise<void> {
   const ctx = systemContext({ db, clock }, app.log);
   await seed(ctx, config);
   // ADR-0011: award existing history its points and repair drift before serving requests; a no-op after the first start.
-  const points = await reconcilePoints(ctx, 'startup');
-  app.log.info({ ...points, corrections: points.corrections.length }, 'points reconciled');
+  // A failure is logged and never keeps the application from starting; the nightly run tries again.
+  const points = await reconcilePointsSafely(ctx, 'startup');
+  if (points) app.log.info({ ...points, corrections: points.correctionsTotal }, 'points reconciled');
 
   let scheduler: ReturnType<typeof startScheduler> = null;
   let shuttingDown = false;

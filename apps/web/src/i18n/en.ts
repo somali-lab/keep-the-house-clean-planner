@@ -81,6 +81,7 @@ export const en = {
   "history.action.recompute": "{actor} recalculated the points",
   "history.action.pointsCreate": "{person} earned {amount} points for {entity}",
   "history.action.pointsDelete": "{person} lost {amount} points for {entity}",
+  "history.action.pointsMoved": "{amount} points for {entity} moved from {from} to {to}",
 
   "completions.title": "Manage completions",
   "completions.explainer": "Correct a completed task or permanently remove an incorrect occurrence. Every change remains visible in History.",
@@ -341,6 +342,7 @@ export const en = {
   "today.actionError": "That didn't work. The change has been reverted.",
   "completionChoice.title": "Who completed “{task}”?",
   "completionChoice.description": "This task is assigned to {assignee}. The points go to whoever did the work: checking it off for {assignee} gives {assignee} the points, taking it over gives you the points.",
+  "completionChoice.descriptionInactive": "This task is assigned to {assignee}, who is no longer active, so it cannot be checked off for them. Taking it over gives you the points.",
   "completionChoice.forAssignee": "Check off for {assignee}",
   "completionChoice.takeOver": "I took over the task",
   "offline.pendingOne": "1 change saved offline and will be sent once connection is restored.",

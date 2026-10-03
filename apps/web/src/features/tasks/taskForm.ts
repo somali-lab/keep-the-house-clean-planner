@@ -70,20 +70,18 @@ export function defaultPointsText(duration: string): string {
 }
 
 /**
- * Whether the points were set by hand: they are filled in from the duration until the person
- * types a value of their own (ADR-0011). A value that equals the default still follows the duration.
+ * The request body. An empty points field means the default for the duration (ADR-0011): a new
+ * task omits it, so the server applies the default, and an existing task is sent the computed
+ * default, because an update that omits the field would leave the old value.
  */
-export function pointsEditedByHand(values: TaskFormValues): boolean {
-  return values.points.trim() !== '' && values.points.trim() !== defaultPointsText(values.durationMinutes);
-}
-
-export function toTaskInput(values: TaskFormValues): CreateTaskInput {
+export function toTaskInput(values: TaskFormValues, mode: 'create' | 'edit' = 'create'): CreateTaskInput {
+  const points = values.points.trim() === '' && mode === 'edit' ? defaultPointsText(values.durationMinutes) : values.points.trim();
   return {
     name: values.name.trim(),
     roomId: values.roomId,
     intervalKey: values.intervalKey,
     durationMinutes: Number(values.durationMinutes.trim()),
-    ...(values.points.trim() === '' ? {} : { points: Number(values.points.trim()) }),
+    ...(points === '' ? {} : { points: Number(points) }),
     defaultAssigneeId: values.defaultAssigneeId || null,
     notes: values.notes,
     tags: values.tags

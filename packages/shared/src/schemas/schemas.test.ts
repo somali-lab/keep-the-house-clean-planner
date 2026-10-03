@@ -156,6 +156,32 @@ describe('one-off task schemas', () => {
     expect(auditActionSchema.safeParse('recompute').success).toBe(true);
   });
 
+  it('caps the points snapshot of an occurrence at the largest task value', () => {
+    const base = {
+      _id: '0123456789abcdef01234567',
+      taskId: null,
+      cycleId: '0123456789abcdef01234568',
+      planId: null,
+      date: '2026-09-16',
+      plannedDate: '2026-09-16',
+      assigneeId: null,
+      status: 'done',
+      statusBeforeCompletion: null,
+      completedAt: '2026-09-16T08:00:00.000Z',
+      completedBy: null,
+      skipReason: null,
+      durationMinutesSnapshot: 10,
+      taskNameSnapshot: 'Taak',
+      origin: 'adhoc',
+      createdAt: '2026-09-16T08:00:00.000Z',
+      updatedAt: '2026-09-16T08:00:00.000Z',
+      isOverdue: false,
+      movedFrom: null,
+    };
+    expect(occurrenceSchema.safeParse({ ...base, pointsSnapshot: 100 }).success).toBe(true);
+    expect(occurrenceSchema.safeParse({ ...base, pointsSnapshot: 101 }).success).toBe(false);
+  });
+
   it('validates the points balances query: optional days, never from after to', () => {
     expect(pointsBalancesQuerySchema.safeParse({}).success).toBe(true);
     expect(pointsBalancesQuerySchema.safeParse({ from: '2026-09-14', to: '2026-09-14' }).success).toBe(true);

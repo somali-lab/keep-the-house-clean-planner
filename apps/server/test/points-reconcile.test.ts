@@ -6,9 +6,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { findActivePlan } from '../src/data/cyclePlans.ts';
 import { COLLECTIONS } from '../src/data/db.ts';
 import { findOccurrenceById, type OccurrenceDoc } from '../src/data/occurrences.ts';
-import { executionKey, findPointEntries, findPointEntryByKey } from '../src/data/points.ts';
+import { applyPointEntryChanges, executionKey, findPointEntries, findPointEntryByKey } from '../src/data/points.ts';
 import { readAllCollections } from '../src/data/transfer.ts';
-import { reconcilePoints } from '../src/domain/points.ts';
+import { reconcilePoints, reconcilePointsSafely } from '../src/domain/points.ts';
+import { runNightly } from '../src/jobs/nightly.ts';
 import { importData, parseImport, type ExportFile } from '../src/domain/transfer.ts';
 import { captureWrites } from './helpers/audit.ts';
 import { asProfile, seededRoom, seededUsers } from './helpers/http.ts';
@@ -246,15 +247,6 @@ describe('POST /api/points/recompute', () => {
     expect(capture.writes).toEqual([]);
     expect(capture.auditInserts).toBe(0);
   });
-
-  it('is run by the nightly job as well', async () => {
-    const { t, occurrence } = await fixture();
-    const monday = await occurrence('2026-09-14');
-    await makeLegacyDone(t, monday, { completedBy: null });
-    expect((await t.app.inject({ method: 'POST', url: '/api/jobs/nightly', headers: asProfile((await seededUsers(t))[0]) })).statusCode).toBe(200);
-    expect(await findPointEntryByKey(t.db, executionKey(new ObjectId(monday)))).toMatchObject({ amount: 3 });
-    expect((await reconcileAudit(t))[0]!.meta).toMatchObject({ trigger: 'nightly', snapshotsSet: 1, created: 1 });
-  });
 });
 
 describe('statistics reset removes the matching points', () => {
@@ -375,5 +367,173 @@ describe('import rebuilds the ledger', () => {
     const again = await captureWrites(empty, () => reconcilePoints(empty.systemCtx(), 'startup'));
     expect(again.writes).toEqual([]);
     expect(again.auditInserts).toBe(0);
+  });
+});
+
+async function insertOrphans(t: TestApp, personId: ObjectId, count: number): Promise<void> {
+  const now = new Date('2026-09-14T00:00:00.000Z');
+  await t.db.collection(COLLECTIONS.pointEntries).insertMany(
+    Array.from({ length: count }, (_, i) => ({
+      _id: new ObjectId(),
+      key: `execution:${new ObjectId().toHexString()}`,
+      kind: 'execution' as const,
+      personId,
+      amount: i + 1,
+      date: now,
+      weekStart: now,
+      occurrenceId: null,
+      taskId: null,
+      titleSnapshot: 'Verdwaald',
+      source: 'live' as const,
+      createdAt: now,
+      updatedAt: now,
+    })),
+  );
+}
+
+describe('reconcilePoints: concurrency', () => {
+  it('never overlaps: two runs at once write one summary and create every entry once', async () => {
+    const { t, p1, occurrence } = await fixture();
+    for (const date of ['2026-09-14', '2026-09-15', '2026-09-16']) await makeLegacyDone(t, await occurrence(date), { completedBy: p1._id });
+
+    const [first, second] = await Promise.all([reconcilePoints(t.systemCtx(), 'startup'), reconcilePoints(t.systemCtx(), 'nightly')]);
+    expect(first.created + second.created).toBe(3);
+    expect(second).toMatchObject({ created: 0, updated: 0, removed: 0, snapshotsSet: 0 });
+    expect(await findPointEntries(t.db)).toHaveLength(3);
+    expect(await reconcileAudit(t)).toHaveLength(1);
+  });
+
+  it('leaves an entry alone that changed after it was read (compare-and-set), for an update and a delete', async () => {
+    const { t, p1, p2, occurrence, call } = await fixture();
+    const monday = await occurrence('2026-09-14');
+    const tuesday = await occurrence('2026-09-15');
+    expect((await call('PATCH', `/api/occurrences/${monday}`, { action: 'complete' })).statusCode).toBe(200);
+    expect((await call('PATCH', `/api/occurrences/${tuesday}`, { action: 'complete', completedBy: p2._id.toHexString() })).statusCode).toBe(200);
+    const stale = (await findPointEntries(t.db)).sort((a, b) => a.key.localeCompare(b.key));
+    const [readA, readB] = [stale.find((e) => e.occurrenceId!.equals(monday))!, stale.find((e) => e.occurrenceId!.equals(tuesday))!];
+    // A live sync moves both entries after the reconciliation read them.
+    await t.db.collection(COLLECTIONS.pointEntries).updateOne({ _id: readA._id }, { $set: { amount: 7 } });
+    await t.db.collection(COLLECTIONS.pointEntries).updateOne({ _id: readB._id }, { $set: { personId: p1._id } });
+
+    const applied = await applyPointEntryChanges(t.systemCtx(), {
+      inserts: [],
+      updates: [{ current: readA, fields: { ...readA, amount: 3 } }],
+      deletes: [readB],
+    });
+    expect(applied).toEqual({ created: 0, updated: 0, removed: 0 });
+    const after = await findPointEntries(t.db);
+    expect(after.find((e) => e._id.equals(readA._id))!.amount).toBe(7);
+    expect(after.find((e) => e._id.equals(readB._id))!.personId).toEqual(p1._id);
+  });
+});
+
+describe('reconcilePoints: robustness', () => {
+  it('skips and counts an unreadable occurrence instead of failing, and keeps its entry', async () => {
+    const { t, p1, occurrence } = await fixture();
+    const monday = await occurrence('2026-09-14');
+    const tuesday = await occurrence('2026-09-15');
+    await makeLegacyDone(t, monday, { completedBy: p1._id });
+    // An old row with no date at all, and one that already has an entry.
+    const broken = await insertLegacyAdhoc(t, monday, { date: null as unknown as Date, completedBy: p1._id });
+    await t.db.collection(COLLECTIONS.occurrences).updateOne({ _id: broken }, { $set: { pointsSnapshot: 2 } });
+    const keptKey = executionKey(broken);
+    await t.db.collection(COLLECTIONS.pointEntries).insertOne({
+      _id: new ObjectId(), key: keptKey, kind: 'execution', personId: p1._id, amount: 2, date: new Date('2026-09-14T00:00:00.000Z'),
+      weekStart: new Date('2026-09-14T00:00:00.000Z'), occurrenceId: broken, taskId: null, titleSnapshot: 'Oud', source: 'live',
+      createdAt: new Date(), updatedAt: new Date(),
+    });
+    await makeLegacyDone(t, tuesday, { completedBy: p1._id });
+
+    const result = await reconcilePoints(t.systemCtx(), 'startup');
+    expect(result).toMatchObject({ skipped: 1, created: 2, removed: 0, snapshotsSet: 2 });
+    expect(await findPointEntryByKey(t.db, keptKey)).not.toBeNull();
+    expect(await findPointEntryByKey(t.db, executionKey(new ObjectId(monday)))).not.toBeNull();
+    expect((await reconcileAudit(t))[0]!.meta).toMatchObject({ skipped: 1 });
+  });
+
+  it('logs and answers null when a safe run fails, so startup, the nightly job and an import carry on', async () => {
+    const { t } = await fixture();
+    const failing = () => Promise.reject(new Error('boom'));
+    expect(await reconcilePointsSafely(t.systemCtx(), 'startup', failing)).toBeNull();
+    expect(await reconcilePointsSafely(t.systemCtx(), 'startup')).toMatchObject({ trigger: 'startup' });
+  });
+
+  it('lists at most 100 corrections, with the total and a truncation flag, in the audit entry and the answer', async () => {
+    const { t, p1, call } = await fixture();
+    await insertOrphans(t, p1._id, 101);
+    const res = await call('POST', '/api/points/recompute');
+    expect(res.statusCode, res.body).toBe(200);
+    const body = res.json<PointsRecomputeResult>();
+    expect(body).toMatchObject({ removed: 101, correctionsTotal: 101, correctionsTruncated: true });
+    expect(body.corrections).toHaveLength(100);
+    const audit = (await reconcileAudit(t))[0]!;
+    expect((audit.meta!.corrections as unknown[]).length).toBe(100);
+    expect(audit.meta).toMatchObject({ correctionsTotal: 101, correctionsTruncated: true });
+
+    await insertOrphans(t, p1._id, 2);
+    const small = await reconcilePoints(t.systemCtx(), 'admin');
+    expect(small).toMatchObject({ correctionsTotal: 2, correctionsTruncated: false });
+    expect(small.corrections).toHaveLength(2);
+  });
+});
+
+describe('the manual nightly route and the points reconciliation', () => {
+  it('does not reconcile through POST /api/jobs/nightly, which a planner may call, but does in the scheduled run', async () => {
+    const { t, p1, occurrence, call } = await fixture();
+    const monday = await occurrence('2026-09-14');
+    await makeLegacyDone(t, monday, { completedBy: p1._id });
+
+    expect((await call('POST', '/api/jobs/nightly')).statusCode).toBe(200);
+    expect(await findPointEntryByKey(t.db, executionKey(new ObjectId(monday)))).toBeNull();
+    expect(await reconcileAudit(t)).toHaveLength(0);
+
+    await runNightly(t.systemCtx());
+    expect(await findPointEntryByKey(t.db, executionKey(new ObjectId(monday)))).toMatchObject({ amount: 3 });
+    expect((await reconcileAudit(t))[0]!.meta).toMatchObject({ trigger: 'nightly', snapshotsSet: 1, created: 1 });
+  });
+});
+
+describe('backfill of a task that never had points', () => {
+  it('gives historical executions the default for the duration they had, not the task\'s current duration', async () => {
+    const { t, p1, task, occurrence, call } = await fixture();
+    const monday = await occurrence('2026-09-14');
+    // The occurrence was made for 15 minutes; the task has since become a 60-minute task and has no points yet.
+    await t.db.collection(COLLECTIONS.occurrences).updateOne({ _id: new ObjectId(monday) }, { $set: { durationMinutesSnapshot: 15 } });
+    await makeLegacyDone(t, monday, { completedBy: p1._id });
+    expect((await call('PATCH', `/api/tasks/${task}`, { durationMinutes: 60 })).statusCode).toBe(200);
+    await t.db.collection(COLLECTIONS.tasks).updateOne({ _id: new ObjectId(task) }, { $unset: { points: '' } });
+
+    const result = await reconcilePoints(t.systemCtx(), 'startup');
+    expect(result).toMatchObject({ tasksDefaulted: 1, snapshotsSet: 1, created: 1 });
+    expect((await t.db.collection(COLLECTIONS.tasks).findOne({ _id: new ObjectId(task) }))!.points).toBe(6);
+    expect((await findOccurrenceById(t.db, new ObjectId(monday)))!.pointsSnapshot).toBe(2);
+    expect(await findPointEntryByKey(t.db, executionKey(new ObjectId(monday)))).toMatchObject({ amount: 2 });
+  });
+
+  it('still uses the task points for a task that has an explicit value', async () => {
+    const { t, p1, task, occurrence, call } = await fixture();
+    const monday = await occurrence('2026-09-14');
+    await t.db.collection(COLLECTIONS.occurrences).updateOne({ _id: new ObjectId(monday) }, { $set: { durationMinutesSnapshot: 15 } });
+    await makeLegacyDone(t, monday, { completedBy: p1._id });
+    expect((await call('PATCH', `/api/tasks/${task}`, { points: 9 })).statusCode).toBe(200);
+    await reconcilePoints(t.systemCtx(), 'startup');
+    expect((await findOccurrenceById(t.db, new ObjectId(monday)))!.pointsSnapshot).toBe(9);
+  });
+});
+
+describe('import: the rebuild never fails the import', () => {
+  it('returns normally and keeps the import audited when the rebuild throws, and records how many entries were dropped', async () => {
+    const source = await fixture();
+    const file = (await source.t.app.inject({ method: 'GET', url: '/api/export/json' })).json<ExportFile>();
+    const empty = await createTestApp({ seed: false });
+    apps.push(empty);
+    await insertOrphans(empty, source.p1._id, 2);
+
+    const result = await importData(empty.systemCtx(), parseImport(file), () => Promise.reject(new Error('boom')));
+    expect(result.removedPointEntries).toBe(2);
+    const imports = (await readAllCollections(empty.db)).auditLog.filter((e) => e.entity === 'import');
+    expect(imports).toHaveLength(1);
+    expect(imports[0]!.after).toMatchObject({ removedPointEntries: 2 });
+    expect(await reconcileAudit(empty)).toHaveLength(0);
   });
 });

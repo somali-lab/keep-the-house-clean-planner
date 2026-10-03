@@ -1,10 +1,10 @@
+import { DEFAULT_INTERVALS } from '@huishoudplanner/shared';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ANNA, BRAM } from '../../test/fixtures.ts';
 import { makeRoom, makeTask } from '../../test/render.tsx';
-import { DEFAULT_INTERVALS } from '@huishoudplanner/shared';
 import { TaskForm } from './TaskForm.tsx';
-import { defaultPointsText, emptyTaskForm, pointsEditedByHand, taskToForm, toTaskInput, validateTaskForm } from './taskForm.ts';
+import { defaultPointsText, emptyTaskForm, taskToForm, toTaskInput, validateTaskForm } from './taskForm.ts';
 
 const rooms = [makeRoom({ _id: 'r1', name: 'Keuken' })];
 
@@ -30,35 +30,31 @@ function renderForm(initial = emptyTaskForm({ name: 'Ramen', roomId: 'r1', inter
 }
 
 describe('TaskForm points', () => {
-  it('prefills the points from the duration, one per ten minutes, until they are edited by hand', () => {
+  it('keeps the field empty and shows the default for the duration as its placeholder', () => {
     const { duration, points, onSubmit, save } = renderForm();
-    expect(points).toHaveValue(null);
-
+    expect(points).toHaveAttribute('placeholder', '');
     fireEvent.change(duration, { target: { value: '30' } });
-    expect(points).toHaveValue(3);
+    expect(points).toHaveValue(null);
+    expect(points).toHaveAttribute('placeholder', '3');
     fireEvent.change(duration, { target: { value: '45' } });
-    expect(points).toHaveValue(5);
-
-    fireEvent.change(points, { target: { value: '8' } });
-    fireEvent.change(duration, { target: { value: '90' } });
-    // Edited by hand: the duration no longer moves them.
-    expect(points).toHaveValue(8);
+    expect(points).toHaveAttribute('placeholder', '5');
 
     save();
-    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ durationMinutes: '90', points: '8' }));
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ durationMinutes: '45', points: '' }));
   });
 
-  it('hands the points back to the duration when the field is cleared', () => {
+  it('keeps a value typed by hand when the duration changes, and gives the placeholder back when it is cleared', () => {
     const { duration, points } = renderForm();
     fireEvent.change(duration, { target: { value: '30' } });
-    fireEvent.change(points, { target: { value: '9' } });
+    fireEvent.change(points, { target: { value: '8' } });
+    fireEvent.change(duration, { target: { value: '90' } });
+    expect(points).toHaveValue(8);
     fireEvent.change(points, { target: { value: '' } });
-    expect(points).toHaveValue(3);
-    fireEvent.change(duration, { target: { value: '60' } });
-    expect(points).toHaveValue(6);
+    expect(points).toHaveValue(null);
+    expect(points).toHaveAttribute('placeholder', '9');
   });
 
-  it('shows the explicit points of an existing task and keeps them when the duration changes', () => {
+  it('shows the points of an existing task and never changes them when the duration is edited', () => {
     const task = makeTask({ _id: 't1', name: 'Ramen', roomId: 'r1', durationMinutes: 30, points: 8 });
     const { duration, points } = renderForm(taskToForm(task));
     expect(points).toHaveValue(8);
@@ -66,17 +62,16 @@ describe('TaskForm points', () => {
     expect(points).toHaveValue(8);
   });
 
-  it('lets a task that still has the default points follow a new duration', () => {
+  it('does not move the points of an existing task that equal the default either', () => {
     const task = makeTask({ _id: 't1', name: 'Ramen', roomId: 'r1', durationMinutes: 30 });
     const { duration, points } = renderForm(taskToForm(task));
     expect(points).toHaveValue(3);
     fireEvent.change(duration, { target: { value: '60' } });
-    expect(points).toHaveValue(6);
+    expect(points).toHaveValue(3);
   });
 
   it('explains the field and rejects points outside 0 to 100 without submitting', () => {
     const { duration, points, onSubmit, save } = renderForm();
-    expect(screen.getByText(/Standaard één punt per tien minuten/)).toBeInTheDocument();
     expect(points).toHaveAccessibleDescription(/Standaard één punt per tien minuten/);
     fireEvent.change(duration, { target: { value: '30' } });
     fireEvent.change(points, { target: { value: '101' } });
@@ -101,21 +96,22 @@ describe('task form model: points', () => {
     expect(defaultPointsText('2.5')).toBe('');
   });
 
-  it('knows when the points were set by hand', () => {
-    expect(pointsEditedByHand(emptyTaskForm({ durationMinutes: '30', points: '3' }))).toBe(false);
-    expect(pointsEditedByHand(emptyTaskForm({ durationMinutes: '30', points: '4' }))).toBe(true);
-    expect(pointsEditedByHand(emptyTaskForm({ durationMinutes: '30', points: '' }))).toBe(false);
-  });
-
-  it('validates and sends the points, and omits them when blank so the server defaults them', () => {
+  it('validates the points', () => {
     const base = emptyTaskForm({ name: 'Ramen', roomId: 'r1', intervalKey: '4wk', durationMinutes: '30' });
+    expect(validateTaskForm({ ...base, points: '' })).toEqual({});
     expect(validateTaskForm({ ...base, points: '100' })).toEqual({});
     expect(validateTaskForm({ ...base, points: '0' })).toEqual({});
     expect(validateTaskForm({ ...base, points: '-1' }).points).toBe('tasks.error.pointsInvalid');
     expect(validateTaskForm({ ...base, points: '2.5' }).points).toBe('tasks.error.pointsInvalid');
     expect(validateTaskForm({ ...base, points: '101' }).points).toBe('tasks.error.pointsInvalid');
+  });
+
+  it('omits empty points on create so the server defaults them, and sends the computed default on edit', () => {
+    const base = emptyTaskForm({ name: 'Ramen', roomId: 'r1', intervalKey: '4wk', durationMinutes: '45' });
     expect(toTaskInput({ ...base, points: '7' }).points).toBe(7);
-    expect(toTaskInput({ ...base, points: '0' }).points).toBe(0);
+    expect(toTaskInput({ ...base, points: '0' }, 'edit').points).toBe(0);
     expect('points' in toTaskInput({ ...base, points: '' })).toBe(false);
+    expect('points' in toTaskInput({ ...base, points: '' }, 'create')).toBe(false);
+    expect(toTaskInput({ ...base, points: '' }, 'edit').points).toBe(5);
   });
 });

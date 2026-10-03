@@ -13,7 +13,7 @@ let db: OccurrenceView[];
 let failNext = false;
 
 /** Tiny in-memory server so refetches after a mutation reflect the change. */
-function setup(settings = makeSettings()) {
+function setup(settings = makeSettings(), users = [ANNA, BRAM]) {
   storeProfile(ANNA._id);
   db = [
     makeOccurrence({ _id: 'o-other', taskId: 't1', taskNameSnapshot: 'Stofzuigen', date: TODAY, assigneeId: BRAM._id }),
@@ -52,7 +52,7 @@ function setup(settings = makeSettings()) {
     return next;
   };
   return mockApi({
-    '/api/users': [ANNA, BRAM],
+    '/api/users': users,
     '/api/settings': settings,
     '/api/rooms': [makeRoom({ _id: 'r1', name: 'Badkamer-ruimte' })],
     '/api/tasks': [makeTask({ _id: 't2', name: 'Badkamer', roomId: 'r1' })],
@@ -228,6 +228,19 @@ describe('TodayPage', () => {
     await waitFor(() => expect(db.find((o) => o._id === 'o-other')?.completedBy).toBe(BRAM._id));
     expect(patchBodies(fetchMock, 'o-other')).toEqual([{ action: 'complete', completedBy: BRAM._id }]);
     expect(await inSection('Afgerond', 'Gedaan door Bram de Vries')).toBeInTheDocument();
+  });
+
+  it('only offers to take the task over when its assignee is no longer active', async () => {
+    const fetchMock = setup(makeSettings(), [ANNA, { ...BRAM, active: false }]);
+    renderWithProviders(<TodayPage now={NOW} />);
+    fireEvent.change(await screen.findByLabelText('Filter op persoon'), { target: { value: 'all' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Afvinken: Stofzuigen' }));
+
+    const dialog = screen.getByRole('alertdialog');
+    expect(dialog).toHaveTextContent('Bram de Vries, die niet meer actief is');
+    expect(screen.queryByRole('button', { name: 'Namens Bram de Vries afvinken' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Ik heb de taak overgenomen' }));
+    await waitFor(() => expect(patchBodies(fetchMock, 'o-other')).toEqual([{ action: 'complete', takeOver: true }]));
   });
 
   it("can take over another person's task while checking it off", async () => {

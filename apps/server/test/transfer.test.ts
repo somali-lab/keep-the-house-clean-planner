@@ -178,6 +178,7 @@ describe('import', () => {
         occurrences: snapshot.occurrences.length,
       },
       auditAdded: snapshot.auditLog.length,
+      removedPointEntries: 0,
     });
 
     const after = await readAllCollections(target.db);

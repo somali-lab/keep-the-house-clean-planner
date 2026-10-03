@@ -161,7 +161,7 @@ export function TasksPage() {
   const submit = (values: TaskFormValues) => {
     saveTask.mutate({
       id: editing?.mode === 'edit' ? editing.task._id : undefined,
-      input: toTaskInput(values),
+      input: toTaskInput(values, editing?.mode === 'edit' ? 'edit' : 'create'),
     });
   };
 

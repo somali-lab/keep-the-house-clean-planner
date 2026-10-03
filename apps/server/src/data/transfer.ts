@@ -29,6 +29,8 @@ export interface ReplaceResult {
   replaced: Record<ReplacedCollection, number>;
   /** Imported audit entries that were not in the log yet. */
   auditAdded: number;
+  /** Entries of the points ledger that were dropped; the caller rebuilds the ledger. */
+  removedPointEntries: number;
 }
 
 /**
@@ -48,7 +50,7 @@ export async function replaceAllCollections(db: Db, docs: TransferDocs): Promise
   }
 
   // The ledger is derived, not exported: the old one is dropped and the caller rebuilds it from the new occurrences.
-  await clearPointEntries(db);
+  const removedPointEntries = await clearPointEntries(db);
 
   const audit = docs[COLLECTIONS.auditLog];
   let duplicates = 0;
@@ -62,5 +64,5 @@ export async function replaceAllCollections(db: Db, docs: TransferDocs): Promise
       duplicates = writeErrors.length;
     }
   }
-  return { replaced, auditAdded: audit.length - duplicates };
+  return { replaced, auditAdded: audit.length - duplicates, removedPointEntries };
 }

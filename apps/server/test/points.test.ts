@@ -306,7 +306,13 @@ describe('administrator corrections', () => {
       weekStart: fromDayKey('2026-09-28'),
       source: 'live',
     });
-    expect(edit.entries[0]!.meta).toEqual({ occurrenceId: new ObjectId(id), reason: 'correction' });
+    // The diff lists changed fields only, so the title and the amount travel in the meta for the history feed.
+    expect(edit.entries[0]!.meta).toEqual({
+      occurrenceId: new ObjectId(id),
+      reason: 'correction',
+      titleSnapshot: 'Stofzuigen',
+      amount: 3,
+    });
     expect(edit.entries[0]!.before).toEqual({ personId: p2._id, date: fromDayKey('2026-10-01') });
     expect(edit.entries[0]!.after).toEqual({ personId: p1._id, date: fromDayKey('2026-09-29') });
 

@@ -13,7 +13,7 @@ import { useSettings } from '../../api/queries.ts';
 import { format, t } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
 import { shortDate } from '../today/OccurrenceItem.tsx';
-import { CompletionChoiceDialog } from '../today/CompletionChoiceDialog.tsx';
+import { CompletionChoiceDialog, useAssigneeChoice } from '../today/CompletionChoiceDialog.tsx';
 import { RecordWorkDialog } from '../today/RecordWorkDialog.tsx';
 import { dayKeyInZone } from '../today/todayModel.ts';
 import { useDue, useDueActions, type DueItemView } from './api.ts';
@@ -40,6 +40,7 @@ export function DuePage({ now }: { now?: Date }) {
   const [recorded, setRecorded] = useState<string | null>(null);
   // Today's planned occurrence of someone else: "Done now" first asks who performed it (ADR-0011).
   const [choiceFor, setChoiceFor] = useState<DueItemView | null>(null);
+  const assigneeChoice = useAssigneeChoice(choiceFor?.nextOccurrence?.assigneeId ?? null);
 
   if (settings.isPending || due.isPending)
     return (
@@ -123,7 +124,8 @@ export function DuePage({ now }: { now?: Date }) {
       {choiceFor && choiceAssignee && (
         <CompletionChoiceDialog
           task={choiceFor.taskName}
-          assignee={activeUsers.find((user) => user._id === choiceAssignee)?.name ?? t('tasks.unknownUser')}
+          assignee={assigneeChoice.name}
+          assigneeActive={assigneeChoice.active}
           open
           onOpenChange={(open) => {
             if (!open) setChoiceFor(null);

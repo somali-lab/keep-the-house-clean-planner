@@ -119,22 +119,23 @@ The existing single reset audit entry gains `removedPointEntries`, and no audit 
 `reconcilePoints(ctx, trigger)` makes the whole ledger match the occurrences. It runs in three steps:
 
 1. **Migrate the fields.** Tasks without `points` get the default value. Done occurrences without `pointsSnapshot` get `task.points`; when the task no longer exists, or for a one-off task, they get the duration rule. Both writes use filters on missing fields, so a second run matches nothing.
-2. **Compute the expected entries.** The function computes the expected execution entry for every done occurrence and loads every stored `execution` entry.
-3. **Apply the differences.** It inserts the missing entries, updates the entries that differ and deletes the orphans, as bulk writes.
+   - *Deliberate refinement:* a task whose points were filled in by this very migration never had a value of its own, so its current duration says nothing about the past. Its historical executions get `defaultPointsForDuration(durationMinutesSnapshot)`, the duration the occurrence had, instead of the points just derived from the task's current duration. A task that already had an explicit value keeps using it.
+2. **Compute the expected entries.** The function loads every stored `execution` entry first, and then computes the expected execution entry for every done occurrence. An occurrence that cannot be read (an invalid date, for example) is skipped and counted as `skipped`, and its stored entry is left alone.
+3. **Apply the differences.** It inserts the missing entries, updates the entries that differ and deletes the orphans, as bulk writes. Updates and deletes are compare-and-set on the entry that was read (`_id`, person, amount and date), so an entry that a live sync changed in the meantime is left for the next run. Reconciliations never overlap within the process: a second one waits for the first.
 
 When anything changed, the run writes **one** summary audit entry: `entity: 'points'`, a fixed ledger id (like `SETTINGS_ID`), `action: 'recompute'`, the system or admin actor, and `meta`:
 
 ```ts
-{ trigger, tasksDefaulted, snapshotsSet, created, updated, removed, unattributed, corrections }
+{ trigger, tasksDefaulted, snapshotsSet, created, updated, removed, unattributed, skipped, corrections, correctionsTotal, correctionsTruncated }
 ```
 
-`corrections` lists, for each updated or removed entry, its key and its old and new person and amount. Such a change means the ledger had drifted from the occurrences, so it is worth keeping in detail. Entries that are only created are counted. When nothing changed, the run writes nothing and audits nothing.
+`corrections` lists, for each updated or removed entry, its key and its old and new person and amount, at most 100 of them; `correctionsTotal` counts all of them and `correctionsTruncated` says whether the list was cut. Such a change means the ledger had drifted from the occurrences, so it is worth keeping in detail. Entries that are only created are counted. When nothing changed, the run writes nothing and audits nothing.
 
 The reconciliation runs in four places:
 
-- **At startup,** after `ensureIndexes`, the room-snapshot backfill and `seed`, and before the HTTP server and the scheduler start. When settings do not exist yet, there is nothing to do. On the first start after the upgrade, it awards all existing history its points, with one audit entry. Every later start is a no-op.
+- **At startup,** after `ensureIndexes`, the room-snapshot backfill and `seed`, and before the HTTP server and the scheduler start. A failing run is logged and never keeps the application from starting. When settings do not exist yet, there is nothing to do. On the first start after the upgrade, it awards all existing history its points, with one audit entry. Every later start is a no-op.
 - **After an import,** in the same request (`trigger: 'import'`). The ledger is not part of the export; see below.
-- **In the nightly job** (`trigger: 'nightly'`). Without transactions, an occurrence write can succeed while its ledger write is lost, for example on a crash or in an interleaving of two syncs. The nightly run repairs such drift within a day and reports it in `corrections`.
+- **In the scheduled nightly job** (`trigger: 'nightly'`). The manual `POST /api/jobs/nightly`, which planners may call, does not reconcile; that is the administrator's `POST /api/points/recompute`. Without transactions, an occurrence write can succeed while its ledger write is lost, for example on a crash or in an interleaving of two syncs. The nightly run repairs such drift within a day and reports it in `corrections`.
 - **On request:** `POST /api/points/recompute` (`requireAdmin`, no body) runs it with `trigger: 'admin'` and answers `200` with the counts. It is covered by the write-route coverage test, which accepts either the audit entry or a provable no-op.
 
 ### API

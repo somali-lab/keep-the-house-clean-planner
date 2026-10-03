@@ -237,6 +237,23 @@ describe('DuePage', () => {
       expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     });
 
+    it('only offers to take the task over when the assignee is no longer active', async () => {
+      storeProfile(ANNA._id);
+      const fetchMock = mockApi({
+        '/api/users': [ANNA, { ...BRAM, active: false }],
+        '/api/settings': makeSettings(),
+        '/api/due': SOMEONE_ELSES,
+        'PATCH /api/occurrences/o-bram': { _id: 'o-bram', status: 'done' },
+      });
+      renderWithProviders(<DuePage now={NOW} />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Vaatwasser leegmaken nu gedaan' }));
+      const dialog = await screen.findByRole('alertdialog');
+      expect(dialog).toHaveTextContent('Bram de Vries, die niet meer actief is');
+      expect(screen.queryByRole('button', { name: 'Namens Bram de Vries afvinken' })).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Ik heb de taak overgenomen' }));
+      await waitFor(() => expect(callsTo(fetchMock, 'PATCH', '/api/occurrences/o-bram')).toEqual([{ action: 'complete', takeOver: true }]));
+    });
+
     it('takes the task over, so the actor receives the points', async () => {
       const fetchMock = setupOthers();
       renderWithProviders(<DuePage now={NOW} />);
