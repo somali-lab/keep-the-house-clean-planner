@@ -2861,6 +2861,76 @@
             }
           }
         }
+      },
+      "post": {
+        "tags": [
+          "Occurrences"
+        ],
+        "summary": "Plans an extra execution of a task, or records it as done today.",
+        "description": "Body { taskId, date, assigneeId?, done?, requestId? }. The task must exist and be active (400 validation_error unknown_task, inactive_task) and the day must lie in a generated cycle (409 cycle_not_generated with the date). Several executions of one task on one day coexist; when the task already has an open occurrence that day the answer carries the warning task_already_planned. assigneeId left out means the task's default assignee (the actor when done), null means anyone; an unknown or inactive person is 400 unknown_user or inactive_user. done true is only allowed for today (400 done_requires_today) and for a person (400 done_requires_person) and refreshes the task's lastCompletedAt. requestId makes the request idempotent: the same key for the same request (task, day, done) answers 200 with the stored record and writes and audits nothing, the same key for another request answers 409 idempotency_key_conflict; of concurrent requests with one key exactly one creates (201). Audited as one create entry with meta origin adhoc, kind extra, recordedDone and requestId.",
+        "operationId": "createExtraExecution",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateExtraExecutionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OccurrenceResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OccurrenceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v2/occurrences/{id}": {
@@ -3532,6 +3602,150 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/occurrences/one-off": {
+      "post": {
+        "tags": [
+          "Occurrences"
+        ],
+        "summary": "Plans a one-off task, or records it as done today.",
+        "description": "Body { name, roomId?, durationMinutes, date, assigneeId?, done?, points?, requestId? }. A one-off task has no task record (taskId null): its name (trimmed, 1 to 120 characters), duration and room live on the occurrence, so it never appears in the task list, the due list, the planner or the AI input. An unknown or inactive room is 400 unknown_room or inactive_room; no room is stored as null. assigneeId left out means nobody (the actor when done), null means anyone. points (0 to 1000) left out means one point per minute of the duration. The rules for done, the day, the idempotency key (a repeat matches on name, day and done) and the audit are those of POST /api/v2/occurrences, with meta kind one_off. A one-off task never warns task_already_planned.",
+        "operationId": "createOneOffOccurrence",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateOneOffRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OccurrenceResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OccurrenceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/occurrences/{id}/retraction": {
+      "post": {
+        "tags": [
+          "Occurrences"
+        ],
+        "summary": "Undoes recorded extra work of today.",
+        "description": "Recorded work (an extra execution or one-off task created done) has no planned state to return to, so undoing it deletes it, audited as a delete with meta reason retract that keeps the removed fields; the task's lastCompletedAt falls back to the newest remaining completion. Only work of today in the household timezone (409 retract_not_today); anything else, planned occurrences included, is 409 not_retractable. A second retract answers 404. Uncomplete of recorded work answers 409 retract_required.",
+        "operationId": "retractOccurrence",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetractOccurrenceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
                 }
               }
             }
@@ -5628,6 +5842,130 @@
               "string"
             ],
             "description": "The id of the plan to copy; 404 not_found when it does not exist."
+          }
+        }
+      },
+      "CreateExtraExecutionRequest": {
+        "required": [
+          "taskId",
+          "date",
+          "assigneeId",
+          "done",
+          "requestId"
+        ],
+        "type": "object",
+        "properties": {
+          "taskId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The task, which must exist and be active."
+          },
+          "date": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The day, YYYY-MM-DD, within a generated cycle. With done: today."
+          },
+          "assigneeId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "An active person, or null for anyone. Left out: the task's default assignee, the actor when done. Done needs a person."
+          },
+          "done": {
+            "type": [
+              "null",
+              "boolean"
+            ],
+            "description": "Record the work as already done; only allowed for today."
+          },
+          "requestId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Idempotency key, 16 to 64 characters of letters, digits, underscore and hyphen."
+          }
+        }
+      },
+      "CreateOneOffRequest": {
+        "required": [
+          "name",
+          "roomId",
+          "durationMinutes",
+          "date",
+          "assigneeId",
+          "done",
+          "points",
+          "requestId"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Trimmed, 1 to 120 characters."
+          },
+          "roomId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "An active room, or null or left out for none."
+          },
+          "durationMinutes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "description": "Whole minutes, at least 1.",
+            "format": "int32"
+          },
+          "date": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The day, YYYY-MM-DD, within a generated cycle. With done: today."
+          },
+          "assigneeId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "An active person, or null for anyone. Left out: nobody, the actor when done. Done needs a person."
+          },
+          "done": {
+            "type": [
+              "null",
+              "boolean"
+            ],
+            "description": "Record the work as already done; only allowed for today."
+          },
+          "points": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "description": "Points, a whole number from 0 to 1000; left out: one per minute of the duration.",
+            "format": "int32"
+          },
+          "requestId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Idempotency key, 16 to 64 characters of letters, digits, underscore and hyphen."
           }
         }
       },
@@ -8240,6 +8578,21 @@
           }
         }
       },
+      "RetractOccurrenceResponse": {
+        "required": [
+          "retracted",
+          "id"
+        ],
+        "type": "object",
+        "properties": {
+          "retracted": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          }
+        }
+      },
       "RewardGoalsDto": {
         "required": [
           "weekPoints",
@@ -9607,7 +9960,7 @@
     },
     {
       "name": "Occurrences",
-      "description": "What actually happened on a day: everyone reads the occurrences; members complete, uncomplete, skip, reschedule, assign and claim them, administrators correct or delete a completion."
+      "description": "What actually happened on a day: everyone reads the occurrences; members complete, uncomplete, skip, reschedule, assign and claim them, plan or record extra executions and one-off tasks and retract recorded work, administrators correct or delete a completion."
     },
     {
       "name": "Points",

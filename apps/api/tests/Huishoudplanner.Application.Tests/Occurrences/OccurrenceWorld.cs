@@ -12,6 +12,7 @@ using Huishoudplanner.Domain.Generation;
 using Huishoudplanner.Domain.Identity;
 using Huishoudplanner.Domain.Occurrences;
 using Huishoudplanner.Domain.Ports.Driven;
+using Huishoudplanner.Domain.Rooms;
 using Huishoudplanner.Domain.Tasks;
 using Huishoudplanner.Domain.Users;
 using OneOf;
@@ -43,7 +44,7 @@ internal sealed class OccurrenceTransactions(FakeOccurrenceStore occurrences, Fa
         if (!outcome.ShouldCommit)
         {
             Aborts++;
-            occurrences.Items = occurrencesBefore;
+            occurrences.Items = [.. occurrencesBefore, .. occurrences.TakeCommittedByOthers()];
             tasks.Items = tasksBefore;
             audit.Entries = auditBefore;
         }
@@ -82,6 +83,12 @@ internal sealed class OccurrenceWorld
 
     public OccurrenceService Service { get; }
 
+    public AdhocOccurrenceService Adhoc { get; }
+
+    public FakeRooms Rooms { get; } = new();
+
+    public Room Room { get; }
+
     public User P1 { get; }
 
     public User P2 { get; }
@@ -100,6 +107,9 @@ internal sealed class OccurrenceWorld
     {
         Transactions = new OccurrenceTransactions(Occurrences, TaskStore, Audit);
         Service = new OccurrenceService(Occurrences, TaskStore, new FakeUserStore(People), SettingsStore, CycleStore, Transactions, Audit, Clock, Points);
+        Adhoc = new AdhocOccurrenceService(Occurrences, TaskStore, new FakeUserStore(People), Rooms, SettingsStore, CycleStore, Transactions, Audit, Clock, Points);
+        Room = new Room("0000000000000000000000aa", "Badkamer", 10, true, false, Now.AddDays(-30), Now.AddDays(-30));
+        Rooms.Items.Add(Room);
         P1 = People.Add("Persoon 1");
         P2 = People.Add("Persoon 2");
         Admin = People.Add("Beheerder", Role.Admin);
@@ -158,11 +168,19 @@ internal sealed class OccurrenceWorld
         return occurrence;
     }
 
+    /// <summary>The record a concurrent request with the same key committed first: an extra execution of the task on a day, recorded or planned.</summary>
+    public Occurrence Winner(HouseholdTask task, string day, string key, bool done = false)
+    {
+        var date = At(day);
+        var draft = new NewAdhocOccurrence(task.Id, Cycle0.Id, date, null, done, done ? Now : null, task.DurationMinutes, task.Name, task.RoomId, "Badkamer", key, done ? task.Points : null, null, Now);
+        return draft.ToOccurrence(Occurrences.NextId());
+    }
+
     public Occurrence Stored(Occurrence occurrence) => Occurrences.Items.Single(o => o.Id == occurrence.Id);
 
     public IEnumerable<AuditEntry> Entries(AuditEntity entity, AuditAction? action = null) =>
         Audit.Entries.Where(e => e.Entity == entity && (action is null || e.Action == action));
 
     /// <summary>Writes made through the occurrence and task stores, to prove that a refused request writes nothing.</summary>
-    public int Writes => Occurrences.Updates + TaskStore.LastCompletedWrites + Audit.Entries.Count;
+    public int Writes => Occurrences.Updates + Occurrences.Writes + TaskStore.LastCompletedWrites + Audit.Entries.Count;
 }

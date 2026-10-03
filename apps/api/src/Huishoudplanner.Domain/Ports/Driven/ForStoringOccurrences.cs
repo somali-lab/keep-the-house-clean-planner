@@ -60,4 +60,23 @@ public interface ForStoringOccurrences
 
     /// <summary>The newest <c>completedAt</c> among the done occurrences of the task (the index serves it); <see cref="LatestCompletion.At"/> is <see langword="null"/> when there is none.</summary>
     Task<OneOf<LatestCompletion, PortError>> FindLatestCompletionAsync(string taskId, CancellationToken cancellationToken);
+
+    /// <summary>The occurrence that was created with this request key (<c>requestId</c>); <see cref="NotFound"/> when no occurrence holds it.</summary>
+    Task<OneOf<Occurrence, NotFound, PortError>> FindByRequestIdAsync(string requestId, CancellationToken cancellationToken);
+
+    /// <summary>The number of open occurrences of a task on a day (planned or ad hoc), for the warning that the task is already planned there.</summary>
+    Task<OneOf<int, PortError>> CountOpenOfTaskOnAsync(string taskId, DateTimeOffset day, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Inserts an ad-hoc occurrence (an extra execution or a one-off task, ADR-0009) and returns it with its new id. A <c>requestId</c> that is
+    /// already stored is <see cref="RequestKeyTaken"/> (the unique index); the transaction the insert ran in is then unusable, so the caller aborts
+    /// it and starts again. Needs a transaction (the audit entry belongs to it).
+    /// </summary>
+    Task<OneOf<Occurrence, RequestKeyTaken, PortError>> InsertAdhocAsync(NewAdhocOccurrence draft, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Deletes recorded work (an ad-hoc occurrence that was created done) and returns the document as it was; <see cref="NotFound"/> when no such
+    /// occurrence exists (any more), also when a concurrent retract was first. Needs a transaction (the audit entry belongs to it).
+    /// </summary>
+    Task<OneOf<Occurrence, NotFound, PortError>> DeleteRecordedAsync(string id, CancellationToken cancellationToken);
 }

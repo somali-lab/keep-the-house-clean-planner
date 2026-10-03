@@ -278,6 +278,12 @@ public sealed class PointsService(
             return Abort<PointsRecomputeResult>(stored.AsT1);
         }
 
+        var unreadable = await entries.FindUnreadableExecutionEntriesAsync(ct).ConfigureAwait(false);
+        if (unreadable.IsT1)
+        {
+            return Abort<PointsRecomputeResult>(unreadable.AsT1);
+        }
+
         // Step 1: migrate the fields. Both writes filter on the missing field, so a second run matches nothing.
         var defaulted = await backfill.DefaultMissingTaskPointsAsync(ct).ConfigureAwait(false);
         if (defaulted.IsT1)
@@ -316,7 +322,7 @@ public sealed class PointsService(
         }
 
         // Steps 2 and 3: the expected entry of every done occurrence, and the differences.
-        var plan = PointsReconciliation.Plan(stored.AsT0, done, zone);
+        var plan = PointsReconciliation.Plan(stored.AsT0, done, zone, new HashSet<string>(unreadable.AsT0.Keys, StringComparer.Ordinal));
         var applied = new AppliedPointEntryChanges(0, 0, 0);
         if (!plan.Changes.IsEmpty)
         {
@@ -338,7 +344,7 @@ public sealed class PointsService(
             Updated = applied.Updated,
             Removed = applied.Removed,
             Unattributed = plan.Unattributed,
-            Skipped = plan.SkippedIds.Count,
+            Skipped = plan.SkippedIds.Count + unreadable.AsT0.WithoutKey,
             Corrections = listed,
             CorrectionsTotal = total,
             CorrectionsTruncated = truncated,

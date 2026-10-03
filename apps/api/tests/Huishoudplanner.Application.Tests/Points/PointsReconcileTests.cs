@@ -248,6 +248,20 @@ public sealed class PointsReconcileTests
     }
 
     [Fact]
+    public async Task Recompute_anEntryThatCannotBeReadIsLeftAloneAndCountedInsteadOfInsertedAgainOnItsKey()
+    {
+        var w = new PointsWorld();
+        var broken = Legacy(w, "2026-09-14", null, w.Occ.P1);
+        w.Ledger.UnreadableKeys.Add(Key(broken.Id));
+        w.Ledger.UnreadableWithoutKey = 2;
+
+        var result = await Run(w);
+
+        result.Should().BeEquivalentTo(new { Skipped = 3, Created = 0, Removed = 0 });
+        w.Ledger.Items.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task Recompute_listsAtMost100CorrectionsWithTheTotalAndATruncationFlag()
     {
         var w = new PointsWorld();

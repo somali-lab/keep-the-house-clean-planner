@@ -22,6 +22,12 @@ public interface ForStoringPointEntries
     /// <summary>Every entry of kind execution, the set a reconciliation compares with the done occurrences.</summary>
     Task<OneOf<IReadOnlyList<PointEntry>, PortError>> FindExecutionEntriesAsync(CancellationToken cancellationToken);
 
+    /// <summary>
+    /// The execution entries that cannot be mapped (no key, or a person that is no id): the reconciliation leaves them alone and counts them, because
+    /// planning as if they were absent would insert an entry on their key again and hit the unique index on every run.
+    /// </summary>
+    Task<OneOf<UnreadableEntries, PortError>> FindUnreadableExecutionEntriesAsync(CancellationToken cancellationToken);
+
     /// <summary>Inserts the entry of one execution, with <paramref name="at"/> as both timestamps. The unique key makes a second insert a failure of the transaction.</summary>
     Task<OneOf<PointEntry, PortError>> InsertExecutionAsync(string key, ExecutionEntryFields fields, PointEntrySource source, DateTimeOffset at, CancellationToken cancellationToken);
 
@@ -43,4 +49,12 @@ public interface ForStoringPointEntries
 
     /// <summary>At most <see cref="PointEntryQuery.Take"/> entries of one person in the range, newest date first, then by id, after the cursor.</summary>
     Task<OneOf<IReadOnlyList<PointEntry>, PortError>> ListAsync(PointEntryQuery query, CancellationToken cancellationToken);
+}
+
+/// <summary>The keys of the unreadable execution entries, and how many have no readable key at all.</summary>
+public sealed record UnreadableEntries(IReadOnlyList<string> Keys, int WithoutKey)
+{
+    public static UnreadableEntries None { get; } = new([], 0);
+
+    public int Count => Keys.Count + WithoutKey;
 }

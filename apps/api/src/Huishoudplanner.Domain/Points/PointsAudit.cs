@@ -126,6 +126,7 @@ public static class PointsAudit
     private static AuditObject Meta(string occurrenceId, PointsSyncReason reason) =>
         AuditObject.Of(("occurrenceId", new AuditObjectId(occurrenceId)), ("reason", PointNames.ToWire(reason)));
 
+    // Node writes the people inside the summary as hexadecimal strings (toHexString), unlike the ObjectId of an entry's own fields.
     private static AuditObject Correction(PointsCorrection correction) =>
         AuditObject.Of(
             ("key", correction.Key),
@@ -133,12 +134,12 @@ public static class PointsAudit
             ("to", correction.To is { } to ? Holding(to) : AuditNull.Instance));
 
     private static AuditObject Holding(PointsHolding holding) =>
-        AuditObject.Of(("personId", new AuditObjectId(holding.PersonId)), ("amount", holding.Amount));
+        AuditObject.Of(("personId", holding.PersonId), ("amount", holding.Amount));
 
     private static AuditObject BonusChange(PointsBonusChange change) =>
         AuditObject.Of(
             ("key", change.Key),
-            ("personId", new AuditObjectId(change.PersonId)),
+            ("personId", change.PersonId),
             ("amount", change.Amount),
             ("change", change.Change));
 

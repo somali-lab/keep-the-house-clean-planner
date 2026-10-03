@@ -194,6 +194,26 @@ public sealed class PointsReconcileEndpointTests(MongoContainerFixture mongo)
     }
 
     [Fact]
+    public async Task Recompute_anExecutionEntryThatCannotBeMappedIsLeftAloneAndCountedOnEveryRunInsteadOfFailingOnItsKey()
+    {
+        await using var h = await PointsHarness.StartAsync(mongo);
+        var task = await h.InsertTaskAsync("Stofzuigen", 30, points: 30);
+        var broken = await h.InsertDoneOccurrenceAsync("2026-09-14", task, h.P1, snapshot: 30);
+        var fine = await h.InsertDoneOccurrenceAsync("2026-09-15", task, h.P1, snapshot: 30);
+        // The person of this entry is a string, not an id (old or hand-edited data), and another entry has no key at all.
+        await h.Ledger.InsertOneAsync(new BsonDocument { { "_id", ObjectId.GenerateNewId() }, { "key", "execution:" + broken }, { "kind", "execution" }, { "personId", "nobody" }, { "amount", 30 }, { "date", PointsHarness.Midnight("2026-09-14") } }, cancellationToken: Ct);
+        await h.Ledger.InsertOneAsync(new BsonDocument { { "_id", ObjectId.GenerateNewId() }, { "kind", "execution" }, { "personId", h.P1 }, { "amount", 1 }, { "date", PointsHarness.Midnight("2026-09-14") } }, cancellationToken: Ct);
+
+        var first = await Recompute(h);
+        var second = await Recompute(h);
+
+        (Count(first, "skipped"), Count(first, "created"), Count(first, "removed")).Should().Be((2, 1, 0));
+        (Count(second, "skipped"), Count(second, "created"), Count(second, "removed")).Should().Be((2, 0, 0));
+        (await h.EntryOfAsync(fine)).Should().NotBeNull();
+        (await h.Ledger.CountDocumentsAsync(new BsonDocument(), cancellationToken: Ct)).Should().Be(3);
+    }
+
+    [Fact]
     public async Task Recompute_listsAtMost100CorrectionsWithTheTotalAndATruncationFlagInTheAnswerAndTheAuditEntry()
     {
         await using var h = await PointsHarness.StartAsync(mongo);

@@ -79,7 +79,10 @@ public sealed class MongoPointStoresTests(MongoContainerFixture mongo)
                 return result.IsT1 ? TransactionOutcome.Abort(result) : TransactionOutcome.Commit(result);
             },
             Ct);
-        duplicate.AsT0.AsT1.Message.Should().StartWith("pointEntries.failed");
+        // A lost race for the key is a transient transaction error: the runner reruns the attempt (which would then read the winner) and, when the
+        // work insists on inserting, gives up with a value-free transient error.
+        duplicate.IsT2.Should().BeTrue();
+        duplicate.AsT2.Message.Should().StartWith("mongo.transient");
         (await h.EntriesAsync()).Should().ContainSingle();
         var indexes = await h.Ledger.Indexes.List(Ct).ToListAsync(Ct);
         indexes.Should().Contain(i => i["name"] == "pointEntries_key_unique" && i["unique"] == true);
@@ -117,6 +120,51 @@ public sealed class MongoPointStoresTests(MongoContainerFixture mongo)
 
         (first.AsT0, second.AsT0).Should().Be((true, false));
         (await entries.FindByKeyAsync("execution:" + occurrence, Ct)).IsT1.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Insert_twoOverlappingTransactionsOnOneKey_theLoserReruns_readsTheWinnersEntryAndUpdatesItInsteadOfFailing()
+    {
+        await using var h = await PointsHarness.StartAsync(mongo);
+        var entries = h.Services.GetRequiredService<ForStoringPointEntries>();
+        var runner = h.Services.GetRequiredService<ForRunningTransactions>();
+        var occurrence = ObjectId.GenerateNewId();
+        var key = "execution:" + occurrence;
+        var firstInserted = new TaskCompletionSource();
+        var secondStarted = new TaskCompletionSource();
+
+        async Task<TransactionOutcome<string>> Upsert(bool first, CancellationToken ct)
+        {
+            var found = await entries.FindByKeyAsync(key, ct);
+            if (found.IsT0)
+            {
+                var updated = await entries.UpdateExecutionAsync(found.AsT0, Fields(h.P2, occurrence, 8), PointEntrySource.Live, At, ct);
+                return TransactionOutcome.Commit("updated:" + updated.IsT0);
+            }
+
+            if (!first)
+            {
+                secondStarted.TrySetResult();
+            }
+
+            var inserted = await entries.InsertExecutionAsync(key, Fields(h.P1, occurrence), PointEntrySource.Live, At, ct);
+            if (first)
+            {
+                firstInserted.SetResult();
+                await secondStarted.Task.WaitAsync(TimeSpan.FromSeconds(20), ct);
+                await Task.Delay(200, ct);
+            }
+
+            return TransactionOutcome.Commit("inserted:" + inserted.IsT0);
+        }
+
+        var winner = runner.RunAsync(ct => Upsert(true, ct), Ct);
+        await firstInserted.Task.WaitAsync(TimeSpan.FromSeconds(20), Ct);
+        var loser = runner.RunAsync(ct => Upsert(false, ct), Ct);
+
+        (await winner).AsT0.Should().Be("inserted:True");
+        (await loser).AsT0.Should().Be("updated:True");
+        (await h.EntriesAsync()).Should().ContainSingle().Which["personId"].Should().Be(h.P2);
     }
 
     // ---- the guarded bulk write of a reconciliation

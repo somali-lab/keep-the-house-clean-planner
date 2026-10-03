@@ -210,6 +210,22 @@ public sealed class PointsReadEndpointTests(MongoContainerFixture mongo)
     }
 
     [Fact]
+    public async Task Entries_rowsThatCannotBeMappedNeverShortenAPageOrHideTheNextCursor()
+    {
+        await using var h = await PointsHarness.StartAsync(mongo);
+        var ct = TestContext.Current.CancellationToken;
+        await h.InsertExecutionEntryAsync(h.P1, "2026-09-14", 1);
+        await h.InsertExecutionEntryAsync(h.P1, "2026-09-13", 2);
+        await h.Ledger.InsertOneAsync(new BsonDocument { { "_id", ObjectId.GenerateNewId() }, { "kind", "kind-from-the-future" }, { "key", "x:1" }, { "personId", h.P1 }, { "amount", 9 }, { "date", PointsHarness.Midnight("2026-09-15") } }, cancellationToken: ct);
+        await h.Ledger.InsertOneAsync(new BsonDocument { { "_id", ObjectId.GenerateNewId() }, { "kind", "execution" }, { "personId", h.P1 }, { "amount", 9 }, { "date", PointsHarness.Midnight("2026-09-15") } }, cancellationToken: ct);
+
+        var (_, page) = await h.GetAsync(Entries(h.P1, "2026-09-01", "2026-09-30", "&limit=1"));
+
+        page.GetProperty("items").EnumerateArray().Select(e => e.GetProperty("amount").GetInt32()).Should().Equal(1);
+        page.GetProperty("nextCursor").GetString().Should().NotBeNull();
+    }
+
+    [Fact]
     public async Task Entries_aRangeOfExactly371DaysIsAcceptedAndOneDayMoreIsRangeTooLargeOnTo()
     {
         await using var h = await PointsHarness.StartAsync(mongo);

@@ -107,6 +107,18 @@ public sealed class PointsReconciliationTests
     }
 
     [Fact]
+    public void Plan_anOccurrenceWhoseStoredEntryCannotBeReadIsSkippedAndCountedNotInsertedAgain()
+    {
+        var unreadable = new HashSet<string> { ExecutionPoints.Key(Id(1)) };
+
+        var plan = PointsReconciliation.Plan([], [Done(1), Done(2)], Amsterdam, unreadable);
+
+        plan.SkippedIds.Should().BeEquivalentTo([Id(1)]);
+        plan.Changes.Inserts.Select(i => i.Key).Should().Equal(ExecutionPoints.Key(Id(2)));
+        plan.Changes.Deletes.Should().BeEmpty();
+    }
+
+    [Fact]
     public void Plan_isDeterministic_insertsAndCorrectionsFollowTheKeyOrder()
     {
         var plan = PointsReconciliation.Plan([Stored(8, P1, 1), Stored(6, P1, 2)], [Done(5), Done(3)], Amsterdam);

@@ -68,6 +68,14 @@ internal sealed class FakePointEntryStore : ForStoringPointEntries
         return Task.FromResult(OneOf<IReadOnlyList<PointEntry>, PortError>.FromT0([.. Items.Where(e => e.Kind == PointEntryKind.Execution)]));
     }
 
+    /// <summary>Execution entries the store cannot map: not part of <see cref="Items"/>, never touched by the fake.</summary>
+    public List<string> UnreadableKeys { get; } = [];
+
+    public int UnreadableWithoutKey { get; set; }
+
+    public Task<OneOf<UnreadableEntries, PortError>> FindUnreadableExecutionEntriesAsync(CancellationToken cancellationToken) =>
+        Task.FromResult(OneOf<UnreadableEntries, PortError>.FromT0(new UnreadableEntries([.. UnreadableKeys], UnreadableWithoutKey)));
+
     public Task<OneOf<PointEntry, PortError>> InsertExecutionAsync(string key, ExecutionEntryFields fields, PointEntrySource source, DateTimeOffset at, CancellationToken cancellationToken)
     {
         if ((WriteFailure ?? Failure) is { } failure)

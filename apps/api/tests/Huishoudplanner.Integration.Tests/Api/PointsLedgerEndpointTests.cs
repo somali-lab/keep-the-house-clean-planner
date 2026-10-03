@@ -344,4 +344,93 @@ public sealed class PointsLedgerEndpointTests(OccurrenceHarness h) : IClassFixtu
             await Ledger.DeleteOneAsync(new BsonDocument("_id", blocker), Ct);
         }
     }
+
+    // ---- recorded work (slice 3.3 endpoints): extra executions, one-off tasks and the retract
+
+    private const string Today = "2026-09-16";
+
+    private Task<(HttpStatusCode Status, JsonElement Body)> Create(string url, object body) => h.SendAsync(HttpMethod.Post, url, body, h.P1);
+
+    [Fact]
+    public async Task Recorded_anExtraExecutionEarnsTheTaskPointsForTheActorAndARetractRemovesTheEntry()
+    {
+        var response = await Create("/api/v2/occurrences", new { taskId = h.Weekly, date = Today, done = true, requestId = "points-request-key-0001" });
+
+        response.Status.Should().Be(HttpStatusCode.Created, response.Body.ToString());
+        var id = response.Body.GetProperty("id").GetString()!;
+        response.Body.GetProperty("pointsSnapshot").GetInt32().Should().Be(30);
+        var entry = (await EntryOf(id))!;
+        (entry["personId"], entry["amount"].AsInt32, entry["taskId"], entry["source"].AsString).Should().Be((Oid(h.P1.Id), 30, Oid(h.Weekly), "live"));
+        var created = (await PointsAuditOf(id)).Should().ContainSingle().Subject;
+        created["meta"].Should().Be(new BsonDocument { { "occurrenceId", Oid(id) }, { "reason", "recorded" } });
+
+        var undo = await Create($"/api/v2/occurrences/{id}/retraction", null!);
+
+        undo.Status.Should().Be(HttpStatusCode.OK, undo.Body.ToString());
+        (await EntryOf(id)).Should().BeNull();
+        var deleted = (await PointsAuditOf(id)).Last();
+        deleted["action"].AsString.Should().Be("delete");
+        deleted["meta"].Should().Be(new BsonDocument { { "occurrenceId", Oid(id) }, { "reason", "retract" } });
+    }
+
+    [Fact]
+    public async Task Recorded_aOneOffTaskEarnsTheDurationRuleOrTheChosenPointsAndZeroPointsEarnNothing()
+    {
+        var byDuration = (await Create("/api/v2/occurrences/one-off", new { name = "Kast opruimen", durationMinutes = 30, date = Today, done = true, requestId = "points-request-key-0002" })).Body.GetProperty("id").GetString()!;
+        var theirs = (await Create("/api/v2/occurrences/one-off", new { name = "Zolder vegen", durationMinutes = 95, date = Today, done = true, assigneeId = h.P2.Id, requestId = "points-request-key-0003" })).Body.GetProperty("id").GetString()!;
+        var chosen = (await Create("/api/v2/occurrences/one-off", new { name = "Garage ordenen", durationMinutes = 30, points = 12, date = Today, done = true, requestId = "points-request-key-0006" })).Body.GetProperty("id").GetString()!;
+        var none = (await Create("/api/v2/occurrences/one-off", new { name = "Even kijken", durationMinutes = 30, points = 0, date = Today, done = true, requestId = "points-request-key-0007" })).Body.GetProperty("id").GetString()!;
+
+        var a = (await EntryOf(byDuration))!;
+        (a["personId"], a["amount"].AsInt32, a["taskId"], a["titleSnapshot"].AsString).Should().Be((Oid(h.P1.Id), 30, BsonNull.Value, "Kast opruimen"));
+        (await EntryOf(theirs))!.Should().Match<BsonDocument>(e => e["personId"] == Oid(h.P2.Id) && e["amount"] == 95);
+        (await EntryOf(chosen))!["amount"].AsInt32.Should().Be(12);
+        (await EntryOf(none)).Should().BeNull();
+        (await PointsAuditOf(none)).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Recorded_aPlannedOneOffTaskKeepsItsChosenPointsWhenCompletedLaterAlsoAfterAnUndo()
+    {
+        var planned = await Create("/api/v2/occurrences/one-off", new { name = "Later vegen", durationMinutes = 20, points = 7, date = Today, assigneeId = h.P1.Id, requestId = "points-request-key-0009" });
+        var id = planned.Body.GetProperty("id").GetString()!;
+        (await EntryOf(id)).Should().BeNull();
+
+        (await Post(id, "complete", null, h.P1)).Body.GetProperty("pointsSnapshot").GetInt32().Should().Be(7);
+        (await EntryOf(id))!["amount"].AsInt32.Should().Be(7);
+        (await Post(id, "uncomplete", null, h.P1)).Status.Should().Be(HttpStatusCode.OK);
+        (await EntryOf(id)).Should().BeNull();
+        (await Post(id, "complete", null, h.P1)).Body.GetProperty("pointsSnapshot").GetInt32().Should().Be(7);
+        (await EntryOf(id))!["amount"].AsInt32.Should().Be(7);
+    }
+
+    [Fact]
+    public async Task Recorded_aPlannedExtraExecutionEarnsNothingUntilItIsDone()
+    {
+        var planned = await Create("/api/v2/occurrences", new { taskId = h.Weekly, date = "2026-09-19" });
+
+        planned.Status.Should().Be(HttpStatusCode.Created, planned.Body.ToString());
+        (await EntryOf(planned.Body.GetProperty("id").GetString()!)).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Recorded_aReplayedRequestKeyWritesNothingAndRepairsALostEntry()
+    {
+        var body = new { taskId = h.Weekly, date = Today, done = true, requestId = "points-request-key-0004" };
+        var first = await Create("/api/v2/occurrences", body);
+        var id = first.Body.GetProperty("id").GetString()!;
+        var (audits, size) = (await h.AuditCountAsync(), await LedgerSize());
+
+        var replay = await Create("/api/v2/occurrences", body);
+
+        replay.Status.Should().Be(HttpStatusCode.OK);
+        (await h.AuditCountAsync(), await LedgerSize()).Should().Be((audits, size));
+
+        // A crash between the occurrence write and the ledger write left no entry: the replay restores it.
+        await Ledger.DeleteOneAsync(new BsonDocument("key", "execution:" + id), Ct);
+        var repaired = await Create("/api/v2/occurrences", body);
+        repaired.Status.Should().Be(HttpStatusCode.OK);
+        (await EntryOf(id))!["amount"].AsInt32.Should().Be(30);
+        (await PointsAuditOf(id)).Last()["action"].AsString.Should().Be("create");
+    }
 }

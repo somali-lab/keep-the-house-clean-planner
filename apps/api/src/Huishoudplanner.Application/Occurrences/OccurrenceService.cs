@@ -22,7 +22,7 @@ namespace Huishoudplanner.Application.Occurrences;
 /// state that was read, so a lost race becomes <c>invalid_transition</c> (or <c>already_claimed</c>) instead of a silent overwrite.
 /// </summary>
 /// <remarks>
-/// Not here yet: the extra and one-off executions with their request keys and the retract (slice 3.3). The points ledger entry that follows a
+/// The extra and one-off executions with their request keys and the retract are <see cref="AdhocOccurrenceService"/>. The points ledger entry that follows a
 /// completion, an undo, a correction and a deletion is made by <see cref="IExecutionPointsService"/> in the same transaction (slice 4.1). The <c>pointsSnapshot</c> of a completion is written, because it is a field of the occurrence.
 /// </remarks>
 public sealed class OccurrenceService(
@@ -36,6 +36,8 @@ public sealed class OccurrenceService(
     TimeProvider time,
     IExecutionPointsService points) : IOccurrenceService
 {
+    private readonly LastCompletedAtRefresh lastCompleted = new(occurrences, tasks, audit);
+
     /// <summary>What one use case reads once: the settings, the zone they name and the moment (whole milliseconds, as stored).</summary>
     private sealed record Context(HouseholdSettings Settings, TimeZoneInfo Zone, DateTimeOffset Now)
     {
@@ -739,37 +741,8 @@ public sealed class OccurrenceService(
     private Task<Step<bool>> RefreshLastCompletedAtAsync(AuditActor actor, string? taskId, string occurrenceId, Context context, CancellationToken ct) =>
         RefreshLastCompletedAtAsync(actor, taskId, occurrenceId, context.Now, ct);
 
-    private async Task<Step<bool>> RefreshLastCompletedAtAsync(AuditActor actor, string? taskId, string occurrenceId, DateTimeOffset now, CancellationToken ct)
-    {
-        if (taskId is null)
-        {
-            return false;
-        }
-
-        if (!(await occurrences.FindLatestCompletionAsync(taskId, ct).ConfigureAwait(false)).AsStep().TryGet(out var latest, out var latestFailure))
-        {
-            return latestFailure;
-        }
-
-        if (!(await tasks.FindAsync(taskId, ct).ConfigureAwait(false)).AsOptional().TryGet(out var task, out var taskFailure))
-        {
-            return taskFailure;
-        }
-
-        if (task is null || task.LastCompletedAt == latest.At)
-        {
-            return false;
-        }
-
-        var written = await tasks.SetLastCompletedAtAsync(taskId, latest.At, now, ct).ConfigureAwait(false);
-        if (!written.AsStep().TryGet(out _, out var writeFailure))
-        {
-            return writeFailure;
-        }
-
-        var entry = TaskAudit.ForLastCompletedAt(actor, taskId, task.LastCompletedAt, latest.At, occurrenceId);
-        return entry is null ? false : await RecordAsync(entry, ct).ConfigureAwait(false);
-    }
+    private Task<Step<bool>> RefreshLastCompletedAtAsync(AuditActor actor, string? taskId, string occurrenceId, DateTimeOffset now, CancellationToken ct) =>
+        lastCompleted.RunAsync(actor, taskId, occurrenceId, now, ct);
 
     /// <summary>
     /// The value an occurrence snapshots when it becomes done (ADR-0011): the points a one-off task was recorded with, else the task's points, or

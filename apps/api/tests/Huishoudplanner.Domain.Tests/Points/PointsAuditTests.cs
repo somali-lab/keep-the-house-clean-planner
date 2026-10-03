@@ -135,9 +135,21 @@ public sealed class PointsAuditTests
         var corrections = ((AuditArray)entry.Meta["corrections"]!).Items;
         corrections[0].Should().Be(AuditObject.Of(
             ("key", "execution:a"),
-            ("from", AuditObject.Of(("personId", new AuditObjectId(P1)), ("amount", 9))),
-            ("to", AuditObject.Of(("personId", new AuditObjectId(P2)), ("amount", 30)))));
+            ("from", AuditObject.Of(("personId", P1), ("amount", 9))),
+            ("to", AuditObject.Of(("personId", P2), ("amount", 30)))));
+        // Byte-compatible with the Node audit documents: the people inside the summary are hexadecimal strings, not ObjectIds.
+        ((AuditObject)((AuditObject)corrections[0]!)["from"]!)["personId"].Should().BeOfType<AuditString>();
         ((AuditObject)corrections[1]!)["to"].Should().Be(AuditNull.Instance);
+    }
+
+    [Fact]
+    public void ForRecompute_aBonusChangeCarriesItsPersonAsAHexString()
+    {
+        var result = PointsRecomputeResult.Empty(PointsRecomputeTrigger.Nightly) with { BonusChanges = [new PointsBonusChange("k", P1, 10, "created")], BonusChangesTotal = 1 };
+
+        var change = (AuditObject)((AuditArray)PointsAudit.ForRecompute(AuditActor.System, result).Meta!["bonusChanges"]!).Items[0];
+
+        change["personId"].Should().Be(new AuditString(P1));
     }
 
     [Theory]

@@ -16,9 +16,9 @@ public static class PointsReconciliation
     /// <summary>
     /// Computes the expected entry of every done occurrence and the inserts, updates and deletes that make the stored execution entries match:
     /// it inserts what is missing, updates what differs and deletes the entries without an occurrence. An occurrence that cannot be read is skipped
-    /// and counted, and its stored entry stays as it is. Planning again after the result was applied gives an empty plan (idempotent).
+    /// and counted, and its stored entry stays as it is. An occurrence whose stored entry cannot be read (<paramref name="unreadableKeys"/>) is skipped and counted the same way. Planning again after the result was applied gives an empty plan (idempotent).
     /// </summary>
-    public static ReconciliationPlan Plan(IReadOnlyList<PointEntry> stored, IEnumerable<ExecutionSource> done, TimeZoneInfo zone)
+    public static ReconciliationPlan Plan(IReadOnlyList<PointEntry> stored, IEnumerable<ExecutionSource> done, TimeZoneInfo zone, IReadOnlySet<string>? unreadableKeys = null)
     {
         ArgumentNullException.ThrowIfNull(stored);
         ArgumentNullException.ThrowIfNull(done);
@@ -33,6 +33,11 @@ public static class PointsReconciliation
             if (expectation.Unreadable)
             {
                 unreadable.Add(ExecutionPoints.Key(source.Id));
+                skipped.Add(source.Id);
+            }
+            else if (expectation.Fields is not null && unreadableKeys?.Contains(ExecutionPoints.Key(source.Id)) == true)
+            {
+                // Its stored entry cannot be read: leave both alone, or the insert would hit the unique key on every run.
                 skipped.Add(source.Id);
             }
             else if (expectation.Fields is { } fields)
@@ -65,7 +70,7 @@ public static class PointsReconciliation
 
         foreach (var current in stored.OrderBy(e => e.Key, StringComparer.Ordinal))
         {
-            if (expected.ContainsKey(current.Key) || unreadable.Contains(current.Key))
+            if (expected.ContainsKey(current.Key) || unreadable.Contains(current.Key) || unreadableKeys?.Contains(current.Key) == true)
             {
                 continue;
             }

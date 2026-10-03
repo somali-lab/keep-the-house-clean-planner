@@ -63,6 +63,31 @@ internal sealed class MongoPointEntryStore : ForStoringPointEntries
         }
     }
 
+    public async Task<OneOf<UnreadableEntries, PortError>> FindUnreadableExecutionEntriesAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var filter = new BsonDocument
+            {
+                { "kind", "execution" },
+                { "$or", new BsonArray
+                    {
+                        new BsonDocument("key", new BsonDocument("$not", new BsonDocument("$type", "string"))),
+                        new BsonDocument("personId", new BsonDocument("$not", new BsonDocument("$type", "objectId"))),
+                    }
+                },
+            };
+            var find = MongoTransactionContext.Session is { } session ? entries.Find(session, filter) : entries.Find(filter);
+            var documents = await find.Project(new BsonDocument("key", 1)).ToListAsync(cancellationToken).ConfigureAwait(false);
+            var keys = documents.Where(d => d.TryGetValue("key", out var k) && k.IsString).Select(d => d["key"].AsString).ToList();
+            return new UnreadableEntries(keys, documents.Count - keys.Count);
+        }
+        catch (Exception e) when (IsFailure(e))
+        {
+            return Failed("read the unreadable execution entries", e);
+        }
+    }
+
     public async Task<OneOf<PointEntry, PortError>> InsertExecutionAsync(
         string key, ExecutionEntryFields fields, PointEntrySource source, DateTimeOffset at, CancellationToken cancellationToken)
     {
@@ -77,6 +102,12 @@ internal sealed class MongoPointEntryStore : ForStoringPointEntries
         {
             await entries.InsertOneAsync(session, document, cancellationToken: cancellationToken).ConfigureAwait(false);
             return ToEntry(document)!;
+        }
+        catch (MongoWriteException e) when (e.WriteError.Category == ServerErrorCategory.DuplicateKey)
+        {
+            // A concurrent transaction wrote the same key: not a failure but a lost race, so the runner reruns the attempt, which then reads the winner.
+            e.AddErrorLabel(TransientLabel);
+            throw;
         }
         catch (Exception e) when (IsFailure(e))
         {
@@ -179,6 +210,12 @@ internal sealed class MongoPointEntryStore : ForStoringPointEntries
             var result = await entries.BulkWriteAsync(session, models, new BulkWriteOptions { IsOrdered = false }, cancellationToken).ConfigureAwait(false);
             return new AppliedPointEntryChanges(Count(result.InsertedCount), Count(result.ModifiedCount), Count(result.DeletedCount));
         }
+        catch (MongoBulkWriteException e) when (e.WriteErrors.Any(w => w.Category == ServerErrorCategory.DuplicateKey))
+        {
+            // A live sync inserted a key of this run meanwhile: the attempt reruns and reads it.
+            e.AddErrorLabel(TransientLabel);
+            throw;
+        }
         catch (Exception e) when (IsFailure(e))
         {
             return Failed("apply the reconciliation", e);
@@ -242,7 +279,9 @@ internal sealed class MongoPointEntryStore : ForStoringPointEntries
         }
 
         var range = new BsonDocument { { "$gte", new BsonDateTime(query.From.UtcDateTime) }, { "$lt", new BsonDateTime(query.ToExclusive.UtcDateTime) } };
-        var filter = new BsonDocument { { "personId", person }, { "date", range } };
+        // Rows this application cannot map (an unknown kind, no key) are left out in the query, so the limit counts only rows that are returned.
+        var known = new BsonArray(Enum.GetValues<PointEntryKind>().Select(k => PointNames.ToWire(k)));
+        var filter = new BsonDocument { { "personId", person }, { "date", range }, { "kind", new BsonDocument("$in", known) }, { "key", new BsonDocument("$type", "string") } };
         if (query.After is { } after && ObjectIdConverter.TryParse(after.Id, out var afterId))
         {
             // Newest date first, then by id: after (date, id) means an older date, or the same date and a later id.
@@ -250,6 +289,8 @@ internal sealed class MongoPointEntryStore : ForStoringPointEntries
             filter = new BsonDocument
             {
                 { "personId", person },
+                { "kind", new BsonDocument("$in", known) },
+                { "key", new BsonDocument("$type", "string") },
                 { "$and", new BsonArray
                     {
                         new BsonDocument("date", range),
