@@ -51,7 +51,12 @@ whether you may create new files, is said in the section *Which commits to read*
   script exists. Keep paired rule bodies equivalent while preserving their different frontmatter.
 - `.agents/skills/**/SKILL.md` (English) contains repeatable procedures for verification,
   releases, server/API changes, web changes, and scheduling-domain changes.
-- `README.md` (English) documents the supported product, setup, operation, and configuration.
+- `README.md` (English) documents setup, operation, and configuration: quick start, releases,
+  configuration, scheduled jobs, backups, integrations, security, local development, and
+  project structure. The section **What it does** and every other description of product
+  features and behaviour belong to the `docs-maintainer` workflow, together with
+  `docs/huishoudplanner-requirements.md`. Do not edit them; if one is stale, mention it in the
+  pull request body.
 
 No `.claude/skills/`, `.github/skills/`, `.github/prompts/`, or `.cursor/skills/` directory
 currently exists.

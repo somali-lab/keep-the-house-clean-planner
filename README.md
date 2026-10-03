@@ -102,7 +102,7 @@ Published tags include the full version (`1.4.2`), rolling minor and major tags 
 The About page in the management menu shows which build is running. A published image shows its release version and the date and time of that release; a build from local source is marked as local and shows no release date, because it is not a release.
 
 The repository also uses GitHub Agentic Workflows to check its coding-agent
-instructions after releases and once a week. See
+instructions, requirements, and feature description after releases and once a week. See
 [Agentic workflow checks](docs/AGENTIC-WORKFLOWS.md) for the triggers, review
 scope, security boundaries, generated files, and maintenance commands.
 
