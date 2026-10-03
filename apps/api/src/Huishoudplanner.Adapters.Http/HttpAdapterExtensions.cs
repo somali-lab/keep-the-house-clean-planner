@@ -1,7 +1,12 @@
 using System.Diagnostics;
+using Huishoudplanner.Adapters.Http.Identity;
 using Huishoudplanner.Adapters.Http.OpenApi;
 using Huishoudplanner.Adapters.Http.Problems;
+using Huishoudplanner.Domain.Ports.Driven;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Extensions;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Huishoudplanner.Adapters.Http;
 
@@ -27,16 +32,49 @@ public static class HttpAdapterExtensions
                 : problem.Title;
             problem.Extensions["traceId"] = Activity.Current?.Id ?? context.HttpContext.TraceIdentifier;
         });
+        services.AddIdentity();
         services.AddOpenApiDocument();
         return services;
+    }
+
+    /// <summary>
+    /// Identity (ADR-0018): the profile-header authentication scheme, the actor resolver and the three policies.
+    /// Needs a <see cref="ForFindingUsers"/> registration from the composition root; <see cref="UseHttpAdapter"/> checks it at startup.
+    /// </summary>
+    private static void AddIdentity(this IServiceCollection services)
+    {
+        services.TryAddScoped<ForResolvingActors, ProfileHeaderActorResolver>();
+        services.AddAuthentication(ProfileHeaderAuthenticationHandler.SchemeName)
+            .AddScheme<AuthenticationSchemeOptions, ProfileHeaderAuthenticationHandler>(ProfileHeaderAuthenticationHandler.SchemeName, null);
+        services.AddAuthorizationBuilder().AddHouseholdPolicies();
+        services.AddSingleton<IAuthorizationHandler, MinimumRoleHandler>();
+        services.AddSingleton<IAuthorizationMiddlewareResultHandler, AuthorizationFailureHandler>();
     }
 
     /// <summary>Exceptions and empty 4xx/5xx responses become <c>application/problem+json</c>. Call first in the pipeline.</summary>
     public static IApplicationBuilder UseHttpAdapter(this IApplicationBuilder app)
     {
         ArgumentNullException.ThrowIfNull(app);
+        RequireUserPort(app.ApplicationServices);
         app.UseExceptionHandler();
         app.UseStatusCodePages();
+        // The authentication handler resolves the actor only for endpoints that declare authorization (see ProfileHeaderAuthenticationHandler),
+        // so endpoints without a policy (health, static files) never depend on the user lookup.
+        app.UseAuthorization();
         return app;
+    }
+
+    /// <summary>
+    /// Fails at startup, not on the first request, when the composition root forgot the user port that identity needs.
+    /// Only the registration is checked, nothing is constructed: build-time OpenAPI generation starts the host without configuration.
+    /// </summary>
+    private static void RequireUserPort(IServiceProvider services)
+    {
+        var registered = services.GetService<IServiceProviderIsService>()?.IsService(typeof(ForFindingUsers)) ?? true;
+        if (!registered)
+        {
+            throw new InvalidOperationException(
+                "AddHttpAdapter needs a registration of ForFindingUsers from the composition root.");
+        }
     }
 }

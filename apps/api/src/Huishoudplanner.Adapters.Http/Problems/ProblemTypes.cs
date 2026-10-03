@@ -8,6 +8,8 @@ public static class ProblemTypes
     public const string NotFound = "not_found";
     public const string ValidationError = "validation_error";
     public const string InternalError = "internal_error";
+    public const string ProfileRequired = "profile_required";
+    public const string PermissionDenied = "permission_denied";
 
     public static string UrnFor(string code) => Prefix + code;
 

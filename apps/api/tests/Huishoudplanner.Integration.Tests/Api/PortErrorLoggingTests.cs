@@ -56,6 +56,7 @@ public sealed class PortErrorLoggingTests
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Logging.ClearProviders().AddProvider(logs);
+        builder.Services.AddSingleton<Huishoudplanner.Domain.Ports.Driven.ForFindingUsers>(new Fixtures.FakeUserDirectory());
         builder.Services.AddHttpAdapter();
         await using var app = builder.Build();
         app.UseHttpAdapter();

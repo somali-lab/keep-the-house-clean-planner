@@ -1,6 +1,9 @@
+
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Ports.Driven;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -55,6 +58,17 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         return this;
     }
 
+    /// <summary>
+    /// Maps extra endpoints on the real host, behind its production pipeline (see <see cref="TestEndpointsStartupFilter"/>),
+    /// so policies can be exercised without production endpoints.
+    /// </summary>
+    public ApiFactory WithEndpoints(Action<IEndpointRouteBuilder> map)
+    {
+        ArgumentNullException.ThrowIfNull(map);
+        overrides.Add(services => services.AddSingleton<IStartupFilter>(new TestEndpointsStartupFilter(map)));
+        return this;
+    }
+
     /// <summary>Serves the web app from this directory (<c>WEB_DIST_DIR</c>).</summary>
     public ApiFactory WithWebDist(string directory)
     {
@@ -106,4 +120,20 @@ public sealed class FakeHealthPort(bool reachable) : ForCheckingHealth
 {
     public Task<OneOf<Success, PortError>> CheckDatabaseAsync(CancellationToken cancellationToken) =>
         Task.FromResult<OneOf<Success, PortError>>(reachable ? new Success() : new PortError("fake database down"));
+}
+
+/// <summary>
+/// Maps the endpoints onto the real application's route builder after the production pipeline has been
+/// configured, so the order of middleware (routing, authentication, authorization) is exactly the production one.
+/// </summary>
+internal sealed class TestEndpointsStartupFilter(Action<IEndpointRouteBuilder> map) : IStartupFilter
+{
+    private const string GlobalEndpointRouteBuilderKey = "__EndpointRouteBuilder";
+
+    public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
+    {
+        next(app);
+        var routes = app.Properties.TryGetValue(GlobalEndpointRouteBuilderKey, out var builder) ? builder as IEndpointRouteBuilder : null;
+        map(routes ?? throw new InvalidOperationException("The host exposes no endpoint route builder."));
+    };
 }

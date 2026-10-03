@@ -34,6 +34,8 @@ public static class MongoAdapterRegistration
         services.TryAddSingleton<IMongoClient>(sp => MongoClientFactory.CreateClient(sp.GetRequiredService<MongoOptions>()));
         services.AddSingleton<ForCheckingHealth>(sp =>
             new MongoHealthCheck(sp.GetRequiredService<IMongoClient>(), sp.GetRequiredService<MongoOptions>()));
+        services.AddSingleton<ForFindingUsers>(sp =>
+            new MongoUserLookup(sp.GetRequiredService<IMongoClient>(), sp.GetRequiredService<MongoOptions>()));
         return services;
     }
 }
