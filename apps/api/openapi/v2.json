@@ -1702,6 +1702,538 @@
         }
       }
     },
+    "/api/v2/ai/prompt-info": {
+      "get": {
+        "tags": [
+          "AI"
+        ],
+        "summary": "The prompts of the four AI use cases.",
+        "description": "Needs no profile. Per use case the effective template (the stored template, else the built-in one with the household's instructions appended), the fixed prompt and a description of the data the code adds; and the built-in defaults, so a template can be restored. Answers 500 settings_missing when the installation has no settings.",
+        "operationId": "getAiPromptInfo",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiPromptInfoResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/ai/test": {
+      "post": {
+        "tags": [
+          "AI"
+        ],
+        "summary": "Tests the given provider settings with a small structured request (planners).",
+        "description": "The body holds the provider settings to test, which need not be stored; the API key is the environment variable AI_API_KEY. Nothing is stored. Answers 400 validation_error for settings that break the rules (before any provider is contacted), 503 ai_disabled for the provider none, 503 ai_misconfigured for incomplete settings or a missing key, and 502 ai_provider_error when the provider failed or did not answer as asked.",
+        "operationId": "testAiProvider",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestAiProviderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiTestResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/ai/propose-plan": {
+      "post": {
+        "tags": [
+          "AI"
+        ],
+        "summary": "Asks the AI for a plan and stores it as an inactive draft (planners).",
+        "description": "The body is optional: taskIds selects the tasks to plan (all active tasks when omitted), constraints holds free-text wishes. The answer is validated with the rules of the plan editor; when it fails the model is asked once more with the errors, after which 422 ai_invalid_plan carries the messages in errors and nothing is stored. A valid proposal is stored as an inactive draft (draft: true, source: ai) and audited with source ai; it is never activated. Answers 400 validation_error for a bad body, unknown or inactive tasks (unknown_task) or no active tasks (no_tasks), 422 ai_invalid_plan, 502 ai_provider_error, 503 ai_disabled and 503 ai_misconfigured.",
+        "operationId": "proposeAiPlan",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposePlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiProposalResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/ai/rebalance": {
+      "post": {
+        "tags": [
+          "AI"
+        ],
+        "summary": "Asks the AI to rebalance a plan and stores the result as an inactive draft (planners).",
+        "description": "Like a proposal, starting from the slots of the given plan: the draft is named after it, keeps its week themes and is audited with the base plan in meta.basePlanId. Answers 404 not_found for an unknown plan, and the same problems as a proposal.",
+        "operationId": "rebalanceAiPlan",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RebalancePlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiProposalResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/ai/suggest-tasks": {
+      "post": {
+        "tags": [
+          "AI"
+        ],
+        "summary": "Suggests tasks that are missing for a room (planners).",
+        "description": "Nothing is stored. Suggestions with an unknown interval, a duration that is not a whole number of minutes of at least 1, an empty name or a name that already exists in the room (case-insensitive, or earlier in the answer) are dropped. Answers 404 not_found for an unknown room, 422 ai_invalid_response when the answer was not usable, 502 ai_provider_error, 503 ai_disabled and 503 ai_misconfigured.",
+        "operationId": "suggestAiTasks",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SuggestTasksRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiSuggestionsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/ai/explain": {
+      "post": {
+        "tags": [
+          "AI"
+        ],
+        "summary": "Explains a plan in four sentences, one per week (planners).",
+        "description": "Nothing is stored. Answers 404 not_found for an unknown plan, 422 ai_invalid_response when the answer did not hold exactly four sentences, 502 ai_provider_error, 503 ai_disabled and 503 ai_misconfigured.",
+        "operationId": "explainAiPlan",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExplainPlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiExplanationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/cycles": {
       "get": {
         "tags": [
@@ -2095,6 +2627,21 @@
   },
   "components": {
     "schemas": {
+      "AiExplanationResponse": {
+        "required": [
+          "rationale"
+        ],
+        "type": "object",
+        "properties": {
+          "rationale": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Four sentences, one per week."
+          }
+        }
+      },
       "AiLimits": {
         "type": "object",
         "properties": {
@@ -2140,6 +2687,94 @@
           }
         }
       },
+      "AiPromptActionResponse": {
+        "required": [
+          "system",
+          "user",
+          "fixedPrompt",
+          "dynamicData"
+        ],
+        "type": "object",
+        "properties": {
+          "system": {
+            "type": "string",
+            "description": "The system part of the effective template."
+          },
+          "user": {
+            "type": "string",
+            "description": "The user part of the effective template."
+          },
+          "fixedPrompt": {
+            "type": "string",
+            "description": "The fixed prompt: the system part."
+          },
+          "dynamicData": {
+            "type": "string",
+            "description": "A description of the data the code adds to the prompt."
+          }
+        }
+      },
+      "AiPromptActionsResponse": {
+        "required": [
+          "planProposal",
+          "planRebalance",
+          "taskSuggestions",
+          "planExplanation"
+        ],
+        "type": "object",
+        "properties": {
+          "planProposal": {
+            "$ref": "#/components/schemas/AiPromptActionResponse"
+          },
+          "planRebalance": {
+            "$ref": "#/components/schemas/AiPromptActionResponse"
+          },
+          "taskSuggestions": {
+            "$ref": "#/components/schemas/AiPromptActionResponse"
+          },
+          "planExplanation": {
+            "$ref": "#/components/schemas/AiPromptActionResponse"
+          }
+        }
+      },
+      "AiPromptDefaultsResponse": {
+        "required": [
+          "planProposal",
+          "planRebalance",
+          "taskSuggestions",
+          "planExplanation"
+        ],
+        "type": "object",
+        "properties": {
+          "planProposal": {
+            "$ref": "#/components/schemas/AiPromptTemplateResponse"
+          },
+          "planRebalance": {
+            "$ref": "#/components/schemas/AiPromptTemplateResponse"
+          },
+          "taskSuggestions": {
+            "$ref": "#/components/schemas/AiPromptTemplateResponse"
+          },
+          "planExplanation": {
+            "$ref": "#/components/schemas/AiPromptTemplateResponse"
+          }
+        }
+      },
+      "AiPromptInfoResponse": {
+        "required": [
+          "actions",
+          "defaults"
+        ],
+        "type": "object",
+        "properties": {
+          "actions": {
+            "$ref": "#/components/schemas/AiPromptActionsResponse"
+          },
+          "defaults": {
+            "$ref": "#/components/schemas/AiPromptDefaultsResponse"
+          }
+        }
+      },
       "AiPromptsDto": {
         "required": [
           "planProposal",
@@ -2178,6 +2813,21 @@
           }
         }
       },
+      "AiPromptTemplateResponse": {
+        "required": [
+          "system",
+          "user"
+        ],
+        "type": "object",
+        "properties": {
+          "system": {
+            "type": "string"
+          },
+          "user": {
+            "type": "string"
+          }
+        }
+      },
       "AiPromptTemplatesDto": {
         "required": [
           "planProposal",
@@ -2198,6 +2848,38 @@
           },
           "planExplanation": {
             "$ref": "#/components/schemas/AiPromptTemplateDto"
+          }
+        }
+      },
+      "AiProposalResponse": {
+        "required": [
+          "planId",
+          "proposalId",
+          "warnings",
+          "rationale"
+        ],
+        "type": "object",
+        "properties": {
+          "planId": {
+            "type": "string",
+            "description": "The id of the draft plan (inactive, draft: true, source: ai)."
+          },
+          "proposalId": {
+            "type": "string"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanIssueResponse"
+            },
+            "description": "The non-blocking warnings of the plan validation (interval_mismatch, over_budget, daily_over_budget)."
+          },
+          "rationale": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Four sentences, one per week."
           }
         }
       },
@@ -2233,6 +2915,72 @@
               "string"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "AiProviderRequest": {
+        "required": [
+          "type",
+          "endpoint",
+          "model",
+          "timeoutSeconds"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "none, mock, anthropic, openai-compatible or ollama."
+          },
+          "endpoint": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "An absolute URL."
+          },
+          "model": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "timeoutSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "description": "Whole seconds, 10 to 900.",
+            "format": "int32"
+          }
+        }
+      },
+      "AiSuggestionsResponse": {
+        "required": [
+          "suggestions"
+        ],
+        "type": "object",
+        "properties": {
+          "suggestions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaskSuggestionResponse"
+            }
+          }
+        }
+      },
+      "AiTestResponse": {
+        "required": [
+          "ok"
+        ],
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
           }
         }
       },
@@ -3342,6 +4090,21 @@
           }
         }
       },
+      "ExplainPlanRequest": {
+        "required": [
+          "planId"
+        ],
+        "type": "object",
+        "properties": {
+          "planId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The plan to explain; 404 not_found when it does not exist."
+          }
+        }
+      },
       "GenerationResultResponse": {
         "required": [
           "cycleIndex",
@@ -4089,6 +4852,55 @@
           }
         }
       },
+      "ProposePlanRequest": {
+        "required": [
+          "taskIds",
+          "constraints"
+        ],
+        "type": "object",
+        "properties": {
+          "taskIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "The tasks to plan, at least one id of an active task. Omitted: all active tasks."
+          },
+          "constraints": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Free-text wishes, at most 2000 characters after trimming."
+          }
+        }
+      },
+      "RebalancePlanRequest": {
+        "required": [
+          "planId",
+          "constraints"
+        ],
+        "type": "object",
+        "properties": {
+          "planId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The plan to rebalance; 404 not_found when it does not exist."
+          },
+          "constraints": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Free-text wishes, at most 2000 characters after trimming."
+          }
+        }
+      },
       "RewardGoalsDto": {
         "required": [
           "weekPoints",
@@ -4378,6 +5190,21 @@
           }
         }
       },
+      "SuggestTasksRequest": {
+        "required": [
+          "roomId"
+        ],
+        "type": "object",
+        "properties": {
+          "roomId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The room to suggest tasks for; 404 not_found when it does not exist."
+          }
+        }
+      },
       "SynchronizedResponse": {
         "required": [
           "removed",
@@ -4556,6 +5383,34 @@
           }
         }
       },
+      "TaskSuggestionResponse": {
+        "required": [
+          "name",
+          "intervalKey",
+          "durationMinutes",
+          "notes"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "intervalKey": {
+            "type": "string"
+          },
+          "durationMinutes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "notes": {
+            "type": "string"
+          }
+        }
+      },
       "TaskSummaryResponse": {
         "required": [
           "taskId",
@@ -4583,6 +5438,24 @@
               "string"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "TestAiProviderRequest": {
+        "required": [
+          "aiProvider"
+        ],
+        "type": "object",
+        "properties": {
+          "aiProvider": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AiProviderRequest"
+              }
+            ]
           }
         }
       },
@@ -5166,6 +6039,10 @@
     {
       "name": "Users",
       "description": "The people of the household: list, create, change, and their browser notification moments."
+    },
+    {
+      "name": "AI",
+      "description": "The AI assistant: prompt information, connection test, plan proposals and rebalancing (stored as drafts), task suggestions and plan explanations (stored nowhere); planners use it."
     }
   ]
 }

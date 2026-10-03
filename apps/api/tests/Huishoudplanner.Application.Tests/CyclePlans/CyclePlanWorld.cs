@@ -1,4 +1,5 @@
 using Huishoudplanner.Application.CyclePlans;
+using Huishoudplanner.Domain.Ai;
 using Huishoudplanner.Application.Generation;
 using Huishoudplanner.Application.Tests.Generation;
 using FakeAudit = Huishoudplanner.Application.Tests.Rooms.FakeAudit;
@@ -66,6 +67,15 @@ internal sealed class FakeCyclePlanStore : ForStoringCyclePlans
         Writes++;
         var stored = new CyclePlan(
             NextId(), plan.Name, plan.Active, plan.Slots, plan.WeekThemes, false, PlanSources.Manual, null, null, false, plan.CreatedAt, plan.CreatedAt);
+        Items.Add(stored);
+        return Task.FromResult<OneOf<CyclePlan, PortError>>(stored);
+    }
+
+    public Task<OneOf<CyclePlan, PortError>> InsertProposalAsync(NewPlanProposal proposal, CancellationToken cancellationToken)
+    {
+        Writes++;
+        var stored = new CyclePlan(
+            NextId(), proposal.Name, false, proposal.Slots, proposal.WeekThemes, true, PlanSources.Ai, proposal.ProposalId, proposal.Rationale, false, proposal.CreatedAt, proposal.CreatedAt);
         Items.Add(stored);
         return Task.FromResult<OneOf<CyclePlan, PortError>>(stored);
     }

@@ -17,4 +17,16 @@ public static class AiAdapterRegistration
         services.TryAddSingleton<ForChattingWithAModel>(sp => AiProviderFactory.Create(options(sp)));
         return services;
     }
+
+    /// <summary>
+    /// Registers <see cref="ForSelectingAModel"/>: the provider is built from the stored settings on every call, with the key
+    /// from <paramref name="apiKey"/> (resolved lazily, after configuration is bound), so a settings change applies immediately.
+    /// </summary>
+    public static IServiceCollection AddAiModelSelector(this IServiceCollection services, Func<IServiceProvider, string?> apiKey)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(apiKey);
+        services.TryAddSingleton<ForSelectingAModel>(sp => new AiModelSelector(() => apiKey(sp)));
+        return services;
+    }
 }

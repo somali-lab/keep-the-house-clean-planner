@@ -144,7 +144,8 @@ public static class AiProviderFactory
     internal static AnthropicClient AnthropicClientFor(AiProviderOptions options, AiProviderHooks? hooks) => new()
     {
         ApiKey = options.ApiKey,
-        BaseUrl = string.IsNullOrWhiteSpace(options.BaseUrl) ? DefaultAnthropicEndpoint : options.BaseUrl.TrimEnd('/'),
+        // The endpoint of the settings is deliberately ignored (as in Node): the key goes to the Anthropic API only, never to a configured host.
+        BaseUrl = DefaultAnthropicEndpoint,
         MaxRetries = 1,
         Timeout = Timeout.InfiniteTimeSpan,
         HttpClient = NewHttpClient(hooks, keepAuthorization: true),

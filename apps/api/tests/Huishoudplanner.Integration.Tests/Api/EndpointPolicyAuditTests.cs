@@ -39,6 +39,11 @@ public sealed class EndpointPolicyAuditTests
         ["PUT /api/v2/cycle-plans/{id}/slots"] = AuthorizationPolicies.PlannerPolicy,
         ["POST /api/v2/cycle-plans/{id}/validation"] = AuthorizationPolicies.PlannerPolicy,
         ["POST /api/v2/cycle-plans/validation"] = AuthorizationPolicies.PlannerPolicy,
+        ["POST /api/v2/ai/test"] = AuthorizationPolicies.PlannerPolicy,
+        ["POST /api/v2/ai/propose-plan"] = AuthorizationPolicies.PlannerPolicy,
+        ["POST /api/v2/ai/rebalance"] = AuthorizationPolicies.PlannerPolicy,
+        ["POST /api/v2/ai/suggest-tasks"] = AuthorizationPolicies.PlannerPolicy,
+        ["POST /api/v2/ai/explain"] = AuthorizationPolicies.PlannerPolicy,
     };
 
     private static readonly string[] ReadMethods = [HttpMethods.Get, HttpMethods.Head, HttpMethods.Options];

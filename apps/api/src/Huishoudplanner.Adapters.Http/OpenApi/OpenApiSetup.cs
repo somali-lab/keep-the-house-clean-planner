@@ -1,3 +1,4 @@
+using Huishoudplanner.Adapters.Http.Ai;
 using Huishoudplanner.Adapters.Http.CyclePlans;
 using Huishoudplanner.Adapters.Http.Cycles;
 using Huishoudplanner.Adapters.Http.Health;
@@ -54,6 +55,7 @@ public static class OpenApiSetup
                 new() { Name = CyclePlanEndpoints.CyclePlansTag, Description = "The four-week cycle plans: everyone reads and compares them, planners create, change, delete, save slots and validate." },
                 new() { Name = CycleEndpoints.CyclesTag, Description = "The generated four-week cycles: a read-only list, created by generation only." },
                 new() { Name = UserEndpoints.UsersTag, Description = "The people of the household: list, create, change, and their browser notification moments." },
+                new() { Name = AiEndpoints.AiTag, Description = "The AI assistant: prompt information, connection test, plan proposals and rebalancing (stored as drafts), task suggestions and plan explanations (stored nowhere); planners use it." },
             };
             return Task.CompletedTask;
         }));
