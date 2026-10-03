@@ -59,6 +59,14 @@ id, so a page continues correctly even when the task it points at has dropped ou
 `DueCalculator.InitialDueDateOf(firstPlanned, createdAt, periodDays, tz)` (first planned day, else one interval after creation).
 The data gathering lives in `Application.Due.DueService` behind `IDueService` and the read-only port `ForReadingDueOccurrences`.
 
+## Promote suggestions (`Huishoudplanner.Domain.Promotion`)
+
+`PromoteSuggestionCalculator.Compute(PromoteInput)` is the pure part of `computePromoteSuggestions` (`apps/server/src/domain/promote.ts`, slice 5.3): the
+slots, cycles, generated occurrences (reduced to `PromoteOccurrence` with day keys), task names, anchor, today, threshold and dismissals go in, the
+`PromoteSuggestion` list comes out (evidence newest first, `ToAssigneeId` only when every move went to the same other person). A threshold below one
+suggests nothing (Node would have crashed). The data gathering lives in `Application.Promotion.PromoteService` behind `IPromoteService` and the
+read-only port `ForReadingPromotionEvidence`. No golden vectors: the Node rule is not unit tested on plain data, only through the API.
+
 ## Settings (`Huishoudplanner.Domain.Settings`)
 
 The singleton settings document (id `000000000000000000000001`). `HouseholdSettings` mirrors `apps/server/src/data/settings.ts`: optional values stay `null` when they are not stored and mean their default for the API (`SettingsDefaults`: EUR, 0 cents per point, automatic goals, no bonuses). There is no API key in it: `AI_API_KEY` is configuration only.
