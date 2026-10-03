@@ -1,0 +1,7 @@
+[*.{cs,csproj,props,slnx,json}]
+indent_size = 4
+[*.{csproj,props,slnx}]
+indent_size = 2
+[*.cs]
+file_scoped_namespaces = true:warning
+csharp_style_namespace_declarations = file_scoped:warning

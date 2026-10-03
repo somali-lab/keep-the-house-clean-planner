@@ -7,3 +7,5 @@ playwright-report/
 test-results/
 *.tsbuildinfo
 dev-dist/
+bin/
+obj/

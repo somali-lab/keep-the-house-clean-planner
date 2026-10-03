@@ -1,6 +1,6 @@
 # ADR-0006 — Server-side PDF rendering
 
-Status: Accepted
+Status: Superseded by ADR-0020
 
 ## Context
 
