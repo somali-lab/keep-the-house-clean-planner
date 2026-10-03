@@ -6,20 +6,21 @@ These instructions apply to the entire repository and are the single source of t
 
 Read each matching instruction file before editing. The `applyTo` frontmatter in the file is authoritative; this index helps locate the relevant rules.
 
-| Scope | Instruction file | Rules |
-| --- | --- | --- |
-| All files | `.github/instructions/project-standards.instructions.md` | General engineering constraints |
-| Release workflows, versioning, and container files | `.github/instructions/release.instructions.md` | Release and publication |
-| `apps/server/**/*.ts` | `.github/instructions/server.instructions.md` | Server layering, authorization, persistence, and audit |
-| `packages/shared/**/*.ts` | `.github/instructions/shared-domain.instructions.md` | Shared contracts, calendar, cycles, and validation |
-| `**/*.test.ts(x)`, `**/*.spec.ts(x)` | `.github/instructions/tests.instructions.md` | Deterministic tests |
-| `apps/web/**/*.ts(x)`, `apps/web/**/*.css` | `.github/instructions/web.instructions.md` | React, accessibility, API, and translations |
+| Scope                                                          | Instruction file                                         | Rules                                                          |
+| -------------------------------------------------------------- | -------------------------------------------------------- | -------------------------------------------------------------- |
+| All files                                                      | `.github/instructions/project-standards.instructions.md` | General engineering constraints                                |
+| Release workflows, versioning, and container files             | `.github/instructions/release.instructions.md`           | Release and publication                                        |
+| `apps/server/**/*.ts`                                          | `.github/instructions/server.instructions.md`            | Server layering, authorization, persistence, and audit         |
+| `packages/shared/**/*.ts`                                      | `.github/instructions/shared-domain.instructions.md`     | Shared contracts, calendar, cycles, and validation             |
+| `**/*.test.ts(x)`, `**/*.spec.ts(x)`, `apps/api/tests/**/*.cs` | `.github/instructions/tests.instructions.md`             | Deterministic tests                                            |
+| `apps/api/**/*.cs`                                             | `.github/instructions/api.instructions.md`               | .NET hexagonal layering, ports, persistence, audit, and errors |
+| `apps/web/**/*.ts(x)`, `apps/web/**/*.css`                     | `.github/instructions/web.instructions.md`               | React, accessibility, API, and translations                    |
 
 ## Start every task
 
 1. Read `git status` and preserve changes you did not make.
-2. Fetch `origin/main`, switch to local `main`, and fast-forward it to `origin/main` before starting implementation so the newest source is present locally. If local `main` cannot be fast-forwarded, preserve its unique commits on a backup branch before realigning it; never silently discard work.
-3. Create and switch to a new dedicated feature branch from that updated `main`, named with a Conventional Commit type prefix, followed by the name of the agent tool doing the work and a short description: `feat/codex-add-export`, `fix/copilot-due-date-bug`. Never create a feature branch from a stale branch and never implement changes directly on `main`.
+2. Fetch `origin/main`, switch to local `main`, and fast-forward it to `origin/main` before starting implementation so the newest source is present locally. If local `main` cannot be fast-forwarded, preserve its unique commits on a backup branch before realigning it; never silently discard work. Work on the .NET rewrite (`apps/api`, `docs/plans/dotnet-rewrite.md`) uses the integration branch `next` as base instead of `main`: do the same with `origin/next`.
+3. Create and switch to a new dedicated feature branch from that updated `main` (`next` for rewrite work, and its pull request targets `next`), named with a Conventional Commit type prefix, followed by the name of the agent tool doing the work and a short description: `feat/codex-add-export`, `fix/copilot-due-date-bug`. Never create a feature branch from a stale branch and never implement changes directly on `main`.
 4. Read the working documents in `docs/` described below; they carry the state of any work that is already in flight.
 5. Locate the implementation, its nearest tests, and any relevant record in `docs/adr/` before editing.
 6. Trace cross-layer changes end to end: shared contract -> server route/domain/data -> web API/UI -> tests.
@@ -64,6 +65,7 @@ Empty these documents as part of finishing the work, and report anything left in
 - `apps/server/src/data`: MongoDB access and the only permitted location for raw database writes.
 - `apps/server/src/audit`: actor context, diffs, and audit recording.
 - `apps/server/test`: API, integration, audit, PDF, backup, and configuration tests.
+- `apps/api`: the .NET 10 rewrite of the server (`Huishoudplanner.slnx`), one project per hexagon ring under `src/` plus `tests/`; see `docs/plans/dotnet-rewrite.md` §3.1. Lives on the integration branch `next` until the switch.
 - `apps/web/src/api`: typed HTTP client and shared queries.
 - `apps/web/src/features`: feature UI plus colocated component/model tests.
 - `apps/web/src/i18n`: Dutch and English message catalogs and language runtime.
@@ -85,6 +87,18 @@ Empty these documents as part of finishing the work, and report anything left in
 - User-facing text goes through the existing i18n helpers and must be added to both Dutch and English catalogs.
 - UI changes must work in mobile and desktop layouts, remain keyboard accessible, and not rely on color alone.
 
+## .NET API rules (`apps/api`)
+
+These apply to the rewrite on `next`; `apps/server` keeps its own rules above until the switch. Details and rationale: `docs/plans/dotnet-rewrite.md` and the skills `hexagonal-arch-dotnet`, `mongodb-persistence` and `xunit-tdd-workflow`.
+
+- Hexagonal rings, one project each: Domain (only `OneOf` as package), Application (references Domain), adapters (reference Domain), Host (the only composition root). `MongoDB.Driver`, `QuestPDF`, `Microsoft.Extensions.AI` and `Microsoft.AspNetCore.*` stay inside their adapter; ArchUnitNET tests enforce it.
+- Driving ports are `IXxxService`, driven ports are verb-based `ForXxx`. No MediatR. Errors are `OneOf` values, never exceptions across a port; the HTTP adapter maps them to RFC 9457 Problem Details.
+- All database writes belong in `Huishoudplanner.Adapters.Mongo`. Every real state change writes entity and audit entry in one transaction (single-node replica set); no-op updates write and audit nothing.
+- Ids are `ObjectId` in storage and 24-character hex strings in the API; never ULID or `Guid`. Calendar dates are `DateOnly` day keys.
+- Time comes from `TimeProvider`; no `DateTime.Now` or `DateTime.UtcNow` outside the clock adapter.
+- Domain rules live in the domain only; the web app holds none of them.
+- Test first, with a test that is red before the change. Integration tests use Testcontainers (`mongo:8` replica set), a shared container per assembly and a uniquely named database per test class.
+
 ## Testing and completion
 
 - Add or update a regression test with every behavior change. Prefer pure model tests for logic, component tests for interaction, server integration tests for HTTP/persistence, and Playwright only for critical cross-stack journeys.
@@ -96,6 +110,9 @@ Empty these documents as part of finishing the work, and report anything left in
 
 ## Project skills
 
+- `hexagonal-arch-dotnet`: place code, ports and dependencies correctly in `apps/api`.
+- `mongodb-persistence`: write or review the Mongo adapter, transactions with audit, indexes, and migrations.
+- `xunit-tdd-workflow`: write .NET tests test-first (xunit.v3, Testcontainers, `WebApplicationFactory`).
 - `verify-household-planner`: choose and run the proportional validation set.
 - `change-server-api`: change shared contracts, Fastify routes, domain logic, persistence, and audit safely.
 - `change-web-feature`: change React features, translations, responsive layouts, offline behavior, and UI tests.

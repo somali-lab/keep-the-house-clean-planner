@@ -1,0 +1,1877 @@
+{
+  "module": "due",
+  "cases": [
+    {
+      "name": "ratio 0",
+      "function": "dueState",
+      "input": {
+        "ratio": 0
+      },
+      "expected": "ok"
+    },
+    {
+      "name": "ratio 0.5",
+      "function": "dueState",
+      "input": {
+        "ratio": 0.5
+      },
+      "expected": "ok"
+    },
+    {
+      "name": "ratio 0.99",
+      "function": "dueState",
+      "input": {
+        "ratio": 0.99
+      },
+      "expected": "ok"
+    },
+    {
+      "name": "ratio 1",
+      "function": "dueState",
+      "input": {
+        "ratio": 1
+      },
+      "expected": "due"
+    },
+    {
+      "name": "ratio 1.49",
+      "function": "dueState",
+      "input": {
+        "ratio": 1.49
+      },
+      "expected": "due"
+    },
+    {
+      "name": "ratio 1.5",
+      "function": "dueState",
+      "input": {
+        "ratio": 1.5
+      },
+      "expected": "overdue"
+    },
+    {
+      "name": "ratio 12",
+      "function": "dueState",
+      "input": {
+        "ratio": 12
+      },
+      "expected": "overdue"
+    },
+    {
+      "name": "hits the exact boundaries 1.0 and 1.5",
+      "function": "computeDue",
+      "input": {
+        "tasks": [
+          {
+            "_id": "six",
+            "active": true,
+            "intervalKey": "1w",
+            "lastCompletedAt": "2026-09-10T10:00:00Z",
+            "initialDueDate": "2026-09-16"
+          },
+          {
+            "_id": "seven",
+            "active": true,
+            "intervalKey": "1w",
+            "lastCompletedAt": "2026-09-09T10:00:00Z",
+            "initialDueDate": "2026-09-16"
+          },
+          {
+            "_id": "fortnight-20",
+            "active": true,
+            "intervalKey": "2wk",
+            "lastCompletedAt": "2026-08-27T10:00:00Z",
+            "initialDueDate": "2026-09-16"
+          },
+          {
+            "_id": "fortnight-21",
+            "active": true,
+            "intervalKey": "2wk",
+            "lastCompletedAt": "2026-08-26T10:00:00Z",
+            "initialDueDate": "2026-09-16"
+          }
+        ],
+        "intervals": [
+          {
+            "key": "daily",
+            "label": "Dagelijks",
+            "perCycle": 28,
+            "periodDays": 1
+          },
+          {
+            "key": "3w",
+            "label": "3x per week",
+            "perCycle": 12,
+            "periodDays": 2
+          },
+          {
+            "key": "2w",
+            "label": "2x per week",
+            "perCycle": 8,
+            "periodDays": 3
+          },
+          {
+            "key": "1w",
+            "label": "1x per week",
+            "perCycle": 4,
+            "periodDays": 7
+          },
+          {
+            "key": "2wk",
+            "label": "1x per 2 weken",
+            "perCycle": 2,
+            "periodDays": 14
+          },
+          {
+            "key": "4wk",
+            "label": "1x per 4 weken",
+            "perCycle": 1,
+            "periodDays": 28
+          },
+          {
+            "key": "quarter",
+            "label": "1x per kwartaal",
+            "perCycle": null,
+            "periodDays": 91
+          }
+        ],
+        "today": "2026-09-16",
+        "timezone": "Europe/Amsterdam"
+      },
+      "expected": [
+        {
+          "taskId": "fortnight-21",
+          "daysSince": 21,
+          "periodDays": 14,
+          "ratio": 1.5,
+          "state": "overdue"
+        },
+        {
+          "taskId": "fortnight-20",
+          "daysSince": 20,
+          "periodDays": 14,
+          "ratio": 1.4285714285714286,
+          "state": "due"
+        },
+        {
+          "taskId": "seven",
+          "daysSince": 7,
+          "periodDays": 7,
+          "ratio": 1,
+          "state": "due"
+        },
+        {
+          "taskId": "six",
+          "daysSince": 6,
+          "periodDays": 7,
+          "ratio": 0.8571428571428571,
+          "state": "ok"
+        }
+      ]
+    },
+    {
+      "name": "counts local calendar days across fall back (49.5 hours is 2 days)",
+      "function": "computeDue",
+      "input": {
+        "tasks": [
+          {
+            "_id": "fall",
+            "active": true,
+            "intervalKey": "daily",
+            "lastCompletedAt": "2026-10-24T20:30:00Z",
+            "initialDueDate": "2026-09-16"
+          }
+        ],
+        "intervals": [
+          {
+            "key": "daily",
+            "label": "Dagelijks",
+            "perCycle": 28,
+            "periodDays": 1
+          },
+          {
+            "key": "3w",
+            "label": "3x per week",
+            "perCycle": 12,
+            "periodDays": 2
+          },
+          {
+            "key": "2w",
+            "label": "2x per week",
+            "perCycle": 8,
+            "periodDays": 3
+          },
+          {
+            "key": "1w",
+            "label": "1x per week",
+            "perCycle": 4,
+            "periodDays": 7
+          },
+          {
+            "key": "2wk",
+            "label": "1x per 2 weken",
+            "perCycle": 2,
+            "periodDays": 14
+          },
+          {
+            "key": "4wk",
+            "label": "1x per 4 weken",
+            "perCycle": 1,
+            "periodDays": 28
+          },
+          {
+            "key": "quarter",
+            "label": "1x per kwartaal",
+            "perCycle": null,
+            "periodDays": 91
+          }
+        ],
+        "today": "2026-10-26",
+        "timezone": "Europe/Amsterdam"
+      },
+      "expected": [
+        {
+          "taskId": "fall",
+          "daysSince": 2,
+          "periodDays": 1,
+          "ratio": 2,
+          "state": "overdue"
+        }
+      ]
+    },
+    {
+      "name": "counts local calendar days across spring forward",
+      "function": "computeDue",
+      "input": {
+        "tasks": [
+          {
+            "_id": "spring",
+            "active": true,
+            "intervalKey": "daily",
+            "lastCompletedAt": "2026-03-28T23:30:00Z",
+            "initialDueDate": "2026-09-16"
+          }
+        ],
+        "intervals": [
+          {
+            "key": "daily",
+            "label": "Dagelijks",
+            "perCycle": 28,
+            "periodDays": 1
+          },
+          {
+            "key": "3w",
+            "label": "3x per week",
+            "perCycle": 12,
+            "periodDays": 2
+          },
+          {
+            "key": "2w",
+            "label": "2x per week",
+            "perCycle": 8,
+            "periodDays": 3
+          },
+          {
+            "key": "1w",
+            "label": "1x per week",
+            "perCycle": 4,
+            "periodDays": 7
+          },
+          {
+            "key": "2wk",
+            "label": "1x per 2 weken",
+            "perCycle": 2,
+            "periodDays": 14
+          },
+          {
+            "key": "4wk",
+            "label": "1x per 4 weken",
+            "perCycle": 1,
+            "periodDays": 28
+          },
+          {
+            "key": "quarter",
+            "label": "1x per kwartaal",
+            "perCycle": null,
+            "periodDays": 91
+          }
+        ],
+        "today": "2026-03-30",
+        "timezone": "Europe/Amsterdam"
+      },
+      "expected": [
+        {
+          "taskId": "spring",
+          "daysSince": 1,
+          "periodDays": 1,
+          "ratio": 1,
+          "state": "due"
+        }
+      ]
+    },
+    {
+      "name": "completion at 23:30 UTC on the eve of spring forward is local 00:30 CET",
+      "function": "computeDue",
+      "input": {
+        "tasks": [
+          {
+            "_id": "spring-eve",
+            "active": true,
+            "intervalKey": "daily",
+            "lastCompletedAt": "2026-03-28T23:30:00Z",
+            "initialDueDate": "2026-09-16"
+          }
+        ],
+        "intervals": [
+          {
+            "key": "daily",
+            "label": "Dagelijks",
+            "perCycle": 28,
+            "periodDays": 1
+          },
+          {
+            "key": "3w",
+            "label": "3x per week",
+            "perCycle": 12,
+            "periodDays": 2
+          },
+          {
+            "key": "2w",
+            "label": "2x per week",
+            "perCycle": 8,
+            "periodDays": 3
+          },
+          {
+            "key": "1w",
+            "label": "1x per week",
+            "perCycle": 4,
+            "periodDays": 7
+          },
+          {
+            "key": "2wk",
+            "label": "1x per 2 weken",
+            "perCycle": 2,
+            "periodDays": 14
+          },
+          {
+            "key": "4wk",
+            "label": "1x per 4 weken",
+            "perCycle": 1,
+            "periodDays": 28
+          },
+          {
+            "key": "quarter",
+            "label": "1x per kwartaal",
+            "perCycle": null,
+            "periodDays": 91
+          }
+        ],
+        "today": "2026-03-29",
+        "timezone": "Europe/Amsterdam"
+      },
+      "expected": [
+        {
+          "taskId": "spring-eve",
+          "daysSince": 0,
+          "periodDays": 1,
+          "ratio": 0,
+          "state": "ok"
+        }
+      ]
+    },
+    {
+      "name": "completion in the repeated fall back hour (second 02:30)",
+      "function": "computeDue",
+      "input": {
+        "tasks": [
+          {
+            "_id": "repeat",
+            "active": true,
+            "intervalKey": "daily",
+            "lastCompletedAt": "2026-10-25T01:30:00Z",
+            "initialDueDate": "2026-09-16"
+          }
+        ],
+        "intervals": [
+          {
+            "key": "daily",
+            "label": "Dagelijks",
+            "perCycle": 28,
+            "periodDays": 1
+          },
+          {
+            "key": "3w",
+            "label": "3x per week",
+            "perCycle": 12,
+            "periodDays": 2
+          },
+          {
+            "key": "2w",
+            "label": "2x per week",
+            "perCycle": 8,
+            "periodDays": 3
+          },
+          {
+            "key": "1w",
+            "label": "1x per week",
+            "perCycle": 4,
+            "periodDays": 7
+          },
+          {
+            "key": "2wk",
+            "label": "1x per 2 weken",
+            "perCycle": 2,
+            "periodDays": 14
+          },
+          {
+            "key": "4wk",
+            "label": "1x per 4 weken",
+            "perCycle": 1,
+            "periodDays": 28
+          },
+          {
+            "key": "quarter",
+            "label": "1x per kwartaal",
+            "perCycle": null,
+            "periodDays": 91
+          }
+        ],
+        "today": "2026-10-26",
+        "timezone": "Europe/Amsterdam"
+      },
+      "expected": [
+        {
+          "taskId": "repeat",
+          "daysSince": 1,
+          "periodDays": 1,
+          "ratio": 1,
+          "state": "due"
+        }
+      ]
+    },
+    {
+      "name": "completion in the last second of the 25-hour day",
+      "function": "computeDue",
+      "input": {
+        "tasks": [
+          {
+            "_id": "last",
+            "active": true,
+            "intervalKey": "daily",
+            "lastCompletedAt": "2026-10-25T22:59:59Z",
+            "initialDueDate": "2026-09-16"
+          }
+        ],
+        "intervals": [
+          {
+            "key": "daily",
+            "label": "Dagelijks",
+            "perCycle": 28,
+            "periodDays": 1
+          },
+          {
+            "key": "3w",
+            "label": "3x per week",
+            "perCycle": 12,
+            "periodDays": 2
+          },
+          {
+            "key": "2w",
+            "label": "2x per week",
+            "perCycle": 8,
+            "periodDays": 3
+          },
+          {
+            "key": "1w",
+            "label": "1x per week",
+            "perCycle": 4,
+            "periodDays": 7
+          },
+          {
+            "key": "2wk",
+            "label": "1x per 2 weken",
+            "perCycle": 2,
+            "periodDays": 14
+          },
+          {
+            "key": "4wk",
+            "label": "1x per 4 weken",
+            "perCycle": 1,
+            "periodDays": 28
+          },
+          {
+            "key": "quarter",
+            "label": "1x per kwartaal",
+            "perCycle": null,
+            "periodDays": 91
+          }
+        ],
+        "today": "2026-10-26",
+        "timezone": "Europe/Amsterdam"
+      },
+      "expected": [
+        {
+          "taskId": "last",
+          "daysSince": 1,
+          "periodDays": 1,
+          "ratio": 1,
+          "state": "due"
+        }
+      ]
+    },
+    {
+      "name": "completion in the first second after the 25-hour day",
+      "function": "computeDue",
+      "input": {
+        "tasks": [
+          {
+            "_id": "next",
+            "active": true,
+            "intervalKey": "daily",
+            "lastCompletedAt": "2026-10-25T23:00:00Z",
+            "initialDueDate": "2026-09-16"
+          }
+        ],
+        "intervals": [
+          {
+            "key": "daily",
+            "label": "Dagelijks",
+            "perCycle": 28,
+            "periodDays": 1
+          },
+          {
+            "key": "3w",
+            "label": "3x per week",
+            "perCycle": 12,
+            "periodDays": 2
+          },
+          {
+            "key": "2w",
+            "label": "2x per week",
+            "perCycle": 8,
+            "periodDays": 3
+          },
+          {
+            "key": "1w",
+            "label": "1x per week",
+            "perCycle": 4,
+            "periodDays": 7
+          },
+          {
+            "key": "2wk",
+            "label": "1x per 2 weken",
+            "perCycle": 2,
+            "periodDays": 14
+          },
+          {
+            "key": "4wk",
+            "label": "1x per 4 weken",
+            "perCycle": 1,
+            "periodDays": 28
+          },
+          {
+            "key": "quarter",
+            "label": "1x per kwartaal",
+            "perCycle": null,
+            "periodDays": 91
+          }
+        ],
+        "today": "2026-10-26",
+        "timezone": "Europe/Amsterdam"
+      },
+      "expected": [
+        {
+          "taskId": "next",
+          "daysSince": 0,
+          "periodDays": 1,
+          "ratio": 0,
+          "state": "ok"
+        }
+      ]
+    },
+    {
+      "name": "uses the local day, not the UTC day, of the last completion",
+      "function": "computeDue",
+      "input": {
+        "tasks": [
+          {
+            "_id": "late",
+            "active": true,
+            "intervalKey": "daily",
+            "lastCompletedAt": "2026-09-15T23:30:00Z",
+            "initialDueDate": "2026-09-16"
+          }
+        ],
+        "intervals": [
+          {
+            "key": "daily",
+            "label": "Dagelijks",
+            "perCycle": 28,
+            "periodDays": 1
+          },
+          {
+            "key": "3w",
+            "label": "3x per week",
+            "perCycle": 12,
+            "periodDays": 2
+          },
+          {
+            "key": "2w",
+            "label": "2x per week",
+            "perCycle": 8,
+            "periodDays": 3
+          },
+          {
+            "key": "1w",
+            "label": "1x per week",
+            "perCycle": 4,
+            "periodDays": 7
+          },
+          {
+            "key": "2wk",
+            "label": "1x per 2 weken",
+            "perCycle": 2,
+            "periodDays": 14
+          },
+          {
+            "key": "4wk",
+            "label": "1x per 4 weken",
+            "perCycle": 1,
+            "periodDays": 28
+          },
+          {
+            "key": "quarter",
+            "label": "1x per kwartaal",
+            "perCycle": null,
+            "periodDays": 91
+          }
+        ],
+        "today": "2026-09-16",
+        "timezone": "Europe/Amsterdam"
+      },
+      "expected": [
+        {
+          "taskId": "late",
+          "daysSince": 0,
+          "periodDays": 1,
+          "ratio": 0,
+          "state": "ok"
+        }
+      ]
+    },
+    {
+      "name": "the same completion read in UTC counts the UTC day",
+      "function": "computeDue",
+      "input": {
+        "tasks": [
+          {
+            "_id": "late",
+            "active": true,
+            "intervalKey": "daily",
+            "lastCompletedAt": "2026-09-15T23:30:00Z",
+            "initialDueDate": "2026-09-16"
+          }
+        ],
+        "intervals": [
+          {
+            "key": "daily",
+            "label": "Dagelijks",
+            "perCycle": 28,
+            "periodDays": 1
+          },
+          {
+            "key": "3w",
+            "label": "3x per week",
+            "perCycle": 12,
+            "periodDays": 2
+          },
+          {
+            "key": "2w",
+            "label": "2x per week",
+            "perCycle": 8,
+            "periodDays": 3
+          },
+          {
+            "key": "1w",
+            "label": "1x per week",
+            "perCycle": 4,
+            "periodDays": 7
+          },
+          {
+            "key": "2wk",
+            "label": "1x per 2 weken",
+            "perCycle": 2,
+            "periodDays": 14
+          },
+          {
+            "key": "4wk",
+            "label": "1x per 4 weken",
+            "perCycle": 1,
+            "periodDays": 28
+          },
+          {
+            "key": "quarter",
+            "label": "1x per kwartaal",
+            "perCycle": null,
+            "periodDays": 91
+          }
+        ],
+        "today": "2026-09-16",
+        "timezone": "UTC"
+      },
+      "expected": [
+        {
+          "taskId": "late",
+          "daysSince": 1,
+          "periodDays": 1,
+          "ratio": 1,
+          "state": "due"
+        }
+      ]
+    },
+    {
+      "name": "completion with an offset instead of Z",
+      "function": "computeDue",
+      "input": {
+        "tasks": [
+          {
+            "_id": "offset",
+            "active": true,
+            "intervalKey": "daily",
+            "lastCompletedAt": "2026-09-15T23:30:00+00:00",
+            "initialDueDate": "2026-09-16"
+          }
+        ],
+        "intervals": [
+          {
+            "key": "daily",
+            "label": "Dagelijks",
+            "perCycle": 28,
+            "periodDays": 1
+          },
+          {
+            "key": "3w",
+            "label": "3x per week",
+            "perCycle": 12,
+            "periodDays": 2
+          },
+          {
+            "key": "2w",
+            "label": "2x per week",
+            "perCycle": 8,
+            "periodDays": 3
+          },
+          {
+            "key": "1w",
+            "label": "1x per week",
+            "perCycle": 4,
+            "periodDays": 7
+          },
+          {
+            "key": "2wk",
+            "label": "1x per 2 weken",
+            "perCycle": 2,
+            "periodDays": 14
+          },
+          {
+            "key": "4wk",
+            "label": "1x per 4 weken",
+            "perCycle": 1,
+            "periodDays": 28
+          },
+          {
+            "key": "quarter",
+            "label": "1x per kwartaal",
+            "perCycle": null,
+            "periodDays": 91
+          }
+        ],
+        "today": "2026-09-16",
+        "timezone": "Europe/Amsterdam"
+      },
+      "expected": [
+        {
+          "taskId": "offset",
+          "daysSince": 0,
+          "periodDays": 1,
+          "ratio": 0,
+          "state": "ok"
+        }
+      ]
+    },
+    {
+      "name": "before the initial due date a never-completed task is not due",
+      "function": "computeDue",
+      "input": {
+        "tasks": [
+          {
+            "_id": "new",
+            "active": true,
+            "intervalKey": "quarter",
+            "lastCompletedAt": null,
+            "initialDueDate": "2026-10-16"
+          }
+        ],
+        "intervals": [
+          {
+            "key": "daily",
+            "label": "Dagelijks",
+            "perCycle": 28,
+            "periodDays": 1
+          },
+          {
+            "key": "3w",
+            "label": "3x per week",
+            "perCycle": 12,
+            "periodDays": 2
+          },
+          {
+            "key": "2w",
+            "label": "2x per week",
+            "perCycle": 8,
+            "periodDays": 3
+          },
+          {
+            "key": "1w",
+            "label": "1x per week",
+            "perCycle": 4,
+            "periodDays": 7
+          },
+          {
+            "key": "2wk",
+            "label": "1x per 2 weken",
+            "perCycle": 2,
+            "periodDays": 14
+          },
+          {
+            "key": "4wk",
+            "label": "1x per 4 weken",
+            "perCycle": 1,
+            "periodDays": 28
+          },
+          {
+            "key": "quarter",
+            "label": "1x per kwartaal",
+            "perCycle": null,
+            "periodDays": 91
+          }
+        ],
+        "today": "2026-09-20",
+        "timezone": "Europe/Amsterdam"
+      },
+      "expected": [
+        {
+          "taskId": "new",
+          "daysSince": 0,
+          "periodDays": 91,
+          "ratio": 0,
+          "state": "ok"
+        }
+      ]
+    },
+    {
+      "name": "on the initial due date a never-completed task is due after one period",
+      "function": "computeDue",
+      "input": {
+        "tasks": [
+          {
+            "_id": "new",
+            "active": true,
+            "intervalKey": "quarter",
+            "lastCompletedAt": null,
+            "initialDueDate": "2026-10-16"
+          }
+        ],
+        "intervals": [
+          {
+            "key": "daily",
+            "label": "Dagelijks",
+            "perCycle": 28,
+            "periodDays": 1
+          },
+          {
+            "key": "3w",
+            "label": "3x per week",
+            "perCycle": 12,
+            "periodDays": 2
+          },
+          {
+            "key": "2w",
+            "label": "2x per week",
+            "perCycle": 8,
+            "periodDays": 3
+          },
+          {
+            "key": "1w",
+            "label": "1x per week",
+            "perCycle": 4,
+            "periodDays": 7
+          },
+          {
+            "key": "2wk",
+            "label": "1x per 2 weken",
+            "perCycle": 2,
+            "periodDays": 14
+          },
+          {
+            "key": "4wk",
+            "label": "1x per 4 weken",
+            "perCycle": 1,
+            "periodDays": 28
+          },
+          {
+            "key": "quarter",
+            "label": "1x per kwartaal",
+            "perCycle": null,
+            "periodDays": 91
+          }
+        ],
+        "today": "2026-10-16",
+        "timezone": "Europe/Amsterdam"
+      },
+      "expected": [
+        {
+          "taskId": "new",
+          "daysSince": 91,
+          "periodDays": 91,
+          "ratio": 1,
+          "state": "due"
+        }
+      ]
+    },
+    {
+      "name": "a never-completed task grows past one period after its initial due date",
+      "function": "computeDue",
+      "input": {
+        "tasks": [
+          {
+            "_id": "new",
+            "active": true,
+            "intervalKey": "1w",
+            "lastCompletedAt": null,
+            "initialDueDate": "2026-09-09"
+          }
+        ],
+        "intervals": [
+          {
+            "key": "daily",
+            "label": "Dagelijks",
+            "perCycle": 28,
+            "periodDays": 1
+          },
+          {
+            "key": "3w",
+            "label": "3x per week",
+            "perCycle": 12,
+            "periodDays": 2
+          },
+          {
+            "key": "2w",
+            "label": "2x per week",
+            "perCycle": 8,
+            "periodDays": 3
+          },
+          {
+            "key": "1w",
+            "label": "1x per week",
+            "perCycle": 4,
+            "periodDays": 7
+          },
+          {
+            "key": "2wk",
+            "label": "1x per 2 weken",
+            "perCycle": 2,
+            "periodDays": 14
+          },
+          {
+            "key": "4wk",
+            "label": "1x per 4 weken",
+            "perCycle": 1,
+            "periodDays": 28
+          },
+          {
+            "key": "quarter",
+            "label": "1x per kwartaal",
+            "perCycle": null,
+            "periodDays": 91
+          }
+        ],
+        "today": "2026-09-16",
+        "timezone": "Europe/Amsterdam"
+      },
+      "expected": [
+        {
+          "taskId": "new",
+          "daysSince": 14,
+          "periodDays": 7,
+          "ratio": 2,
+          "state": "overdue"
+        }
+      ]
+    },
+    {
+      "name": "a never-completed task reaches overdue half a period later",
+      "function": "computeDue",
+      "input": {
+        "tasks": [
+          {
+            "_id": "new",
+            "active": true,
+            "intervalKey": "quarter",
+            "lastCompletedAt": null,
+            "initialDueDate": "2026-10-16"
+          }
+        ],
+        "intervals": [
+          {
+            "key": "daily",
+            "label": "Dagelijks",
+            "perCycle": 28,
+            "periodDays": 1
+          },
+          {
+            "key": "3w",
+            "label": "3x per week",
+            "perCycle": 12,
+            "periodDays": 2
+          },
+          {
+            "key": "2w",
+            "label": "2x per week",
+            "perCycle": 8,
+            "periodDays": 3
+          },
+          {
+            "key": "1w",
+            "label": "1x per week",
+            "perCycle": 4,
+            "periodDays": 7
+          },
+          {
+            "key": "2wk",
+            "label": "1x per 2 weken",
+            "perCycle": 2,
+            "periodDays": 14
+          },
+          {
+            "key": "4wk",
+            "label": "1x per 4 weken",
+            "perCycle": 1,
+            "periodDays": 28
+          },
+          {
+            "key": "quarter",
+            "label": "1x per kwartaal",
+            "perCycle": null,
+            "periodDays": 91
+          }
+        ],
+        "today": "2026-12-01",
+        "timezone": "Europe/Amsterdam"
+      },
+      "expected": [
+        {
+          "taskId": "new",
+          "daysSince": 137,
+          "periodDays": 91,
+          "ratio": 1.5054945054945055,
+          "state": "overdue"
+        }
+      ]
+    },
+    {
+      "name": "a never-completed task counts days across DST",
+      "function": "computeDue",
+      "input": {
+        "tasks": [
+          {
+            "_id": "new",
+            "active": true,
+            "intervalKey": "4wk",
+            "lastCompletedAt": null,
+            "initialDueDate": "2026-10-12"
+          }
+        ],
+        "intervals": [
+          {
+            "key": "daily",
+            "label": "Dagelijks",
+            "perCycle": 28,
+            "periodDays": 1
+          },
+          {
+            "key": "3w",
+            "label": "3x per week",
+            "perCycle": 12,
+            "periodDays": 2
+          },
+          {
+            "key": "2w",
+            "label": "2x per week",
+            "perCycle": 8,
+            "periodDays": 3
+          },
+          {
+            "key": "1w",
+            "label": "1x per week",
+            "perCycle": 4,
+            "periodDays": 7
+          },
+          {
+            "key": "2wk",
+            "label": "1x per 2 weken",
+            "perCycle": 2,
+            "periodDays": 14
+          },
+          {
+            "key": "4wk",
+            "label": "1x per 4 weken",
+            "perCycle": 1,
+            "periodDays": 28
+          },
+          {
+            "key": "quarter",
+            "label": "1x per kwartaal",
+            "perCycle": null,
+            "periodDays": 91
+          }
+        ],
+        "today": "2026-11-09",
+        "timezone": "Europe/Amsterdam"
+      },
+      "expected": [
+        {
+          "taskId": "new",
+          "daysSince": 56,
+          "periodDays": 28,
+          "ratio": 2,
+          "state": "overdue"
+        }
+      ]
+    },
+    {
+      "name": "ranks by ratio, skips inactive tasks and unknown intervals",
+      "function": "computeDue",
+      "input": {
+        "tasks": [
+          {
+            "_id": "a",
+            "active": true,
+            "intervalKey": "1w",
+            "lastCompletedAt": "2026-09-12T10:00:00Z",
+            "initialDueDate": "2026-09-16"
+          },
+          {
+            "_id": "b",
+            "active": true,
+            "intervalKey": "daily",
+            "lastCompletedAt": "2026-09-13T10:00:00Z",
+            "initialDueDate": "2026-09-16"
+          },
+          {
+            "_id": "c",
+            "active": false,
+            "intervalKey": "1w",
+            "lastCompletedAt": "2025-01-01T10:00:00Z",
+            "initialDueDate": "2026-09-16"
+          },
+          {
+            "_id": "d",
+            "active": true,
+            "intervalKey": "mystery",
+            "lastCompletedAt": null,
+            "initialDueDate": "2026-09-16"
+          },
+          {
+            "_id": "e",
+            "active": true,
+            "intervalKey": "2wk",
+            "lastCompletedAt": "2026-09-02T10:00:00Z",
+            "initialDueDate": "2026-09-16"
+          }
+        ],
+        "intervals": [
+          {
+            "key": "daily",
+            "label": "Dagelijks",
+            "perCycle": 28,
+            "periodDays": 1
+          },
+          {
+            "key": "3w",
+            "label": "3x per week",
+            "perCycle": 12,
+            "periodDays": 2
+          },
+          {
+            "key": "2w",
+            "label": "2x per week",
+            "perCycle": 8,
+            "periodDays": 3
+          },
+          {
+            "key": "1w",
+            "label": "1x per week",
+            "perCycle": 4,
+            "periodDays": 7
+          },
+          {
+            "key": "2wk",
+            "label": "1x per 2 weken",
+            "perCycle": 2,
+            "periodDays": 14
+          },
+          {
+            "key": "4wk",
+            "label": "1x per 4 weken",
+            "perCycle": 1,
+            "periodDays": 28
+          },
+          {
+            "key": "quarter",
+            "label": "1x per kwartaal",
+            "perCycle": null,
+            "periodDays": 91
+          }
+        ],
+        "today": "2026-09-16",
+        "timezone": "Europe/Amsterdam"
+      },
+      "expected": [
+        {
+          "taskId": "b",
+          "daysSince": 3,
+          "periodDays": 1,
+          "ratio": 3,
+          "state": "overdue"
+        },
+        {
+          "taskId": "e",
+          "daysSince": 14,
+          "periodDays": 14,
+          "ratio": 1,
+          "state": "due"
+        },
+        {
+          "taskId": "a",
+          "daysSince": 4,
+          "periodDays": 7,
+          "ratio": 0.5714285714285714,
+          "state": "ok"
+        }
+      ]
+    },
+    {
+      "name": "equal ratio and days since are ordered by task id",
+      "function": "computeDue",
+      "input": {
+        "tasks": [
+          {
+            "_id": "z",
+            "active": true,
+            "intervalKey": "1w",
+            "lastCompletedAt": "2026-09-09T10:00:00Z",
+            "initialDueDate": "2026-09-16"
+          },
+          {
+            "_id": "b",
+            "active": true,
+            "intervalKey": "1w",
+            "lastCompletedAt": "2026-09-09T10:00:00Z",
+            "initialDueDate": "2026-09-16"
+          },
+          {
+            "_id": "m",
+            "active": true,
+            "intervalKey": "1w",
+            "lastCompletedAt": "2026-09-09T10:00:00Z",
+            "initialDueDate": "2026-09-16"
+          }
+        ],
+        "intervals": [
+          {
+            "key": "daily",
+            "label": "Dagelijks",
+            "perCycle": 28,
+            "periodDays": 1
+          },
+          {
+            "key": "3w",
+            "label": "3x per week",
+            "perCycle": 12,
+            "periodDays": 2
+          },
+          {
+            "key": "2w",
+            "label": "2x per week",
+            "perCycle": 8,
+            "periodDays": 3
+          },
+          {
+            "key": "1w",
+            "label": "1x per week",
+            "perCycle": 4,
+            "periodDays": 7
+          },
+          {
+            "key": "2wk",
+            "label": "1x per 2 weken",
+            "perCycle": 2,
+            "periodDays": 14
+          },
+          {
+            "key": "4wk",
+            "label": "1x per 4 weken",
+            "perCycle": 1,
+            "periodDays": 28
+          },
+          {
+            "key": "quarter",
+            "label": "1x per kwartaal",
+            "perCycle": null,
+            "periodDays": 91
+          }
+        ],
+        "today": "2026-09-16",
+        "timezone": "Europe/Amsterdam"
+      },
+      "expected": [
+        {
+          "taskId": "b",
+          "daysSince": 7,
+          "periodDays": 7,
+          "ratio": 1,
+          "state": "due"
+        },
+        {
+          "taskId": "m",
+          "daysSince": 7,
+          "periodDays": 7,
+          "ratio": 1,
+          "state": "due"
+        },
+        {
+          "taskId": "z",
+          "daysSince": 7,
+          "periodDays": 7,
+          "ratio": 1,
+          "state": "due"
+        }
+      ]
+    },
+    {
+      "name": "equal ratio but different days since: more days ranks first",
+      "function": "computeDue",
+      "input": {
+        "tasks": [
+          {
+            "_id": "few",
+            "active": true,
+            "intervalKey": "1w",
+            "lastCompletedAt": "2026-09-09T10:00:00Z",
+            "initialDueDate": "2026-09-16"
+          },
+          {
+            "_id": "many",
+            "active": true,
+            "intervalKey": "2wk",
+            "lastCompletedAt": "2026-09-02T10:00:00Z",
+            "initialDueDate": "2026-09-16"
+          }
+        ],
+        "intervals": [
+          {
+            "key": "daily",
+            "label": "Dagelijks",
+            "perCycle": 28,
+            "periodDays": 1
+          },
+          {
+            "key": "3w",
+            "label": "3x per week",
+            "perCycle": 12,
+            "periodDays": 2
+          },
+          {
+            "key": "2w",
+            "label": "2x per week",
+            "perCycle": 8,
+            "periodDays": 3
+          },
+          {
+            "key": "1w",
+            "label": "1x per week",
+            "perCycle": 4,
+            "periodDays": 7
+          },
+          {
+            "key": "2wk",
+            "label": "1x per 2 weken",
+            "perCycle": 2,
+            "periodDays": 14
+          },
+          {
+            "key": "4wk",
+            "label": "1x per 4 weken",
+            "perCycle": 1,
+            "periodDays": 28
+          },
+          {
+            "key": "quarter",
+            "label": "1x per kwartaal",
+            "perCycle": null,
+            "periodDays": 91
+          }
+        ],
+        "today": "2026-09-16",
+        "timezone": "Europe/Amsterdam"
+      },
+      "expected": [
+        {
+          "taskId": "many",
+          "daysSince": 14,
+          "periodDays": 14,
+          "ratio": 1,
+          "state": "due"
+        },
+        {
+          "taskId": "few",
+          "daysSince": 7,
+          "periodDays": 7,
+          "ratio": 1,
+          "state": "due"
+        }
+      ]
+    },
+    {
+      "name": "never reports negative days for a completion in the future",
+      "function": "computeDue",
+      "input": {
+        "tasks": [
+          {
+            "_id": "x",
+            "active": true,
+            "intervalKey": "1w",
+            "lastCompletedAt": "2026-09-20T10:00:00Z",
+            "initialDueDate": "2026-09-16"
+          }
+        ],
+        "intervals": [
+          {
+            "key": "daily",
+            "label": "Dagelijks",
+            "perCycle": 28,
+            "periodDays": 1
+          },
+          {
+            "key": "3w",
+            "label": "3x per week",
+            "perCycle": 12,
+            "periodDays": 2
+          },
+          {
+            "key": "2w",
+            "label": "2x per week",
+            "perCycle": 8,
+            "periodDays": 3
+          },
+          {
+            "key": "1w",
+            "label": "1x per week",
+            "perCycle": 4,
+            "periodDays": 7
+          },
+          {
+            "key": "2wk",
+            "label": "1x per 2 weken",
+            "perCycle": 2,
+            "periodDays": 14
+          },
+          {
+            "key": "4wk",
+            "label": "1x per 4 weken",
+            "perCycle": 1,
+            "periodDays": 28
+          },
+          {
+            "key": "quarter",
+            "label": "1x per kwartaal",
+            "perCycle": null,
+            "periodDays": 91
+          }
+        ],
+        "today": "2026-09-16",
+        "timezone": "Europe/Amsterdam"
+      },
+      "expected": [
+        {
+          "taskId": "x",
+          "daysSince": 0,
+          "periodDays": 7,
+          "ratio": 0,
+          "state": "ok"
+        }
+      ]
+    },
+    {
+      "name": "no tasks",
+      "function": "computeDue",
+      "input": {
+        "tasks": [],
+        "intervals": [
+          {
+            "key": "daily",
+            "label": "Dagelijks",
+            "perCycle": 28,
+            "periodDays": 1
+          },
+          {
+            "key": "3w",
+            "label": "3x per week",
+            "perCycle": 12,
+            "periodDays": 2
+          },
+          {
+            "key": "2w",
+            "label": "2x per week",
+            "perCycle": 8,
+            "periodDays": 3
+          },
+          {
+            "key": "1w",
+            "label": "1x per week",
+            "perCycle": 4,
+            "periodDays": 7
+          },
+          {
+            "key": "2wk",
+            "label": "1x per 2 weken",
+            "perCycle": 2,
+            "periodDays": 14
+          },
+          {
+            "key": "4wk",
+            "label": "1x per 4 weken",
+            "perCycle": 1,
+            "periodDays": 28
+          },
+          {
+            "key": "quarter",
+            "label": "1x per kwartaal",
+            "perCycle": null,
+            "periodDays": 91
+          }
+        ],
+        "today": "2026-09-16",
+        "timezone": "Europe/Amsterdam"
+      },
+      "expected": []
+    },
+    {
+      "name": "only inactive tasks",
+      "function": "computeDue",
+      "input": {
+        "tasks": [
+          {
+            "_id": "off",
+            "active": false,
+            "intervalKey": "1w",
+            "lastCompletedAt": "2026-09-01T10:00:00Z",
+            "initialDueDate": "2026-09-16"
+          }
+        ],
+        "intervals": [
+          {
+            "key": "daily",
+            "label": "Dagelijks",
+            "perCycle": 28,
+            "periodDays": 1
+          },
+          {
+            "key": "3w",
+            "label": "3x per week",
+            "perCycle": 12,
+            "periodDays": 2
+          },
+          {
+            "key": "2w",
+            "label": "2x per week",
+            "perCycle": 8,
+            "periodDays": 3
+          },
+          {
+            "key": "1w",
+            "label": "1x per week",
+            "perCycle": 4,
+            "periodDays": 7
+          },
+          {
+            "key": "2wk",
+            "label": "1x per 2 weken",
+            "perCycle": 2,
+            "periodDays": 14
+          },
+          {
+            "key": "4wk",
+            "label": "1x per 4 weken",
+            "perCycle": 1,
+            "periodDays": 28
+          },
+          {
+            "key": "quarter",
+            "label": "1x per kwartaal",
+            "perCycle": null,
+            "periodDays": 91
+          }
+        ],
+        "today": "2026-09-16",
+        "timezone": "Europe/Amsterdam"
+      },
+      "expected": []
+    },
+    {
+      "name": "completed today",
+      "function": "computeDue",
+      "input": {
+        "tasks": [
+          {
+            "_id": "now",
+            "active": true,
+            "intervalKey": "daily",
+            "lastCompletedAt": "2026-09-16T08:00:00Z",
+            "initialDueDate": "2026-09-16"
+          }
+        ],
+        "intervals": [
+          {
+            "key": "daily",
+            "label": "Dagelijks",
+            "perCycle": 28,
+            "periodDays": 1
+          },
+          {
+            "key": "3w",
+            "label": "3x per week",
+            "perCycle": 12,
+            "periodDays": 2
+          },
+          {
+            "key": "2w",
+            "label": "2x per week",
+            "perCycle": 8,
+            "periodDays": 3
+          },
+          {
+            "key": "1w",
+            "label": "1x per week",
+            "perCycle": 4,
+            "periodDays": 7
+          },
+          {
+            "key": "2wk",
+            "label": "1x per 2 weken",
+            "perCycle": 2,
+            "periodDays": 14
+          },
+          {
+            "key": "4wk",
+            "label": "1x per 4 weken",
+            "perCycle": 1,
+            "periodDays": 28
+          },
+          {
+            "key": "quarter",
+            "label": "1x per kwartaal",
+            "perCycle": null,
+            "periodDays": 91
+          }
+        ],
+        "today": "2026-09-16",
+        "timezone": "Europe/Amsterdam"
+      },
+      "expected": [
+        {
+          "taskId": "now",
+          "daysSince": 0,
+          "periodDays": 1,
+          "ratio": 0,
+          "state": "ok"
+        }
+      ]
+    },
+    {
+      "name": "completion across a leap day",
+      "function": "computeDue",
+      "input": {
+        "tasks": [
+          {
+            "_id": "leap",
+            "active": true,
+            "intervalKey": "4wk",
+            "lastCompletedAt": "2028-02-10T10:00:00Z",
+            "initialDueDate": "2026-09-16"
+          }
+        ],
+        "intervals": [
+          {
+            "key": "daily",
+            "label": "Dagelijks",
+            "perCycle": 28,
+            "periodDays": 1
+          },
+          {
+            "key": "3w",
+            "label": "3x per week",
+            "perCycle": 12,
+            "periodDays": 2
+          },
+          {
+            "key": "2w",
+            "label": "2x per week",
+            "perCycle": 8,
+            "periodDays": 3
+          },
+          {
+            "key": "1w",
+            "label": "1x per week",
+            "perCycle": 4,
+            "periodDays": 7
+          },
+          {
+            "key": "2wk",
+            "label": "1x per 2 weken",
+            "perCycle": 2,
+            "periodDays": 14
+          },
+          {
+            "key": "4wk",
+            "label": "1x per 4 weken",
+            "perCycle": 1,
+            "periodDays": 28
+          },
+          {
+            "key": "quarter",
+            "label": "1x per kwartaal",
+            "perCycle": null,
+            "periodDays": 91
+          }
+        ],
+        "today": "2028-03-07",
+        "timezone": "Europe/Amsterdam"
+      },
+      "expected": [
+        {
+          "taskId": "leap",
+          "daysSince": 26,
+          "periodDays": 28,
+          "ratio": 0.9285714285714286,
+          "state": "ok"
+        }
+      ]
+    },
+    {
+      "name": "completion across a year boundary",
+      "function": "computeDue",
+      "input": {
+        "tasks": [
+          {
+            "_id": "ny",
+            "active": true,
+            "intervalKey": "2wk",
+            "lastCompletedAt": "2026-12-25T10:00:00Z",
+            "initialDueDate": "2026-09-16"
+          }
+        ],
+        "intervals": [
+          {
+            "key": "daily",
+            "label": "Dagelijks",
+            "perCycle": 28,
+            "periodDays": 1
+          },
+          {
+            "key": "3w",
+            "label": "3x per week",
+            "perCycle": 12,
+            "periodDays": 2
+          },
+          {
+            "key": "2w",
+            "label": "2x per week",
+            "perCycle": 8,
+            "periodDays": 3
+          },
+          {
+            "key": "1w",
+            "label": "1x per week",
+            "perCycle": 4,
+            "periodDays": 7
+          },
+          {
+            "key": "2wk",
+            "label": "1x per 2 weken",
+            "perCycle": 2,
+            "periodDays": 14
+          },
+          {
+            "key": "4wk",
+            "label": "1x per 4 weken",
+            "perCycle": 1,
+            "periodDays": 28
+          },
+          {
+            "key": "quarter",
+            "label": "1x per kwartaal",
+            "perCycle": null,
+            "periodDays": 91
+          }
+        ],
+        "today": "2027-01-08",
+        "timezone": "Europe/Amsterdam"
+      },
+      "expected": [
+        {
+          "taskId": "ny",
+          "daysSince": 14,
+          "periodDays": 14,
+          "ratio": 1,
+          "state": "due"
+        }
+      ]
+    },
+    {
+      "name": "a custom interval list is used instead of the defaults",
+      "function": "computeDue",
+      "input": {
+        "tasks": [
+          {
+            "_id": "custom",
+            "active": true,
+            "intervalKey": "fortnight",
+            "lastCompletedAt": "2026-09-01T10:00:00Z",
+            "initialDueDate": "2026-09-16"
+          }
+        ],
+        "intervals": [
+          {
+            "key": "fortnight",
+            "label": "Fortnight",
+            "perCycle": 2,
+            "periodDays": 14
+          }
+        ],
+        "today": "2026-09-16",
+        "timezone": "Europe/Amsterdam"
+      },
+      "expected": [
+        {
+          "taskId": "custom",
+          "daysSince": 15,
+          "periodDays": 14,
+          "ratio": 1.0714285714285714,
+          "state": "due"
+        }
+      ]
+    }
+  ]
+}
