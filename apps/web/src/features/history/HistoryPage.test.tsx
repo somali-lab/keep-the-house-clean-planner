@@ -70,7 +70,7 @@ describe('HistoryPage', () => {
 
   it('filters by actor, entity type and date range', async () => {
     const fetchMock = setup(() => ({ items: PAGE_1, nextCursor: null }));
-    renderWithProviders(<HistoryPage />, { route: '/manage/history' });
+    renderWithProviders(<HistoryPage />, { route: '/manage/history', headerReset: true });
     await screen.findAllByRole('listitem');
 
     fireEvent.change(screen.getByLabelText('Wie'), { target: { value: BRAM._id } });
@@ -89,7 +89,7 @@ describe('HistoryPage', () => {
 
     expect(screen.getByLabelText('Wie')).toHaveDisplayValue('Bram de Vries');
     expect(within(screen.getByLabelText('Wie')).getByRole('option', { name: 'Systeem' })).toHaveValue(SYSTEM_ACTOR_ID);
-    fireEvent.click(screen.getByRole('button', { name: 'Filters wissen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Filters van dit scherm resetten' }));
     await waitFor(() => expect(auditUrls(fetchMock).at(-1)).toBe('/api/audit?limit=50'));
     expect(screen.getByLabelText('Wie')).toHaveValue('');
   });

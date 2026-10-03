@@ -762,7 +762,6 @@ export const en = {
   "language.label": "Language",
   "language.nl": "Dutch",
   "language.en": "English",
-  "history.filter.reset": "Clear filters",
   "mobileTasks.block": "{from} through {to}",
   "planner.searchTasks": "Search tasks",
   "planner.cycleTotal": "Full cycle total",
