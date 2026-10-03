@@ -1,4 +1,5 @@
 using Huishoudplanner.Host.Configuration;
+using Huishoudplanner.Host.Telemetry;
 
 // NODE_ENV is a legacy alias of ASPNETCORE_ENVIRONMENT (see AppOptionsBinder).
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions
@@ -9,6 +10,7 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 
 builder.Configuration.AddLegacyEnvironmentAliases();
 builder.Services.AddAppOptions(builder.Configuration);
+builder.Services.AddAppTelemetry(builder.Configuration);
 
 var app = builder.Build();
 

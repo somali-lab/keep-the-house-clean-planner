@@ -27,3 +27,7 @@ Every rule is proven three ways: it passes on the shipped assemblies, it passes 
 All configuration comes from environment variables, listed in [requirements section 9](../../docs/huishoudplanner-requirements.md). They are bound to `AppOptions` (`src/Huishoudplanner.Host/Configuration`) through `IOptions<AppOptions>` and validated when the host starts: an invalid configuration refuses to start and the message names the offending variables without ever echoing their values. An empty variable counts as unset.
 
 Two variables were renamed for .NET: `NODE_ENV` is now `ASPNETCORE_ENVIRONMENT` and `LOG_LEVEL` is now `Logging__LogLevel__Default`. The old names still work as aliases (the new name wins when both are set; for the environment the order is `ASPNETCORE_ENVIRONMENT`, `DOTNET_ENVIRONMENT`, `NODE_ENV`) until the switch from `apps/server`.
+
+## Observability
+
+Traces, metrics and logs go out over OTLP when `OTEL_EXPORTER_OTLP_ENDPOINT` is set; without it the application logs JSON to stdout only. The pipeline lives in `src/Huishoudplanner.Host/Telemetry`; variables, the Elastic example and the verification status are in [docs/OBSERVABILITY.md](../../docs/OBSERVABILITY.md).
