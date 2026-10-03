@@ -319,6 +319,7 @@ The fridge is a legitimate output device. The schedule must work without a phone
 - Management screens — planner, tasks, distribution, statistics, history, completions and settings — live behind a separate management area and are reachable from anywhere.
 - The overview and the management area switch with a button in the same top-right spot: a management button in the overview, and a Home button in management that always returns to the week overview. The management side menu stays available.
 - The settings screen is organised in tabs so that cycle, intervals, AI, notifications, appearance and maintenance stay separable.
+- An About page, reachable for every role from the management menu, shows the running version, the date and time of the latest release labelled as such, and links to the license and the changelog that belong to the running build. A local build that is not a release shows no release date.
 
 ### 7.2 Interaction
 

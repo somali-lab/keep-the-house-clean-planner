@@ -4,10 +4,8 @@ ARG NODE_IMAGE=node:24-bookworm-slim
 
 # ---------- build: install all deps, build the web app ----------
 FROM ${NODE_IMAGE} AS build
-ARG APP_OFFICIAL_BUILD=false
 WORKDIR /app
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
-    APP_OFFICIAL_BUILD=${APP_OFFICIAL_BUILD}
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 COPY package.json package-lock.json ./
 COPY packages/shared/package.json packages/shared/
 COPY apps/server/package.json apps/server/
@@ -17,6 +15,11 @@ COPY tsconfig.base.json ./
 COPY version.txt ./
 COPY packages/shared packages/shared
 COPY apps/web apps/web
+# Build identity is declared last so a new release moment does not invalidate the dependency layers.
+ARG APP_OFFICIAL_BUILD=false
+ARG APP_RELEASE_DATE=
+ENV APP_OFFICIAL_BUILD=${APP_OFFICIAL_BUILD} \
+    APP_RELEASE_DATE=${APP_RELEASE_DATE}
 RUN npm run build --workspace apps/web
 
 # ---------- deps: production dependencies only ----------
