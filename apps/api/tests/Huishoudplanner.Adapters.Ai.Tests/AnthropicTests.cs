@@ -102,14 +102,15 @@ public class AnthropicTests
     }
 
     [Fact]
-    public async Task Max_tokens_from_the_request_wins_and_a_custom_base_url_is_used()
+    public async Task Max_tokens_from_the_request_wins_and_a_configured_base_url_is_ignored_so_the_key_never_leaves_the_Anthropic_API()
     {
         var handler = FakeHandler.Json(HttpStatusCode.OK, Text("{}"));
         var request = Helpers.Request with { Options = Helpers.Request.Options with { MaxTokens = 500 } };
 
         await Helpers.Create(Options() with { BaseUrl = "https://proxy.example/" }, handler).Ask(request);
 
-        handler.Requests[0].Uri.ToString().Should().Be("https://proxy.example/v1/messages");
+        handler.Requests[0].Uri.Host.Should().Be("api.anthropic.com");
+        handler.Requests[0].Uri.ToString().Should().NotContain("proxy.example");
         handler.Requests[0].BodyOf().GetProperty("max_tokens").GetInt32().Should().Be(500);
     }
 
