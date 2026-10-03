@@ -16,7 +16,7 @@ namespace Huishoudplanner.Application.Settings;
 /// </summary>
 public sealed class SettingsService(
     ForStoringSettings store,
-    ForCheckingIntervalUsage intervalUsage,
+    ForStoringTasks tasks,
     ForRecordingAudit audit,
     ForRunningTransactions transactions,
     TimeProvider time) : ISettingsService
@@ -133,7 +133,7 @@ public sealed class SettingsService(
             return Array.Empty<string>();
         }
 
-        var used = await intervalUsage.GetKeysInUseAsync(cancellationToken).ConfigureAwait(false);
+        var used = await tasks.GetIntervalKeysInUseAsync(cancellationToken).ConfigureAwait(false);
         return used.Match<OneOf<IReadOnlyList<string>, PortError>>(
             keys => removed.Where(key => keys.Contains(key, StringComparer.Ordinal)).ToList(),
             error => error);

@@ -1,4 +1,5 @@
 using Huishoudplanner.Application.Rooms;
+using Huishoudplanner.Application.Tests.Tasks;
 using Huishoudplanner.Domain.Audit;
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Identity;
@@ -20,7 +21,7 @@ internal sealed class RoomWorld
 
     public FakeRooms Rooms { get; } = new();
 
-    public FakeUsage Usage { get; } = new();
+    public FakeTaskStore Usage { get; } = new();
 
     public FakeAudit Audit { get; } = new();
 
@@ -172,16 +173,6 @@ internal sealed class FakeRooms : ForStoringRooms
         Writes++;
         return Task.FromResult<OneOf<Success, NotFound, PortError>>(new Success());
     }
-}
-
-internal sealed class FakeUsage : ForCheckingRoomUsage
-{
-    public Dictionary<string, int> TasksPerRoom { get; } = [];
-
-    public PortError? Failure { get; set; }
-
-    public Task<OneOf<int, PortError>> CountTasksInRoomAsync(string roomId, CancellationToken cancellationToken) =>
-        Task.FromResult<OneOf<int, PortError>>(Failure is { } failure ? failure : TasksPerRoom.GetValueOrDefault(roomId));
 }
 
 internal sealed class FakeAudit : ForRecordingAudit

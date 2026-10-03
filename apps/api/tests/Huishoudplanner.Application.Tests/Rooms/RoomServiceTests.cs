@@ -260,7 +260,7 @@ public sealed class RoomServiceTests
     {
         var world = new RoomWorld();
         var used = world.Seed("Gebruikte kamer", 80);
-        world.Usage.TasksPerRoom[used.Id] = taskCount;
+        world.Usage.ExtraTasksPerRoom[used.Id] = taskCount;
 
         var result = await world.Service.DeleteAsync(RoomWorld.Admin, used.Id, Ct);
 

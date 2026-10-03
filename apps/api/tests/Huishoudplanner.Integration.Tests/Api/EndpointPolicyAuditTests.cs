@@ -30,6 +30,9 @@ public sealed class EndpointPolicyAuditTests
         ["POST /api/v2/users"] = AuthorizationPolicies.AdminPolicy,
         ["PATCH /api/v2/users/{id}"] = AuthorizationPolicies.AdminPolicy,
         ["PUT /api/v2/users/{id}/browser-notifications"] = AuthorizationPolicies.ActorPolicy,
+        ["POST /api/v2/tasks"] = AuthorizationPolicies.PlannerPolicy,
+        ["PATCH /api/v2/tasks/{id}"] = AuthorizationPolicies.PlannerPolicy,
+        ["POST /api/v2/rooms/{id}/tasks/bulk"] = AuthorizationPolicies.PlannerPolicy,
     };
 
     private static readonly string[] ReadMethods = [HttpMethods.Get, HttpMethods.Head, HttpMethods.Options];

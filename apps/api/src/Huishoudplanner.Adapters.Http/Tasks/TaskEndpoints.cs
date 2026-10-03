@@ -1,0 +1,210 @@
+using System.Globalization;
+using Huishoudplanner.Adapters.Http.Identity;
+using Huishoudplanner.Adapters.Http.Problems;
+using Huishoudplanner.Domain.Errors;
+using Huishoudplanner.Domain.Identity;
+using Huishoudplanner.Domain.Ports.Driving;
+using Microsoft.Extensions.Logging;
+
+namespace Huishoudplanner.Adapters.Http.Tasks;
+
+/// <summary>
+/// <c>/api/v2/tasks</c> and <c>/api/v2/rooms/{id}/tasks/bulk</c> (requirements 4.2, 8). Reads are open like in the Node server;
+/// create, change and the bulk change need a planner (<c>requirePlanner</c> there, <see cref="AuthorizationPolicies.PlannerPolicy"/> here).
+/// A task is deactivated, not deleted: the permanent delete arrives with the plans and badges it has to be removed from.
+/// </summary>
+public static class TaskEndpoints
+{
+    public const string TasksTag = "Tasks";
+
+    private const string Path = "/api/v2/tasks";
+
+    public static IEndpointRouteBuilder MapTaskEndpoints(this IEndpointRouteBuilder routes)
+    {
+        ArgumentNullException.ThrowIfNull(routes);
+
+        routes.MapGet(Path, ListAsync)
+            .WithName("listTasks")
+            .WithTags(TasksTag)
+            .WithSummary("Lists the tasks, ordered by name.")
+            .WithDescription("Needs no profile. roomId limits the list to one room, active=true or active=false to active or inactive tasks. The list is paged: pass the nextCursor of a page as cursor for the next one (limit 1 to 200, default 50).")
+            .Produces<TaskListResponse>(StatusCodes.Status200OK)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status500InternalServerError);
+
+        routes.MapPost(Path, CreateAsync)
+            .RequirePlanner()
+            .WithName("createTask")
+            .WithTags(TasksTag)
+            .WithSummary("Creates a task (planners).")
+            .WithDescription("The task is created active. Without points the server applies the default for the duration (one point per minute, from 1 to 1000). The room must exist and be active, the interval must be one of the household intervals and the default assignee an active person: otherwise 400 validation_error with unknown_room, inactive_room, unknown_interval, unknown_user or inactive_user on the field. The change is audited.")
+            .Accepts<CreateTaskRequest>("application/json")
+            .Produces<TaskResponse>(StatusCodes.Status201Created)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status500InternalServerError);
+
+        routes.MapPatch(Path + "/{id}", UpdateAsync)
+            .RequirePlanner()
+            .WithName("updateTask")
+            .WithTags(TasksTag)
+            .WithSummary("Changes a task, or deactivates one with active=false (planners).")
+            .WithDescription("A change that changes nothing writes and audits nothing. A change of the default assignee is audited as its own assign entry. Changed references are checked like on create. Answers 404 not_found for an unknown task.")
+            .Accepts<UpdateTaskRequest>("application/json")
+            .Produces<TaskResponse>(StatusCodes.Status200OK)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status500InternalServerError);
+
+        routes.MapPost("/api/v2/rooms/{id}/tasks/bulk", BulkAsync)
+            .RequirePlanner()
+            .WithName("bulkUpdateRoomTasks")
+            .WithTags(TasksTag)
+            .WithSummary("Deactivates or reassigns all active tasks of a room (planners).")
+            .WithDescription("op=deactivate deactivates every active task of the room, op=reassign gives them all the default assignee in defaultAssigneeId (an active person, or null for anyone). One audit entry per task that changes; updated counts them. Answers 404 not_found for an unknown room.")
+            .Accepts<BulkRoomTasksRequest>("application/json")
+            .Produces<BulkRoomTasksResponse>(StatusCodes.Status200OK)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status500InternalServerError);
+
+        return routes;
+    }
+
+    private static async Task<IResult> ListAsync(
+        ITaskService tasks,
+        ILogger<ITaskService> logger,
+        CancellationToken cancellationToken,
+        string? roomId = null,
+        string? active = null,
+        string? limit = null,
+        string? cursor = null)
+    {
+        // Bound as strings so that a malformed value is a field-keyed validation_error, not a framework binding failure.
+        var errors = new Dictionary<string, string[]>();
+        bool? activeFilter = null;
+        if (active is not null)
+        {
+            if (active is "true" or "false")
+            {
+                activeFilter = active == "true";
+            }
+            else
+            {
+                errors["active"] = ["Must be 'true' or 'false'."];
+            }
+        }
+
+        int? limitValue = null;
+        if (limit is not null)
+        {
+            if (int.TryParse(limit, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed))
+            {
+                limitValue = parsed;
+            }
+            else
+            {
+                errors["limit"] = ["Must be an integer."];
+            }
+        }
+
+        if (errors.Count > 0)
+        {
+            return ProblemResults.From(new ValidationErrors(errors));
+        }
+
+        var result = await tasks.ListAsync(roomId, activeFilter, limitValue, cursor, cancellationToken);
+        return result.Match(
+            list => Results.Ok(new TaskListResponse([.. list.Items.Select(TaskResponse.From)], list.NextCursor)),
+            ProblemResults.From,
+            error => ProblemResults.From(error, logger));
+    }
+
+    private static async Task<IResult> CreateAsync(
+        HttpContext http,
+        ITaskService tasks,
+        ILogger<ITaskService> logger,
+        CancellationToken cancellationToken)
+    {
+        var body = await TaskRequestParser.ReadBodyAsync(http, cancellationToken);
+        if (body.TryPickT1(out var invalidBody, out var json))
+        {
+            return ProblemResults.From(invalidBody);
+        }
+
+        if (TaskRequestParser.ParseCreate(json).TryPickT1(out var invalid, out var command))
+        {
+            return ProblemResults.From(invalid);
+        }
+
+        var result = await tasks.CreateAsync(await ActorOf(http), command, cancellationToken);
+        return result.Match(
+            task => Results.Json(TaskResponse.From(task), statusCode: StatusCodes.Status201Created),
+            ProblemResults.From,
+            ProblemResults.From,
+            error => ProblemResults.From(error, logger));
+    }
+
+    private static async Task<IResult> UpdateAsync(
+        string id,
+        HttpContext http,
+        ITaskService tasks,
+        ILogger<ITaskService> logger,
+        CancellationToken cancellationToken)
+    {
+        var body = await TaskRequestParser.ReadBodyAsync(http, cancellationToken);
+        if (body.TryPickT1(out var invalidBody, out var json))
+        {
+            return ProblemResults.From(invalidBody);
+        }
+
+        if (TaskRequestParser.ParsePatch(json).TryPickT1(out var invalid, out var patch))
+        {
+            return ProblemResults.From(invalid);
+        }
+
+        var result = await tasks.UpdateAsync(await ActorOf(http), id, patch, cancellationToken);
+        return result.Match(
+            task => Results.Ok(TaskResponse.From(task)),
+            ProblemResults.From,
+            ProblemResults.From,
+            ProblemResults.From,
+            error => ProblemResults.From(error, logger));
+    }
+
+    private static async Task<IResult> BulkAsync(
+        string id,
+        HttpContext http,
+        ITaskService tasks,
+        ILogger<ITaskService> logger,
+        CancellationToken cancellationToken)
+    {
+        var body = await TaskRequestParser.ReadBodyAsync(http, cancellationToken);
+        if (body.TryPickT1(out var invalidBody, out var json))
+        {
+            return ProblemResults.From(invalidBody);
+        }
+
+        if (TaskRequestParser.ParseBulk(json).TryPickT1(out var invalid, out var change))
+        {
+            return ProblemResults.From(invalid);
+        }
+
+        var result = await tasks.BulkUpdateRoomAsync(await ActorOf(http), id, change, cancellationToken);
+        return result.Match(
+            updated => Results.Ok(new BulkRoomTasksResponse(updated)),
+            ProblemResults.From,
+            ProblemResults.From,
+            ProblemResults.From,
+            error => ProblemResults.From(error, logger));
+    }
+
+    /// <summary>The policy guarantees an actor on every write; a missing one is a programming error and becomes a 500.</summary>
+    private static async Task<Actor> ActorOf(HttpContext http) =>
+        await http.GetActorAsync() ?? throw new InvalidOperationException("A task write ran without an actor; the endpoint must require authorization.");
+}
