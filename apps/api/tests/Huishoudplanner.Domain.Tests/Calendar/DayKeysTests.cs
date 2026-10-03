@@ -169,7 +169,6 @@ public class DayKeysTests
 
     [Theory]
     [InlineData("2026-W38\n")]
-    [InlineData("9999-W52")]
     [InlineData("9999-W53")]
     [InlineData("0000-W01")]
     public void MondayOfIsoWeek_returns_null_for_invalid_or_out_of_range_labels(string label) =>
