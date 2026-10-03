@@ -4,4 +4,12 @@
     <ProjectReference Include="..\..\src\Huishoudplanner.Domain\Huishoudplanner.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="MongoDB.Driver" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Huishoudplanner.Integration.Tests" />
+  </ItemGroup>
+
 </Project>
