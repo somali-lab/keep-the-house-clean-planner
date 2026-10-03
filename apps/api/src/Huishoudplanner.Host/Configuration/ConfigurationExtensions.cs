@@ -17,16 +17,19 @@ public static class ConfigurationExtensions
 
     /// <summary>
     /// Binds <see cref="AppOptions"/> from <paramref name="configuration"/> and validates it when the
-    /// host starts, so an invalid configuration refuses to start without echoing any value.
+    /// host starts (unless <paramref name="validateOnStart"/> is false, for build-time OpenAPI generation), so an invalid configuration refuses to start without echoing any value.
     /// </summary>
-    public static IServiceCollection AddAppOptions(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddAppOptions(this IServiceCollection services, IConfiguration configuration, bool validateOnStart = true)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
         services.AddSingleton<IValidateOptions<AppOptions>, AppOptionsValidator>();
-        services.AddOptions<AppOptions>()
-            .Configure(options => AppOptionsBinder.Bind(configuration, options))
-            .ValidateOnStart();
+        var builder = services.AddOptions<AppOptions>().Configure(options => AppOptionsBinder.Bind(configuration, options));
+        if (validateOnStart)
+        {
+            builder.ValidateOnStart();
+        }
+
         return services;
     }
 }

@@ -7,6 +7,7 @@ using Huishoudplanner.Application;
 using Huishoudplanner.Domain.Ports.Driving;
 using Huishoudplanner.Host.Configuration;
 using Microsoft.Extensions.Options;
+using Scalar.AspNetCore;
 
 namespace Huishoudplanner.Host;
 
@@ -28,7 +29,20 @@ public static class CompositionExtensions
         ArgumentNullException.ThrowIfNull(app);
         app.UseHttpAdapter();
         app.MapHealthEndpoints();
-        app.UseWebApp(app.Services.GetRequiredService<IOptions<AppOptions>>().Value.WebDistDir);
+        if (app.Environment.IsDevelopment())
+        {
+            // The document at /openapi/v2.json and its Scalar UI at /scalar/v2 exist in Development only; the checked-in
+            // apps/api/openapi/v2.json (generated at build time) is the artefact everything else uses.
+            app.MapOpenApi();
+            app.MapScalarApiReference();
+        }
+        // Mapped endpoints win over the SPA fallback, so the document and the UI are never shadowed by index.html.
+        if (!BuildTimeGeneration.IsRunning)
+        {
+            // No configuration at build time (and the document describes no web app routes: the fallback is excluded from it).
+            app.UseWebApp(app.Services.GetRequiredService<IOptions<AppOptions>>().Value.WebDistDir);
+        }
+
         return app;
     }
 

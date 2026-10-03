@@ -21,6 +21,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     private readonly List<Action<IServiceCollection>> overrides = [];
 
     private readonly List<ILoggerProvider> logProviders = [];
+    private string environment = "Test";
     private string? webDistDir;
 
     private ApiFactory(string mongoUrl) => this.mongoUrl = mongoUrl;
@@ -37,6 +38,14 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 
     /// <summary>A MongoDB address nothing listens on, for the "database is down" case with the real adapter.</summary>
     public static ApiFactory ForUnreachableMongo() => new("mongodb://127.0.0.1:1/unreachable");
+
+    /// <summary>Runs the host in another environment than <c>Test</c> (for example <c>Development</c>, where the OpenAPI document is served).</summary>
+    public ApiFactory InEnvironment(string environmentName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(environmentName);
+        environment = environmentName;
+        return this;
+    }
 
     /// <summary>Collects what the host logs.</summary>
     public ApiFactory WithLogProvider(ILoggerProvider provider)
@@ -66,7 +75,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
-        builder.UseEnvironment("Test");
+        builder.UseEnvironment(environment);
         builder.UseSetting("MONGO_URL", mongoUrl);
         if (webDistDir is not null)
         {

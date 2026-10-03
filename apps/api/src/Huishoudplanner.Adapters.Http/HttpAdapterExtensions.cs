@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Huishoudplanner.Adapters.Http.OpenApi;
 using Huishoudplanner.Adapters.Http.Problems;
 using Microsoft.AspNetCore.Http.Extensions;
 
@@ -6,7 +7,7 @@ namespace Huishoudplanner.Adapters.Http;
 
 public static class HttpAdapterExtensions
 {
-    /// <summary>Registers Problem Details: every problem gets a stable <c>type</c> URN, a <c>detail</c>, a <c>status</c> and a <c>traceId</c>.</summary>
+    /// <summary>Registers the OpenAPI document and Problem Details: every problem gets a stable <c>type</c> URN, a <c>detail</c>, a <c>status</c> and a <c>traceId</c>.</summary>
     public static IServiceCollection AddHttpAdapter(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -26,6 +27,7 @@ public static class HttpAdapterExtensions
                 : problem.Title;
             problem.Extensions["traceId"] = Activity.Current?.Id ?? context.HttpContext.TraceIdentifier;
         });
+        services.AddOpenApiDocument();
         return services;
     }
 

@@ -10,8 +10,12 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 });
 
 builder.Configuration.AddLegacyEnvironmentAliases();
-builder.Services.AddAppOptions(builder.Configuration);
-builder.Services.AddAppTelemetry(builder.Configuration);
+// Build-time OpenAPI generation has no configuration and no telemetry exporters: skip startup validation and telemetry (see BuildTimeGeneration).
+builder.Services.AddAppOptions(builder.Configuration, validateOnStart: !BuildTimeGeneration.IsRunning);
+if (!BuildTimeGeneration.IsRunning)
+{
+    builder.Services.AddAppTelemetry(builder.Configuration);
+}
 builder.Services.AddApiServices();
 
 var app = builder.Build();
