@@ -102,9 +102,10 @@ review and CI before a person merges it.
   `[context]`, and restricts which files may be changed.
 - A run that finds nothing calls the `noop` output instead of creating a pull
   request.
-- Runs use strict compilation, a 20-minute agent timeout, at most 100 AI Credits
-  per run, and at most 300 AI Credits across scheduled runs in 24 hours.
-- The configured engine is GitHub Copilot using `claude-haiku-4.5`.
+- Runs use strict compilation, a 20-minute agent timeout, at most 200 AI Credits
+  per run, and at most 400 AI Credits across scheduled runs in 24 hours.
+- The configured engine is GitHub Copilot using `claude-sonnet-5`; the cheaper
+  `claude-haiku-4.5` proved too shallow to notice missing guidance for new domains.
 
 Context-maintainer pull requests expire after seven days. That setting causes
 `gh aw compile` to generate `agentics-maintenance.yml`, which runs daily to close
@@ -165,9 +166,7 @@ to continue; the sections already corrected will pass quickly.
 The permissions, safe-output model, strict compilation, and absence of builds and
 tests are the same as for the context maintainer. The differences are:
 
-- Model: `claude-sonnet-5` instead of `claude-haiku-4.5`, because checking
-  behaviour against requirements takes more reasoning than checking paths and
-  names. It is listed in the built-in model catalog of `gh aw` under the
+- Model: `claude-sonnet-5`, the same as the context maintainer. It is listed in the built-in model catalog of `gh aw` under the
   `github-copilot` provider (`gh aw models`).
 - Budget: at most 200 AI Credits per run and 400 across scheduled runs in 24
   hours, with a 30-minute agent timeout. A release run and the weekly run of the
