@@ -30,6 +30,7 @@ export const en = {
   "nav.main": "Main Menu",
   "layout.openManagement": "Open Settings and Management",
   "layout.openOverview": "Back to Overview",
+  "layout.home": "Home: Go to the Week Overview",
   "layout.dayView": "Day View",
   "layout.collapseMenu": "Collapse Menu",
   "layout.expandMenu": "Expand Menu",

@@ -38,6 +38,7 @@ export const nl = {
 
   'layout.openManagement': 'Instellingen en beheer openen',
   'layout.openOverview': 'Terug naar overzicht',
+  'layout.home': 'Home: naar het weekoverzicht',
   'layout.dayView': 'Dagweergave',
   'layout.collapseMenu': 'Menu inklappen',
   'layout.expandMenu': 'Menu uitklappen',

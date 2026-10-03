@@ -105,7 +105,12 @@ describe('TodayPage', () => {
     expect(within(section('Taken van Bram de Vries')).getByText('Stofzuigen')).toBeInTheDocument();
     expect(screen.queryByText('Badkamer')).not.toBeInTheDocument();
 
+    // Only the everyone view switches to two columns on wide screens.
+    expect(screen.getByTestId('today-sections')).not.toHaveClass('lg:columns-2');
+    fireEvent.change(screen.getByLabelText('Filter op persoon'), { target: { value: 'unassigned' } });
+    expect(screen.getByTestId('today-sections')).not.toHaveClass('lg:columns-2');
     fireEvent.change(screen.getByLabelText('Filter op persoon'), { target: { value: 'all' } });
+    expect(screen.getByTestId('today-sections')).toHaveClass('lg:columns-2');
     expect(sectionTitles()).toEqual(['Mijn taken', 'Nog niet opgepakt', 'Van anderen', 'Achterstallig']);
     expect(within(section('Nog niet opgepakt')).getByText('Wastafel')).toBeInTheDocument();
     expect(within(section('Van anderen')).getByText('Stofzuigen')).toBeInTheDocument();

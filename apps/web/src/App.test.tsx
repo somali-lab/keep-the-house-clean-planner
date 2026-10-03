@@ -113,6 +113,18 @@ describe('app shell', () => {
     expect(window.location.pathname).toBe('/');
   });
 
+  it('returns from any management page to the week overview with the Home button', async () => {
+    setViewportWidth(1280);
+    window.history.replaceState(null, '', '/manage/statistics');
+    render(<App queryClient={testQueryClient()} />);
+
+    const home = await screen.findByRole('button', { name: 'Home: naar het weekoverzicht' });
+    expect(screen.getByRole('navigation', { name: 'Hoofdmenu' })).toHaveTextContent('Statistiek');
+    fireEvent.click(home);
+    expect(await screen.findByRole('heading', { name: 'Weekoverzicht' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/');
+  });
+
   it('switches the interface to English immediately and remembers that choice', async () => {
     setViewportWidth(1280);
     window.history.replaceState(null, '', '/manage/planner');

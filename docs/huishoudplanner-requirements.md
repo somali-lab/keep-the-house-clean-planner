@@ -189,6 +189,7 @@ dismissedPromotions: [ ... ]
 ### 4.4 Daily use
 
 - A today view lists the open occurrences for the selected profile, then the other members', then overdue items, and can be filtered per profile.
+- When the today view shows everyone, its groups sit in two columns on screens wide enough for two readable columns; narrower screens keep one column.
 - The view can browse forward a day or two without leaving the day-oriented layout, and shows which cycle week the day belongs to.
 - No backlog is shown from before the cycle anchor date; there is nothing to be behind on yet.
 - Complete and undo. Undo restores the previous status.
@@ -316,6 +317,7 @@ The fridge is a legitimate output device. The schedule must work without a phone
 
 - A compact overview is the default at every screen width: the week grid, the day view, the overdue list and the task list.
 - Management screens — planner, tasks, distribution, statistics, history, completions and settings — live behind a separate management area and are reachable from anywhere.
+- The overview and the management area switch with a button in the same top-right spot: a management button in the overview, and a Home button in management that always returns to the week overview. The management side menu stays available.
 - The settings screen is organised in tabs so that cycle, intervals, AI, notifications, appearance and maintenance stay separable.
 - An About page, reachable for every role from the management menu, shows the running version, the date and time of the latest release labelled as such, and links to the license and the changelog that belong to the running build. A local build that is not a release shows no release date.
 
