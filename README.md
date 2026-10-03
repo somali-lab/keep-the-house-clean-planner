@@ -35,6 +35,7 @@ The screenshots show a scripted demo household with fictional people and sample 
 - Offers light, dark, and system colour modes.
 - Works as an installable PWA and queues completions while temporarily offline.
 - Can generate optional AI-assisted planning suggestions that require approval before they are applied.
+- Shows an About page with the running version, the date and time of the latest release, and links to the license and changelog.
 
 > [!IMPORTANT]
 > This application has no built-in authentication. Selecting a profile only records who performs an action; it is not a login. Keep the app on a trusted home network, use a VPN, or place it behind an authenticated reverse proxy.
@@ -92,6 +93,8 @@ ghcr.io/somali-lab/keep-the-house-clean-planner
 ```
 
 Published tags include the full version (`1.4.2`), rolling minor and major tags (`1.4` and `1`), `latest`, and an immutable `sha-<commit>` tag. See [Releasing](docs/RELEASING.md) for the release flow and the one-time repository settings.
+
+The About page in the management menu shows which build is running. A published image shows its release version and the date and time of that release; a build from local source is marked as local and shows no release date, because it is not a release.
 
 The repository also uses GitHub Agentic Workflows to check its coding-agent
 instructions after releases and once a week. See

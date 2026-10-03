@@ -12,6 +12,7 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  Info,
 } from 'lucide-react';
 import { NavLink, Navigate, Route, Routes } from 'react-router';
 import { AppLogo } from '@/components/AppLogo';
@@ -20,6 +21,7 @@ import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { ThemeSwitcher } from '@/components/ThemeSwitcher';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { AboutPage } from '../features/about/AboutPage.tsx';
 import { DistributionPage } from '../features/distribution/DistributionPage.tsx';
 import { CompletionManagementPage } from '../features/completions/CompletionManagementPage.tsx';
 import { HistoryPage } from '../features/history/HistoryPage.tsx';
@@ -40,6 +42,7 @@ const PAGES: Partial<Record<string, ReactElement>> = {
   '/manage/history': <HistoryPage />,
   '/manage/completions': <CompletionManagementPage />,
   '/manage/settings': <SettingsPage />,
+  '/manage/about': <AboutPage />,
 };
 
 const SECTIONS: { path: string; label: MessageKey; icon: LucideIcon; minimumRole: UserRole }[] = [
@@ -50,6 +53,7 @@ const SECTIONS: { path: string; label: MessageKey; icon: LucideIcon; minimumRole
   { path: '/manage/history', label: 'nav.history', icon: History, minimumRole: 'member' },
   { path: '/manage/completions', label: 'nav.completions', icon: ClipboardCheck, minimumRole: 'admin' },
   { path: '/manage/settings', label: 'nav.settings', icon: Settings, minimumRole: 'admin' },
+  { path: '/manage/about', label: 'nav.about', icon: Info, minimumRole: 'member' },
 ];
 
 const ROLE_LEVEL: Record<UserRole, number> = { member: 0, planner: 1, admin: 2 };

@@ -317,6 +317,7 @@ The fridge is a legitimate output device. The schedule must work without a phone
 - A compact overview is the default at every screen width: the week grid, the day view, the overdue list and the task list.
 - Management screens — planner, tasks, distribution, statistics, history, completions and settings — live behind a separate management area and are reachable from anywhere.
 - The settings screen is organised in tabs so that cycle, intervals, AI, notifications, appearance and maintenance stay separable.
+- An About page, reachable for every role from the management menu, shows the running version, the date and time of the latest release labelled as such, and links to the license and the changelog that belong to the running build. A local build that is not a release shows no release date.
 
 ### 7.2 Interaction
 

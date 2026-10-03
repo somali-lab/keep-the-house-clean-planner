@@ -4,14 +4,18 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
-import { buildAppVersion } from './src/versionModel.ts';
+import { buildAppVersion, buildReleaseDate, sourceRef } from './src/versionModel.ts';
 
 const releaseVersion = readFileSync(new URL('../../version.txt', import.meta.url), 'utf8');
-const appVersion = buildAppVersion(releaseVersion, process.env.APP_OFFICIAL_BUILD === 'true');
+const officialBuild = process.env.APP_OFFICIAL_BUILD === 'true';
+const appVersion = buildAppVersion(releaseVersion, officialBuild);
 
 export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(appVersion),
+    __APP_OFFICIAL_BUILD__: JSON.stringify(officialBuild),
+    __APP_RELEASE_DATE__: JSON.stringify(buildReleaseDate(process.env.APP_RELEASE_DATE, officialBuild)),
+    __APP_SOURCE_REF__: JSON.stringify(sourceRef(releaseVersion, officialBuild)),
   },
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
