@@ -1,0 +1,19 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Huishoudplanner.Adapters.Ai/Huishoudplanner.Adapters.Ai.csproj" />
+    <Project Path="src/Huishoudplanner.Adapters.Http/Huishoudplanner.Adapters.Http.csproj" />
+    <Project Path="src/Huishoudplanner.Adapters.Jobs/Huishoudplanner.Adapters.Jobs.csproj" />
+    <Project Path="src/Huishoudplanner.Adapters.Mongo/Huishoudplanner.Adapters.Mongo.csproj" />
+    <Project Path="src/Huishoudplanner.Adapters.Notify/Huishoudplanner.Adapters.Notify.csproj" />
+    <Project Path="src/Huishoudplanner.Adapters.Pdf/Huishoudplanner.Adapters.Pdf.csproj" />
+    <Project Path="src/Huishoudplanner.Application/Huishoudplanner.Application.csproj" />
+    <Project Path="src/Huishoudplanner.Domain/Huishoudplanner.Domain.csproj" />
+    <Project Path="src/Huishoudplanner.Host/Huishoudplanner.Host.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Huishoudplanner.Application.Tests/Huishoudplanner.Application.Tests.csproj" />
+    <Project Path="tests/Huishoudplanner.Architecture.Tests/Huishoudplanner.Architecture.Tests.csproj" />
+    <Project Path="tests/Huishoudplanner.Domain.Tests/Huishoudplanner.Domain.Tests.csproj" />
+    <Project Path="tests/Huishoudplanner.Integration.Tests/Huishoudplanner.Integration.Tests.csproj" />
+  </Folder>
+</Solution>

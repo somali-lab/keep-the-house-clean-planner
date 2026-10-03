@@ -1,0 +1,25 @@
+<Project>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <RootNamespace>$(MSBuildProjectName)</RootNamespace>
+    <AssemblyName>$(MSBuildProjectName)</AssemblyName>
+  </PropertyGroup>
+
+  <!-- The application version is the single value in the repository-root version.txt (maintained by Release Please). -->
+  <PropertyGroup>
+    <RepositoryRoot>$([MSBuild]::EnsureTrailingSlash('$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..', '..'))'))</RepositoryRoot>
+    <VersionFromFile>$([System.IO.File]::ReadAllText('$(RepositoryRoot)version.txt').Trim())</VersionFromFile>
+    <Version>$(VersionFromFile)</Version>
+  </PropertyGroup>
+
+
+</Project>
