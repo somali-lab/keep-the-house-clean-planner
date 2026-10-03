@@ -33,6 +33,13 @@ public sealed class WriteRouteCoverageTests(AuditCoverageHarness h) : IClassFixt
         .Select(f => (string)f.GetRawConstantValue()!)
         .ToHashSet();
 
+    /// <summary>
+    /// Collections of derived state (ADR-0011): the points ledger is kept in step with the occurrences by the sync hook inside the same transaction,
+    /// and its changes are not audited one by one. A write to them is covered by the audit entry of the occurrence change that caused it (or by the
+    /// one summary entry of a reconciliation), so a request that writes only derived collections without a <c>points</c> summary is a failure.
+    /// </summary>
+    private static readonly HashSet<string> DerivedCollections = [MongoCollections.PointEntries];
+
     private enum Kind
     {
         /// <summary>Changes state, so the request must write entity and audit entry (and repeat as a no-op where <c>Idempotent</c>).</summary>
@@ -160,6 +167,11 @@ public sealed class WriteRouteCoverageTests(AuditCoverageHarness h) : IClassFixt
             return new(HttpMethod.Post, $"/api/v2/cycle-plans/{copy}/activation", new { previewToken = preview.GetProperty("previewToken").GetString() }, h.Planner);
         }, "cyclePlan", "activate", Idempotent: true),
 
+        new("POST /api/v2/points/recompute", Kind.Audited, async h =>
+        {
+            await h.InsertStrayLedgerEntryAsync();
+            return new(HttpMethod.Post, "/api/v2/points/recompute", null, h.Admin);
+        }, "points", "recompute", Idempotent: true),
         new("DELETE /api/v2/stats", Kind.Audited, Fixed(h => new(HttpMethod.Delete, "/api/v2/stats", null, h.Admin)), "settings", "reset"), // not idempotent by design (as in Node): a reset that finds nothing to reset still records its counts as one audit entry
 
         // The only deliberately unaudited writes. Both only ever delete audit entries; neither may touch other state.
@@ -252,6 +264,11 @@ public sealed class WriteRouteCoverageTests(AuditCoverageHarness h) : IClassFixt
                 if (writes.Count > 0 && auditInserts == 0)
                 {
                     failures.Add($"UNAUDITED WRITE: {Describe(writes)} without any audit entry");
+                }
+
+                if (writes.Count > 0 && writes.All(w => DerivedCollections.Contains(w.Collection)) && scenario.Entity != "points")
+                {
+                    failures.Add($"only derived state was written ({Describe(writes)}); the primary change that causes it is missing or unaudited");
                 }
 
                 if (!entries.Any(e => e["entity"].AsString == scenario.Entity && e["action"].AsString == scenario.Action && e["source"].AsString == scenario.Source))
