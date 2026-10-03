@@ -57,7 +57,16 @@ import {
   MIN_AI_TIMEOUT_SECONDS,
 } from '../packages/shared/src/schemas/settings.ts';
 import { MAX_BROWSER_NOTIFICATION_TIMES } from '../packages/shared/src/schemas/users.ts';
-import { PLAN_WEEKS } from '../packages/shared/src/validation/plan.ts';
+import {
+  budgetFor,
+  isWeekendDay,
+  PLAN_WEEKS,
+  validatePlan,
+  type PlanSlot,
+  type PlanTask,
+  type PlanUser,
+  type ValidatePlanInput,
+} from '../packages/shared/src/validation/plan.ts';
 import { DEFAULT_INTERVALS, type Interval } from '../packages/shared/src/schemas/intervals.ts';
 import {
   addDays,
@@ -890,7 +899,369 @@ const limitsModule: ModuleSpec = {
   },
 };
 
-export const MODULES: ModuleSpec[] = [timeModule, cycleModule, dueModule, limitsModule];
+// ---------------------------------------------------------------------------------------
+// validation (packages/shared/src/validation/plan.ts; scenarios of plan.test.ts plus edge cases)
+// ---------------------------------------------------------------------------------------
+
+interface PlanInput {
+  [key: string]: Json;
+  slots: PlanSlot[] & Json;
+  tasks: PlanTask[] & Json;
+  users: PlanUser[] & Json;
+  intervals: Interval[];
+}
+
+const ANNA = 'a00000000000000000000001';
+const BRAM = 'b00000000000000000000002';
+const GONE = 'c00000000000000000000003';
+
+const planUser = (_id: string, name: string, overrides: Partial<PlanUser> = {}): PlanUser => ({
+  _id,
+  name,
+  active: true,
+  unavailableWeekdays: [],
+  dailyBudgetMinutes: { weekday: 60, weekend: 120 },
+  maxDailyMinutes: { weekday: 480, weekend: 480 },
+  ...overrides,
+});
+const PLAN_USERS: PlanUser[] = [
+  planUser(ANNA, 'Anna', { unavailableWeekdays: [2] }),
+  planUser(BRAM, 'Bram'),
+  planUser(GONE, 'Oud', { active: false }),
+];
+
+const planTask = (
+  id: string,
+  intervalKey: string,
+  durationMinutes: number,
+  active = true,
+): PlanTask => ({
+  _id: id,
+  name: id,
+  intervalKey,
+  durationMinutes,
+  active,
+});
+const WEEKLY = planTask('weekly', '1w', 40);
+const THREE_TIMES_WEEKLY = planTask('three-times-weekly', '3w', 10);
+const TWICE = planTask('twice', '2w', 10);
+const QUARTER = planTask('quarter', 'quarter', 90);
+const MONTHLY = planTask('monthly', '4wk', 40);
+const OLD = planTask('old', '1w', 10, false);
+const PLAN_TASKS = [WEEKLY, TWICE, QUARTER, MONTHLY, OLD];
+
+const planSlot = (
+  taskId: string,
+  weekIndex: number,
+  weekday: number,
+  assigneeId: string | null = BRAM,
+): PlanSlot => ({ taskId, weekIndex, weekday, assigneeId });
+
+/** Slots that satisfy every interval exactly with no budget issues. */
+const fullPlan = (): PlanSlot[] => [
+  ...[0, 1, 2, 3].map((w) => planSlot('weekly', w, 1)),
+  ...[0, 1, 2, 3].flatMap((w) => [planSlot('twice', w, 3), planSlot('twice', w, 6)]),
+  planSlot('monthly', 0, 5, ANNA),
+];
+
+const plan = (slots: PlanSlot[], overrides: Partial<ValidatePlanInput> = {}): PlanInput =>
+  ({
+    slots,
+    tasks: PLAN_TASKS,
+    users: PLAN_USERS,
+    intervals: DEFAULT_INTERVALS.map((i) => ({ ...i })),
+    ...overrides,
+  }) as PlanInput;
+
+const withUser = (id: string, overrides: Partial<PlanUser>): PlanUser[] =>
+  PLAN_USERS.map((u) => (u._id === id ? { ...u, ...overrides } : u));
+
+const threeTimesWeekly = (count: number): PlanSlot[] =>
+  Array.from({ length: count }, (_, index) =>
+    planSlot('three-times-weekly', Math.floor(index / 3), (index % 3) + 1),
+  );
+
+const budgetUser = planUser('u', 'U', { maxDailyMinutes: { weekday: 45, weekend: 75 } });
+const bramBudgets = (overrides: Partial<PlanUser>): PlanUser[] => withUser(BRAM, overrides);
+
+const validationModule: ModuleSpec = {
+  module: 'validation',
+  functions: {
+    isWeekendDay: fn(
+      (i: { weekday: number }) => isWeekendDay(i.weekday),
+      [-1, 0, 1, 5, 6, 7].map((weekday): [string, { weekday: number }] => [
+        `${weekday}`,
+        { weekday },
+      ]),
+    ),
+    budgetFor: fn(
+      (i: { user: PlanUser & Json; weekday: number }) => budgetFor(i.user, i.weekday),
+      [
+        ['Saturday uses the weekend maximum', { user: budgetUser as PlanUser & Json, weekday: 6 }],
+        ['Sunday uses the weekend maximum', { user: budgetUser as PlanUser & Json, weekday: 0 }],
+        ['Friday uses the weekday maximum', { user: budgetUser as PlanUser & Json, weekday: 5 }],
+        ['Monday uses the weekday maximum', { user: budgetUser as PlanUser & Json, weekday: 1 }],
+      ],
+    ),
+    validatePlan: fn(
+      (i: PlanInput) => JSON.parse(JSON.stringify(validatePlan(i))) as Json,
+      [
+        // ---- errors
+        ['empty plan: every active grid task is short, nothing else', plan([])],
+        [
+          'empty plan without tasks, users or intervals',
+          plan([], { tasks: [], users: [], intervals: [] }),
+        ],
+        ['accepts a plan that satisfies every rule', plan(fullPlan())],
+        [
+          'assignee unavailable on that weekday',
+          plan([...fullPlan(), planSlot('weekly', 0, 2, ANNA)]),
+        ],
+        ['unknown task', plan([...fullPlan(), planSlot('nope', 0, 1)])],
+        ['inactive task', plan([...fullPlan(), planSlot('old', 0, 1)])],
+        [
+          'unknown user',
+          plan([...fullPlan(), planSlot('weekly', 0, 4, 'd00000000000000000000004')]),
+        ],
+        ['inactive user', plan([...fullPlan(), planSlot('weekly', 0, 4, GONE)])],
+        ['weekIndex above range', plan([...fullPlan(), planSlot('weekly', 4, 1)])],
+        ['negative weekIndex', plan([...fullPlan(), planSlot('weekly', -1, 1)])],
+        ['weekday above range', plan([...fullPlan(), planSlot('weekly', 0, 7)])],
+        ['negative weekday', plan([...fullPlan(), planSlot('weekly', 0, -1)])],
+        ['last valid position: week 3, Sunday', plan([planSlot('weekly', 3, 0)])],
+        ['first valid position: week 0, Sunday', plan([planSlot('weekly', 0, 0)])],
+        [
+          'allows the same unavailable weekday for another user',
+          plan([...fullPlan(), planSlot('quarter', 0, 2, BRAM)]),
+        ],
+        [
+          'allows an unassigned slot on any weekday',
+          plan([...fullPlan(), planSlot('quarter', 0, 2, null)]),
+        ],
+        [
+          'rejects the same task twice on the same day, even for different assignees',
+          plan([...fullPlan(), planSlot('weekly', 0, 1, ANNA)]),
+        ],
+        [
+          'allows the same task on the same weekday in different weeks',
+          plan([planSlot('quarter', 0, 1), planSlot('quarter', 1, 1)]),
+        ],
+        [
+          'a third placement on one day is reported again (each repeat is an error)',
+          plan([
+            planSlot('quarter', 0, 1),
+            planSlot('quarter', 0, 1, ANNA),
+            planSlot('quarter', 0, 1, null),
+          ]),
+        ],
+        [
+          'the same task twice on one day, both unassigned',
+          plan([planSlot('quarter', 0, 1, null), planSlot('quarter', 0, 1, null)]),
+        ],
+        [
+          'one slot with every problem: errors come in rule order',
+          plan([planSlot('nope', 9, 9, 'd00000000000000000000004')]),
+        ],
+        [
+          'out-of-range position skips the unavailability and duplicate checks',
+          plan([planSlot('weekly', 4, 2, ANNA), planSlot('weekly', 4, 2, ANNA)]),
+        ],
+        [
+          'inactive task: an error, but the slot still counts in the summary',
+          plan([planSlot('old', 0, 1)]),
+        ],
+        [
+          'unknown task twice on one day: unknown_task then duplicate_task_day',
+          plan([planSlot('nope', 0, 1), planSlot('nope', 0, 1)]),
+        ],
+        [
+          'errors follow slot order across several bad slots',
+          plan([
+            planSlot('weekly', 0, 7),
+            planSlot('nope', 0, 1),
+            planSlot('weekly', 5, 1, GONE),
+            planSlot('old', 0, 3),
+          ]),
+        ],
+        [
+          'inactive user: minutes are not counted for anyone',
+          plan([planSlot('weekly', 0, 1, GONE)]),
+        ],
+        [
+          'unknown assignee: minutes are not counted for anyone',
+          plan([planSlot('weekly', 0, 1, 'd00000000000000000000004')]),
+        ],
+        ['unavailable assignee still counts the minutes', plan([planSlot('weekly', 0, 2, ANNA)])],
+        [
+          'unavailable weekday is checked on Sunday too',
+          plan([planSlot('weekly', 0, 0, ANNA)], {
+            users: withUser(ANNA, { unavailableWeekdays: [0, 6] }),
+          }),
+        ],
+        // ---- interval warnings
+        [
+          '2w with 5 slots is a warning, not an error',
+          plan([
+            ...fullPlan().filter((s) => s.taskId !== 'twice'),
+            ...[0, 1, 2, 3, 4].map((i) => planSlot('twice', i % 4, i < 4 ? 3 : 4)),
+          ]),
+        ],
+        [
+          'three-times-weekly needs 12 slots per cycle: 11 is short',
+          plan(threeTimesWeekly(11), { tasks: [THREE_TIMES_WEEKLY] }),
+        ],
+        [
+          'three-times-weekly with all 12 slots is fine',
+          plan(threeTimesWeekly(12), { tasks: [THREE_TIMES_WEEKLY] }),
+        ],
+        [
+          'too many slots for the interval is a warning too',
+          plan([...fullPlan(), planSlot('monthly', 1, 5, ANNA)]),
+        ],
+        [
+          'warns for active tasks that are not placed at all',
+          plan(fullPlan().filter((s) => s.taskId !== 'monthly')),
+        ],
+        [
+          'skips the interval check when perCycle is null',
+          plan([...fullPlan(), planSlot('quarter', 2, 4, null)]),
+        ],
+        [
+          'reports placed/required per task, leaving out inactive tasks without slots',
+          plan(fullPlan()),
+        ],
+        [
+          'a task with an unknown interval key is not grid-planned',
+          plan([planSlot('odd', 0, 1)], { tasks: [planTask('odd', 'mystery', 5)] }),
+        ],
+        [
+          'interval warnings follow the task order, not the slot order',
+          plan([planSlot('monthly', 0, 5, ANNA)], { tasks: [MONTHLY, WEEKLY, TWICE] }),
+        ],
+        [
+          'an inactive task with slots is summarised without an interval warning',
+          plan([planSlot('old', 0, 1), planSlot('old', 1, 1)], { tasks: [OLD] }),
+        ],
+        // ---- budgets and totals
+        [
+          'uses the weekday budget Monday-Friday',
+          plan([planSlot('weekly', 1, 2), planSlot('monthly', 1, 2)], { tasks: [WEEKLY, MONTHLY] }),
+        ],
+        [
+          'uses the weekend budget on Saturday',
+          plan([planSlot('weekly', 0, 6), planSlot('monthly', 0, 6)], { tasks: [WEEKLY, MONTHLY] }),
+        ],
+        [
+          'uses the weekend budget on Sunday',
+          plan([planSlot('weekly', 0, 0), planSlot('monthly', 0, 0), planSlot('quarter', 0, 0)], {
+            tasks: [WEEKLY, MONTHLY, QUARTER],
+          }),
+        ],
+        [
+          'exactly at budget is fine',
+          plan([planSlot('weekly', 0, 1), planSlot('quarter', 0, 1, ANNA)], {
+            tasks: [planTask('weekly', '1w', 60), QUARTER],
+            users: [
+              { ...PLAN_USERS[1]! },
+              { ...PLAN_USERS[0]!, dailyBudgetMinutes: { weekday: 90, weekend: 120 } },
+            ],
+          }),
+        ],
+        [
+          'one minute over the budget warns',
+          plan([planSlot('weekly', 0, 1)], { tasks: [planTask('weekly', '1w', 61)] }),
+        ],
+        [
+          'applies one shared weekday budget across Monday to Friday',
+          plan([planSlot('weekly', 0, 1), planSlot('monthly', 0, 2)], { tasks: [WEEKLY, MONTHLY] }),
+        ],
+        [
+          'the weekend budget is shared across Saturday and Sunday',
+          plan(
+            [planSlot('weekly', 0, 6), planSlot('monthly', 0, 0), planSlot('quarter', 0, 6, ANNA)],
+            { tasks: [WEEKLY, MONTHLY, QUARTER] },
+          ),
+        ],
+        [
+          'summarises minutes per day per user with budgets, Monday first, for active users only',
+          plan([planSlot('weekly', 0, 1, ANNA), planSlot('quarter', 0, 1, BRAM)]),
+        ],
+        [
+          'warns when one day exceeds the configured daily maximum',
+          plan([planSlot('weekly', 0, 1), planSlot('monthly', 0, 1)], {
+            tasks: [WEEKLY, MONTHLY],
+            users: bramBudgets({
+              dailyBudgetMinutes: { weekday: 200, weekend: 200 },
+              maxDailyMinutes: { weekday: 60, weekend: 90 },
+            }),
+          }),
+        ],
+        [
+          'the daily maximum on a weekend day uses the weekend value',
+          plan([planSlot('weekly', 2, 0), planSlot('monthly', 2, 0)], {
+            tasks: [WEEKLY, MONTHLY],
+            users: bramBudgets({
+              dailyBudgetMinutes: { weekday: 200, weekend: 200 },
+              maxDailyMinutes: { weekday: 480, weekend: 70 },
+            }),
+          }),
+        ],
+        [
+          'overload per day and per week at once: weekly warnings first, then days Monday first',
+          plan(
+            [
+              planSlot('weekly', 0, 1),
+              planSlot('monthly', 0, 1),
+              planSlot('quarter', 0, 0),
+              planSlot('weekly', 1, 6),
+            ],
+            {
+              tasks: [WEEKLY, MONTHLY, QUARTER],
+              users: bramBudgets({ maxDailyMinutes: { weekday: 60, weekend: 60 } }),
+            },
+          ),
+        ],
+        [
+          'two users over budget: warnings follow the user order',
+          plan(
+            [
+              planSlot('weekly', 0, 1),
+              planSlot('monthly', 0, 3, ANNA),
+              planSlot('quarter', 0, 4, ANNA),
+              planSlot('quarter', 0, 5, BRAM),
+            ],
+            { tasks: [WEEKLY, MONTHLY, QUARTER] },
+          ),
+        ],
+        [
+          'totals unassigned slots separately, not against any budget',
+          plan([
+            planSlot('quarter', 2, 3, null),
+            planSlot('weekly', 2, 3, null),
+            planSlot('twice', 2, 4, ANNA),
+          ]),
+        ],
+        ['totals minutes per week per user', plan(fullPlan())],
+        [
+          'inactive users are left out of the summary',
+          plan([planSlot('weekly', 0, 1)], { users: [PLAN_USERS[2]!, PLAN_USERS[1]!] }),
+        ],
+        [
+          'no active users: only unassigned minutes are summarised',
+          plan([planSlot('weekly', 0, 1, null)], { users: [PLAN_USERS[2]!] }),
+        ],
+      ],
+    ),
+  },
+};
+
+export const MODULES: ModuleSpec[] = [
+  timeModule,
+  cycleModule,
+  dueModule,
+  limitsModule,
+  validationModule,
+];
 
 /** Runs every case through the real TypeScript function. */
 export function buildVectors(): VectorFile[] {
