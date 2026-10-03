@@ -33,3 +33,12 @@ Two variables were renamed for .NET: `NODE_ENV` is now `ASPNETCORE_ENVIRONMENT` 
 Errors leave the API as RFC 9457 Problem Details (`application/problem+json`): `type` is `urn:huishoudplanner:problem:<code>`, plus `status`, `detail` and an always present `traceId`; validation problems add an `errors` object. Port error values (`NotFound`, `ConflictError`, `ValidationErrors`, `PortError` in `Domain/Errors`) are mapped by `ProblemResults` in `Adapters.Http`; unhandled exceptions and empty 4xx/5xx responses go through `UseExceptionHandler` and `UseStatusCodePages` and never leak a message.
 
 `GET /api/v2/health` answers `{ "status": "ok", "version": "1.7.0", "database": "ok" }`, or `503` with `"error"` in both status fields when the database ping fails. Integration tests build the host with `ApiFactory` (`tests/Huishoudplanner.Integration.Tests/Fixtures`): swap a driven port with `WithPort`, or use `ForMongo` for the Docker-backed variant.
+
+## OpenAPI document
+
+The API is described by an OpenAPI 3.1 document (`AddOpenApi("v2")` in `Adapters.Http`, document name `v2`, title and tags in `OpenApi/OpenApiSetup.cs`, endpoints describe themselves with `WithName`, `WithSummary`, `Produces<T>` and `ProducesProblem`). It is generated at build time by `Microsoft.Extensions.ApiDescription.Server` and checked in at `apps/api/openapi/v2.json`: the reviewed source of the generated TypeScript client in the web app.
+
+- **Regenerate:** `dotnet build apps/api/src/Huishoudplanner.Host` (every build of the Host rewrites `openapi/v2.json`; review and commit the diff). It needs no MongoDB and no configuration: under the generation tool `BuildTimeGeneration.IsRunning` is true (entry assembly `GetDocument.Insider`) and `Program.cs` skips the `ValidateOnStart` of `AppOptions`.
+- **Drift is caught twice:** `OpenApiDocumentTests` compares the live document (served at `/openapi/v2.json`) with the checked-in file, and the CI job `openapi-drift` builds the Host and runs `git diff --exit-code -- openapi/v2.json`.
+- **Development only:** `MapOpenApi` (`/openapi/v2.json`) and the Scalar UI (`/scalar/v2`) are mapped when `ASPNETCORE_ENVIRONMENT=Development`.
+- The only server entry is `/`: paths already carry the `/api/v2` prefix.
