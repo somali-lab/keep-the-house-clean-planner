@@ -4,17 +4,15 @@ import { defaultPointsForDuration, MAX_TASK_POINTS, MIN_TASK_POINTS } from './po
 describe('defaultPointsForDuration', () => {
   it.each([
     [1, 1],
-    [5, 1],
-    [10, 1],
-    [11, 2],
-    [20, 2],
-    [30, 3],
-    [31, 4],
-    [45, 5],
-    [60, 6],
-    [999, 100],
-    [1000, 100],
-    [5000, 100],
+    [5, 5],
+    [10, 10],
+    [30, 30],
+    [45, 45],
+    [60, 60],
+    [999, 999],
+    [1000, 1000],
+    [1001, 1000],
+    [5000, 1000],
   ])('%d minutes earn %d points', (minutes, points) => {
     expect(defaultPointsForDuration(minutes)).toBe(points);
   });
@@ -27,7 +25,7 @@ describe('defaultPointsForDuration', () => {
     }
   });
 
-  it('keeps the bounds of a task at 0..100', () => {
-    expect([MIN_TASK_POINTS, MAX_TASK_POINTS]).toEqual([0, 100]);
+  it('keeps the bounds of a task at 0..1000', () => {
+    expect([MIN_TASK_POINTS, MAX_TASK_POINTS]).toEqual([0, 1000]);
   });
 });

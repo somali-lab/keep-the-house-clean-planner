@@ -18,7 +18,7 @@ import type { UserDoc } from '../src/data/users.ts';
 
 /**
  * ADR-0011: the reconciliation makes the ledger match the occurrences, idempotently. Monday 14 Sep 2026
- * is the first day of cycle 0; the plan has one task of 30 minutes (3 points by default) on Monday
+ * is the first day of cycle 0; the plan has one task of 30 minutes (30 points by default) on Monday
  * (person 1), Tuesday (person 2) and Wednesday (nobody).
  */
 const apps: TestApp[] = [];
@@ -122,13 +122,13 @@ describe('reconcilePoints: retroactive points', () => {
     });
 
     const entry = async (id: string | ObjectId) => findPointEntryByKey(t.db, executionKey(new ObjectId(id)));
-    expect(await entry(monday)).toMatchObject({ personId: p2._id, amount: 3, source: 'backfill', titleSnapshot: 'Stofzuigen', date: fromDayKey('2026-09-14') });
-    expect(await entry(tuesday)).toMatchObject({ personId: p2._id, amount: 3 });
+    expect(await entry(monday)).toMatchObject({ personId: p2._id, amount: 30, source: 'backfill', titleSnapshot: 'Stofzuigen', date: fromDayKey('2026-09-14') });
+    expect(await entry(tuesday)).toMatchObject({ personId: p2._id, amount: 30 });
     expect(await entry(wednesday)).toBeNull();
-    expect(await entry(orphanTask)).toMatchObject({ personId: p1._id, amount: 3, taskId: expect.any(ObjectId) });
-    expect(await entry(oneOff)).toMatchObject({ personId: p2._id, amount: 10, taskId: null, titleSnapshot: 'Zolder vegen' });
-    expect((await findOccurrenceById(t.db, new ObjectId(wednesday)))!.pointsSnapshot).toBe(3);
-    expect((await t.db.collection(COLLECTIONS.tasks).findOne({ _id: new ObjectId(task) }))!.points).toBe(3);
+    expect(await entry(orphanTask)).toMatchObject({ personId: p1._id, amount: 25, taskId: expect.any(ObjectId) });
+    expect(await entry(oneOff)).toMatchObject({ personId: p2._id, amount: 95, taskId: null, titleSnapshot: 'Zolder vegen' });
+    expect((await findOccurrenceById(t.db, new ObjectId(wednesday)))!.pointsSnapshot).toBe(30);
+    expect((await t.db.collection(COLLECTIONS.tasks).findOne({ _id: new ObjectId(task) }))!.points).toBe(30);
 
     const audit = await reconcileAudit(t);
     expect(audit).toHaveLength(1);
@@ -156,7 +156,7 @@ describe('reconcilePoints: retroactive points', () => {
     expect((await call('PATCH', `/api/tasks/${task}`, { points: 9 })).statusCode).toBe(200);
     const result = await reconcilePoints(t.systemCtx(), 'admin');
     expect(result).toMatchObject({ created: 0, updated: 0, removed: 0 });
-    expect(await findPointEntryByKey(t.db, executionKey(new ObjectId(monday)))).toMatchObject({ personId: p1._id, amount: 3 });
+    expect(await findPointEntryByKey(t.db, executionKey(new ObjectId(monday)))).toMatchObject({ personId: p1._id, amount: 30 });
   });
 
   it('heals drift between the ledger and the occurrences and lists every correction', async () => {
@@ -181,7 +181,7 @@ describe('reconcilePoints: retroactive points', () => {
     expect(result).toMatchObject({ trigger: 'nightly', created: 1, updated: 1, removed: 1, snapshotsSet: 0, tasksDefaulted: 0 });
     expect(result.corrections).toEqual(
       expect.arrayContaining([
-        { key: mondayKey, from: { personId: p2._id.toHexString(), amount: 9 }, to: { personId: p1._id.toHexString(), amount: 3 } },
+        { key: mondayKey, from: { personId: p2._id.toHexString(), amount: 9 }, to: { personId: p1._id.toHexString(), amount: 30 } },
         { key: stray, from: { personId: p1._id.toHexString(), amount: 4 }, to: null },
       ]),
     );
@@ -190,9 +190,9 @@ describe('reconcilePoints: retroactive points', () => {
     const entries = await findPointEntries(t.db);
     expect(entries.map((e) => [e.key, e.personId.toHexString(), e.amount]).sort()).toEqual(
       [
-        [mondayKey, p1._id.toHexString(), 3],
-        [executionKey(new ObjectId(tuesday)), p2._id.toHexString(), 3],
-        [executionKey(new ObjectId(wednesday)), p1._id.toHexString(), 3],
+        [mondayKey, p1._id.toHexString(), 30],
+        [executionKey(new ObjectId(tuesday)), p2._id.toHexString(), 30],
+        [executionKey(new ObjectId(wednesday)), p1._id.toHexString(), 30],
       ].sort(),
     );
     expect(entries.find((e) => e.key === mondayKey)!.source).toBe('recompute');
@@ -275,7 +275,7 @@ describe('statistics reset removes the matching points', () => {
     expect(audit[0]!.meta).toMatchObject({ scoped: true, removedPointEntries: 1 });
     // No audit entry per removed ledger entry.
     expect(await t.db.collection(COLLECTIONS.auditLog).countDocuments({ entity: 'points', action: 'delete' })).toBe(0);
-    expect((await findOccurrenceById(t.db, new ObjectId(wednesday)))!.pointsSnapshot).toBe(3);
+    expect((await findOccurrenceById(t.db, new ObjectId(wednesday)))!.pointsSnapshot).toBe(30);
   });
 
   it('starting over removes every entry, clears the snapshots and records the count', async () => {
@@ -302,7 +302,7 @@ describe('import rebuilds the ledger', () => {
     expect(file.schemaVersion).toBe(3);
     expect(Object.keys(file.collections)).not.toContain('pointEntries');
     expect(file.collections.tasks[0]).toHaveProperty('points');
-    expect(file.collections.occurrences.some((o) => o.pointsSnapshot === 3)).toBe(true);
+    expect(file.collections.occurrences.some((o) => o.pointsSnapshot === 30)).toBe(true);
   });
 
   it('rebuilds the ledger from a version-3 file and drops the ledger of the data it replaces', async () => {
@@ -322,7 +322,7 @@ describe('import rebuilds the ledger', () => {
     expect(res.statusCode, res.body).toBe(200);
     const entries = await findPointEntries(target.t.db);
     expect(entries.map((e) => e.key)).toEqual([executionKey(new ObjectId(monday))]);
-    expect(entries[0]).toMatchObject({ amount: 3, source: 'backfill' });
+    expect(entries[0]).toMatchObject({ amount: 30, source: 'backfill' });
     const audit = await reconcileAudit(target.t);
     expect(audit).toHaveLength(1);
     expect(audit[0]!.meta).toMatchObject({ trigger: 'import', created: 1, updated: 0, removed: 0, tasksDefaulted: 0, snapshotsSet: 0 });
@@ -348,15 +348,15 @@ describe('import rebuilds the ledger', () => {
     await importData(empty.systemCtx(), parsed);
 
     const after = await readAllCollections(empty.db);
-    expect(after.tasks.every((task) => task.points === 3)).toBe(true);
+    expect(after.tasks.every((task) => task.points === 30)).toBe(true);
     const done = after.occurrences.filter((o) => o.status === 'done');
     expect(done).toHaveLength(2);
-    expect(done.every((o) => o.pointsSnapshot === 3)).toBe(true);
+    expect(done.every((o) => o.pointsSnapshot === 30)).toBe(true);
     const entries = await findPointEntries(empty.db);
     expect(entries.map((e) => [e.key, e.personId.toHexString(), e.amount]).sort()).toEqual(
       [
-        [executionKey(new ObjectId(monday)), source.p1._id.toHexString(), 3],
-        [executionKey(new ObjectId(tuesday)), source.p1._id.toHexString(), 3],
+        [executionKey(new ObjectId(monday)), source.p1._id.toHexString(), 30],
+        [executionKey(new ObjectId(tuesday)), source.p1._id.toHexString(), 30],
       ].sort(),
     );
     const audit = await reconcileAudit(empty);
@@ -488,12 +488,29 @@ describe('the manual nightly route and the points reconciliation', () => {
     expect(await reconcileAudit(t)).toHaveLength(0);
 
     await runNightly(t.systemCtx());
-    expect(await findPointEntryByKey(t.db, executionKey(new ObjectId(monday)))).toMatchObject({ amount: 3 });
+    expect(await findPointEntryByKey(t.db, executionKey(new ObjectId(monday)))).toMatchObject({ amount: 30 });
     expect((await reconcileAudit(t))[0]!.meta).toMatchObject({ trigger: 'nightly', snapshotsSet: 1, created: 1 });
   });
 });
 
 describe('backfill of a task that never had points', () => {
+  it('gives a done one-off task without a snapshot the points it was recorded with, not the duration rule', async () => {
+    const { t, p1, occurrence } = await fixture();
+    const monday = await occurrence('2026-09-14');
+    const withPoints = await insertLegacyAdhoc(t, monday, { taskId: null, durationMinutesSnapshot: 40, completedBy: p1._id, pointsOverride: 7 });
+    const noPoints = await insertLegacyAdhoc(t, monday, { taskId: null, durationMinutesSnapshot: 40, completedBy: p1._id, pointsOverride: 0 });
+    const byDuration = await insertLegacyAdhoc(t, monday, { taskId: null, durationMinutesSnapshot: 40, completedBy: p1._id });
+
+    await reconcilePoints(t.systemCtx(), 'admin');
+    const snapshot = async (id: ObjectId) => (await findOccurrenceById(t.db, id))!.pointsSnapshot;
+    expect(await snapshot(withPoints)).toBe(7);
+    expect(await snapshot(noPoints)).toBe(0);
+    expect(await snapshot(byDuration)).toBe(40);
+    expect(await findPointEntryByKey(t.db, executionKey(withPoints))).toMatchObject({ amount: 7, taskId: null });
+    expect(await findPointEntryByKey(t.db, executionKey(noPoints))).toBeNull();
+    expect(await findPointEntryByKey(t.db, executionKey(byDuration))).toMatchObject({ amount: 40 });
+  });
+
   it('gives historical executions the default for the duration they had, not the task\'s current duration', async () => {
     const { t, p1, task, occurrence, call } = await fixture();
     const monday = await occurrence('2026-09-14');
@@ -505,9 +522,9 @@ describe('backfill of a task that never had points', () => {
 
     const result = await reconcilePoints(t.systemCtx(), 'startup');
     expect(result).toMatchObject({ tasksDefaulted: 1, snapshotsSet: 1, created: 1 });
-    expect((await t.db.collection(COLLECTIONS.tasks).findOne({ _id: new ObjectId(task) }))!.points).toBe(6);
-    expect((await findOccurrenceById(t.db, new ObjectId(monday)))!.pointsSnapshot).toBe(2);
-    expect(await findPointEntryByKey(t.db, executionKey(new ObjectId(monday)))).toMatchObject({ amount: 2 });
+    expect((await t.db.collection(COLLECTIONS.tasks).findOne({ _id: new ObjectId(task) }))!.points).toBe(60);
+    expect((await findOccurrenceById(t.db, new ObjectId(monday)))!.pointsSnapshot).toBe(15);
+    expect(await findPointEntryByKey(t.db, executionKey(new ObjectId(monday)))).toMatchObject({ amount: 15 });
   });
 
   it('still uses the task points for a task that has an explicit value', async () => {

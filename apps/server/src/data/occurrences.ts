@@ -34,6 +34,8 @@ export interface OccurrenceDoc {
   requestId?: string | null;
   /** Points of this execution, fixed when it became done (ADR-0011); null or missing means not yet snapshotted. */
   pointsSnapshot?: number | null;
+  /** Points a one-off task was recorded with (ADR-0011); wins over the duration rule when it becomes done. Missing means none. */
+  pointsOverride?: number | null;
   createdAt: Date;
   updatedAt: Date;
 }

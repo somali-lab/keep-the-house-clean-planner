@@ -182,6 +182,8 @@ export type RecordWorkInput =
       date: string;
       assigneeId: string | null;
       done: boolean;
+      /** Chosen points (ADR-0011); omitted means the default for the duration. */
+      points?: number;
     };
 
 /**
@@ -216,6 +218,7 @@ export function useRecordWork() {
                 date: input.date,
                 assigneeId: input.assigneeId,
                 ...(input.done ? { done: true } : {}),
+                ...(input.points === undefined ? {} : { points: input.points }),
                 requestId,
               })
             ).data;

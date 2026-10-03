@@ -83,6 +83,14 @@ describe('one-off task schemas', () => {
     ).toMatchObject({ roomId: null, assigneeId: ID, done: true, requestId: 'one-off-request-key-0001' });
   });
 
+  it('takes optional whole points from 0 to 1000 for a one-off task', () => {
+    expect(createOneOffOccurrenceInputSchema.parse(base).points).toBeUndefined();
+    for (const points of [0, 7, 1000]) expect(createOneOffOccurrenceInputSchema.parse({ ...base, points }).points).toBe(points);
+    for (const points of [-1, 1001, 2.5, '5', null]) {
+      expect(createOneOffOccurrenceInputSchema.safeParse({ ...base, points }).success, String(points)).toBe(false);
+    }
+  });
+
   it('enforces the name, duration, date and request key bounds', () => {
     const invalid = [
       { ...base, name: '   ' },
@@ -139,12 +147,12 @@ describe('one-off task schemas', () => {
     expect(patchOccurrenceInputSchema.safeParse({ action: 'complete' }).success).toBe(true);
   });
 
-  it('keeps task points optional on create and within 0..100', () => {
+  it('keeps task points optional on create and within 0..1000', () => {
     const base = { name: 'Stofzuigen', roomId: ID, intervalKey: '1w', durationMinutes: 20 };
     expect(createTaskInputSchema.parse(base).points).toBeUndefined();
     expect(createTaskInputSchema.parse({ ...base, points: 0 }).points).toBe(0);
-    expect(createTaskInputSchema.parse({ ...base, points: 100 }).points).toBe(100);
-    for (const points of [-1, 101, 1.5, '3']) {
+    expect(createTaskInputSchema.parse({ ...base, points: 1000 }).points).toBe(1000);
+    for (const points of [-1, 1001, 1.5, '3']) {
       expect(createTaskInputSchema.safeParse({ ...base, points }).success).toBe(false);
       expect(updateTaskInputSchema.safeParse({ points }).success).toBe(false);
     }
@@ -178,8 +186,8 @@ describe('one-off task schemas', () => {
       isOverdue: false,
       movedFrom: null,
     };
-    expect(occurrenceSchema.safeParse({ ...base, pointsSnapshot: 100 }).success).toBe(true);
-    expect(occurrenceSchema.safeParse({ ...base, pointsSnapshot: 101 }).success).toBe(false);
+    expect(occurrenceSchema.safeParse({ ...base, pointsSnapshot: 1000 }).success).toBe(true);
+    expect(occurrenceSchema.safeParse({ ...base, pointsSnapshot: 1001 }).success).toBe(false);
   });
 
   it('validates the points balances query: optional days, never from after to', () => {

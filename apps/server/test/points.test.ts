@@ -27,7 +27,7 @@ let t: TestApp;
 let p1: UserDoc; // administrator
 let p2: UserDoc;
 let roomId: string;
-let vacuum: string; // 30 minutes, default points: 3
+let vacuum: string; // 30 minutes, default points: 30
 let heavy: string; // explicit 8 points
 let free: string; // explicit 0 points
 
@@ -95,14 +95,14 @@ describe('a check-off creates exactly one ledger entry', () => {
       count: 1,
     });
     expect(result.statusCode, result.body).toBe(200);
-    expect(result.json<OccurrenceView>().pointsSnapshot).toBe(3);
+    expect(result.json<OccurrenceView>().pointsSnapshot).toBe(30);
 
     const entry = (await entryOf(id))!;
     expect(entry).toMatchObject({
       key: `execution:${id}`,
       kind: 'execution',
       personId: p1._id,
-      amount: 3,
+      amount: 30,
       date: fromDayKey(TODAY),
       weekStart: fromDayKey('2026-09-14'),
       occurrenceId: new ObjectId(id),
@@ -113,7 +113,7 @@ describe('a check-off creates exactly one ledger entry', () => {
     expect(entries[0]!.actorId).toEqual(p1._id);
     expect(entries[0]!.entityId).toEqual(entry._id);
     expect(entries[0]!.meta).toEqual({ occurrenceId: new ObjectId(id), reason: 'complete' });
-    expect(entries[0]!.after).toMatchObject({ key: `execution:${id}`, personId: p1._id, amount: 3 });
+    expect(entries[0]!.after).toMatchObject({ key: `execution:${id}`, personId: p1._id, amount: 30 });
 
     const again = await captureWrites(t, () => patch(id, { action: 'complete' }));
     expect(again.result.statusCode).toBe(409);
@@ -219,7 +219,7 @@ describe('recorded work', () => {
     expect(await entryOf(created._id)).toBeNull();
   });
 
-  it('credits a one-off task of 30 minutes with 3 points, to the chosen person', async () => {
+  it('credits a one-off task of 30 minutes with 30 points, to the chosen person', async () => {
     const mine = await call('POST', '/api/occurrences/one-off', {
       name: 'Kast opruimen',
       durationMinutes: 30,
@@ -228,10 +228,10 @@ describe('recorded work', () => {
       requestId: key(2),
     });
     expect(mine.statusCode, mine.body).toBe(201);
-    expect(mine.json<OccurrenceView>().pointsSnapshot).toBe(3);
+    expect(mine.json<OccurrenceView>().pointsSnapshot).toBe(30);
     expect(await entryOf(mine.json<OccurrenceView>()._id)).toMatchObject({
       personId: p1._id,
-      amount: 3,
+      amount: 30,
       taskId: null,
       titleSnapshot: 'Kast opruimen',
     });
@@ -244,7 +244,91 @@ describe('recorded work', () => {
       assigneeId: p2._id.toHexString(),
       requestId: key(3),
     });
-    expect(await entryOf(theirs.json<OccurrenceView>()._id)).toMatchObject({ personId: p2._id, amount: 10 });
+    expect(await entryOf(theirs.json<OccurrenceView>()._id)).toMatchObject({ personId: p2._id, amount: 95 });
+  });
+
+  it('credits a one-off task with the points chosen on recording instead of the duration rule', async () => {
+    const res = await call('POST', '/api/occurrences/one-off', {
+      name: 'Garage ordenen',
+      durationMinutes: 30,
+      points: 12,
+      date: TODAY,
+      done: true,
+      requestId: key(6),
+    });
+    expect(res.statusCode, res.body).toBe(201);
+    const occurrence = res.json<OccurrenceView>();
+    expect(occurrence).toMatchObject({ pointsSnapshot: 12, pointsOverride: 12 });
+    expect(await entryOf(occurrence._id)).toMatchObject({ personId: p1._id, amount: 12, taskId: null });
+
+    const none = await call('POST', '/api/occurrences/one-off', {
+      name: 'Even kijken',
+      durationMinutes: 30,
+      points: 0,
+      date: TODAY,
+      done: true,
+      requestId: key(7),
+    });
+    expect(none.json<OccurrenceView>()).toMatchObject({ pointsSnapshot: 0, pointsOverride: 0 });
+    expect(await entryOf(none.json<OccurrenceView>()._id)).toBeNull();
+  });
+
+  it('applies the duration rule to a one-off task recorded without points', async () => {
+    const res = await call('POST', '/api/occurrences/one-off', {
+      name: 'Zonder punten',
+      durationMinutes: 25,
+      date: TODAY,
+      done: true,
+      requestId: key(8),
+    });
+    expect(res.json<OccurrenceView>()).toMatchObject({ pointsSnapshot: 25, pointsOverride: null });
+    expect(await entryOf(res.json<OccurrenceView>()._id)).toMatchObject({ amount: 25 });
+  });
+
+  it('keeps the chosen points of a planned one-off task when it is completed later, also after an undo', async () => {
+    const planned = await call('POST', '/api/occurrences/one-off', {
+      name: 'Later vegen',
+      durationMinutes: 20,
+      points: 7,
+      date: TODAY,
+      assigneeId: p1._id.toHexString(),
+      requestId: key(9),
+    });
+    expect(planned.statusCode, planned.body).toBe(201);
+    const id = planned.json<OccurrenceView>()._id;
+    expect(planned.json<OccurrenceView>()).toMatchObject({ pointsSnapshot: null, pointsOverride: 7 });
+    expect(await entryOf(id)).toBeNull();
+
+    const done = await patch(id, { action: 'complete' });
+    expect(done.statusCode, done.body).toBe(200);
+    expect(done.json<OccurrenceView>().pointsSnapshot).toBe(7);
+    expect(await entryOf(id)).toMatchObject({ personId: p1._id, amount: 7, taskId: null });
+
+    expect((await patch(id, { action: 'uncomplete' })).statusCode).toBe(200);
+    expect(await entryOf(id)).toBeNull();
+    expect((await patch(id, { action: 'complete' })).json<OccurrenceView>().pointsSnapshot).toBe(7);
+    expect(await entryOf(id)).toMatchObject({ amount: 7 });
+  });
+
+  it('applies the duration rule to a planned one-off task without points when it is completed', async () => {
+    const planned = await call('POST', '/api/occurrences/one-off', {
+      name: 'Later vegen zonder',
+      durationMinutes: 20,
+      date: TODAY,
+      assigneeId: p1._id.toHexString(),
+      requestId: key(10),
+    });
+    const id = planned.json<OccurrenceView>()._id;
+    expect((await patch(id, { action: 'complete' })).json<OccurrenceView>().pointsSnapshot).toBe(20);
+  });
+
+  it.each([-1, 1001, 2.5, '5'])('rejects %j points on a one-off task', async (points) => {
+    const res = await captureWrites(t, () =>
+      call('POST', '/api/occurrences/one-off', { name: 'Fout', durationMinutes: 10, date: TODAY, done: true, points }),
+    );
+    expect(res.result.statusCode).toBe(400);
+    expect(res.result.json()).toMatchObject({ code: 'validation_error', details: [{ field: 'points' }] });
+    expect(res.writes).toEqual([]);
   });
 
   it('does not earn points before it is done', async () => {
@@ -278,7 +362,7 @@ describe('recorded work', () => {
       count: 1,
     });
     expect(repaired.result.statusCode).toBe(200);
-    expect((await entryOf(id))?.amount).toBe(3);
+    expect((await entryOf(id))?.amount).toBe(30);
   });
 });
 
@@ -301,7 +385,7 @@ describe('administrator corrections', () => {
     expect(moved._id).toEqual(stored._id);
     expect(moved).toMatchObject({
       personId: p1._id,
-      amount: 3,
+      amount: 30,
       date: fromDayKey('2026-09-29'),
       weekStart: fromDayKey('2026-09-28'),
       source: 'live',
@@ -311,7 +395,7 @@ describe('administrator corrections', () => {
       occurrenceId: new ObjectId(id),
       reason: 'correction',
       titleSnapshot: 'Stofzuigen',
-      amount: 3,
+      amount: 30,
     });
     expect(edit.entries[0]!.before).toEqual({ personId: p2._id, date: fromDayKey('2026-10-01') });
     expect(edit.entries[0]!.after).toEqual({ personId: p1._id, date: fromDayKey('2026-09-29') });
@@ -401,18 +485,18 @@ describe('syncing is idempotent', () => {
 });
 
 describe('task points', () => {
-  it('defaults the points of a new task from its duration, within 1..100', async () => {
+  it('defaults the points of a new task from its duration, within 1..1000', async () => {
     const forty = await call('POST', '/api/tasks', { name: 'A', roomId, intervalKey: '1w', durationMinutes: 45 });
-    expect(forty.json()).toMatchObject({ points: 5 });
+    expect(forty.json()).toMatchObject({ points: 45 });
     const quick = await call('POST', '/api/tasks', { name: 'B', roomId, intervalKey: '1w', durationMinutes: 1 });
     expect(quick.json()).toMatchObject({ points: 1 });
     const huge = await call('POST', '/api/tasks', { name: 'C', roomId, intervalKey: '1w', durationMinutes: 5000 });
-    expect(huge.json()).toMatchObject({ points: 100 });
+    expect(huge.json()).toMatchObject({ points: 1000 });
     const stored = await findTaskById(t.db, new ObjectId(forty.json<{ _id: string }>()._id));
-    expect(stored?.points).toBe(5);
+    expect(stored?.points).toBe(45);
   });
 
-  it.each([0, 1, 100])('accepts %d points on create and on update', async (points) => {
+  it.each([0, 1, 1000])('accepts %d points on create and on update', async (points) => {
     const created = await call('POST', '/api/tasks', {
       name: `P${points}`,
       roomId,
@@ -426,7 +510,7 @@ describe('task points', () => {
     expect(updated.json()).toMatchObject({ points: 50 });
   });
 
-  it.each([-1, 101, 2.5, '3'])('rejects %j points with a validation error naming the field', async (points) => {
+  it.each([-1, 1001, 2.5, '3'])('rejects %j points with a validation error naming the field', async (points) => {
     const base = { roomId, intervalKey: '1w', durationMinutes: 30 };
     const create = await captureWrites(t, () => call('POST', '/api/tasks', { name: 'Fout', ...base, points }));
     expect(create.result.statusCode).toBe(400);
@@ -471,10 +555,10 @@ describe('task points', () => {
     // eslint-disable-next-line no-restricted-syntax -- simulates a task document from before points existed
     await t.db.collection(COLLECTIONS.tasks).updateOne({ _id: new ObjectId(task) }, { $unset: { points: '' } });
     const list = await t.app.inject({ method: 'GET', url: '/api/tasks' });
-    expect(list.json<{ _id: string; points: number }[]>().find((x) => x._id === task)?.points).toBe(6);
+    expect(list.json<{ _id: string; points: number }[]>().find((x) => x._id === task)?.points).toBe(60);
 
     const adhoc = await call('POST', '/api/occurrences', { taskId: task, date: TODAY, done: true, requestId: key(5) });
-    expect(adhoc.json<OccurrenceView>().pointsSnapshot).toBe(6);
-    expect((await entryOf(adhoc.json<OccurrenceView>()._id))?.amount).toBe(6);
+    expect(adhoc.json<OccurrenceView>().pointsSnapshot).toBe(60);
+    expect((await entryOf(adhoc.json<OccurrenceView>()._id))?.amount).toBe(60);
   });
 });

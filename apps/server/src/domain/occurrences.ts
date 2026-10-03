@@ -40,6 +40,7 @@ export function toOccurrenceView(doc: OccurrenceDoc, todayKey: string, timezone:
     recordedDone: doc.recordedDone ?? false,
     requestId: doc.requestId ?? null,
     pointsSnapshot: doc.pointsSnapshot ?? null,
+    pointsOverride: doc.pointsOverride ?? null,
     isOverdue: doc.status === 'open' && date < todayKey,
     movedFrom: date === plannedDate ? null : plannedDate,
   };
@@ -334,6 +335,8 @@ export interface OneOffOccurrenceInput {
   /** undefined = unassigned (the actor when done); null = "wie dan ook". */
   assigneeId?: ObjectId | null;
   done?: boolean;
+  /** Chosen points (ADR-0011); undefined = the default for the duration. */
+  points?: number;
   requestId?: string;
 }
 
@@ -565,8 +568,10 @@ export async function createOneOffOccurrence(ctx: AuditContext, input: OneOffOcc
     origin: 'adhoc',
     recordedDone: done,
     requestId: input.requestId ?? null,
-    // A one-off task has no task value: the duration rule applies (ADR-0011).
-    ...(done ? { pointsSnapshot: defaultPointsForDuration(input.durationMinutes) } : {}),
+    // A one-off task has no task value: the chosen points, else the duration rule (ADR-0011). The
+    // chosen value stays on the occurrence, so a one-off planned now and completed later keeps it.
+    ...(input.points === undefined ? {} : { pointsOverride: input.points }),
+    ...(done ? { pointsSnapshot: input.points ?? defaultPointsForDuration(input.durationMinutes) } : {}),
     createdAt: now,
     updatedAt: now,
   };

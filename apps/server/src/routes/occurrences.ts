@@ -91,6 +91,7 @@ export const occurrenceRoutes: FastifyPluginAsync = async (app) => {
         : { assigneeId: input.assigneeId === null ? null : new ObjectId(input.assigneeId) }),
       ...(input.done === undefined ? {} : { done: input.done }),
       ...(input.requestId === undefined ? {} : { requestId: input.requestId }),
+      ...(input.points === undefined ? {} : { points: input.points }),
     });
     return reply.status(result.created ? 201 : 200).send(await viewWithWarnings(result));
   });

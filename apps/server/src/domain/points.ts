@@ -49,14 +49,15 @@ export function taskPoints(task: Pick<TaskDoc, 'points' | 'durationMinutes'>): n
 }
 
 /**
- * The value an occurrence snapshots when it becomes done (ADR-0011): the task's points, or the
- * duration rule for a one-off task and for a task that no longer exists. It never reads a task
+ * The value an occurrence snapshots when it becomes done (ADR-0011): the points a one-off task was
+ * recorded with, else the task's points, or the duration rule for a one-off task and for a task that no longer exists. It never reads a task
  * value that was changed afterwards, because the snapshot is taken once, at completion.
  */
 export async function pointsSnapshotFor(
   ctx: AuditContext,
-  occurrence: Pick<OccurrenceDoc, 'taskId' | 'durationMinutesSnapshot'>,
+  occurrence: Pick<OccurrenceDoc, 'taskId' | 'durationMinutesSnapshot' | 'pointsOverride'>,
 ): Promise<number> {
+  if (occurrence.pointsOverride != null) return occurrence.pointsOverride;
   const task = occurrence.taskId ? await findTaskById(ctx.db, occurrence.taskId) : null;
   return task ? taskPoints(task) : defaultPointsForDuration(occurrence.durationMinutesSnapshot);
 }
@@ -202,6 +203,7 @@ async function reconcileNow(ctx: AuditContext, trigger: PointsRecomputeTrigger):
   if (unsnapshotted.length > 0) {
     const tasks = new Map((await listTasks(ctx.db)).map((task) => [task._id.toHexString(), task]));
     const snapshots = unsnapshotted.map((doc) => {
+      if (doc.pointsOverride != null) return { id: doc._id, points: doc.pointsOverride };
       const taskId = doc.taskId?.toHexString();
       const task = taskId ? tasks.get(taskId) : undefined;
       // A task that no longer exists, a one-off task and a task whose points this migration just

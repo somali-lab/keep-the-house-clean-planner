@@ -47,16 +47,18 @@ The Due page's "Done now" opens the same completion dialog as Today when today's
 
 ### Task points and the snapshot on the occurrence
 
-- **On the task:** `points` is an integer from `0` to `100`. `0` means the task earns no points.
-- **Default value:** the shared helper `defaultPointsForDuration(minutes)` returns `clamp(ceil(minutes / 10), 1, 100)`, so a task earns one point for every ten minutes it takes, or part of ten minutes.
+- **On the task:** `points` is an integer from `0` to `1000`. `0` means the task earns no points.
+- **Default value:** the shared helper `defaultPointsForDuration(minutes)` returns `clamp(minutes, 1, 1000)`, so a task earns one point for every minute it takes. The upper bound (`MAX_TASK_POINTS`) is shared by the task schema, the snapshot, the one-off input and the form fields.
   - A new task gets this value when `points` is omitted on create. The task form fills it in from the duration until the person edits the field.
   - At startup, every existing task without `points` gets the same value. This is a schema migration and is counted in the backfill summary.
   - Changing `points` goes through the existing `PATCH /api/tasks/:id` (`requirePlanner`) and is audited as a task `update`.
-- **On the occurrence:** `pointsSnapshot: number | null` is written when the occurrence becomes done. That happens on `complete` and on the ad-hoc create with `done: true`. The value is `task.points`, or the one-off rule for a one-off task. `uncomplete` and the "start over" statistics reset set it back to `null`, so a later check-off takes the value that applies at that moment. `edit_completion` keeps it. It is part of the occurrence audit diff. Missing on older data means not yet snapshotted.
+- **On the occurrence:** `pointsSnapshot: number | null` is written when the occurrence becomes done. That happens on `complete` and on the ad-hoc create with `done: true`. The value is `task.points`, or for a one-off task its `pointsOverride` when it has one and the one-off rule otherwise. `uncomplete` and the "start over" statistics reset set it back to `null`, so a later check-off takes the value that applies at that moment. `edit_completion` keeps it. It is part of the occurrence audit diff. Missing on older data means not yet snapshotted.
 
 **A changed task value never rewrites past points**, not even during a recomputation. A recomputation reads the snapshot, not the task. This is the same rule that keeps the workload statistics stable when a duration changes.
 
-**Default for one-off tasks** (`taskId: null`): `defaultPointsForDuration(durationMinutesSnapshot)`, the same rule that sets a new task's default. A one-off task of 30 minutes therefore earns 3 points. This is a product default and an open question for the maintainer (see Consequences). The value is snapshotted when the work is recorded, so a household setting can replace the rule later without touching past entries.
+**Points of one-off tasks** (`taskId: null`). The record-work dialog has a points field for a one-off task, from `0` to `1000`, filled in with the default for the entered duration until it is edited by hand. `POST /api/occurrences/one-off` takes the optional integer `points` (the same bounds as a task). Without it, the one-off rule applies: `defaultPointsForDuration(durationMinutesSnapshot)`, so a one-off task of 30 minutes earns 30 points.
+
+A chosen value is stored on the occurrence as `pointsOverride: number | null`. It is written when the one-off task is created and never changes afterwards, whether the work is recorded as done at once or planned and checked off later. `pointsSnapshot` is still the value that counts: it is set from `pointsOverride` (else the duration rule) when the occurrence becomes done, and an uncomplete followed by a new check-off therefore gives the same points. A missing `pointsOverride`, as on older data and on extra executions of a task, means the rule. The override is part of the occurrence's create audit entry and of the export; the reconciliation reads it when it fills in a missing snapshot. The value is snapshotted when the work is done, so a household setting can still replace the default rule later without touching past entries.
 
 ### The ledger: a keyed projection, not a stream of deltas
 
@@ -118,7 +120,7 @@ The existing single reset audit entry gains `removedPointEntries`, and no audit 
 
 `reconcilePoints(ctx, trigger)` makes the whole ledger match the occurrences. It runs in three steps:
 
-1. **Migrate the fields.** Tasks without `points` get the default value. Done occurrences without `pointsSnapshot` get `task.points`; when the task no longer exists, or for a one-off task, they get the duration rule. Both writes use filters on missing fields, so a second run matches nothing.
+1. **Migrate the fields.** Tasks without `points` get the default value. Done occurrences without `pointsSnapshot` get `task.points`; when the task no longer exists, or for a one-off task without `pointsOverride`, they get the duration rule; a one-off task with `pointsOverride` gets that value. Both writes use filters on missing fields, so a second run matches nothing.
    - *Deliberate refinement:* a task whose points were filled in by this very migration never had a value of its own, so its current duration says nothing about the past. Its historical executions get `defaultPointsForDuration(durationMinutesSnapshot)`, the duration the occurrence had, instead of the points just derived from the task's current duration. A task that already had an explicit value keeps using it.
 2. **Compute the expected entries.** The function loads every stored `execution` entry first, and then computes the expected execution entry for every done occurrence. An occurrence that cannot be read (an invalid date, for example) is skipped and counted as `skipped`, and its stored entry is left alone.
 3. **Apply the differences.** It inserts the missing entries, updates the entries that differ and deletes the orphans, as bulk writes. Updates and deletes are compare-and-set on the entry that was read (`_id`, person, amount and date), so an entry that a live sync changed in the meantime is left for the next run. Reconciliations never overlap within the process: a second one waits for the first.
@@ -159,7 +161,7 @@ It lists every active user, including those at `0`, and every inactive user with
 
 **`POST /api/points/recompute`** is described above.
 
-Task create and update gain `points` (integer from `0` to `100`), and the occurrence view gains `pointsSnapshot`. `patchOccurrenceInputSchema` rejects `completedBy` together with `takeOver`. The audit schema gains the entity `points` and the action `recompute`.
+Task create and update gain `points` (integer from `0` to `1000`), `POST /api/occurrences/one-off` gains the optional `points`, and the occurrence view gains `pointsSnapshot` and `pointsOverride`. `patchOccurrenceInputSchema` rejects `completedBy` together with `takeOver`. The audit schema gains the entity `points` and the action `recompute`.
 
 ### Transfer
 
@@ -186,6 +188,6 @@ The ledger is **rebuilt, not exported**. Every entry in P10a is derived. The dat
 - **The first start after the upgrade** writes all historical points and one summary audit entry. Every later start writes nothing.
 - **Version 3 exports.** An application older than this decision cannot import a version-3 export. Downgrading was never supported.
 - **Open product questions,** answered here with defaults:
-  - **One-off task points.** The default is the duration rule. The alternatives are a fixed household setting, or points entered in the record-work dialog.
+  - **One-off task points.** Decided by the maintainer: they are entered in the record-work dialog and default to the duration rule (see above). A fixed household setting remains possible later.
   - **Statistics purge.** The default is that the purge removes the points. The alternative is one non-derived `carry_over` entry per person that preserves the balances. That fits once P10c makes balances spendable.
-  - **The default points formula and its bounds.** The default is one point per ten minutes, and the bounds are `0` to `100`.
+  - **The default points formula and its bounds.** Decided by the maintainer: one point per minute, and the bounds are `0` to `1000`. An earlier draft of this record used one point per ten minutes and a maximum of `100`.

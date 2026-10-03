@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildRecordWork, type RecordWorkForm } from './recordWorkModel.ts';
+import { buildRecordWork, defaultPointsText, pointsFieldValue, type RecordWorkForm } from './recordWorkModel.ts';
 
 const TODAY = '2026-09-16';
 const FORM: RecordWorkForm = {
@@ -9,6 +9,7 @@ const FORM: RecordWorkForm = {
   name: '',
   roomId: '',
   duration: '',
+  points: null,
   doneBy: 'u1',
   date: TODAY,
   planFor: '',
@@ -41,6 +42,54 @@ describe('buildRecordWork', () => {
           errors: { name: 'recordWork.error.name', duration: 'recordWork.error.duration' },
         });
       }
+    });
+  });
+
+  describe('points of a one-off task', () => {
+    const ONE_OFF: RecordWorkForm = { ...FORM, kind: 'oneOff', taskId: '', name: 'Kast', duration: '25' };
+
+    it('shows the default for the duration until the field is edited by hand', () => {
+      expect(defaultPointsText('25')).toBe('25');
+      expect(defaultPointsText('1500')).toBe('1000');
+      expect(defaultPointsText('')).toBe('');
+      expect(defaultPointsText('0')).toBe('');
+      expect(pointsFieldValue({ points: null, duration: '40' })).toBe('40');
+      expect(pointsFieldValue({ points: '5', duration: '40' })).toBe('5');
+      expect(pointsFieldValue({ points: '', duration: '40' })).toBe('');
+    });
+
+    it('omits the points while they were not edited, or cleared, so the server applies the default', () => {
+      for (const points of [null, '', '  ']) {
+        const result = buildRecordWork({ ...ONE_OFF, points }, TODAY);
+        expect(result.ok && 'points' in result.body).toBe(false);
+      }
+    });
+
+    it('sends the typed points, also 0 and the maximum, in both modes', () => {
+      for (const [points, expected] of [
+        ['12', 12],
+        ['0', 0],
+        ['1000', 1000],
+      ] as const) {
+        expect(buildRecordWork({ ...ONE_OFF, points }, TODAY)).toMatchObject({ ok: true, body: { points: expected } });
+        expect(buildRecordWork({ ...ONE_OFF, mode: 'plan', date: '2026-09-18', points }, TODAY)).toMatchObject({
+          ok: true,
+          body: { points: expected, done: false },
+        });
+      }
+    });
+
+    it('rejects points that are not a whole number from 0 to 1000', () => {
+      for (const points of ['-1', '1001', '2.5', 'abc']) {
+        expect(buildRecordWork({ ...ONE_OFF, points }, TODAY)).toEqual({ ok: false, errors: { points: 'recordWork.error.points' } });
+      }
+    });
+
+    it('ignores the points of an extra execution', () => {
+      expect(buildRecordWork({ ...FORM, points: 'abc' }, TODAY)).toEqual({
+        ok: true,
+        body: { kind: 'extra', taskId: 't1', date: TODAY, assigneeId: 'u1', done: true },
+      });
     });
   });
 

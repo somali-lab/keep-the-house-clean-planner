@@ -29,7 +29,7 @@ import { toApi } from '../http/serialize.ts';
 
 /**
  * Written by every export. Version 2 adds `recordedDone`, `requestId` and a nullable occurrence
- * `taskId` (ADR-0009). Version 3 adds `tasks.points` and `occurrences.pointsSnapshot`; the points
+ * `taskId` (ADR-0009). Version 3 adds `tasks.points`, `occurrences.pointsSnapshot` and `occurrences.pointsOverride`; the points
  * ledger itself is not exported but rebuilt on import (ADR-0011). An import also accepts versions 1
  * and 2, which are valid unchanged because the new fields are optional; the rebuild fills them in.
  */
