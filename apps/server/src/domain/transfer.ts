@@ -1,5 +1,10 @@
 import {
   auditEntrySchema,
+  badgeRuleSchema,
+  BADGE_IMAGE_TYPES,
+  MAX_BADGE_DESCRIPTION_LENGTH,
+  MAX_BADGE_IMAGE_BYTES,
+  MAX_BADGE_NAME_LENGTH,
   centsPerPointSchema,
   currencyCodeSchema,
   cyclePlanSchema,
@@ -12,14 +17,17 @@ import {
   requestKeySchema,
   roomSchema,
   settingsSchema,
+  sniffBadgeImageType,
   taskSchema,
   toDayKey,
   userSchema,
 } from '@huishoudplanner/shared';
-import { BSON, ObjectId, type Db, type Document } from 'mongodb';
+import { createHash } from 'node:crypto';
+import { BSON, Binary, ObjectId, type Db, type Document } from 'mongodb';
 import { z } from 'zod';
 import type { AuditContext } from '../audit/context.ts';
 import { record } from '../audit/record.ts';
+import { countBadges } from '../data/badges.ts';
 import { countRedemptions } from '../data/points.ts';
 import { SETTINGS_ID } from '../data/settings.ts';
 import { reconcilePoints, reconcilePointsSafely } from './points.ts';
@@ -43,8 +51,11 @@ import { toApi } from '../http/serialize.ts';
  * Version 5 adds the redemptions, in `collections.pointEntries`: they are booked, so unlike the derived
  * entries they cannot be rebuilt (ADR-0013). Settings gain `currencyCode` and `centsPerPoint`. Files of
  * versions 1 to 4 have no redemptions and import without any.
+ * Version 6 adds the badge definitions with their images, in `collections.badges`; the awards are derived and
+ * rebuilt on import (ADR-0014). A file of versions 1 to 5 has no badges and imports without any, like every other
+ * replaced collection.
  */
-export const EXPORT_SCHEMA_VERSION = 5;
+export const EXPORT_SCHEMA_VERSION = 6;
 
 /**
  * Export file. `collections` is MongoDB relaxed Extended JSON (`{"$oid"}`,
@@ -60,7 +71,7 @@ const rawDocs = z.array(z.record(z.string(), z.unknown()));
 
 const envelopeSchema = z
   .object({
-    schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
+    schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5), z.literal(6)]),
     exportedAt: isoDateTimeSchema,
     collections: z.object({
       settings: rawDocs,
@@ -72,6 +83,8 @@ const envelopeSchema = z
       occurrences: rawDocs,
       // Only from version 5; an older file has no booked entries.
       pointEntries: rawDocs.optional(),
+      // Only from version 6; an older file has no badges.
+      badges: rawDocs.optional(),
       auditLog: rawDocs,
     }),
   })
@@ -79,6 +92,10 @@ const envelopeSchema = z
     // A version 5 file without its redemptions would silently drop them on import.
     if (envelope.schemaVersion >= 5 && envelope.collections.pointEntries === undefined) {
       ctx.addIssue({ code: 'custom', path: ['collections', 'pointEntries'], message: 'required' });
+    }
+    // The same for a version 6 file without its badges.
+    if (envelope.schemaVersion >= 6 && envelope.collections.badges === undefined) {
+      ctx.addIssue({ code: 'custom', path: ['collections', 'badges'], message: 'required' });
     }
   });
 
@@ -105,6 +122,27 @@ const redemptionDocSchema = z.object({
   updatedAt: isoDateTimeSchema,
 });
 
+/** A badge in API form (ADR-0014): its image bytes are base64 here, and a real Binary in the stored form. */
+const badgeDocSchema = z.object({
+  _id: objectIdSchema,
+  name: z.string().trim().min(1).max(MAX_BADGE_NAME_LENGTH),
+  description: z.string().max(MAX_BADGE_DESCRIPTION_LENGTH),
+  rule: badgeRuleSchema,
+  active: z.boolean(),
+  exampleKey: z.string().min(1).max(100).nullable().optional(),
+  image: z
+    .object({
+      data: z.string().min(1),
+      contentType: z.enum(BADGE_IMAGE_TYPES),
+      size: z.number().int().min(1).max(MAX_BADGE_IMAGE_BYTES),
+      hash: z.string().regex(/^[0-9a-f]{64}$/),
+    })
+    .nullable()
+    .optional(),
+  createdAt: isoDateTimeSchema,
+  updatedAt: isoDateTimeSchema,
+});
+
 /** Shape checks on the API form of each stored document (ObjectId → hex, Date → ISO). */
 const DOC_SCHEMAS: Record<TransferCollection, z.ZodType<Record<string, unknown>>> = {
   settings: settingsSchema.extend({ _id: objectIdSchema }),
@@ -116,6 +154,7 @@ const DOC_SCHEMAS: Record<TransferCollection, z.ZodType<Record<string, unknown>>
   // Stored as Dates at local midnight; the API shows them as day keys.
   occurrences: occurrenceSchema.extend({ date: isoDateTimeSchema, plannedDate: isoDateTimeSchema }),
   pointEntries: redemptionDocSchema,
+  badges: badgeDocSchema,
   auditLog: auditEntrySchema,
 };
 
@@ -133,6 +172,7 @@ const TYPED_FIELDS: Record<TransferCollection, { ids: string[]; dates: string[] 
     dates: ['date', 'plannedDate', 'completedAt', ...TIMESTAMPS],
   },
   pointEntries: { ids: ['personId', 'occurrenceId', 'taskId'], dates: ['date', 'weekStart', ...TIMESTAMPS] },
+  badges: { ids: [], dates: TIMESTAMPS },
   auditLog: { ids: ['actorId', 'entityId'], dates: ['at'] },
 };
 
@@ -209,6 +249,60 @@ function redemptionIssues(redemptions: Document[], users: Document[]): FieldIssu
   return issues;
 }
 
+/**
+ * Brings the badges of a file in line with its tasks (ADR-0014): a task the file does not have (it was deleted before an
+ * older export) is dropped from the rule, the tasks of a rule are put in a stable order, and a rule that named tasks and
+ * names none left is deactivated, because an empty list would count every task.
+ */
+function reconcileBadgeTasks(badges: Document[], tasks: Document[]): Document[] {
+  const known = new Set(tasks.map((task) => String(task._id)));
+  return badges.map((doc) => {
+    const rule = doc.rule as Document | undefined;
+    if (!rule || !Array.isArray(rule.taskIds) || !rule.taskIds.every((id: unknown) => id instanceof ObjectId)) return doc;
+    const kept = (rule.taskIds as ObjectId[]).filter((id) => known.has(String(id))).sort((a, b) => (a.toHexString() < b.toHexString() ? -1 : 1));
+    const emptied = rule.taskIds.length > 0 && kept.length === 0;
+    return { ...doc, rule: { ...rule, taskIds: kept }, ...(emptied ? { active: false } : {}) };
+  });
+}
+
+/**
+ * Badges that cannot be put back: a rule with a task id that is not an id, an image whose bytes are not
+ * what the file says they are (size, hash, a real PNG, JPEG or WebP of the declared type; an SVG is refused), or a
+ * duplicate example key, which would violate a unique index. Replacing the data deletes first and inserts after, so
+ * such a file has to be refused before anything is written (ADR-0014).
+ */
+function badgeIssues(badges: Document[]): FieldIssue[] {
+  const issues: FieldIssue[] = [];
+  const exampleKeys = new Set<string>();
+  badges.forEach((doc, i) => {
+    const path = `collections.badges.${i}`;
+    const rule = doc.rule as Document;
+    if (Array.isArray(rule.taskIds)) {
+      rule.taskIds.forEach((id: unknown, j: number) => {
+        if (!(id instanceof ObjectId)) issues.push({ field: `${path}.rule.taskIds.${j}`, message: 'expected_object_id' });
+      });
+    }
+    if (typeof doc.exampleKey === 'string') {
+      if (exampleKeys.has(doc.exampleKey)) issues.push({ field: `${path}.exampleKey`, message: 'duplicate_example_key' });
+      exampleKeys.add(doc.exampleKey);
+    }
+    const image = doc.image as Document | null | undefined;
+    if (image) {
+      if (!(image.data instanceof Binary)) {
+        issues.push({ field: `${path}.image.data`, message: 'expected_binary' });
+        return;
+      }
+      const bytes = Buffer.from(image.data.buffer.subarray(0, image.data.position));
+      if (bytes.length !== image.size) issues.push({ field: `${path}.image.size`, message: 'image_size_mismatch' });
+      if (createHash('sha256').update(bytes).digest('hex') !== image.hash) issues.push({ field: `${path}.image.hash`, message: 'image_hash_mismatch' });
+      const type = sniffBadgeImageType(bytes);
+      if (!type) issues.push({ field: `${path}.image.data`, message: 'unsupported_image_type' });
+      else if (type !== image.contentType) issues.push({ field: `${path}.image.contentType`, message: 'image_type_mismatch' });
+    }
+  });
+  return issues;
+}
+
 export async function buildExport(db: Db, now: Date): Promise<ExportFile> {
   const docs = await readAllCollections(db);
   return {
@@ -256,7 +350,7 @@ export function parseImport(body: unknown, now: Date = new Date()): ParsedImport
   const envelope = parseOrThrow(envelopeSchema, body);
   let deserialized: Record<TransferCollection, Document[]>;
   try {
-    deserialized = BSON.EJSON.deserialize({ ...envelope.collections, pointEntries: envelope.collections.pointEntries ?? [] }, { relaxed: true }) as Record<
+    deserialized = BSON.EJSON.deserialize({ ...envelope.collections, pointEntries: envelope.collections.pointEntries ?? [], badges: envelope.collections.badges ?? [] }, { relaxed: true }) as Record<
       TransferCollection,
       Document[]
     >;
@@ -289,7 +383,10 @@ export function parseImport(body: unknown, now: Date = new Date()): ParsedImport
   }
   issues.push(...bonusScheduleIssues(docs.settings[0], now));
   // The keys are built from typed values, so check them only once every document has the right types.
-  if (issues.length === 0) issues.push(...duplicateKeyIssues(docs.occurrences), ...redemptionIssues(docs.pointEntries, docs.users));
+  if (issues.length === 0) {
+    docs.badges = reconcileBadgeTasks(docs.badges, docs.tasks);
+    issues.push(...duplicateKeyIssues(docs.occurrences), ...redemptionIssues(docs.pointEntries, docs.users), ...badgeIssues(docs.badges));
+  }
   if (issues.length > 0) throw new HttpError(400, 'validation_error', 'Invalid import file', issues);
   return { schemaVersion: envelope.schemaVersion, exportedAt: envelope.exportedAt, docs };
 }
@@ -302,6 +399,14 @@ export type ImportResult = ReplaceResult;
  */
 export async function redemptionsLostByImport(db: Db, parsed: ParsedImport): Promise<number> {
   return parsed.schemaVersion < 5 ? countRedemptions(db) : 0;
+}
+
+/**
+ * The badges an import would remove without bringing any back: a file older than version 6 has none (ADR-0014). Zero for
+ * a version 6 file, which carries its own badges and replaces them like any other collection.
+ */
+export async function badgesLostByImport(db: Db, parsed: ParsedImport): Promise<number> {
+  return parsed.schemaVersion < 6 ? countBadges(db) : 0;
 }
 
 /**
@@ -325,6 +430,8 @@ export async function importData(
       auditAdded: result.auditAdded,
       removedPointEntries: result.removedPointEntries,
       removedRedemptions: result.removedRedemptions,
+      removedBadges: result.removedBadges,
+      removedBadgeAwards: result.removedBadgeAwards,
     },
     meta: { mode: 'replace', schemaVersion: parsed.schemaVersion, exportedAt: parsed.exportedAt },
   });

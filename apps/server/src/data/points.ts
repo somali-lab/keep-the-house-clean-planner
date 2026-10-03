@@ -382,3 +382,14 @@ export async function deleteRedemptions(db: Db, before?: Date): Promise<number> 
   const result = await pointEntriesCollection(db).deleteMany({ kind: 'redemption', ...(before ? { date: { $lt: before } } : {}) });
   return result.deletedCount;
 }
+
+/** The on-time week bonuses of the given people (everybody when null), dated on the last day of their week; badges count these (ADR-0014). */
+export function findWeekOnTimeBonuses(db: Db, personIds: ObjectId[] | null): Promise<{ personId: ObjectId; date: Date }[]> {
+  return pointEntriesCollection(db)
+    .find(
+      { kind: 'bonus_week_ontime', ...(personIds ? { personId: { $in: personIds } } : {}) },
+      { projection: { personId: 1, date: 1 } },
+    )
+    .sort({ date: 1, _id: 1 })
+    .toArray() as Promise<{ personId: ObjectId; date: Date }[]>;
+}

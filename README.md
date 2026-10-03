@@ -27,6 +27,7 @@ The screenshots show a scripted demo household with fictional people and sample 
 - Records extra executions of a task and one-off tasks that never enter the task list, with an undo, so work that was not in the plan still counts in history and statistics.
 - Assigns chores to household members and separates weekday from weekend workload.
 - Awards points per completed chore to the person who did the work, kept in a ledger that corrects itself when a completion is undone or corrected, with balances and entries on the statistics page. Administrators can set bonuses for doing everything in a week or a cycle, and for doing it all on time, under **Settings → Calendar**; a bonus is paid out after the period has ended and is only ever based on the amounts that applied then. Administrators can also set a currency and what one point is worth (**Settings → Calendar**); people then redeem points for a payout or reward from the Points tab, a booking can never take the balance below zero, is audited, and can be undone on the same day.
+- Lets administrators create badges under **Badges** in the management area: a name, an uploaded picture (PNG, JPEG or WebP, at most 256 KB) and a rule on chosen tasks, such as 10 executions of the toilet task, 300 minutes of mopping, or 4 weeks with everything on time (this one needs bonuses to be set). Badges are awarded automatically from the same audited completions as the points, at the moment the threshold was crossed, and are shown in the Points tab and in "Mijn badges" on the Today page with the day they were earned or the progress so far. An award follows the data, so undoing work below the threshold takes the badge away again. **Add example badges** creates ready-made examples once; names and thresholds stay editable.
 - Reviews workload per person, per week, and across the full cycle.
 - Searches tasks by name in the planner and week overview, shows cycle-week information, and keeps each person's filter choices after a reload.
 - Groups My tasks into dated, sliding week blocks so the task date and cycle week stay clear.
@@ -129,7 +130,7 @@ Some database, backup, package, and browser-storage identifiers retain the origi
 
 All times follow `TZ_APP`:
 
-- `03:00` — generate upcoming cycles and reconcile the points ledger with the completed work, which also finalises the week and cycle bonuses of the periods that ended.
+- `03:00` — generate upcoming cycles and reconcile the points ledger with the completed work, which also finalises the week and cycle bonuses of the periods that ended. The badge awards are recomputed from the same data.
 - `03:30` — the separate backup container creates a database backup.
 - `03:45` — remove old history when audit retention is enabled.
 - `07:30` — send the ntfy or Home Assistant morning notification when `NOTIFY_TYPE` is set. Browser notifications use each person's own times and do not run on the server.
@@ -157,7 +158,7 @@ docker compose restart app
 > [!WARNING]
 > `--drop` replaces the current database. Create a fresh backup before restoring an archive.
 
-A full JSON export and import are also available under **Settings → Data**. Imports are validated before replacing the current data.
+A full JSON export and import are also available under **Settings → Data**. Imports are validated before replacing the current data. The export includes the badge definitions with their pictures; the awards are rebuilt on import.
 
 ## Optional integrations
 

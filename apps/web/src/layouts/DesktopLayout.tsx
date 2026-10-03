@@ -7,6 +7,7 @@ import {
   Scale,
   History,
   ListChecks,
+  Medal,
   type LucideIcon,
   CalendarDays,
   Settings,
@@ -25,6 +26,7 @@ import { ThemeSwitcher } from '@/components/ThemeSwitcher';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { AboutPage } from '../features/about/AboutPage.tsx';
+import { BadgesPage } from '../features/badges/BadgesPage.tsx';
 import { DistributionPage } from '../features/distribution/DistributionPage.tsx';
 import { CompletionManagementPage } from '../features/completions/CompletionManagementPage.tsx';
 import { BrowserNotificationsPage } from '../features/settings/BrowserNotificationsSection.tsx';
@@ -46,6 +48,7 @@ const PAGES: Partial<Record<string, ReactElement>> = {
   '/manage/history': <HistoryPage />,
   '/manage/completions': <CompletionManagementPage />,
   '/manage/notifications': <BrowserNotificationsPage />,
+  '/manage/badges': <BadgesPage />,
   '/manage/settings': <SettingsPage />,
   '/manage/about': <AboutPage />,
 };
@@ -58,6 +61,7 @@ const SECTIONS: { path: string; label: MessageKey; icon: LucideIcon; minimumRole
   { path: '/manage/history', label: 'nav.history', icon: History, minimumRole: 'member' },
   { path: '/manage/notifications', label: 'nav.notifications', icon: Bell, minimumRole: 'member' },
   { path: '/manage/completions', label: 'nav.completions', icon: ClipboardCheck, minimumRole: 'admin' },
+  { path: '/manage/badges', label: 'nav.badges', icon: Medal, minimumRole: 'admin' },
   { path: '/manage/settings', label: 'nav.settings', icon: Settings, minimumRole: 'admin' },
   { path: '/manage/about', label: 'nav.about', icon: Info, minimumRole: 'member' },
 ];

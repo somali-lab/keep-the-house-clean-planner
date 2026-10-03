@@ -9,6 +9,7 @@ import { useSettings, useUsers } from '../../api/queries.ts';
 import { format, t } from '../../i18n/nl.ts';
 import { getLocale } from '../../i18n/runtime.ts';
 import { useProfile } from '../../identity/index.ts';
+import { PersonBadges } from '../badges/PersonBadges.tsx';
 import { dayKeyInZone } from '../today/todayModel.ts';
 import { useAllTimeBalances, usePointsBalances, usePointsEntries, useUndoRedemption, type StatsPeriod } from './api.ts';
 import { statsTableClass } from './ChartFrame.tsx';
@@ -269,6 +270,7 @@ export function PointsSection({ period, now }: { period: StatsPeriod; now?: Date
               {entries.isPending || entries.isPlaceholderData ? t('app.loading') : format('stats.points.noEntries', { name: nameOf(personId) })}
             </p>
           )}
+          <PersonBadges personId={personId} title={format('badges.of', { name: nameOf(personId) })} />
         </div>
       )}
     </section>

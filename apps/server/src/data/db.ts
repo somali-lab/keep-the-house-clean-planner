@@ -10,6 +10,8 @@ export const COLLECTIONS = {
   auditLog: 'auditLog',
   settings: 'settings',
   pointEntries: 'pointEntries',
+  badges: 'badges',
+  badgeAwards: 'badgeAwards',
 } as const;
 
 export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS];
@@ -31,6 +33,9 @@ export const INDEXES: Record<CollectionName, IndexDescription[]> = {
     { key: { date: 1, assigneeId: 1 } },
     { key: { status: 1, date: 1 } },
     { key: { taskId: 1, completedAt: -1 } },
+    // ADR-0014: the executions credited to a person are found through the person and the status.
+    { key: { completedBy: 1, status: 1 } },
+    { key: { assigneeId: 1, status: 1 } },
     {
       key: { cycleId: 1, taskId: 1, plannedDate: 1 },
       name: GENERATED_SLOT_INDEX,
@@ -57,6 +62,21 @@ export const INDEXES: Record<CollectionName, IndexDescription[]> = {
       unique: true,
       partialFilterExpression: { requestId: { $type: 'string' } },
     },
+  ],
+  // ADR-0014: a badge definition; an example is created once, by its stable key.
+  badges: [
+    {
+      key: { exampleKey: 1 },
+      name: 'badges_example_key_unique',
+      unique: true,
+      partialFilterExpression: { exampleKey: { $type: 'string' } },
+    },
+  ],
+  // ADR-0014: derived awards, one per badge and person.
+  badgeAwards: [
+    { key: { key: 1 }, name: 'badgeAwards_key_unique', unique: true },
+    { key: { personId: 1 } },
+    { key: { badgeId: 1 } },
   ],
 };
 

@@ -1,4 +1,4 @@
-import type { User } from '@huishoudplanner/shared';
+import type { Badge, User } from '@huishoudplanner/shared';
 import { QueryClient } from '@tanstack/react-query';
 import { vi } from 'vitest';
 
@@ -50,4 +50,23 @@ export function testQueryClient(): QueryClient {
 
 export function storeProfile(id: string): void {
   window.localStorage.setItem('huishoudplanner.profileId', id);
+}
+
+/** A badge as the API returns it (ADR-0014). */
+export function makeBadge(overrides: Partial<Badge> & Pick<Badge, '_id' | 'name'>): Badge {
+  return {
+    description: '',
+    rule: { type: 'executions', taskIds: [], threshold: 10 },
+    active: true,
+    exampleKey: null,
+    image: null,
+    createdAt: STAMP,
+    updatedAt: STAMP,
+    ...overrides,
+  };
+}
+
+/** Image details of a stored badge picture. */
+export function makeBadgeImage(id: string): NonNullable<Badge['image']> {
+  return { contentType: 'image/png', size: 70, hash: 'a'.repeat(64), url: `/api/badges/${id}/image?v=aaaaaaaaaaaa` };
 }

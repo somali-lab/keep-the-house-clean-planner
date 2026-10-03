@@ -11,6 +11,8 @@ export const auditEntitySchema = z.enum([
   'room',
   'import',
   'points',
+  'badge',
+  'badgeAward',
 ]);
 export type AuditEntity = z.infer<typeof auditEntitySchema>;
 

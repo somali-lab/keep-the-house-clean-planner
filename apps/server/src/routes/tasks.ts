@@ -10,6 +10,7 @@ import {
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { removeTaskFromPlans } from '../data/cyclePlans.ts';
+import { removeTaskFromBadgeRules } from '../domain/badges.ts';
 import { findRoomById } from '../data/rooms.ts';
 import { getSettings } from '../data/settings.ts';
 import { updateUpcomingOccurrenceRoomSnapshots } from '../data/occurrences.ts';
@@ -90,6 +91,8 @@ export const taskRoutes: FastifyPluginAsync = async (app) => {
     await removeTaskFromPlans(ctx, id);
     const task = await deleteTask(ctx, id);
     if (!task) throw notFound('task');
+    // The rules that named the task stop naming it; a rule left without tasks is deactivated (ADR-0014).
+    await removeTaskFromBadgeRules(ctx, id);
     return { deleted: true };
   });
 

@@ -13,6 +13,7 @@ import { HttpError } from './http/errors.ts';
 import { identityPlugin } from './identity/index.ts';
 import { aiRoutes } from './routes/ai.ts';
 import { auditRoutes } from './routes/audit.ts';
+import { badgeRoutes } from './routes/badges.ts';
 import { cyclePlanRoutes } from './routes/cyclePlans.ts';
 import { cycleRoutes } from './routes/cycles.ts';
 import { dueRoutes } from './routes/due.ts';
@@ -120,6 +121,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   await app.register(occurrenceRoutes, { prefix: '/api' });
   await app.register(dueRoutes, { prefix: '/api' });
   await app.register(pointsRoutes, { prefix: '/api' });
+  await app.register(badgeRoutes, { prefix: '/api' });
   await app.register(promoteRoutes, { prefix: '/api' });
   await app.register(aiRoutes, { prefix: '/api' });
   await app.register(statsRoutes, { prefix: '/api' });

@@ -159,6 +159,10 @@ export function useOccurrenceAction(
     // is never queued, so its list is refetched, and so is everything the deleted work fed: the due list
     // (it restarted the due clock), the tasks (lastCompletedAt) and the statistics.
     onSettled: (updated, error, action) => {
+      // A check-off, an undo and a retract change who has earned which badge (ADR-0014).
+      if (action.kind === 'complete' || action.kind === 'uncomplete' || action.kind === 'retract') {
+        void queryClient.invalidateQueries({ queryKey: ['badges'] });
+      }
       if (action.kind === 'retract') {
         for (const key of ['due', 'tasks', 'stats']) void queryClient.invalidateQueries({ queryKey: [key] });
         return queryClient.invalidateQueries({ queryKey });
@@ -228,7 +232,7 @@ export function useRecordWork() {
     // Occurrences, the due list, tasks (lastCompletedAt) and every statistic read the new record.
     onSettled: () =>
       Promise.all(
-        ['occurrences', 'due', 'tasks', 'stats'].map((key) => queryClient.invalidateQueries({ queryKey: [key] })),
+        ['occurrences', 'due', 'tasks', 'stats', 'badges'].map((key) => queryClient.invalidateQueries({ queryKey: [key] })),
       ),
   });
 }
@@ -245,7 +249,7 @@ export function useCheckOffPlanned() {
       (await sendOccurrenceAction({ id: input.id, kind: 'complete', completedBy: input.completedBy })).data,
     onSettled: () =>
       Promise.all(
-        ['occurrences', 'due', 'tasks', 'stats'].map((key) => queryClient.invalidateQueries({ queryKey: [key] })),
+        ['occurrences', 'due', 'tasks', 'stats', 'badges'].map((key) => queryClient.invalidateQueries({ queryKey: [key] })),
       ),
   });
 }

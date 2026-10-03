@@ -43,7 +43,7 @@ describe('DataSection', () => {
 
   it('imports only after confirmation, and can be cancelled', async () => {
     storeProfile(ANNA._id);
-    const fetchMock = mockApi({ [`POST /api/import/json`]: { replaced: { users: 2 }, auditAdded: 0 }, '/api/points/redemptions/count': { count: 0 } });
+    const fetchMock = mockApi({ [`POST /api/import/json`]: { replaced: { users: 2 }, auditAdded: 0 }, '/api/points/redemptions/count': { count: 0 }, '/api/badges': { badges: [] } });
     renderWithProviders(<DataSection />);
 
     choose(JSON.stringify(FILE));
@@ -54,7 +54,9 @@ describe('DataSection', () => {
     expect(importCalls(fetchMock)).toEqual([]);
 
     choose(JSON.stringify(FILE));
-    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Alles vervangen' }));
+    const confirm = within(await screen.findByRole('dialog')).getByRole('button', { name: 'Alles vervangen' });
+    await waitFor(() => expect(confirm).toBeEnabled());
+    fireEvent.click(confirm);
     await waitFor(() => expect(importCalls(fetchMock)).toEqual([FILE]));
     expect(await screen.findByRole('status')).toHaveTextContent('Import voltooid: alle gegevens zijn vervangen.');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -112,13 +114,69 @@ describe('DataSection', () => {
 
     it('does not ask for a version 5 file, which brings its own redemptions', async () => {
       storeProfile(ANNA._id);
-      const fetchMock = mockApi({ [COUNT]: { count: 3 } });
+      const fetchMock = mockApi({ [COUNT]: { count: 3 }, '/api/badges': { badges: [] } });
       renderWithProviders(<DataSection />);
       choose(JSON.stringify({ ...FILE, schemaVersion: 5 }));
       const dialog = await screen.findByRole('dialog');
-      expect(within(dialog).getByRole('button', { name: 'Alles vervangen' })).toBeEnabled();
+      await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Alles vervangen' })).toBeEnabled());
       expect(within(dialog).queryByRole('checkbox')).not.toBeInTheDocument();
       expect(countCalls(fetchMock)).toEqual([]);
+    });
+  });
+
+  describe('badges and an older file (ADR-0014)', () => {
+    const importUrls = (fetchMock: ReturnType<typeof vi.fn>) =>
+      fetchMock.mock.calls.filter(([u]) => String(u).startsWith('/api/import/json')).map(([u]) => String(u));
+    const badges = (count: number) => ({ badges: Array.from({ length: count }, (_, i) => ({ _id: `b${i}` })) });
+
+    it('warns with the count for a file older than version 6, and only imports after it is acknowledged', async () => {
+      storeProfile(ANNA._id);
+      const fetchMock = mockApi({ '/api/badges': badges(2), '/api/points/redemptions/count': { count: 0 }, 'POST /api/import/json': { replaced: {}, auditAdded: 0 } });
+      renderWithProviders(<DataSection />);
+      choose(JSON.stringify({ ...FILE, schemaVersion: 5 }));
+      const dialog = await screen.findByRole('dialog', { name: 'Alle gegevens vervangen?' });
+      expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+        'Dit bestand is van een oudere versie (versie 5) en bevat geen badges. De 2 badges die er nu zijn, met hun afbeeldingen, worden door deze import verwijderd.',
+      );
+      const confirm = within(dialog).getByRole('button', { name: 'Alles vervangen' });
+      expect(confirm).toBeDisabled();
+      fireEvent.click(confirm);
+      expect(importUrls(fetchMock)).toEqual([]);
+      fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Ik begrijp dat 2 badges verloren gaan' }));
+      expect(confirm).toBeEnabled();
+      fireEvent.click(confirm);
+      await waitFor(() => expect(importUrls(fetchMock)).toEqual([IMPORT_URL + '&acknowledgeBadges=true']));
+    });
+
+    it('asks for both acknowledgements when redemptions and badges would be lost', async () => {
+      storeProfile(ANNA._id);
+      const fetchMock = mockApi({ '/api/badges': badges(1), '/api/points/redemptions/count': { count: 3 }, 'POST /api/import/json': { replaced: {}, auditAdded: 0 } });
+      renderWithProviders(<DataSection />);
+      choose(JSON.stringify({ ...FILE, schemaVersion: 4 }));
+      const dialog = await screen.findByRole('dialog');
+      const confirm = within(dialog).getByRole('button', { name: 'Alles vervangen' });
+      fireEvent.click(await within(dialog).findByRole('checkbox', { name: 'Ik begrijp dat 3 inwisselingen verloren gaan' }));
+      expect(confirm).toBeDisabled();
+      fireEvent.click(await within(dialog).findByRole('checkbox', { name: 'Ik begrijp dat 1 badges verloren gaan' }));
+      expect(confirm).toBeEnabled();
+      fireEvent.click(confirm);
+      await waitFor(() => expect(importUrls(fetchMock)).toEqual([IMPORT_URL + '&acknowledgeRedemptions=true&acknowledgeBadges=true']));
+    });
+
+    it('shows nothing for a version 6 file or when there are no badges', async () => {
+      storeProfile(ANNA._id);
+      const fetchMock = mockApi({ '/api/badges': badges(0), 'POST /api/import/json': { replaced: {}, auditAdded: 0 } });
+      renderWithProviders(<DataSection />);
+      choose(JSON.stringify({ ...FILE, schemaVersion: 5 }));
+      const dialog = await screen.findByRole('dialog');
+      await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Alles vervangen' })).toBeEnabled());
+      expect(within(dialog).queryByRole('checkbox')).not.toBeInTheDocument();
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Annuleren' }));
+      choose(JSON.stringify({ ...FILE, schemaVersion: 6 }));
+      const next = await screen.findByRole('dialog');
+      expect(within(next).getByRole('button', { name: 'Alles vervangen' })).toBeEnabled();
+      expect(within(next).queryByRole('checkbox')).not.toBeInTheDocument();
+      expect(importUrls(fetchMock)).toEqual([]);
     });
   });
 

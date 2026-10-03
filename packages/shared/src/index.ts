@@ -1,3 +1,4 @@
+export * from './badges.ts';
 export * from './bonuses.ts';
 export * from './cycle.ts';
 export * from './due.ts';

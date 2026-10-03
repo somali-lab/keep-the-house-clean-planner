@@ -516,7 +516,7 @@ describe('transfer', () => {
     expect(before).toEqual(WEEK_BONUSES);
 
     const file = (await f.t.app.inject({ method: 'GET', url: '/api/export/json' })).json<ExportFile>();
-    expect(file.schemaVersion).toBe(5);
+    expect(file.schemaVersion).toBe(6);
     expect(file.collections.settings[0]!.bonusSchedule).toEqual([{ from: '2026-09-14', ...AMOUNTS }]);
     const res = await f.call('POST', '/api/import/json?mode=replace&confirm=true', file as unknown as Record<string, unknown>);
     expect(res.statusCode, res.body).toBe(200);

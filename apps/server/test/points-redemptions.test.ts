@@ -526,14 +526,14 @@ describe('transfer', () => {
   }
   const importFile = (f: Fixture, file: unknown) => f.call('POST', '/api/import/json?mode=replace&confirm=true', file as Record<string, unknown>);
 
-  it('exports the redemptions only, as schema version 5, and keeps them on a round trip while the rest is rebuilt', async () => {
+  it('exports the redemptions only, as schema version 6, and keeps them on a round trip while the rest is rebuilt', async () => {
     const f = await fixture();
     await f.earn(10);
     await f.earn(10, f.p2);
     expect((await f.call('PATCH', '/api/settings', { currencyCode: 'USD', centsPerPoint: 15 })).statusCode).toBe(200);
     expect((await f.redeem({ points: 4, note: 'Pizza', requestId: KEY_A })).statusCode).toBe(201);
     const file = await exported(f);
-    expect(file.schemaVersion).toBe(5);
+    expect(file.schemaVersion).toBe(6);
     expect(file.collections.pointEntries).toHaveLength(1);
     expect(file.collections.pointEntries[0]).toMatchObject({ kind: 'redemption', amount: -4, note: 'Pizza', centsPerPointSnapshot: 15, currencyCodeSnapshot: 'USD', requestId: KEY_A });
     expect(file.collections.settings[0]).toMatchObject({ currencyCode: 'USD', centsPerPoint: 15 });

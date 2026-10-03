@@ -2,7 +2,7 @@ import { today } from '@huishoudplanner/shared';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { getSettings } from '../data/settings.ts';
-import { buildExport, importData, parseImport, redemptionsLostByImport } from '../domain/transfer.ts';
+import { badgesLostByImport, buildExport, importData, parseImport, redemptionsLostByImport } from '../domain/transfer.ts';
 import { HttpError, parseOrThrow } from '../http/errors.ts';
 import { auditContext, requireAdmin } from '../identity/index.ts';
 
@@ -14,6 +14,8 @@ const importQuerySchema = z.object({
   confirm: z.string().optional(),
   /** Needed to import a file of version 4 or older while redemptions exist: they are removed (ADR-0013). */
   acknowledgeRedemptions: z.string().optional(),
+  /** Needed to import a file of version 5 or older while badges exist: they are removed (ADR-0014). */
+  acknowledgeBadges: z.string().optional(),
 });
 
 export const transferRoutes: FastifyPluginAsync = async (app) => {
@@ -44,6 +46,16 @@ export const transferRoutes: FastifyPluginAsync = async (app) => {
         'This file is older than version 5 and has no redemptions; importing it removes the existing ones. Add acknowledgeRedemptions=true',
         undefined,
         { count: lost },
+      );
+    }
+    const lostBadges = await badgesLostByImport(app.deps.db, parsed);
+    if (lostBadges > 0 && query.acknowledgeBadges !== 'true') {
+      throw new HttpError(
+        409,
+        'badges_would_be_removed',
+        'This file is older than version 6 and has no badges; importing it removes the existing ones. Add acknowledgeBadges=true',
+        undefined,
+        { count: lostBadges },
       );
     }
     return importData(auditContext(request), parsed);
