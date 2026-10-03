@@ -1,6 +1,8 @@
 import type { AuditEntry } from '@huishoudplanner/shared';
 import { format, hasMessage, t, type MessageKey } from '../../i18n/nl.ts';
 import { getLocale } from '../../i18n/runtime.ts';
+import { bonusText } from '../stats/bonusText.ts';
+import { bonusLabelOfKey } from '../stats/pointsModel.ts';
 
 export const SYSTEM_ACTOR_ID = '000000000000000000000000';
 
@@ -126,6 +128,21 @@ export function formatValue(path: string, value: unknown, names: NameLookup): st
     if (field === 'vacationRanges') {
       return value.map((r) => (isRecord(r) ? `${String(r.from)} t/m ${String(r.to)}` : String(r))).join(', ');
     }
+    if (field === 'bonusSchedule') {
+      return value
+        .map((row) =>
+          isRecord(row)
+            ? format('history.value.bonusRow', {
+                from: formatValue('date', row.from, names),
+                weekDone: Number(row.weekDone),
+                weekOnTime: Number(row.weekOnTime),
+                cycleDone: Number(row.cycleDone),
+                cycleOnTime: Number(row.cycleOnTime),
+              })
+            : String(row),
+        )
+        .join(' | ');
+    }
     if (field === 'weekThemes') return value.map((v) => str(v) ?? none).join(' | ');
     if (value.every((v) => typeof v === 'string' || typeof v === 'number')) return value.join(', ');
     return String(value.length);
@@ -172,6 +189,23 @@ function updateLines(entry: AuditEntry, names: NameLookup, actor: string, entity
     );
   }
   return lines.length > 0 ? lines : [format('history.action.updateNoField', { actor, entity })];
+}
+
+/** Who earned or lost which week or cycle bonus in a reconciliation (ADR-0012), one line per bonus. */
+function bonusChangeLines(meta: Json, names: NameLookup): string[] {
+  const changes = Array.isArray(meta.bonusChanges) ? meta.bonusChanges.filter(isRecord) : [];
+  const lines = changes.map((change) => {
+    const key = str(change.key) ?? '';
+    const label = bonusLabelOfKey(key);
+    return format(change.change === 'removed' ? 'history.action.bonusRemoved' : 'history.action.bonusCreated', {
+      person: formatValue('personId', change.personId, names),
+      amount: typeof change.amount === 'number' ? change.amount : '?',
+      bonus: label ? bonusText(label) : key,
+    });
+  });
+  const total = typeof meta.bonusChangesTotal === 'number' ? meta.bonusChangesTotal : changes.length;
+  if (total > changes.length) lines.push(format('history.action.bonusMore', { count: total - changes.length }));
+  return lines;
 }
 
 /** One or more Dutch sentences describing an audit entry. */
@@ -258,7 +292,7 @@ export function describeEntry(entry: AuditEntry, names: NameLookup): string[] {
     case 'reset':
       return [format('history.action.reset', { actor })];
     case 'recompute':
-      return [format('history.action.recompute', { actor })];
+      return [format('history.action.recompute', { actor }), ...bonusChangeLines(meta, names)];
   }
 }
 

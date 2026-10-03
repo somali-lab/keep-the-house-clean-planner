@@ -1,6 +1,6 @@
 import { DEFAULT_INTERVALS, type Interval } from '@huishoudplanner/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { getSettings } from '../src/data/settings.ts';
+import { getSettings, StaleBonusScheduleError, updateSettings } from '../src/data/settings.ts';
 import { createTask } from '../src/data/tasks.ts';
 import type { UserDoc } from '../src/data/users.ts';
 import { findInterval } from '../src/domain/intervals.ts';
@@ -250,5 +250,46 @@ describe('period bonuses (ADR-0012)', () => {
     const direct = await patch({ bonusSchedule: [{ from: '2026-01-01', ...AMOUNTS }] });
     expect(direct.statusCode).toBe(200);
     expect((await schedule()).some((row) => (row as { from: string }).from === '2026-01-01')).toBe(false);
+  });
+
+  it('writes the schedule as a compare-and-set on the schedule it was computed from', async () => {
+    const t2 = await createTestApp({ now: '2026-09-16T08:00:00.000Z' });
+    try {
+      const ctx = t2.systemCtx();
+      const row = { from: '2026-09-16', ...AMOUNTS };
+      // Nothing is stored yet: a write that expects an earlier schedule is refused and writes nothing.
+      await expect(updateSettings(ctx, { bonusSchedule: [row] }, { basedOnBonusSchedule: { rows: [row] } })).rejects.toBeInstanceOf(StaleBonusScheduleError);
+      expect((await getSettings(t2.db))!.bonusSchedule).toBeUndefined();
+      await updateSettings(ctx, { bonusSchedule: [row] }, { basedOnBonusSchedule: { rows: undefined } });
+      expect((await getSettings(t2.db))!.bonusSchedule).toEqual([row]);
+      // The same expectation is stale now.
+      const other = { ...row, weekDone: 9 };
+      await expect(updateSettings(ctx, { bonusSchedule: [other] }, { basedOnBonusSchedule: { rows: undefined } })).rejects.toBeInstanceOf(StaleBonusScheduleError);
+      await updateSettings(ctx, { bonusSchedule: [other] }, { basedOnBonusSchedule: { rows: [row] } });
+      expect((await getSettings(t2.db))!.bonusSchedule).toEqual([other]);
+    } finally {
+      await t2.close();
+    }
+  });
+
+  it('answers 409 bonus_schedule_conflict when two administrators set amounts at the same time, and keeps one schedule', async () => {
+    const t2 = await createTestApp({ now: '2026-09-16T08:00:00.000Z' });
+    try {
+      const [first] = await seededUsers(t2);
+      const send = (weekDone: number) =>
+        t2.app.inject({ method: 'PATCH', url: '/api/settings', headers: asProfile(first!), payload: { periodBonuses: { ...AMOUNTS, weekDone } } });
+      const answers = await Promise.all([send(1), send(2), send(3), send(4), send(5), send(6)]);
+      const statuses = answers.map((answer) => answer.statusCode);
+      expect(statuses.every((status) => status === 200 || status === 409)).toBe(true);
+      expect(statuses).toContain(200);
+      for (const answer of answers.filter((a) => a.statusCode === 409)) {
+        expect(answer.json<{ code: string }>().code).toBe('bonus_schedule_conflict');
+      }
+      const schedule = (await getSettings(t2.db))!.bonusSchedule!;
+      expect(schedule).toHaveLength(1);
+      expect(schedule[0]!.from).toBe('2026-09-16');
+    } finally {
+      await t2.close();
+    }
   });
 });

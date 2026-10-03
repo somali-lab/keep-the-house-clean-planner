@@ -146,6 +146,8 @@ function toBonusOccurrence(doc: BonusOccurrenceDoc, timezone: string): BonusOccu
     date: toDayKey(doc.date, timezone),
     recordedDone: doc.recordedDone === true,
     assigneeId: doc.assigneeId ? doc.assigneeId.toHexString() : null,
+    // Missing means the assignee; a frozen null means it was unassigned.
+    ...(doc.periodOwnerId === undefined ? {} : { periodOwnerId: doc.periodOwnerId ? doc.periodOwnerId.toHexString() : null }),
     completedBy: doc.completedBy ? doc.completedBy.toHexString() : null,
     completedAt: doc.completedAt ? doc.completedAt.toISOString() : null,
   };
@@ -182,7 +184,7 @@ function sameBonus(stored: PointEntryDoc, fields: PointEntryFields): boolean {
  */
 async function reconcileBonuses(
   ctx: AuditContext,
-  settings: { cycleAnchorDate: string; timezone: string; bonusSchedule?: BonusScheduleRow[] | undefined },
+  settings: { cycleAnchorDate: string; timezone: string; bonusSchedule?: BonusScheduleRow[] | undefined; bonusFloor?: string | undefined },
   storedBonuses: PointEntryDoc[],
   skippedIds: Set<string>,
   result: PointsRecomputeResult,
@@ -196,8 +198,8 @@ async function reconcileBonuses(
     } catch (err) {
       ctx.log.warn({ err, occurrenceId: String(doc._id) }, 'bonus reconciliation skipped an unreadable occurrence');
       skippedIds.add(String(doc._id));
-      const owner = doc.status === 'done' ? (doc.completedBy ?? doc.assigneeId) : doc.assigneeId;
-      if (owner) blocked.add(String(owner));
+      // Every person the occurrence could count for: its owner and the person who did it.
+      for (const person of [doc.assigneeId, doc.periodOwnerId, doc.completedBy]) if (person) blocked.add(String(person));
     }
   }
 
@@ -207,37 +209,45 @@ async function reconcileBonuses(
       timezone,
       today: toDayKey(ctx.clock.now(), timezone),
       schedule: settings.bonusSchedule ?? [],
+      floor: settings.bonusFloor,
     })
       .filter((entry) => !blocked.has(entry.personId))
       .map((entry) => [entry.key, { entry, fields: bonusFields(entry, timezone) }] as const),
   );
 
   const changes: BonusEntryChanges = { inserts: [], deletes: [] };
-  const removedLog: PointsBonusChange[] = [];
-  const createdLog: PointsBonusChange[] = [];
   const storedByKey = new Map(storedBonuses.map((doc) => [doc.key, doc]));
   for (const [key, current] of storedByKey) {
     if (blocked.has(current.personId.toHexString())) continue;
     const want = expected.get(key);
     if (want && sameBonus(current, want.fields)) continue;
     changes.deletes.push(current);
-    removedLog.push({ key, personId: current.personId.toHexString(), amount: current.amount, change: 'removed' });
   }
   for (const [key, { entry, fields }] of expected) {
     const current = storedByKey.get(key);
     if (current && sameBonus(current, fields)) continue;
     changes.inserts.push({ key, kind: entry.kind, fields });
-    createdLog.push({ key, personId: entry.personId, amount: entry.amount, change: 'created' });
   }
 
   const applied = await applyBonusEntryChanges(ctx, changes);
-  result.bonusesCreated = applied.created;
-  result.bonusesRemoved = applied.removed;
+  // Only the writes that happened are counted and listed: a delete that missed its compare-and-set
+  // and an insert that hit a duplicate key are not.
+  const removedLog: PointsBonusChange[] = applied.removed.map((key) => {
+    const doc = storedByKey.get(key)!;
+    return { key, personId: doc.personId.toHexString(), amount: doc.amount, change: 'removed' };
+  });
+  const createdLog: PointsBonusChange[] = applied.created.map((key) => {
+    const { entry } = expected.get(key)!;
+    return { key, personId: entry.personId, amount: entry.amount, change: 'created' };
+  });
+  result.bonusesCreated = createdLog.length;
+  result.bonusesRemoved = removedLog.length;
   const byKey = (a: PointsBonusChange, b: PointsBonusChange) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
   const log = [...removedLog.sort(byKey), ...createdLog.sort(byKey)];
   result.bonusChangesTotal = log.length;
   result.bonusChangesTruncated = log.length > MAX_POINTS_CORRECTIONS;
   result.bonusChanges = log.slice(0, MAX_POINTS_CORRECTIONS);
+  if (applied.error !== undefined) throw applied.error;
 }
 
 /** Reconciliations never overlap in this process: a second run waits for the first one (ADR-0005: one process). */
@@ -387,7 +397,14 @@ async function reconcileNow(ctx: AuditContext, trigger: PointsRecomputeTrigger):
   result.corrections = corrections.slice(0, MAX_POINTS_CORRECTIONS);
 
   // Step 4: the week and cycle bonuses (ADR-0012), inserted or deleted, never updated.
-  await reconcileBonuses(ctx, settings, storedBonuses, skippedIds, result);
+  // A failure here must not hide what steps 1 to 3 and the part of step 4 that ran have written, so
+  // the summary is recorded first and the failure rethrown after it.
+  let bonusFailure: { error: unknown } | null = null;
+  try {
+    await reconcileBonuses(ctx, settings, storedBonuses, skippedIds, result);
+  } catch (error) {
+    bonusFailure = { error };
+  }
   result.skipped = skippedIds.size;
 
   if (
@@ -396,6 +413,7 @@ async function reconcileNow(ctx: AuditContext, trigger: PointsRecomputeTrigger):
   ) {
     await record(ctx, { entity: 'points', entityId: POINTS_LEDGER_ID, action: 'recompute', meta: { ...result } });
   }
+  if (bonusFailure) throw bonusFailure.error;
   return result;
 }
 

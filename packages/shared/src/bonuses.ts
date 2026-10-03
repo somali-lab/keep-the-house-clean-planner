@@ -84,6 +84,11 @@ export interface BonusOccurrence {
   /** Created directly in the done state (no plan). Missing on older data means false. */
   recordedDone?: boolean | undefined;
   assigneeId: string | null;
+  /**
+   * The assignee at the moment the planned week had ended and the occurrence was first assigned,
+   * claimed, taken over or completed (null = it was unassigned). Missing means the assignee.
+   */
+  periodOwnerId?: string | null | undefined;
   completedBy: string | null;
   completedAt: string | null;
 }
@@ -93,12 +98,39 @@ export function periodDayOf(occurrence: Pick<BonusOccurrence, 'plannedDate' | 'd
   return occurrence.recordedDone === true ? occurrence.date : occurrence.plannedDate;
 }
 
+/** The person the occurrence is planned for as far as a period is concerned: the frozen period owner, else the assignee. */
+export function periodOwnerOf(occurrence: Pick<BonusOccurrence, 'assigneeId' | 'periodOwnerId'>): string | null {
+  return occurrence.periodOwnerId !== undefined ? occurrence.periodOwnerId : occurrence.assigneeId;
+}
+
+/** The person who receives the points of done work: `completedBy`, else the assignee (the rule of the execution points). */
+export function creditedOf(occurrence: Pick<BonusOccurrence, 'status' | 'assigneeId' | 'completedBy'>): string | null {
+  return occurrence.status === 'done' ? (occurrence.completedBy ?? occurrence.assigneeId) : null;
+}
+
+/** One person's view of an occurrence: the item that goes into that person's set. */
+export interface Placement {
+  person: string;
+  item: BonusOccurrence;
+}
+
 /**
- * The person whose set the occurrence is in: the credited person for done work (the rule of the
- * execution points), the assignee for open and skipped work; null (nobody) for unassigned work.
+ * Where an occurrence counts (ADR-0012). Recorded work belongs to the credited person and never
+ * blocks. Planned work belongs to its period owner. Open and skipped work is the owner's open item;
+ * unassigned work is in nobody's set. Done work is the owner's done item when the owner is the
+ * credited person. When somebody else did it, it is not done for the owner (it still blocks), and
+ * for the person who did it it is non-blocking, like recorded work: never needed, never late.
  */
-export function ownerOf(occurrence: Pick<BonusOccurrence, 'status' | 'assigneeId' | 'completedBy'>): string | null {
-  return occurrence.status === 'done' ? (occurrence.completedBy ?? occurrence.assigneeId) : occurrence.assigneeId;
+export function placementsOf(occurrence: BonusOccurrence): Placement[] {
+  const credited = creditedOf(occurrence);
+  if (occurrence.recordedDone === true) return credited === null ? [] : [{ person: credited, item: occurrence }];
+  const owner = periodOwnerOf(occurrence);
+  if (occurrence.status !== 'done') return owner === null ? [] : [{ person: owner, item: occurrence }];
+  if (owner !== null && credited === owner) return [{ person: owner, item: occurrence }];
+  const placements: Placement[] = [];
+  if (owner !== null) placements.push({ person: owner, item: { ...occurrence, status: 'open', completedAt: null, completedBy: null } });
+  if (credited !== null) placements.push({ person: credited, item: { ...occurrence, recordedDone: true, date: occurrence.plannedDate } });
+  return placements;
 }
 
 export interface SetEvaluation {
@@ -112,7 +144,7 @@ export interface SetEvaluation {
   eligible: boolean;
   /** Every occurrence in the set is done, whenever it was completed. */
   allDone: boolean;
-  /** Everything is done and every completion lies before the cut-off; done work without `completedAt` is late. */
+  /** Everything is done and every completion lies before the cut-off; planned done work without `completedAt` is late. Recorded work is always on time. */
   allOnTime: boolean;
 }
 
@@ -124,7 +156,14 @@ export function evaluateSet(set: readonly BonusOccurrence[], cutoff: Date): SetE
   let skipped = 0;
   let onTime = 0;
   for (const occurrence of set) {
-    if (occurrence.recordedDone !== true) planned += 1;
+    if (occurrence.recordedDone === true) {
+      // Recorded work never blocks and is always on time, whatever its completion instant says
+      // (an administrator may have corrected the date to before it).
+      done += 1;
+      onTime += 1;
+      continue;
+    }
+    planned += 1;
     if (occurrence.status === 'done') {
       done += 1;
       if (occurrence.completedAt !== null && Date.parse(occurrence.completedAt) < cutoff.getTime()) onTime += 1;
@@ -186,6 +225,11 @@ export interface BonusContext {
   /** Today in the household timezone. */
   today: DayKey;
   schedule: readonly BonusScheduleRow[];
+  /**
+   * The boundary of the last statistics reset: a period that starts before this day is never
+   * evaluated, because its history was (partly) purged and what remains cannot be trusted.
+   */
+  floor?: DayKey | undefined;
 }
 
 /**
@@ -202,17 +246,18 @@ export function expectedBonusEntries(items: readonly BonusOccurrence[], context:
     if (group) group.set.push(item);
     else groups.set(id, { person, period, set: [item] });
   };
-  for (const item of items) {
-    const person = ownerOf(item);
-    if (person === null) continue;
-    const day = periodDayOf(item);
-    add(person, weekOf(day), item);
-    add(person, cycleOf(day, context.anchor), item);
+  for (const occurrence of items) {
+    for (const { person, item } of placementsOf(occurrence)) {
+      const day = periodDayOf(item);
+      add(person, weekOf(day), item);
+      add(person, cycleOf(day, context.anchor), item);
+    }
   }
 
   const entries: ExpectedBonusEntry[] = [];
   for (const { person, period, set } of groups.values()) {
     if (!periodEnded(period, context.today)) continue;
+    if (context.floor !== undefined && period.start < context.floor) continue;
     const evaluation = evaluateSet(set, onTimeCutoff(period, context.timezone));
     if (!evaluation.eligible) continue;
     const amounts = bonusAmountsOn(context.schedule, period.end);

@@ -38,6 +38,8 @@ export const occurrenceSchema = z
     pointsSnapshot: z.number().int().min(0).max(MAX_TASK_POINTS).nullable().optional(),
     /** Points a one-off task was recorded with; used when it becomes done. Null or missing means the duration rule. */
     pointsOverride: z.number().int().min(0).max(MAX_TASK_POINTS).nullable().optional(),
+    /** The assignee when work of an ended planned week was first assigned, claimed, taken over or completed (null = unassigned); bonuses count it for that person (ADR-0012). Missing means the assignee. */
+    periodOwnerId: objectIdSchema.nullable().optional(),
   })
   .extend(timestampsSchema.shape);
 export type Occurrence = z.infer<typeof occurrenceSchema>;

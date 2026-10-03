@@ -36,6 +36,12 @@ export interface OccurrenceDoc {
   pointsSnapshot?: number | null;
   /** Points a one-off task was recorded with (ADR-0011); wins over the duration rule when it becomes done. Missing means none. */
   pointsOverride?: number | null;
+  /**
+   * The assignee at the moment work of an ended planned week was first assigned, claimed, taken over
+   * or completed (null = it was unassigned), frozen so the bonus of that week stays with the person
+   * it was planned for (ADR-0012). Missing means the assignee.
+   */
+  periodOwnerId?: ObjectId | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -117,13 +123,13 @@ export function findDoneOccurrences(db: Db): Promise<OccurrenceDoc[]> {
 /** The fields of an occurrence that week and cycle bonuses need (ADR-0012). */
 export type BonusOccurrenceDoc = Pick<
   OccurrenceDoc,
-  '_id' | 'status' | 'plannedDate' | 'date' | 'recordedDone' | 'assigneeId' | 'completedBy' | 'completedAt'
+  '_id' | 'status' | 'plannedDate' | 'date' | 'recordedDone' | 'assigneeId' | 'periodOwnerId' | 'completedBy' | 'completedAt'
 >;
 
-/** Every occurrence, with a projection of seven fields; the bonus ledger is reconciled against these (ADR-0012). */
+/** Every occurrence, with a projection of eight fields; the bonus ledger is reconciled against these (ADR-0012). */
 export function findBonusOccurrences(db: Db): Promise<BonusOccurrenceDoc[]> {
   return occurrencesCollection(db)
-    .find({}, { projection: { status: 1, plannedDate: 1, date: 1, recordedDone: 1, assigneeId: 1, completedBy: 1, completedAt: 1 } })
+    .find({}, { projection: { status: 1, plannedDate: 1, date: 1, recordedDone: 1, assigneeId: 1, periodOwnerId: 1, completedBy: 1, completedAt: 1 } })
     .toArray() as Promise<BonusOccurrenceDoc[]>;
 }
 

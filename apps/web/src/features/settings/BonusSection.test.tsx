@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ANNA, BRAM, mockApi, storeProfile } from '../../test/fixtures.ts';
 import { makeSettings, renderWithProviders } from '../../test/render.tsx';
 import { BonusSection, parseBonusAmount } from './BonusSection.tsx';
@@ -61,6 +61,35 @@ describe('BonusSection', () => {
       'Vanaf 16-09-2026: week 5 gedaan en 3 op tijd, cyclus 20 gedaan en 10 op tijd',
       'Vanaf 01-09-2026: week 4 gedaan en 2 op tijd, cyclus 10 gedaan en 5 op tijd',
     ]);
+  });
+
+  it('marks a row that has not started yet, and takes the amounts of the row in force', async () => {
+    const schedule = [...SCHEDULE, { from: '2026-09-20', weekDone: 50, weekOnTime: 30, cycleDone: 200, cycleOnTime: 100 }];
+    setup(ANNA._id, makeSettings({ bonusSchedule: schedule }));
+    renderWithProviders(<BonusSection settings={makeSettings({ bonusSchedule: schedule })} now={NOW} />);
+    const form = await screen.findByRole('form', { name: 'Bonussen' });
+    expect(within(form).getByLabelText('Week: alles gedaan')).toHaveValue(5);
+    const rows = within(form).getAllByRole('listitem');
+    expect(rows[0]).toHaveTextContent('Vanaf 20-09-2026');
+    expect(rows[0]).toHaveTextContent('nog niet van kracht');
+    expect(rows[1]).not.toHaveTextContent('nog niet van kracht');
+    expect(within(form).getByText('Deze bedragen gelden sinds 16-09-2026.')).toBeInTheDocument();
+  });
+
+  it('says so when someone else changed the amounts in the meantime', async () => {
+    storeProfile(ANNA._id);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === 'PATCH') return new Response(JSON.stringify({ code: 'bonus_schedule_conflict' }), { status: 409 });
+        const body = String(input).includes('users') ? [ANNA, BRAM] : makeSettings();
+        return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }),
+    );
+    renderWithProviders(<BonusSection settings={makeSettings()} now={NOW} />);
+    const form = await screen.findByRole('form', { name: 'Bonussen' });
+    fireEvent.click(within(form).getByRole('button', { name: 'Bonussen opslaan' }));
+    expect(await within(form).findByRole('alert')).toHaveTextContent('Iemand anders heeft de bonusbedragen net gewijzigd');
   });
 
   it('says that bonuses are off without a schedule, with every amount at 0', async () => {

@@ -1,12 +1,12 @@
 import type { BonusAmounts, Settings } from '@huishoudplanner/shared';
 import { bonusAmountsOn, MAX_BONUS_POINTS, MIN_BONUS_POINTS } from '@huishoudplanner/shared/bonuses';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Gift, Save } from 'lucide-react';
+import { Clock, Gift, Save } from 'lucide-react';
 import { useId, useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { api } from '../../api/index.ts';
+import { api, ApiRequestError } from '../../api/index.ts';
 import { queryKeys } from '../../api/queries.ts';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
@@ -52,7 +52,11 @@ export function BonusSection({ settings, now }: { settings: Settings; now?: Date
       setMessage({ kind: 'status', text: t('settings.saved') });
       await queryClient.invalidateQueries({ queryKey: queryKeys.settings });
     },
-    onError: () => setMessage({ kind: 'alert', text: t('app.error') }),
+    onError: (error) =>
+      setMessage({
+        kind: 'alert',
+        text: error instanceof ApiRequestError && error.code === 'bonus_schedule_conflict' ? t('settings.bonuses.conflict') : t('app.error'),
+      }),
   });
 
   if (profile?.role !== 'admin') return null;
@@ -116,6 +120,12 @@ export function BonusSection({ settings, now }: { settings: Settings; now?: Date
                   cycleDone: row.cycleDone,
                   cycleOnTime: row.cycleOnTime,
                 })}
+                {row.from > todayKey && (
+                  <span className="ml-auto inline-flex items-center gap-1 font-semibold text-muted-foreground">
+                    <Clock className="size-4" aria-hidden="true" />
+                    {t('settings.bonuses.future')}
+                  </span>
+                )}
               </li>
             ))}
           </ul>

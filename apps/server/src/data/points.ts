@@ -236,43 +236,65 @@ export interface BonusEntryChanges {
   deletes: PointEntryDoc[];
 }
 
+export interface AppliedBonusEntryChanges {
+  /** Keys of the entries that were really inserted; a duplicate key (already written) is not among them. */
+  created: string[];
+  /** Keys of the entries that are really gone; a delete that missed its compare-and-set is not among them. */
+  removed: string[];
+  /** The failure that stopped the write, if any; `created` and `removed` still say what did happen. */
+  error?: unknown;
+}
+
 /**
- * Applies the bonus differences of a reconciliation as one ordered bulk write, deletes first
- * (ADR-0012). A bonus entry is only inserted or deleted, never updated: person and period are part
- * of its key. Deletes are compare-and-set on the entry that was read. No per-entry audit entry: the
- * caller records one summary. Inserted entries get source 'recompute'.
+ * Applies the bonus differences of a reconciliation (ADR-0012): the deletes first as one ordered
+ * bulk write, then the inserts as one unordered write. A bonus entry is only inserted or deleted,
+ * never updated: person and period are part of its key. Deletes are compare-and-set on the entry
+ * that was read. No per-entry audit entry: the caller records one summary. Inserted entries get
+ * source 'recompute'. What was done is read back, so the summary only lists writes that happened:
+ * a delete that missed its compare-and-set and an insert that hit a duplicate key are left out. A
+ * failure is returned, not thrown, so the caller can still record what was written before it.
  */
-export async function applyBonusEntryChanges(
-  ctx: AuditContext,
-  changes: BonusEntryChanges,
-): Promise<{ created: number; removed: number }> {
+export async function applyBonusEntryChanges(ctx: AuditContext, changes: BonusEntryChanges): Promise<AppliedBonusEntryChanges> {
+  const collection = pointEntriesCollection(ctx.db);
   const now = ctx.clock.now();
-  const operations: AnyBulkWriteOperation<PointEntryDoc>[] = [
-    ...changes.deletes.map((current) => ({ deleteOne: { filter: { ...sameAsRead(current), key: current.key } } })),
-    ...changes.inserts.map(({ key, kind, fields }) => ({
-      insertOne: {
-        document: {
-          _id: new ObjectId(),
-          key,
-          kind,
-          ...fields,
-          periodStart: fields.periodStart ?? null,
-          source: 'recompute' as const,
-          createdAt: now,
-          updatedAt: now,
-        },
-      },
-    })),
-  ];
-  if (operations.length === 0) return { created: 0, removed: 0 };
+  const documents = changes.inserts.map(({ key, kind, fields }): PointEntryDoc => ({
+    _id: new ObjectId(),
+    key,
+    kind,
+    ...fields,
+    periodStart: fields.periodStart ?? null,
+    source: 'recompute',
+    createdAt: now,
+    updatedAt: now,
+  }));
+  let error: unknown;
   try {
-    const result = await pointEntriesCollection(ctx.db).bulkWrite(operations, { ordered: true });
-    return { created: result.insertedCount, removed: result.deletedCount };
+    if (changes.deletes.length > 0) {
+      await collection.bulkWrite(
+        changes.deletes.map((current) => ({ deleteOne: { filter: { ...sameAsRead(current), key: current.key } } })),
+        { ordered: true },
+      );
+    }
+    if (documents.length > 0) {
+      try {
+        await collection.insertMany(documents, { ordered: false });
+      } catch (err) {
+        // Only this reconciliation writes bonuses, so a duplicate key means an earlier run already wrote the entry.
+        if (!(err instanceof MongoBulkWriteError)) throw err;
+        const writeErrors = Array.isArray(err.writeErrors) ? err.writeErrors : [err.writeErrors];
+        if (writeErrors.some((e) => e.code !== 11000)) throw err;
+      }
+    }
   } catch (err) {
-    // Only this reconciliation writes bonuses, so a duplicate key means an earlier run of it already wrote the entry.
-    if (!(err instanceof MongoBulkWriteError)) throw err;
-    const writeErrors = Array.isArray(err.writeErrors) ? err.writeErrors : [err.writeErrors];
-    if (writeErrors.some((e) => e.code !== 11000)) throw err;
-    return { created: err.result.insertedCount, removed: err.result.deletedCount };
+    error = err;
   }
+  const ids = [...changes.deletes.map((doc) => doc._id), ...documents.map((doc) => doc._id)];
+  const present = new Set(
+    ids.length === 0 ? [] : (await collection.find({ _id: { $in: ids } }, { projection: { _id: 1 } }).toArray()).map((doc) => doc._id.toHexString()),
+  );
+  return {
+    removed: changes.deletes.filter((doc) => !present.has(doc._id.toHexString())).map((doc) => doc.key),
+    created: documents.filter((doc) => present.has(doc._id.toHexString())).map((doc) => doc.key),
+    ...(error === undefined ? {} : { error }),
+  };
 }

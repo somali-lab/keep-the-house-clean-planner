@@ -11,7 +11,7 @@ import type {
 } from '@huishoudplanner/shared';
 import { ObjectId, type Db } from 'mongodb';
 import type { AuditContext } from '../audit/context.ts';
-import { diffFields, isEmptyDiff } from '../audit/diff.ts';
+import { deepEqual, diffFields, isEmptyDiff } from '../audit/diff.ts';
 import { record } from '../audit/record.ts';
 import { COLLECTIONS } from './db.ts';
 
@@ -34,6 +34,8 @@ export interface SettingsDoc {
   dismissedPromotions: DismissedPromotion[];
   /** Bonus amounts over time (ADR-0012), sorted by `from`; missing means no bonuses. */
   bonusSchedule?: BonusScheduleRow[];
+  /** Boundary of the last statistics reset: periods that start before this day earn no bonus (ADR-0012). */
+  bonusFloor?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -62,16 +64,30 @@ export async function insertSettingsIfMissing(
   return true;
 }
 
+/** The bonus schedule changed between reading it and writing the new one (ADR-0012); nothing was written. */
+export class StaleBonusScheduleError extends Error {
+  constructor() {
+    super('The bonus schedule changed in the meantime');
+    this.name = 'StaleBonusScheduleError';
+  }
+}
+
 /**
  * Returns null if settings are missing; skips the write (and audit) when nothing changes. A
  * `bonusSchedule` patch is audited against the schedule that was in force, `[]` when there was none.
+ * With `options.basedOnBonusSchedule` the write is a compare-and-set: it only happens while the stored
+ * schedule is still the one the patch was computed from (`undefined` = none stored), otherwise
+ * {@link StaleBonusScheduleError} is thrown and nothing is written.
  */
 export async function updateSettings(
   ctx: AuditContext,
   patch: Omit<UpdateSettingsInput, 'periodBonuses'> & { dismissedPromotions?: DismissedPromotion[]; bonusSchedule?: BonusScheduleRow[] },
+  options: { basedOnBonusSchedule?: { rows: BonusScheduleRow[] | undefined } } = {},
 ): Promise<SettingsDoc | null> {
   const before = await getSettings(ctx.db);
   if (!before) return null;
+  const based = options.basedOnBonusSchedule;
+  if (based && !deepEqual(before.bonusSchedule, based.rows)) throw new StaleBonusScheduleError();
   const diff = diffFields(
     { ...before, ...(patch.bonusSchedule ? { bonusSchedule: before.bonusSchedule ?? [] } : {}) },
     { ...before, ...patch },
@@ -79,11 +95,17 @@ export async function updateSettings(
   if (isEmptyDiff(diff)) return before;
 
   const after = await settingsCollection(ctx.db).findOneAndUpdate(
-    { _id: SETTINGS_ID },
+    {
+      _id: SETTINGS_ID,
+      ...(based ? { bonusSchedule: based.rows === undefined ? { $exists: false } : based.rows } : {}),
+    },
     { $set: { ...patch, updatedAt: ctx.clock.now() } },
     { returnDocument: 'after' },
   );
-  if (!after) return null;
+  if (!after) {
+    if (based) throw new StaleBonusScheduleError();
+    return null;
+  }
   await record(ctx, { entity: 'settings', entityId: SETTINGS_ID, action: 'update', ...diff });
   return after;
 }

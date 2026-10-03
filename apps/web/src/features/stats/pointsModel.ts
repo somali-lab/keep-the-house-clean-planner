@@ -1,5 +1,4 @@
 import { cycleEnd, cycleIndexFor, cycleStart } from '@huishoudplanner/shared/cycle';
-import type { PointEntryView } from '@huishoudplanner/shared';
 import { addDays, isoWeek, mondayOf } from '@huishoudplanner/shared/time';
 import type { StatsPeriod } from './api.ts';
 
@@ -47,7 +46,7 @@ const BONUS_LABEL_KEY = {
  * What a ledger entry says about its period, or null for an entry that is not a bonus. A bonus is
  * dated on the last day of its period, and `periodStart` is the first day.
  */
-export function bonusLabel(entry: Pick<PointEntryView, 'kind' | 'periodStart' | 'date'>): BonusLabel | null {
+export function bonusLabel(entry: { kind: string; periodStart: string | null; date: string }): BonusLabel | null {
   if (!(entry.kind in BONUS_LABEL_KEY) || entry.periodStart === null) return null;
   return {
     key: BONUS_LABEL_KEY[entry.kind as keyof typeof BONUS_LABEL_KEY],
@@ -55,4 +54,17 @@ export function bonusLabel(entry: Pick<PointEntryView, 'kind' | 'periodStart' | 
     from: entry.periodStart,
     to: entry.date,
   };
+}
+
+const BONUS_KIND_OF_KEY = new Set(Object.keys(BONUS_LABEL_KEY));
+
+/**
+ * The label of a bonus that is only known by its ledger key, `<kind>:<personId>:<periodStart>`, as the
+ * history of a reconciliation lists it. A week ends six days and a cycle 27 days after its first day.
+ */
+export function bonusLabelOfKey(key: string): BonusLabel | null {
+  const [kind, , periodStart] = key.split(':');
+  if (!kind || !periodStart || !BONUS_KIND_OF_KEY.has(kind) || !/^\d{4}-\d{2}-\d{2}$/.test(periodStart)) return null;
+  const days = kind.startsWith('bonus_week') ? 6 : 27;
+  return bonusLabel({ kind: kind as keyof typeof BONUS_LABEL_KEY, periodStart, date: addDays(periodStart, days) });
 }

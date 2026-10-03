@@ -115,6 +115,8 @@ export const settingsSchema = z
     dismissedPromotions: z.array(dismissedPromotionSchema),
     /** Bonus amounts over time (ADR-0012); a missing list means no bonuses. The API always returns it. */
     bonusSchedule: bonusScheduleSchema.optional(),
+    /** Boundary of the last statistics reset: periods that start before this day earn no bonus (ADR-0012). */
+    bonusFloor: dayKeySchema.optional(),
   })
   .extend(timestampsSchema.shape);
 export type Settings = z.infer<typeof settingsSchema>;

@@ -6,8 +6,10 @@ import {
   evaluateSet,
   expectedBonusEntries,
   onTimeCutoff,
-  ownerOf,
+  creditedOf,
   periodDayOf,
+  periodOwnerOf,
+  placementsOf,
   periodEnded,
   scheduleWithAmounts,
   weekOf,
@@ -78,12 +80,26 @@ describe('the occurrence in a set', () => {
     expect(periodDayOf({ plannedDate: '2026-09-16', date: '2026-09-23', recordedDone: true })).toBe('2026-09-23');
   });
 
-  it('credits done work to completedBy or the assignee, and open or skipped work to the assignee', () => {
-    expect(ownerOf({ status: 'done', assigneeId: ANNA, completedBy: BRAM })).toBe(BRAM);
-    expect(ownerOf({ status: 'done', assigneeId: ANNA, completedBy: null })).toBe(ANNA);
-    expect(ownerOf({ status: 'done', assigneeId: null, completedBy: null })).toBeNull();
-    expect(ownerOf({ status: 'open', assigneeId: ANNA, completedBy: BRAM })).toBe(ANNA);
-    expect(ownerOf({ status: 'skipped', assigneeId: null, completedBy: null })).toBeNull();
+  it('takes the frozen period owner, else the assignee, and credits done work to completedBy or the assignee', () => {
+    expect(periodOwnerOf({ assigneeId: ANNA })).toBe(ANNA);
+    expect(periodOwnerOf({ assigneeId: ANNA, periodOwnerId: BRAM })).toBe(BRAM);
+    expect(periodOwnerOf({ assigneeId: ANNA, periodOwnerId: null })).toBeNull();
+    expect(creditedOf({ status: 'done', assigneeId: ANNA, completedBy: BRAM })).toBe(BRAM);
+    expect(creditedOf({ status: 'done', assigneeId: ANNA, completedBy: null })).toBe(ANNA);
+    expect(creditedOf({ status: 'open', assigneeId: ANNA, completedBy: BRAM })).toBeNull();
+  });
+
+  it('places work in the set of its owner, and done work by someone else as open for the owner and non-blocking for the doer', () => {
+    expect(placementsOf(occ('2026-09-14')).map((p) => p.person)).toEqual([ANNA]);
+    expect(placementsOf(occ('2026-09-14', { status: 'skipped', completedBy: null, completedAt: null })).map((p) => p.person)).toEqual([ANNA]);
+    expect(placementsOf(occ('2026-09-14', { status: 'open', assigneeId: null, completedBy: null, completedAt: null }))).toEqual([]);
+    const byBram = placementsOf(occ('2026-09-14', { completedBy: BRAM }));
+    expect(byBram.map((p) => [p.person, p.item.status, p.item.recordedDone === true])).toEqual([
+      [ANNA, 'open', false],
+      [BRAM, 'done', true],
+    ]);
+    // Unassigned owner: only the doer has an item, and it is non-blocking.
+    expect(placementsOf(occ('2026-09-14', { assigneeId: null, periodOwnerId: null, completedBy: BRAM })).map((p) => p.person)).toEqual([BRAM]);
   });
 });
 
@@ -303,10 +319,12 @@ describe('expectedBonusEntries', () => {
       ]);
     });
 
-    it('credits a named third person and stays neutral for the assignee', () => {
+    it('credits a named third person without needing the work, and the assignee has not done it', () => {
       const byCarel = occ('2026-09-14', { assigneeId: ANNA, completedBy: CAREL });
-      const entries = expectedBonusEntries([byCarel], context('2026-09-21'));
-      expect(entries.map((entry) => entry.personId)).toEqual([CAREL, CAREL]);
+      // Carel has only non-blocking work, so he is not eligible; Anna's item is not done.
+      expect(expectedBonusEntries([byCarel], context('2026-09-21'))).toEqual([]);
+      const withOwn = [byCarel, occ('2026-09-15', { assigneeId: CAREL, completedBy: CAREL })];
+      expect(new Set(expectedBonusEntries(withOwn, context('2026-09-21')).map((entry) => entry.personId))).toEqual(new Set([CAREL]));
     });
 
     it('lets unassigned open work block nobody and unassigned done work count for the person who did it', () => {
@@ -322,6 +340,83 @@ describe('expectedBonusEntries', () => {
     it('evaluates every person on their own set', () => {
       const items = [occ('2026-09-14'), occ('2026-09-15', { assigneeId: BRAM, completedBy: null, status: 'open', completedAt: null })];
       expect(kinds(expectedBonusEntries(items, context('2026-09-21')))).toEqual(['bonus_week_done:anna:2026-09-14', 'bonus_week_ontime:anna:2026-09-14']);
+    });
+  });
+
+  describe('helping with overdue work from an ended week', () => {
+    // Anna and Bram both have a finished week; Bram's second item stayed open and is overdue.
+    const annaDone = occ('2026-09-14');
+    const bramDone = occ('2026-09-14', { assigneeId: BRAM, completedBy: BRAM });
+    const bramOverdue = (overrides: Partial<BonusOccurrence>) =>
+      occ('2026-09-15', { assigneeId: BRAM, periodOwnerId: BRAM, status: 'open', completedBy: null, completedAt: null, ...overrides });
+
+    it("keeps Anna's finalised week bonus when she takes over Bram's overdue item, and Bram gains nothing from it", () => {
+      const takenOver = bramOverdue({ status: 'done', assigneeId: ANNA, completedBy: ANNA, completedAt: '2026-09-23T10:00:00.000Z' });
+      const entries = expectedBonusEntries([annaDone, bramDone, takenOver], context('2026-09-28'));
+      // Anna: her own item is done on time and the taken-over one is non-blocking.
+      expect(kinds(entries.filter((entry) => entry.personId === ANNA))).toEqual(['bonus_week_done:anna:2026-09-14', 'bonus_week_ontime:anna:2026-09-14']);
+      // Bram: the item he missed is not done for him, so he earns nothing.
+      expect(entries.filter((entry) => entry.personId === BRAM)).toEqual([]);
+    });
+
+    it('does not turn that item into a bonus for Anna on its own', () => {
+      const takenOver = bramOverdue({ status: 'done', assigneeId: ANNA, completedBy: ANNA, completedAt: '2026-09-23T10:00:00.000Z' });
+      expect(expectedBonusEntries([takenOver], context('2026-09-28'))).toEqual([]);
+    });
+
+    it('treats unassigned overdue work that is claimed as non-blocking for the claimer and for nobody else', () => {
+      const claimed = occ('2026-09-15', { assigneeId: BRAM, periodOwnerId: null, completedBy: BRAM, completedAt: '2026-09-23T10:00:00.000Z' });
+      const entries = expectedBonusEntries([bramDone, claimed], context('2026-09-28'));
+      expect(kinds(entries)).toEqual(['bonus_week_done:bram:2026-09-14', 'bonus_week_ontime:bram:2026-09-14']);
+      // Still unassigned and open after the week: it blocks nobody.
+      const open = occ('2026-09-15', { assigneeId: null, periodOwnerId: null, status: 'open', completedBy: null, completedAt: null });
+      expect(kinds(expectedBonusEntries([bramDone, open], context('2026-09-28')))).toHaveLength(2);
+    });
+
+    it("does not move reassigned open overdue work into the new assignee's ended week", () => {
+      const reassigned = bramOverdue({ assigneeId: ANNA });
+      const entries = expectedBonusEntries([annaDone, bramDone, reassigned], context('2026-09-28'));
+      // Bram still owns the missed item for that week; Anna's week is unaffected.
+      expect(entries.filter((entry) => entry.personId === BRAM)).toEqual([]);
+      expect(kinds(entries.filter((entry) => entry.personId === ANNA))).toEqual(['bonus_week_done:anna:2026-09-14', 'bonus_week_ontime:anna:2026-09-14']);
+    });
+
+    it('lets Bram finish his own overdue item late: done, but not on time', () => {
+      const late = bramOverdue({ status: 'done', completedBy: BRAM, completedAt: '2026-09-23T10:00:00.000Z' });
+      expect(kinds(expectedBonusEntries([bramDone, late], context('2026-09-28')))).toEqual(['bonus_week_done:bram:2026-09-14']);
+    });
+
+    it('still credits the owner normally for a completion on behalf of the owner', () => {
+      const onBehalf = bramOverdue({ status: 'done', completedBy: BRAM, completedAt: '2026-09-18T10:00:00.000Z' });
+      expect(kinds(expectedBonusEntries([bramDone, onBehalf], context('2026-09-28')))).toEqual(['bonus_week_done:bram:2026-09-14', 'bonus_week_ontime:bram:2026-09-14']);
+    });
+  });
+
+  describe('recorded work', () => {
+    it('never blocks and is always on time, also when a corrected date lies before its completion instant', () => {
+      // An administrator moved the date to the week of 14 September; it was completed in the week after.
+      const corrected = occ('2026-09-16', { recordedDone: true, date: '2026-09-16', completedAt: '2026-09-23T10:00:00.000Z' });
+      expect(evaluateSet([corrected], new Date('2026-09-20T22:00:00.000Z'))).toMatchObject({ allDone: true, allOnTime: true, eligible: false });
+      expect(kinds(expectedBonusEntries([corrected, occ('2026-09-14')], context('2026-09-28')))).toEqual([
+        'bonus_week_done:anna:2026-09-14',
+        'bonus_week_ontime:anna:2026-09-14',
+      ]);
+      // Even a recorded item that is not marked done does not block.
+      const odd = occ('2026-09-16', { recordedDone: true, status: 'open', completedAt: null });
+      expect(evaluateSet([odd], new Date('2026-09-20T22:00:00.000Z'))).toMatchObject({ allDone: true, allOnTime: true });
+    });
+  });
+
+  describe('the statistics reset floor', () => {
+    it('skips the periods that start before the floor, and keeps the ones that start on it', () => {
+      const items = [occ('2026-09-14'), occ('2026-09-21')];
+      const all = expectedBonusEntries(items, context('2026-09-28'));
+      expect(all.map((entry) => entry.periodStart)).toEqual(['2026-09-14', '2026-09-14', '2026-09-21', '2026-09-21']);
+      const floored = expectedBonusEntries(items, context('2026-09-28', { floor: '2026-09-21' }));
+      expect(floored.map((entry) => entry.periodStart)).toEqual(['2026-09-21', '2026-09-21']);
+      // A cycle that starts before the floor is skipped as a whole.
+      expect(expectedBonusEntries(items, context('2026-10-12', { floor: '2026-09-21' })).some((entry) => entry.kind.startsWith('bonus_cycle'))).toBe(false);
+      expect(expectedBonusEntries(items, context('2026-10-12', { floor: '2026-09-14' })).some((entry) => entry.kind.startsWith('bonus_cycle'))).toBe(true);
     });
   });
 

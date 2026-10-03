@@ -9,6 +9,7 @@ import { useProfile } from '../../identity/index.ts';
 import { dayKeyInZone } from '../today/todayModel.ts';
 import { usePointsBalances, usePointsEntries, type StatsPeriod } from './api.ts';
 import { statsTableClass } from './ChartFrame.tsx';
+import { bonusText } from './bonusText.ts';
 import { bonusLabel, pointsRange } from './pointsModel.ts';
 import { formatNumber } from './scale.ts';
 
@@ -18,11 +19,6 @@ const noneClass = 'rounded-xl border border-dashed px-4 py-3 text-sm text-muted-
 /** "16 september 2026" in the interface language; a day key is a calendar date, so UTC keeps it unchanged. */
 function longDate(dayKey: string): string {
   return new Intl.DateTimeFormat(getLocale(), { dateStyle: 'long', timeZone: 'UTC' }).format(new Date(`${dayKey}T00:00:00Z`));
-}
-
-/** "7 sep" in the interface language: the short form that labels the days of a cycle bonus. */
-function shortDate(dayKey: string): string {
-  return new Intl.DateTimeFormat(getLocale(), { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(`${dayKey}T00:00:00Z`));
 }
 
 /**
@@ -152,7 +148,7 @@ export function PointsSection({ period, now }: { period: StatsPeriod; now?: Date
                         {bonus ? (
                           <span className="inline-flex items-center gap-2 font-semibold">
                             <Gift className="size-4 shrink-0 text-primary" aria-hidden="true" />
-                            {format(bonus.key, { week: bonus.week, from: shortDate(bonus.from), to: shortDate(bonus.to) })}
+                            {bonusText(bonus)}
                           </span>
                         ) : (
                           entry.titleSnapshot

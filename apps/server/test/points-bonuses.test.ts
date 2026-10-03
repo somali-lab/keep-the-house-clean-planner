@@ -11,7 +11,7 @@ import { ObjectId } from 'mongodb';
 import { afterEach, describe, expect, it } from 'vitest';
 import { findActivePlan } from '../src/data/cyclePlans.ts';
 import { COLLECTIONS } from '../src/data/db.ts';
-import { findBonusPointEntries, type PointEntryDoc } from '../src/data/points.ts';
+import { applyBonusEntryChanges, findBonusPointEntries, type PointEntryDoc } from '../src/data/points.ts';
 import { reconcilePoints, reconcilePointsSafely } from '../src/domain/points.ts';
 import type { ExportFile } from '../src/domain/transfer.ts';
 import { runNightly } from '../src/jobs/nightly.ts';
@@ -246,17 +246,99 @@ describe('corrections after finalisation', () => {
     expect(await bonuses(f)).toEqual(WEEK_BONUSES.filter((entry) => !entry.includes(' p1 ')));
   });
 
-  it('moves the blocker to the other person on a take-over of overdue work', async () => {
+  /** The occurrence document, to see what was frozen on it. */
+  const stored = (f: Fixture, id: string) => f.t.db.collection(COLLECTIONS.occurrences).findOne({ _id: new ObjectId(id) });
+  const occurrenceAudit = (f: Fixture, id: string) =>
+    f.t.db.collection(COLLECTIONS.auditLog).find({ entity: 'occurrence', entityId: new ObjectId(id) }).sort({ _id: 1 }).toArray();
+
+  it("keeps person 1's finalised bonus when she takes over person 2's overdue item, and person 2 gains nothing from it", async () => {
     const f = await finalised();
-    // Person 2 had left Tuesday undone in a second scenario: here person 1 takes over person 2's finished task.
     const tuesday = await f.occurrence('2026-09-15');
+    // Person 2 uncompletes Tuesday after the week ended: the item is open and overdue, and blocks person 2.
     expect((await f.at('2026-09-22T08:00:00.000Z', 'PATCH', `/api/occurrences/${tuesday}`, { action: 'uncomplete' }, f.p2)).statusCode).toBe(200);
     await f.reconcileAt('2026-09-22T09:00:00.000Z');
     expect(await bonuses(f)).toEqual(WEEK_BONUSES.filter((entry) => entry.includes(' p1 ')));
+
+    // Person 1 takes it over and finishes it: the week of person 1 is not penalised, person 2 still has not done it.
+    const before = (await occurrenceAudit(f, tuesday)).length;
     expect((await f.at('2026-09-23T08:00:00.000Z', 'PATCH', `/api/occurrences/${tuesday}`, { action: 'complete', takeOver: true }, f.p1)).statusCode).toBe(200);
+    const doc = (await stored(f, tuesday))!;
+    expect((doc.periodOwnerId as ObjectId).equals(f.p2._id)).toBe(true);
+    expect((doc.assigneeId as ObjectId).equals(f.p1._id)).toBe(true);
+    // The freeze is part of the same audited update: one more entry, no separate one.
+    const audit = await occurrenceAudit(f, tuesday);
+    expect(audit).toHaveLength(before + 1);
+    expect(audit.at(-1)!.after).toMatchObject({ periodOwnerId: f.p2._id });
+    const result = await f.reconcileAt('2026-09-23T09:00:00.000Z');
+    expect(result).toMatchObject({ bonusesCreated: 0, bonusesRemoved: 0 });
+    expect(await bonuses(f)).toEqual(WEEK_BONUSES.filter((entry) => entry.includes(' p1 ')));
+  });
+
+  it('counts a completion on behalf of the owner for the owner: done, but late', async () => {
+    const f = await finalised();
+    const tuesday = await f.occurrence('2026-09-15');
+    expect((await f.at('2026-09-22T08:00:00.000Z', 'PATCH', `/api/occurrences/${tuesday}`, { action: 'uncomplete' }, f.p2)).statusCode).toBe(200);
+    // Person 1 checks it off for person 2.
+    expect(
+      (await f.at('2026-09-23T08:00:00.000Z', 'PATCH', `/api/occurrences/${tuesday}`, { action: 'complete', completedBy: f.p2._id.toHexString() }, f.p1)).statusCode,
+    ).toBe(200);
     await f.reconcileAt('2026-09-23T09:00:00.000Z');
-    // The occurrence belongs to person 1 now: it is done, but late, so person 1 loses the on-time bonus and person 2 has nothing to earn.
-    expect(await bonuses(f)).toEqual(['bonus_week_done p1 2026-09-14 5']);
+    expect(await bonuses(f)).toEqual(
+      [...WEEK_BONUSES.filter((entry) => entry.includes(' p1 ')), 'bonus_week_done p2 2026-09-14 5'].sort(),
+    );
+  });
+
+  it('does not let claiming unassigned overdue work change anybody\'s bonus, and never blocks the claimer', async () => {
+    const f = await finalised();
+    const wednesday = await f.occurrence('2026-09-16');
+    expect((await f.at('2026-09-22T08:00:00.000Z', 'POST', `/api/occurrences/${wednesday}/claim`, undefined, f.p2)).statusCode).toBe(200);
+    expect((await stored(f, wednesday))!.periodOwnerId).toBeNull();
+    await f.reconcileAt('2026-09-22T09:00:00.000Z');
+    expect(await bonuses(f)).toEqual(WEEK_BONUSES);
+    expect((await f.at('2026-09-23T08:00:00.000Z', 'PATCH', `/api/occurrences/${wednesday}`, complete, f.p2)).statusCode).toBe(200);
+    await f.reconcileAt('2026-09-23T09:00:00.000Z');
+    expect(await bonuses(f)).toEqual(WEEK_BONUSES);
+  });
+
+  it("does not move reassigned open overdue work into the new assignee's ended week", async () => {
+    const f = await finalised();
+    const tuesday = await f.occurrence('2026-09-15');
+    expect((await f.at('2026-09-22T08:00:00.000Z', 'PATCH', `/api/occurrences/${tuesday}`, { action: 'uncomplete' }, f.p2)).statusCode).toBe(200);
+    const assign = await f.at('2026-09-22T08:30:00.000Z', 'PATCH', `/api/occurrences/${tuesday}`, { action: 'assign', assigneeId: f.p1._id.toHexString() });
+    expect(assign.statusCode, assign.body).toBe(200);
+    expect(((await stored(f, tuesday))!.periodOwnerId as ObjectId).equals(f.p2._id)).toBe(true);
+    await f.reconcileAt('2026-09-22T09:00:00.000Z');
+    // Person 2 still owns the missed item of that week; person 1 keeps the bonuses, and has no extra item in the ended week.
+    expect(await bonuses(f)).toEqual(WEEK_BONUSES.filter((entry) => entry.includes(' p1 ')));
+    // Assigning the person who already has it freezes and writes nothing.
+    const again = await captureWrites(f.t, () => f.call('PATCH', `/api/occurrences/${tuesday}`, { action: 'assign', assigneeId: f.p1._id.toHexString() }));
+    expect(again.writes).toEqual([]);
+  });
+
+  it('freezes nothing while the planned week is still running', async () => {
+    const f = await fixture();
+    const tuesday = await f.occurrence('2026-09-15');
+    expect((await f.at('2026-09-15T08:00:00.000Z', 'PATCH', `/api/occurrences/${tuesday}`, { action: 'assign', assigneeId: f.p1._id.toHexString() })).statusCode).toBe(200);
+    expect((await stored(f, tuesday))!.periodOwnerId).toBeUndefined();
+  });
+
+  it('never lets recorded work block or be late, also when an administrator corrects its date to before its completion', async () => {
+    const f = await finalised();
+    const task = (await f.t.db.collection(COLLECTIONS.tasks).findOne({}))!._id.toHexString();
+    // Person 1 records extra work on 23 September, then an administrator moves it into the ended week.
+    const recorded = await f.at('2026-09-23T08:00:00.000Z', 'POST', '/api/occurrences', { taskId: task, date: '2026-09-23', done: true, assigneeId: f.p1._id.toHexString() });
+    expect(recorded.statusCode, recorded.body).toBe(201);
+    const id = recorded.json<{ _id: string }>()._id;
+    const edit = await f.at('2026-09-23T09:00:00.000Z', 'PATCH', `/api/occurrences/${id}`, {
+      action: 'edit_completion',
+      date: '2026-09-16',
+      completedAt: '2026-09-23T08:00:00.000Z',
+      completedBy: f.p1._id.toHexString(),
+    });
+    expect(edit.statusCode, edit.body).toBe(200);
+    const result = await f.reconcileAt('2026-09-23T10:00:00.000Z');
+    expect(result).toMatchObject({ bonusesCreated: 0, bonusesRemoved: 0 });
+    expect(await bonuses(f)).toEqual(WEEK_BONUSES);
   });
 
   it('leaves the bonuses of a person whose occurrence cannot be read, and counts it as skipped', async () => {
@@ -454,5 +536,145 @@ describe('transfer', () => {
     expect(res.statusCode, res.body).toBe(200);
     expect(await bonuses(f)).toEqual([]);
     expect((await f.t.app.inject({ method: 'GET', url: '/api/settings' })).json()).toMatchObject({ bonusSchedule: [] });
+  });
+});
+
+describe('the statistics reset floor', () => {
+  it('keeps a purged week from paying out on what remains, for an item that was dragged forward out of it', async () => {
+    const f = await fixture();
+    const monday = await f.occurrence('2026-09-14');
+    const tuesday = await f.occurrence('2026-09-15');
+    expect((await f.at('2026-09-15T07:00:00.000Z', 'PATCH', `/api/occurrences/${tuesday}`, complete, f.p2)).statusCode).toBe(200);
+    // Person 1 never did Monday's task; it was dragged to 22 September and finished there.
+    expect((await f.at('2026-09-21T08:00:00.000Z', 'PATCH', `/api/occurrences/${monday}`, { action: 'reschedule', date: '2026-09-22' })).statusCode).toBe(200);
+    expect((await f.at('2026-09-22T08:00:00.000Z', 'PATCH', `/api/occurrences/${monday}`, complete, f.p1)).statusCode).toBe(200);
+
+    const res = await f.at('2026-09-22T09:00:00.000Z', 'DELETE', '/api/stats?before=2026-09-21');
+    expect(res.statusCode, res.body).toBe(200);
+    expect((await f.t.db.collection(COLLECTIONS.settings).findOne({}))!.bonusFloor).toBe('2026-09-21');
+    const reset = (await f.t.db.collection(COLLECTIONS.auditLog).find({ entity: 'settings', action: 'reset' }).toArray()).at(-1)!;
+    expect(reset.after).toMatchObject({ bonusFloor: '2026-09-21' });
+
+    // Only the dragged item survived the purge. The week it was planned in began before the boundary, so it pays nothing.
+    await f.reconcileAt('2026-09-22T10:00:00.000Z');
+    expect(await bonuses(f)).toEqual([]);
+
+    // Without the floor the same history would award the purged week.
+    await f.t.db.collection(COLLECTIONS.settings).updateOne({}, { $unset: { bonusFloor: '' } });
+    await f.reconcileAt('2026-09-22T11:00:00.000Z');
+    expect(await bonuses(f)).toEqual(['bonus_week_done p1 2026-09-14 5']);
+  });
+
+  it('applies the floor when the statistics start over, and only moves it forward', async () => {
+    const f = await fixture();
+    const monday = await f.occurrence('2026-09-14');
+    const tuesday = await f.occurrence('2026-09-15');
+    expect((await f.at('2026-09-15T07:00:00.000Z', 'PATCH', `/api/occurrences/${tuesday}`, complete, f.p2)).statusCode).toBe(200);
+    // Person 1 dragged Monday's task forward to 25 September instead of doing it.
+    expect((await f.at('2026-09-21T08:00:00.000Z', 'PATCH', `/api/occurrences/${monday}`, { action: 'reschedule', date: '2026-09-25' })).statusCode).toBe(200);
+    await f.reconcileAt('2026-09-21T09:00:00.000Z');
+    expect(await bonuses(f)).toEqual(WEEK_BONUSES.filter((entry) => entry.includes(' p2 ')));
+
+    // Starting over deletes the past, reopens the rest and sets the floor to today.
+    expect((await f.at('2026-09-22T08:00:00.000Z', 'DELETE', '/api/stats')).statusCode).toBe(200);
+    expect((await f.t.db.collection(COLLECTIONS.settings).findOne({}))!.bonusFloor).toBe('2026-09-22');
+    // The dragged item is finished late; the week it was planned in began before the floor.
+    expect((await f.at('2026-09-25T08:00:00.000Z', 'PATCH', `/api/occurrences/${monday}`, complete, f.p1)).statusCode).toBe(200);
+    await f.reconcileAt('2026-09-25T09:00:00.000Z');
+    expect(await bonuses(f)).toEqual([]);
+
+    // Without the floor the surviving item would pay out the week that was cleared.
+    await f.t.db.collection(COLLECTIONS.settings).updateOne({}, { $unset: { bonusFloor: '' } });
+    await f.reconcileAt('2026-09-25T10:00:00.000Z');
+    expect(await bonuses(f)).toEqual(['bonus_week_done p1 2026-09-14 5']);
+
+    // A later purge before an earlier day never moves the floor back.
+    await f.t.db.collection(COLLECTIONS.settings).updateOne({}, { $set: { bonusFloor: '2026-09-22' } });
+    expect((await f.at('2026-09-26T08:00:00.000Z', 'DELETE', '/api/stats?before=2026-09-10')).statusCode).toBe(200);
+    expect((await f.t.db.collection(COLLECTIONS.settings).findOne({}))!.bonusFloor).toBe('2026-09-22');
+  });
+});
+
+describe('writing the bonuses', () => {
+  it('still audits what steps 1 to 3 changed when the bonus step fails, and rethrows the failure', async () => {
+    const f = await fixture();
+    await doTheWeek(f);
+    const col = f.t.db.collection(COLLECTIONS.pointEntries);
+    const now = new Date('2026-09-21T01:00:00.000Z');
+    // Drift for step 3 to repair: an execution entry without an occurrence.
+    await col.insertOne({
+      _id: new ObjectId(),
+      key: `execution:${new ObjectId().toHexString()}`,
+      kind: 'execution',
+      personId: f.p1._id,
+      amount: 2,
+      date: now,
+      weekStart: now,
+      occurrenceId: null,
+      taskId: null,
+      titleSnapshot: 'Verdwaald',
+      source: 'live',
+      createdAt: now,
+      updatedAt: now,
+    });
+    // An anchor that is not a Monday makes the cycle calculation of step 4 throw.
+    await f.t.db.collection(COLLECTIONS.settings).updateOne({}, { $set: { cycleAnchorDate: '2026-09-15' } });
+    f.t.clock.set(now);
+    await expect(reconcilePoints(f.t.systemCtx(), 'nightly')).rejects.toThrow(RangeError);
+    const audit = await auditOf(f.t);
+    expect(audit).toHaveLength(1);
+    expect(audit[0]!.meta).toMatchObject({ removed: 1, bonusesCreated: 0, bonusesRemoved: 0 });
+    expect(await col.countDocuments({ titleSnapshot: 'Verdwaald' })).toBe(0);
+  });
+
+  it('only counts the writes that happened: a delete that missed its compare-and-set and a duplicate key are left out', async () => {
+    const f = await fixture();
+    await doTheWeek(f);
+    await f.reconcileAt('2026-09-21T01:00:00.000Z');
+    const entries = await findBonusPointEntries(f.t.db);
+    const [stale, gone, kept] = entries as [PointEntryDoc, PointEntryDoc, PointEntryDoc];
+    // Somebody changed the first entry after it was read: the compare-and-set misses.
+    await f.t.db.collection(COLLECTIONS.pointEntries).updateOne({ _id: stale._id }, { $set: { amount: 99 } });
+    const fresh = {
+      personId: f.p1._id,
+      amount: 5,
+      date: new Date('2026-08-30T22:00:00.000Z'),
+      weekStart: new Date('2026-08-23T22:00:00.000Z'),
+      periodStart: new Date('2026-08-23T22:00:00.000Z'),
+      occurrenceId: null,
+      taskId: null,
+      titleSnapshot: '',
+    };
+    const newKey = `bonus_week_done:${f.p1._id.toHexString()}:2026-08-24`;
+    const applied = await applyBonusEntryChanges(f.t.systemCtx(), {
+      deletes: [stale, gone],
+      inserts: [
+        { key: kept.key, kind: kept.kind, fields: fresh },
+        { key: newKey, kind: 'bonus_week_done', fields: fresh },
+      ],
+    });
+    expect(applied.error).toBeUndefined();
+    expect(applied.removed).toEqual([gone.key]);
+    expect(applied.created).toEqual([newKey]);
+    expect(await f.t.db.collection(COLLECTIONS.pointEntries).countDocuments({ _id: stale._id })).toBe(1);
+    expect((await f.t.db.collection(COLLECTIONS.pointEntries).findOne({ key: kept.key }))!.amount).toBe(kept.amount);
+  });
+
+  it('refuses an import whose bonus schedule holds a row that has not started yet', async () => {
+    const f = await fixture();
+    await doTheWeek(f);
+    await f.reconcileAt('2026-09-21T01:00:00.000Z');
+    const file = (await f.t.app.inject({ method: 'GET', url: '/api/export/json' })).json<ExportFile>();
+    file.collections.settings[0]!.bonusSchedule = [{ from: '2026-09-14', ...AMOUNTS }, { from: '2026-09-22', ...AMOUNTS }];
+    const capture = await captureWrites(f.t, () => f.call('POST', '/api/import/json?mode=replace&confirm=true', file as unknown as Record<string, unknown>));
+    expect(capture.result.statusCode).toBe(400);
+    expect(capture.result.json<{ details: { field: string; message: string }[] }>().details).toContainEqual({
+      field: 'collections.settings.0.bonusSchedule.1.from',
+      message: 'bonus_schedule_in_future',
+    });
+    expect(capture.writes).toEqual([]);
+    // A row that starts today is accepted.
+    file.collections.settings[0]!.bonusSchedule = [{ from: '2026-09-21', ...AMOUNTS }];
+    expect((await f.call('POST', '/api/import/json?mode=replace&confirm=true', file as unknown as Record<string, unknown>)).statusCode).toBe(200);
   });
 });
