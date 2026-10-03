@@ -1,8 +1,4 @@
-using System.Text.RegularExpressions;
 using ArchUnitNET.Domain;
-using ArchUnitNET.Domain.Dependencies;
-using ArchUnitNET.Domain.Extensions;
-using ArchUnitNET.Fluent.Conditions;
 using ArchUnitNET.Fluent;
 using static ArchUnitNET.Fluent.ArchRuleDefinition;
 
@@ -21,27 +17,6 @@ internal static class ArchitectureRules
     private const string QuestPdf = @"^QuestPDF(\..*)?$";
     private const string AspNetCore = @"^Microsoft\.AspNetCore(\..*)?$";
     private const string ExtensionsAi = @"^Microsoft\.Extensions\.AI(\..*)?$";
-
-    /// <summary>Mongo write operations; the .NET counterpart of the write methods lint-rule.test.ts forbids.</summary>
-    private const string MongoWriteMethod =
-        @"^(Insert|Update|Replace|Delete|BulkWrite|FindOneAnd|Drop|Create|Rename|Merge)";
-
-    /// <summary>
-    /// A condition that fails a type when any of its members calls a method matching <paramref name="forbidden"/>.
-    /// External types (BCL, MongoDB.Driver) are not loaded into the architecture, so their methods cannot be
-    /// listed up front; the call dependencies carry the target type and method name instead.
-    /// </summary>
-    private static Func<IType, ConditionResult> NotCalling(Func<MethodCallDependency, bool> forbidden) =>
-        type =>
-        {
-            var offending = type.Members
-                .SelectMany(m => m.GetMethodCallDependencies())
-                .Where(forbidden)
-                .Select(c => $"{c.Target.FullName}.{c.TargetMember.Name}")
-                .Distinct()
-                .ToList();
-            return new ConditionResult(type, offending.Count == 0, "calls " + string.Join(", ", offending));
-        };
 
     private static string Any(params string[] patterns) => string.Join("|", patterns);
 
@@ -98,19 +73,6 @@ internal static class ArchitectureRules
             .Should().NotDependOnAnyTypesThat().ResideInNamespaceMatching(MongoDb)
             .Because("MongoDB.Driver types live only in Adapters.Mongo");
 
-    /// <summary>
-    /// Writes only in the Mongo adapter: the counterpart of apps/server/test/lint-rule.test.ts. Nothing outside
-    /// Adapters.Mongo may call a MongoDB.Driver write method. The confinement rule above already covers every
-    /// use; this one names the intent so a failure message says "write".
-    /// </summary>
-    public static IArchRule MongoWritesOnlyInMongoAdapter(Layout l) =>
-        Types().That().Are(Ours(l)).And().AreNot(InNamespace(l.Adapter("Mongo"), "the Mongo adapter"))
-            .Should().FollowCustomCondition(
-                NotCalling(c => Regex.IsMatch(c.Target.Namespace.FullName, MongoDb)
-                                && Regex.IsMatch(c.TargetMember.Name, MongoWriteMethod)),
-                "not call MongoDB.Driver write methods")
-            .Because("data is written only in the Mongo adapter (counterpart of lint-rule.test.ts)");
-
     /// <summary>Domain and Application have no reference to MongoDB at all.</summary>
     public static IArchRule DomainAndApplicationDoNotKnowMongo(Layout l) =>
         Types().That().ResideInNamespaceMatching(Any(l.Domain, l.Application))
@@ -137,30 +99,12 @@ internal static class ArchitectureRules
             .Should().NotDependOnAnyTypesThat().ResideInNamespaceMatching(ExtensionsAi)
             .Because("Microsoft.Extensions.AI lives only in Adapters.Ai");
 
-    // -- Time -----------------------------------------------------------------------------------
-
-    /// <summary>
-    /// Decision: the clock adapter is a type whose name contains "Clock" inside the Host namespace (the
-    /// implementation of ForTellingTime is composed there). Every other type of ours must go through the port.
-    /// </summary>
-    public static IObjectProvider<IType> ClockAdapter(Layout l) =>
-        Types().That().ResideInNamespaceMatching(l.Host).And().HaveFullNameContaining("Clock")
-            .As("the clock adapter (a *Clock type in Host)");
-
-    public static IArchRule WallClockOnlyInClockAdapter(Layout l) =>
-        Types().That().Are(Ours(l)).And().AreNot(ClockAdapter(l))
-            .Should().FollowCustomCondition(
-                NotCalling(c => c.Target.FullName is "System.DateTime" or "System.DateTimeOffset"
-                                && Regex.IsMatch(c.TargetMember.Name, @"^get_(Now|UtcNow|Today)\(")),
-                "not read DateTime or DateTimeOffset Now, UtcNow or Today")
-            .Because("time comes through ForTellingTime; only the clock adapter reads the wall clock");
-
     // -- Ports ----------------------------------------------------------------------------------
 
-    /// <summary>Driven ports are interfaces named For* in Domain.Ports.Driven.</summary>
+    /// <summary>Interfaces in Domain.Ports.Driven are named For*; commands, DTOs and error records may sit beside them.</summary>
     public static IArchRule DrivenPortsAreNamedFor(Layout l) =>
-        Types().That().ResideInNamespaceMatching(l.DrivenPorts)
-            .Should().Be(Interfaces()).AndShould().HaveNameMatching(@"^For[A-Z]")
+        Interfaces().That().ResideInNamespaceMatching(l.DrivenPorts)
+            .Should().HaveNameMatching(@"^For[A-Z]")
             .Because("driven ports are interfaces named ForXxx")
             .WithoutRequiringPositiveResults();
 
@@ -171,10 +115,25 @@ internal static class ArchitectureRules
             .Because("a ForXxx interface is a driven port")
             .WithoutRequiringPositiveResults();
 
-    /// <summary>Driving ports are interfaces named I*Service in Domain.Ports.Driving.</summary>
+    /// <summary>Interfaces in Domain.Ports.Driving are named I*Service; commands, DTOs and error records may sit beside them.</summary>
     public static IArchRule DrivingPortsAreNamedService(Layout l) =>
-        Types().That().ResideInNamespaceMatching(l.DrivingPorts)
-            .Should().Be(Interfaces()).AndShould().HaveNameMatching(@"^I[A-Z]\w*Service$")
+        Interfaces().That().ResideInNamespaceMatching(l.DrivingPorts)
+            .Should().HaveNameMatching(@"^I[A-Z]\w*Service$")
             .Because("driving ports are interfaces named IXxxService")
             .WithoutRequiringPositiveResults();
+
+    // -- Assemblies keep to their own namespace root ----------------------------------------------
+
+    /// <summary>
+    /// Rings are judged by namespace, so an assembly must not host types of another ring. Every type in the
+    /// assembly (within <paramref name="scope"/>) must live under <paramref name="ringNamespace"/>; Program and
+    /// compiler-emitted attributes are exempt.
+    /// </summary>
+    public static IArchRule AssemblyKeepsToItsNamespaceRoot(string assemblyPattern, string ringNamespace, string scope) =>
+        Types().That().ResideInAssemblyMatching(assemblyPattern)
+            .And().ResideInNamespaceMatching(scope)
+            .And().DoNotResideInNamespaceMatching(@"^(System|Microsoft\.CodeAnalysis)(\..*)?$")
+            .And().DoNotHaveFullName("Program")
+            .Should().ResideInNamespaceMatching(ringNamespace)
+            .Because("an assembly holds only types under its own root namespace");
 }

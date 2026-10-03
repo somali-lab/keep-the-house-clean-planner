@@ -33,6 +33,44 @@ namespace Huishoudplanner.Fixtures.Bad.Domain
         public IMongoDatabase? Database { get; set; }
     }
 
+    /// <summary>Domain reads the clock inside an async lambda (compiled into a nested generated type).</summary>
+    public sealed class DomainReadsClockInAsyncLambda
+    {
+        public Func<Task<DateTime>> Reader() => async () =>
+        {
+            await Task.Yield();
+            return DateTime.UtcNow;
+        };
+    }
+
+    /// <summary>Domain reads the clock inside an async local function.</summary>
+    public sealed class DomainReadsClockInAsyncLocalFunction
+    {
+        public async Task<DateTimeOffset> Read()
+        {
+            await Task.Yield();
+            return Inner();
+
+            static DateTimeOffset Inner() => DateTimeOffset.Now;
+        }
+    }
+
+    /// <summary>Domain reads the clock inside an async iterator.</summary>
+    public sealed class DomainReadsClockInAsyncIterator
+    {
+        public async IAsyncEnumerable<DateTime> Stream()
+        {
+            await Task.Yield();
+            yield return DateTime.Today;
+        }
+    }
+
+    /// <summary>Domain uses TimeProvider.System directly.</summary>
+    public sealed class DomainUsesTimeProvider
+    {
+        public DateTimeOffset Now() => TimeProvider.System.GetUtcNow();
+    }
+
     /// <summary>Domain reads the wall clock.</summary>
     public sealed class DomainReadsClock
     {
@@ -45,8 +83,11 @@ namespace Huishoudplanner.Fixtures.Bad.Domain.Ports.Driven
     /// <summary>Driven port not named For*.</summary>
     public interface IStoringThings;
 
-    /// <summary>Named For* but not an interface.</summary>
+    /// <summary>Named For* but not an interface: allowed beside ports.</summary>
     public sealed class ForBeingAClass;
+
+    /// <summary>A command next to the ports: allowed.</summary>
+    public sealed record StoreThingCommand(string Name);
 }
 
 namespace Huishoudplanner.Fixtures.Bad.Domain.Ports.Driving
@@ -54,8 +95,11 @@ namespace Huishoudplanner.Fixtures.Bad.Domain.Ports.Driving
     /// <summary>Driving port not named I*Service.</summary>
     public interface ThingManager;
 
-    /// <summary>Named I*Service but not an interface.</summary>
+    /// <summary>Named I*Service but not an interface: allowed beside ports.</summary>
     public sealed class IThingService;
+
+    /// <summary>A command next to the ports: allowed.</summary>
+    public sealed record RenameThingCommand(string Name);
 }
 
 namespace Huishoudplanner.Fixtures.Bad.Domain.Misplaced
@@ -79,6 +123,24 @@ namespace Huishoudplanner.Fixtures.Bad.Application
     public sealed class ApplicationReachesHost
     {
         public Host.HostTarget? Target { get; set; }
+    }
+
+    /// <summary>Application writes to Mongo inside an async lambda.</summary>
+    public sealed class ApplicationWritesToMongoInAsyncLambda
+    {
+        public Func<IMongoCollection<BsonDocument>, Task> Writer() =>
+            async collection =>
+            {
+                await Task.Yield();
+                await collection.ReplaceOneAsync(FilterDefinition<BsonDocument>.Empty, new BsonDocument());
+            };
+    }
+
+    /// <summary>Application writes with an aggregation that ends in $out.</summary>
+    public sealed class ApplicationAggregatesIntoOut
+    {
+        public Task Write(IMongoCollection<BsonDocument> collection) =>
+            collection.Aggregate().Out("elsewhere").ToListAsync();
     }
 
     /// <summary>Application writes to Mongo directly.</summary>
@@ -190,6 +252,12 @@ namespace Huishoudplanner.Fixtures.Bad.Host
 {
     public sealed class HostTarget;
 
+    /// <summary>A type with Clock in its name that is not the exact SystemClock.</summary>
+    public sealed class NotQuiteSystemClock
+    {
+        public DateTime Now() => DateTime.UtcNow;
+    }
+
     /// <summary>Host type that reads the clock but is not a *Clock type.</summary>
     public sealed class Scheduler
     {
@@ -204,4 +272,10 @@ namespace Huishoudplanner.Fixtures.Bad.Adapters.Jobs.Time
     {
         public DateTime Today() => DateTime.Today;
     }
+}
+
+namespace Huishoudplanner.Fixtures.Bad.Elsewhere
+{
+    /// <summary>A type outside the root namespace of its assembly.</summary>
+    public sealed class StrayType;
 }

@@ -23,6 +23,8 @@ namespace Huishoudplanner.Fixtures.Good.Domain.Ports.Driven
         Task Save(Thing thing);
     }
 
+    public sealed record StoreThingCommand(string Name);
+
     public interface ForTellingTime
     {
         DateTimeOffset Now();
@@ -31,6 +33,8 @@ namespace Huishoudplanner.Fixtures.Good.Domain.Ports.Driven
 
 namespace Huishoudplanner.Fixtures.Good.Domain.Ports.Driving
 {
+    public sealed record RenameThingCommand(string Name);
+
     public interface IThingService
     {
         Task Rename(Thing thing);
