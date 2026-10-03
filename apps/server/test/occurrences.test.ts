@@ -63,7 +63,7 @@ beforeAll(async () => {
   ];
   const put = await inject('PUT', `/api/cycle-plans/${planId}/slots`, { slots });
   expect(put.statusCode, put.body).toBe(200);
-  expect((await inject('POST', '/api/jobs/nightly')).statusCode).toBe(200);
+  expect((await inject('POST', '/api/jobs/generation')).statusCode).toBe(200);
   t.clock.set('2026-09-16T08:00:00.000Z');
 });
 
@@ -176,7 +176,7 @@ describe('PATCH /api/occurrences/:id', () => {
   });
 
   it('claims an unclaimed occurrence implicitly for completedBy', async () => {
-    const occ = await find(twice, '2026-09-23');
+    const occ = await find(twice, '2026-09-16');
     expect(occ.assigneeId).toBeNull();
     const res = await patch(occ._id, { action: 'complete', completedBy: p2._id.toHexString() });
     expect(res.json()).toMatchObject({ assigneeId: p2._id.toHexString(), completedBy: p2._id.toHexString() });
@@ -352,6 +352,20 @@ describe('POST /api/occurrences/:id/claim', () => {
     const again = await inject('POST', `/api/occurrences/${occ._id}/claim`);
     expect(again.statusCode).toBe(409);
     expect(again.json()).toMatchObject({ code: 'already_claimed' });
+  });
+
+  it('cannot claim an unassigned occurrence that is skipped or done: 409 invalid_transition, nothing written', async () => {
+    const skipped = await find(twice, '2026-10-14');
+    expect(skipped.assigneeId).toBeNull();
+    expect((await patch(skipped._id, { action: 'skip' })).statusCode).toBe(200);
+    const { result } = await expectAudited(t, () => inject('POST', `/api/occurrences/${skipped._id}/claim`, undefined, p2), {
+      entity: 'occurrence',
+      action: 'assign',
+      count: 0,
+    });
+    expect(result.statusCode).toBe(409);
+    expect(result.json()).toMatchObject({ code: 'invalid_transition', details: { status: 'skipped', action: 'claim' } });
+    expect((await find(twice, '2026-10-14')).assigneeId).toBeNull();
   });
 
   it('cannot claim an occurrence that already has an assignee, 404 if unknown', async () => {
