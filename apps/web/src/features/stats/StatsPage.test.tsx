@@ -2,12 +2,13 @@ import type {
   CompletionResponse,
   DeviationsResponse,
   IntervalsResponse,
+  PointEntryView,
   PointsBalancesResponse,
   PointsEntriesResponse,
   WorkloadResponse,
 } from '@huishoudplanner/shared';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, onTestFinished } from 'vitest';
 import { ANNA, BRAM, makeUser, mockApi, storeProfile } from '../../test/fixtures.ts';
 import { makeRoom, makeSettings, makeTask, renderWithProviders } from '../../test/render.tsx';
 import { StatsPage } from './StatsPage.tsx';
@@ -432,9 +433,9 @@ describe('StatsPage: points', () => {
     from: '2026-09-14',
     to: '2026-09-20',
     balances: [
-      { personId: ANNA._id, points: 8, executions: 3 },
-      { personId: BRAM._id, points: 0, executions: 0 },
-      { personId: FORMER._id, points: 4, executions: 1 },
+      { personId: ANNA._id, points: 8, executions: 3, bonusPoints: 0 },
+      { personId: BRAM._id, points: 0, executions: 0, bonusPoints: 0 },
+      { personId: FORMER._id, points: 4, executions: 1, bonusPoints: 0 },
     ],
   };
   const entry = (id: string, personId: string, date: string, amount: number, title: string) => ({
@@ -445,6 +446,7 @@ describe('StatsPage: points', () => {
     amount,
     date,
     weekStart: '2026-09-14',
+    periodStart: null,
     occurrenceId: id,
     taskId: null,
     titleSnapshot: title,
@@ -481,9 +483,9 @@ describe('StatsPage: points', () => {
 
     const balances = await within(section).findByRole('table', { name: 'Punten per persoon' });
     expect(within(balances).getAllByRole('row').slice(1).map((row) => row.textContent)).toEqual([
-      'Anna83',
-      'Bram de Vries00',
-      'Carla (inactief)41',
+      'Anna830',
+      'Bram de Vries000',
+      'Carla (inactief)410',
     ]);
     const entries = await within(section).findByRole('table', { name: 'Posten van Anna' });
     expect(within(entries).getAllByRole('row').slice(1).map((row) => row.textContent)).toEqual([
@@ -526,10 +528,59 @@ describe('StatsPage: points', () => {
     );
   });
 
+  it('shows the bonus column and labels bonus entries by kind and period, with an icon', async () => {
+    const bonus = (id: string, kind: PointEntryView['kind'], date: string, periodStart: string, amount: number) => ({
+      ...entry(id, ANNA._id, date, amount, ''),
+      key: `${kind}:${ANNA._id}:${periodStart}`,
+      kind,
+      periodStart,
+      occurrenceId: null,
+    });
+    const original = ENTRIES[ANNA._id]!;
+    onTestFinished(() => {
+      ENTRIES[ANNA._id] = original;
+    });
+    ENTRIES[ANNA._id] = {
+      entries: [
+        bonus('f00000000000000000000001', 'bonus_week_ontime', '2026-09-20', '2026-09-14', 3),
+        bonus('f00000000000000000000002', 'bonus_week_done', '2026-09-20', '2026-09-14', 5),
+        bonus('f00000000000000000000003', 'bonus_cycle_done', '2026-10-04', '2026-09-07', 20),
+        bonus('f00000000000000000000004', 'bonus_cycle_ontime', '2026-10-04', '2026-09-07', 10),
+        entry('e00000000000000000000002', ANNA._id, '2026-09-14', 3, 'Stofzuigen'),
+      ],
+    };
+    setup(
+      WORKLOAD,
+      pointsRoutes({
+        from: '2026-09-14',
+        to: '2026-09-20',
+        balances: [{ personId: ANNA._id, points: 41, executions: 1, bonusPoints: 38 }],
+      }),
+    );
+    renderWithProviders(<StatsPage now={NOW} />);
+    await selectStatsTab('Punten');
+    const balances = await screen.findByRole('table', { name: 'Punten per persoon' });
+    expect(within(balances).getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual(['Persoon', 'Punten', 'Uitvoeringen', 'Bonus']);
+    expect(within(balances).getAllByRole('row')[1]!.textContent).toBe('Anna41138');
+
+    const entries = await screen.findByRole('table', { name: 'Posten van Anna' });
+    const rows = within(entries).getAllByRole('row').slice(1);
+    expect(rows.map((row) => row.textContent)).toEqual([
+      '20 september 2026Weekbonus: alles op tijd, week 38+3',
+      '20 september 2026Weekbonus: alles gedaan, week 38+5',
+      '4 oktober 2026Cyclusbonus: alles gedaan, 7 sep – 4 okt+20',
+      '4 oktober 2026Cyclusbonus: alles op tijd, 7 sep – 4 okt+10',
+      '14 september 2026Stofzuigen+3',
+    ]);
+    // The label is text next to an icon, so a bonus is not recognisable by colour or icon alone.
+    expect(rows[0]!.querySelector('svg')).not.toBeNull();
+    expect(rows[4]!.querySelector('svg')).toBeNull();
+  });
+
   it('says so when nobody earned points in the period', async () => {
     setup(
       WORKLOAD,
-      pointsRoutes({ from: '2026-09-14', to: '2026-09-20', balances: [{ personId: ANNA._id, points: 0, executions: 0 }] }),
+      pointsRoutes({ from: '2026-09-14', to: '2026-09-20', balances: [{ personId: ANNA._id, points: 0, executions: 0, bonusPoints: 0 }] }),
     );
     renderWithProviders(<StatsPage now={NOW} />);
     await selectStatsTab('Punten');

@@ -1,5 +1,6 @@
 import type {
   AiProviderSettings,
+  BonusScheduleRow,
   AiPromptTemplates,
   AiPrompts,
   CompletionControl,
@@ -31,6 +32,8 @@ export interface SettingsDoc {
   completionControl?: CompletionControl;
   promoteThreshold: number;
   dismissedPromotions: DismissedPromotion[];
+  /** Bonus amounts over time (ADR-0012), sorted by `from`; missing means no bonuses. */
+  bonusSchedule?: BonusScheduleRow[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -59,14 +62,20 @@ export async function insertSettingsIfMissing(
   return true;
 }
 
-/** Returns null if settings are missing; skips the write (and audit) when nothing changes. */
+/**
+ * Returns null if settings are missing; skips the write (and audit) when nothing changes. A
+ * `bonusSchedule` patch is audited against the schedule that was in force, `[]` when there was none.
+ */
 export async function updateSettings(
   ctx: AuditContext,
-  patch: UpdateSettingsInput & { dismissedPromotions?: DismissedPromotion[] },
+  patch: Omit<UpdateSettingsInput, 'periodBonuses'> & { dismissedPromotions?: DismissedPromotion[]; bonusSchedule?: BonusScheduleRow[] },
 ): Promise<SettingsDoc | null> {
   const before = await getSettings(ctx.db);
   if (!before) return null;
-  const diff = diffFields({ ...before }, { ...before, ...patch });
+  const diff = diffFields(
+    { ...before, ...(patch.bonusSchedule ? { bonusSchedule: before.bonusSchedule ?? [] } : {}) },
+    { ...before, ...patch },
+  );
   if (isEmptyDiff(diff)) return before;
 
   const after = await settingsCollection(ctx.db).findOneAndUpdate(

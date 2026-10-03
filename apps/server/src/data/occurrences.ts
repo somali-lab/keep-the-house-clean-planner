@@ -114,6 +114,19 @@ export function findDoneOccurrences(db: Db): Promise<OccurrenceDoc[]> {
   return occurrencesCollection(db).find({ status: 'done' }).toArray();
 }
 
+/** The fields of an occurrence that week and cycle bonuses need (ADR-0012). */
+export type BonusOccurrenceDoc = Pick<
+  OccurrenceDoc,
+  '_id' | 'status' | 'plannedDate' | 'date' | 'recordedDone' | 'assigneeId' | 'completedBy' | 'completedAt'
+>;
+
+/** Every occurrence, with a projection of seven fields; the bonus ledger is reconciled against these (ADR-0012). */
+export function findBonusOccurrences(db: Db): Promise<BonusOccurrenceDoc[]> {
+  return occurrencesCollection(db)
+    .find({}, { projection: { status: 1, plannedDate: 1, date: 1, recordedDone: 1, assigneeId: 1, completedBy: 1, completedAt: 1 } })
+    .toArray() as Promise<BonusOccurrenceDoc[]>;
+}
+
 /**
  * Writes missing points snapshots as a bulk migration: `updatedAt` stays and nothing is audited
  * per occurrence, because the reconciliation records one summary. The filter keeps a snapshot

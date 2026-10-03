@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MAX_BONUS_POINTS, MIN_BONUS_POINTS } from '../bonuses.ts';
 import { isMonday } from '../time.ts';
 import { dayKeySchema, objectIdSchema, timestampsSchema, weekdaySchema } from './common.ts';
 import { intervalSchema } from './intervals.ts';
@@ -80,6 +81,25 @@ export type DismissedPromotion = z.infer<typeof dismissedPromotionSchema>;
 const uniqueIntervalKeys = (intervals: { key: string }[]) =>
   new Set(intervals.map((i) => i.key)).size === intervals.length;
 
+/** One amount of a week or cycle bonus: an integer from 0 to 1000; 0 disables that kind (ADR-0012). */
+export const bonusAmountSchema = z.number().int().min(MIN_BONUS_POINTS).max(MAX_BONUS_POINTS);
+
+export const bonusAmountsSchema = z.object({
+  weekDone: bonusAmountSchema,
+  weekOnTime: bonusAmountSchema,
+  cycleDone: bonusAmountSchema,
+  cycleOnTime: bonusAmountSchema,
+});
+
+/** The amounts that apply to every period whose last day is on or after `from`, until the next row. */
+export const bonusScheduleRowSchema = bonusAmountsSchema.extend({ from: dayKeySchema });
+export type BonusScheduleRowInput = z.infer<typeof bonusScheduleRowSchema>;
+
+/** Sorted by `from`, with unique `from` days. */
+export const bonusScheduleSchema = z
+  .array(bonusScheduleRowSchema)
+  .refine((rows) => rows.every((row, i) => i === 0 || rows[i - 1]!.from < row.from), 'bonus_schedule_not_sorted');
+
 export const settingsSchema = z
   .object({
     cycleAnchorDate: anchorDateSchema,
@@ -93,6 +113,8 @@ export const settingsSchema = z
     completionControl: completionControlSchema.optional(),
     promoteThreshold: z.number().int().min(2),
     dismissedPromotions: z.array(dismissedPromotionSchema),
+    /** Bonus amounts over time (ADR-0012); a missing list means no bonuses. The API always returns it. */
+    bonusSchedule: bonusScheduleSchema.optional(),
   })
   .extend(timestampsSchema.shape);
 export type Settings = z.infer<typeof settingsSchema>;
@@ -107,6 +129,8 @@ export const updateSettingsInputSchema = z
     aiPromptTemplates: aiPromptTemplatesSchema,
     completionControl: completionControlSchema,
     promoteThreshold: z.number().int().min(2),
+    /** The amounts that apply from today on; the server writes the schedule row (administrators only). */
+    periodBonuses: bonusAmountsSchema,
   })
   .partial();
 export type UpdateSettingsInput = z.infer<typeof updateSettingsInputSchema>;

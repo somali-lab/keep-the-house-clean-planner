@@ -1,12 +1,13 @@
 import { z } from 'zod';
 import { dayKeySchema, isoDateTimeSchema, objectIdSchema } from './common.ts';
+import { BONUS_KINDS } from '../bonuses.ts';
 import { MAX_TASK_POINTS, MIN_TASK_POINTS } from '../points.ts';
 import { daysBetween, isDayKey } from '../time.ts';
 
 /** Points value of a task: an integer from 0 to 100; 0 means the task earns no points (ADR-0011). */
 export const taskPointsSchema = z.number().int().min(MIN_TASK_POINTS).max(MAX_TASK_POINTS);
 
-export const pointEntryKindSchema = z.enum(['execution']);
+export const pointEntryKindSchema = z.enum(['execution', ...BONUS_KINDS]);
 export type PointEntryKind = z.infer<typeof pointEntryKindSchema>;
 
 /** The path that wrote the current value of a ledger entry. */
@@ -26,6 +27,8 @@ export const pointEntryViewSchema = z.object({
   amount: z.number().int(),
   date: dayKeySchema,
   weekStart: dayKeySchema,
+  /** First day of the week or cycle a bonus is for; null for an execution (ADR-0012). */
+  periodStart: dayKeySchema.nullable(),
   occurrenceId: objectIdSchema.nullable(),
   taskId: objectIdSchema.nullable(),
   titleSnapshot: z.string(),
@@ -69,8 +72,10 @@ export const personBalanceSchema = z.object({
   personId: objectIdSchema,
   /** Sum of the entries in the range; can be negative once redemptions exist. */
   points: z.number().int(),
-  /** Number of entries in the range. */
+  /** Number of entries of kind execution in the range. */
   executions: z.number().int().min(0),
+  /** Sum of the week and cycle bonus entries in the range; included in `points`. */
+  bonusPoints: z.number().int(),
 });
 export type PersonBalance = z.infer<typeof personBalanceSchema>;
 
@@ -101,6 +106,15 @@ export const pointsCorrectionSchema = z.object({
 });
 export type PointsCorrection = z.infer<typeof pointsCorrectionSchema>;
 
+/** One bonus entry that was created or removed by a reconciliation (ADR-0012). */
+export const pointsBonusChangeSchema = z.object({
+  key: z.string(),
+  personId: objectIdSchema,
+  amount: z.number().int(),
+  change: z.enum(['created', 'removed']),
+});
+export type PointsBonusChange = z.infer<typeof pointsBonusChangeSchema>;
+
 export const pointsRecomputeResultSchema = z.object({
   trigger: pointsRecomputeTriggerSchema,
   /** Tasks that got the default points for their duration. */
@@ -112,11 +126,17 @@ export const pointsRecomputeResultSchema = z.object({
   removed: z.number().int().min(0),
   /** Done occurrences with points but nobody to credit; they earn no entry. */
   unattributed: z.number().int().min(0),
-  /** Done occurrences that could not be read (an invalid date, for example); they are left as they are. */
+  /** Occurrences that could not be read (an invalid date, for example); they and the bonuses of their owner are left as they are. */
   skipped: z.number().int().min(0),
   /** The first corrections only, at most {@link MAX_POINTS_CORRECTIONS}; `correctionsTotal` counts all of them. */
   corrections: z.array(pointsCorrectionSchema).max(MAX_POINTS_CORRECTIONS),
   correctionsTotal: z.number().int().min(0),
   correctionsTruncated: z.boolean(),
+  bonusesCreated: z.number().int().min(0),
+  bonusesRemoved: z.number().int().min(0),
+  /** The first created or removed bonus entries only, at most {@link MAX_POINTS_CORRECTIONS}; `bonusChangesTotal` counts all of them. */
+  bonusChanges: z.array(pointsBonusChangeSchema).max(MAX_POINTS_CORRECTIONS),
+  bonusChangesTotal: z.number().int().min(0),
+  bonusChangesTruncated: z.boolean(),
 });
 export type PointsRecomputeResult = z.infer<typeof pointsRecomputeResultSchema>;

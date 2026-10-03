@@ -1,4 +1,4 @@
-import { updateSettingsInputSchema } from '@huishoudplanner/shared';
+import { scheduleWithAmounts, toDayKey, updateSettingsInputSchema } from '@huishoudplanner/shared';
 import type { FastifyPluginAsync } from 'fastify';
 import { getSettings, updateSettings } from '../data/settings.ts';
 import { intervalKeysInUse } from '../data/tasks.ts';
@@ -7,11 +7,16 @@ import { HttpError, notFound, parseOrThrow } from '../http/errors.ts';
 import { toApi } from '../http/serialize.ts';
 import { auditContext, requireAdmin } from '../identity/index.ts';
 
+/** The API always returns the bonus schedule; a missing list means no bonuses. */
+function withSchedule<T extends { bonusSchedule?: unknown }>(settings: T) {
+  return { ...settings, bonusSchedule: settings.bonusSchedule ?? [] };
+}
+
 export const settingsRoutes: FastifyPluginAsync = async (app) => {
   app.get('/settings', async () => {
     const settings = await getSettings(app.deps.db);
     if (!settings) throw notFound('settings');
-    return toApi(settings);
+    return toApi(withSchedule(settings));
   });
 
   app.patch('/settings', { preHandler: requireAdmin }, async (request) => {
@@ -30,8 +35,18 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       }
     }
 
-    const settings = await updateSettings(auditContext(request), input);
+    // The amounts apply from today on: the server turns them into a schedule row, and equal amounts write nothing (ADR-0012).
+    const { periodBonuses, ...rest } = input;
+    const patch: Parameters<typeof updateSettings>[1] = { ...rest };
+    if (periodBonuses) {
+      const today = toDayKey(app.deps.clock.now(), current.timezone);
+      const schedule = current.bonusSchedule ?? [];
+      const next = scheduleWithAmounts(schedule, periodBonuses, today);
+      if (JSON.stringify(next) !== JSON.stringify(schedule)) patch.bonusSchedule = next;
+    }
+
+    const settings = await updateSettings(auditContext(request), patch);
     if (!settings) throw notFound('settings');
-    return toApi(settings);
+    return toApi(withSchedule(settings));
   });
 };

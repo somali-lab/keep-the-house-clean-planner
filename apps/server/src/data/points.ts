@@ -1,11 +1,14 @@
 import { MongoBulkWriteError, MongoServerError, ObjectId, type AnyBulkWriteOperation, type Db } from 'mongodb';
-import type { PointEntryKind, PointEntrySource, PointsSyncReason } from '@huishoudplanner/shared';
+import { BONUS_KINDS, type PointEntryKind, type PointEntrySource, type PointsSyncReason } from '@huishoudplanner/shared';
 import type { AuditContext } from '../audit/context.ts';
 import { diffFields, isEmptyDiff } from '../audit/diff.ts';
 import { record } from '../audit/record.ts';
 import { COLLECTIONS } from './db.ts';
 
-/** One entry of the points ledger (ADR-0011). Entries of kind 'execution' are derived from one occurrence. */
+/**
+ * One entry of the points ledger (ADR-0011, ADR-0012). An entry of kind 'execution' is derived from
+ * one occurrence; the four bonus kinds are derived from the occurrences of a person in one period.
+ */
 export interface PointEntryDoc {
   _id: ObjectId;
   /** Unique; 'execution:<occurrenceId>'. */
@@ -18,6 +21,8 @@ export interface PointEntryDoc {
   date: Date;
   /** Local midnight of that week's Monday. */
   weekStart: Date;
+  /** Local midnight of the first day of the week or cycle a bonus is for; null or missing for an execution. */
+  periodStart?: Date | null;
   occurrenceId: ObjectId | null;
   /** Null for a one-off task. */
   taskId: ObjectId | null;
@@ -33,7 +38,7 @@ export interface PointEntryDoc {
 export type PointEntryFields = Pick<
   PointEntryDoc,
   'personId' | 'amount' | 'date' | 'weekStart' | 'occurrenceId' | 'taskId' | 'titleSnapshot'
->;
+> & { periodStart?: Date | null };
 
 /** Fixed id of the ledger as a whole, the audit entityId of a reconciliation summary (like SETTINGS_ID). */
 export const POINTS_LEDGER_ID = new ObjectId('000000000000000000000002');
@@ -44,12 +49,20 @@ export const pointEntriesCollection = (db: Db) => db.collection<PointEntryDoc>(C
 
 export const executionKey = (occurrenceId: ObjectId): string => `execution:${occurrenceId.toHexString()}`;
 
+/** Kinds that are derived from the occurrences; the statistics reset removes these and never another kind. */
+const DERIVED_KINDS: PointEntryKind[] = ['execution', ...BONUS_KINDS];
+
 export function findPointEntryByKey(db: Db, key: string): Promise<PointEntryDoc | null> {
   return pointEntriesCollection(db).findOne({ key });
 }
 
 export function findPointEntries(db: Db, filter: Partial<Pick<PointEntryDoc, 'personId' | 'kind'>> = {}): Promise<PointEntryDoc[]> {
   return pointEntriesCollection(db).find(filter).sort({ date: -1, _id: 1 }).toArray();
+}
+
+/** Every stored week and cycle bonus entry (ADR-0012). */
+export function findBonusPointEntries(db: Db): Promise<PointEntryDoc[]> {
+  return pointEntriesCollection(db).find({ kind: { $in: [...BONUS_KINDS] } }).sort({ date: -1, _id: 1 }).toArray();
 }
 
 interface AuditMeta {
@@ -70,7 +83,7 @@ export async function insertPointEntry(
   meta: AuditMeta,
 ): Promise<{ inserted: true; doc: PointEntryDoc } | { inserted: false }> {
   const now = ctx.clock.now();
-  const doc: PointEntryDoc = { _id: new ObjectId(), key, kind, ...fields, source, createdAt: now, updatedAt: now };
+  const doc: PointEntryDoc = { _id: new ObjectId(), key, kind, ...fields, periodStart: fields.periodStart ?? null, source, createdAt: now, updatedAt: now };
   try {
     await pointEntriesCollection(ctx.db).insertOne(doc);
   } catch (err) {
@@ -90,7 +103,7 @@ export async function updatePointEntry(
   source: PointEntrySource,
   meta: AuditMeta,
 ): Promise<boolean> {
-  const diff = diffFields({ ...current }, { ...current, ...fields }, { ignore: [...AUDIT_IGNORE, 'source'] });
+  const diff = diffFields({ ...current }, { ...current, ...fields }, { ignore: [...AUDIT_IGNORE, 'source', 'periodStart'] });
   if (isEmptyDiff(diff)) return false;
   // The diff holds changed fields only, so the title and amount travel in the meta for the history feed.
   const auditMeta = { ...meta, titleSnapshot: fields.titleSnapshot, amount: fields.amount };
@@ -143,7 +156,7 @@ export async function applyPointEntryChanges(
   const operations: AnyBulkWriteOperation<PointEntryDoc>[] = [
     ...changes.inserts.map(({ key, kind, fields }) => ({
       insertOne: {
-        document: { _id: new ObjectId(), key, kind, ...fields, source: 'backfill' as const, createdAt: now, updatedAt: now },
+        document: { _id: new ObjectId(), key, kind, ...fields, periodStart: fields.periodStart ?? null, source: 'backfill' as const, createdAt: now, updatedAt: now },
       },
     })),
     // Compare-and-set: an entry that a live sync changed after it was read is left alone; the next run sees it again.
@@ -175,25 +188,39 @@ export function findPointEntriesInRange(db: Db, personId: ObjectId, from: Date, 
 export interface PointTotal {
   personId: ObjectId;
   points: number;
+  /** Entries of kind execution. */
   executions: number;
+  /** Sum of the week and cycle bonus entries; part of `points`. */
+  bonusPoints: number;
 }
 
-/** Sum and count of the entries per person; `range` bounds are `[from, to)` and both optional. */
+/** Sum and counts of the entries per person; `range` bounds are `[from, to)` and both optional. */
 export function sumPointEntries(db: Db, range: { from?: Date; to?: Date }): Promise<PointTotal[]> {
   const date = { ...(range.from ? { $gte: range.from } : {}), ...(range.to ? { $lt: range.to } : {}) };
   return pointEntriesCollection(db)
     .aggregate<PointTotal>([
       { $match: Object.keys(date).length > 0 ? { date } : {} },
-      { $group: { _id: '$personId', points: { $sum: '$amount' }, executions: { $sum: 1 } } },
-      { $project: { _id: 0, personId: '$_id', points: 1, executions: 1 } },
+      {
+        $group: {
+          _id: '$personId',
+          points: { $sum: '$amount' },
+          executions: { $sum: { $cond: [{ $eq: ['$kind', 'execution'] }, 1, 0] } },
+          bonusPoints: { $sum: { $cond: [{ $in: ['$kind', [...BONUS_KINDS]] }, '$amount', 0] } },
+        },
+      },
+      { $project: { _id: 0, personId: '$_id', points: 1, executions: 1, bonusPoints: 1 } },
     ])
     .toArray();
 }
 
-/** Removes every execution entry, or only those dated before `before`. Returns the number removed. */
-export async function deleteExecutionPointEntries(db: Db, before?: Date): Promise<number> {
+/**
+ * Removes the derived entries (executions and bonuses, never another kind), or only those dated
+ * before `before`. A bonus is dated on the last day of its period, so a purge removes the bonuses
+ * of the periods that ended before the boundary. Returns the number removed.
+ */
+export async function deleteDerivedPointEntries(db: Db, before?: Date): Promise<number> {
   const result = await pointEntriesCollection(db).deleteMany({
-    kind: 'execution',
+    kind: { $in: DERIVED_KINDS },
     ...(before ? { date: { $lt: before } } : {}),
   });
   return result.deletedCount;
@@ -202,4 +229,50 @@ export async function deleteExecutionPointEntries(db: Db, before?: Date): Promis
 /** Removes the whole ledger and returns how many entries went; an import rebuilds it from the imported occurrences. */
 export async function clearPointEntries(db: Db): Promise<number> {
   return (await pointEntriesCollection(db).deleteMany({})).deletedCount;
+}
+
+export interface BonusEntryChanges {
+  inserts: { key: string; kind: PointEntryKind; fields: PointEntryFields }[];
+  deletes: PointEntryDoc[];
+}
+
+/**
+ * Applies the bonus differences of a reconciliation as one ordered bulk write, deletes first
+ * (ADR-0012). A bonus entry is only inserted or deleted, never updated: person and period are part
+ * of its key. Deletes are compare-and-set on the entry that was read. No per-entry audit entry: the
+ * caller records one summary. Inserted entries get source 'recompute'.
+ */
+export async function applyBonusEntryChanges(
+  ctx: AuditContext,
+  changes: BonusEntryChanges,
+): Promise<{ created: number; removed: number }> {
+  const now = ctx.clock.now();
+  const operations: AnyBulkWriteOperation<PointEntryDoc>[] = [
+    ...changes.deletes.map((current) => ({ deleteOne: { filter: { ...sameAsRead(current), key: current.key } } })),
+    ...changes.inserts.map(({ key, kind, fields }) => ({
+      insertOne: {
+        document: {
+          _id: new ObjectId(),
+          key,
+          kind,
+          ...fields,
+          periodStart: fields.periodStart ?? null,
+          source: 'recompute' as const,
+          createdAt: now,
+          updatedAt: now,
+        },
+      },
+    })),
+  ];
+  if (operations.length === 0) return { created: 0, removed: 0 };
+  try {
+    const result = await pointEntriesCollection(ctx.db).bulkWrite(operations, { ordered: true });
+    return { created: result.insertedCount, removed: result.deletedCount };
+  } catch (err) {
+    // Only this reconciliation writes bonuses, so a duplicate key means an earlier run of it already wrote the entry.
+    if (!(err instanceof MongoBulkWriteError)) throw err;
+    const writeErrors = Array.isArray(err.writeErrors) ? err.writeErrors : [err.writeErrors];
+    if (writeErrors.some((e) => e.code !== 11000)) throw err;
+    return { created: err.result.insertedCount, removed: err.result.deletedCount };
+  }
 }

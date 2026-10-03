@@ -86,7 +86,12 @@ const SCENARIOS: Scenario[] = [
   {
     route: 'PATCH /api/settings',
     audit: { entity: 'settings', action: 'update' },
-    run: () => call('PATCH', '/api/settings', { vacationRanges: [{ from: '2026-12-24', to: '2026-12-31' }] }),
+    // The amounts of the week and cycle bonuses become a schedule row in the same settings update (ADR-0012).
+    run: () =>
+      call('PATCH', '/api/settings', {
+        vacationRanges: [{ from: '2026-12-24', to: '2026-12-31' }],
+        periodBonuses: { weekDone: 5, weekOnTime: 3, cycleDone: 20, cycleOnTime: 10 },
+      }),
   },
   {
     route: 'POST /api/tasks',
@@ -258,7 +263,7 @@ const SCENARIOS: Scenario[] = [
     run: () => call('DELETE', '/api/stats'),
   },
   {
-    // Repairs drift: an entry without an occurrence is removed and the removal is audited once, as a summary.
+    // Repairs drift: an execution entry without an occurrence and a bonus entry that no set supports are removed, and both removals are audited once, as a summary.
     route: 'POST /api/points/recompute',
     audit: { entity: 'points', action: 'recompute', count: 1 },
     prepare: async () => {
@@ -276,6 +281,23 @@ const SCENARIOS: Scenario[] = [
         taskId: null,
         titleSnapshot: 'Verdwaald',
         source: 'live',
+        createdAt: now,
+        updatedAt: now,
+      });
+      // eslint-disable-next-line no-restricted-syntax -- creates drift (a bonus that no occurrence supports) that only a reconciliation repairs
+      await t.db.collection(COLLECTIONS.pointEntries).insertOne({
+        _id: new ObjectId(),
+        key: `bonus_week_done:${p1._id.toHexString()}:2026-08-31`,
+        kind: 'bonus_week_done',
+        personId: p1._id,
+        amount: 5,
+        date: now,
+        weekStart: now,
+        periodStart: now,
+        occurrenceId: null,
+        taskId: null,
+        titleSnapshot: '',
+        source: 'recompute',
         createdAt: now,
         updatedAt: now,
       });

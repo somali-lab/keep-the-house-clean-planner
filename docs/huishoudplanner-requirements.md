@@ -133,21 +133,23 @@ pointsOverride: number | null    // points a one-off task was recorded with (0..
 
 ### `pointEntries`
 
-The points ledger: one entry per execution that earned points (see 4.12).
+The points ledger: one entry per execution that earned points, and one entry per week or cycle bonus that was earned (see 4.12).
 
 ```
 _id,
-key: string,                     // unique; 'execution:<occurrenceId>'
-kind: 'execution',
+key: string,                     // unique; 'execution:<occurrenceId>' or '<kind>:<personId>:<periodStart>'
+kind: 'execution' | 'bonus_week_done' | 'bonus_week_ontime' | 'bonus_cycle_done' | 'bonus_cycle_ontime',
 personId,                        // the person credited
-amount: integer,                 // signed; an execution is >= 1
-date, weekStart,                 // local midnight of the occurrence's date and of that week's Monday
-occurrenceId | null, taskId | null,   // taskId null = one-off task
-titleSnapshot: string,           // the occurrence's task name, so the entry stays readable
+amount: integer,                 // signed; an execution or a bonus is >= 1
+date, weekStart,                 // local midnight of the occurrence's date (a bonus: the last day of its period) and of that week's Monday
+periodStart | null,              // local midnight of the first day of the week or cycle of a bonus; null for an execution
+occurrenceId | null, taskId | null,   // taskId null = one-off task; both null for a bonus
+titleSnapshot: string,           // the occurrence's task name, so the entry stays readable; empty for a bonus
 source: 'live' | 'backfill' | 'recompute'
 ```
 
 - An entry of kind `execution` is a pure function of one occurrence; it is changed in place or removed, never compensated by a second entry.
+- An entry of one of the four bonus kinds is a pure function of the occurrences of one person in one period, the cycle anchor, the timezone, today and the bonus schedule (see 4.12). It is only inserted or deleted, never updated; a cycle is keyed by its first day, not by an index, because the anchor can move.
 
 ### `auditLog`
 
@@ -173,8 +175,11 @@ aiProvider: { type, endpoint, model, timeoutSeconds },
 aiPrompts, aiPromptTemplates,
 completionControl: 'circle' | 'thumb',
 promoteThreshold,
-dismissedPromotions: [ ... ]
+dismissedPromotions: [ ... ],
+bonusSchedule: [{ from, weekDone, weekOnTime, cycleDone, cycleOnTime }]   // sorted by `from`, unique days; amounts are integers 0..1000; missing = []
 ```
+
+- `bonusSchedule` holds the amounts of the week and cycle bonuses over time (see 4.12). The amounts of a period are those of the last row whose `from` is on or before the period's last day; before the first row every amount is `0`, so the default `[]` leaves bonuses disabled.
 
 ### Indexes
 
@@ -266,11 +271,11 @@ ratio     = daysSince / intervalPeriodDays
 
 - A period is selected either as a number of recent cycles or as a range of calendar weeks.
 - Reports: an overview, fairness between users, workload per user over time, completion rate per task, room and user, configured versus actually achieved intervals, deviations between planned and actual days, and points (see 4.12).
-- The Points report shows the balance and the number of executions of every person, and a table with the ledger entries of one chosen person. It covers the period selected for the other reports: the current week and the weeks before it, or the current cycle and the cycles before it, both ends included. A person who is no longer active is listed when they earned points in the period.
+- The Points report shows the balance, the number of executions and the bonus points of every person, and a table with the ledger entries of one chosen person. A bonus entry is labelled by its kind and period, for example "Weekbonus: alles op tijd, week 40" or "Cyclusbonus: alles gedaan, 7 sep – 4 okt", with an icon and the text, not by colour alone. It covers the period selected for the other reports: the current week and the weeks before it, or the current cycle and the cycles before it, both ends included. A person who is no longer active is listed when they earned points in the period.
 - Every chart has an equivalent table, so the same numbers are available without interpreting a graphic.
 - One-off tasks count like any other occurrence in workload, fairness, the overview and the completion totals per user. Per task, all one-off tasks share one combined row labelled "One-off Task". Per room they count under the room recorded on the occurrence, and one-off tasks without a room share one row without a room. They are left out of the interval report (they have no configured interval) and out of the deviation report, as are recorded extra executions, because nothing was planned.
 - An administrator can reset statistics completely, or purge only the completion data before a chosen date. Starting over deletes recorded extra executions instead of reopening them, because they have no planned state to return to.
-- A reset removes the points that belong to the history it removes (see 4.12). Starting over deletes every ledger entry of kind `execution` and clears the points snapshots of the occurrences it reopens. Purging before a date deletes the entries dated before that date and leaves the others. The number of removed entries is recorded as `removedPointEntries` in the one reset audit entry; no audit entry is written per removed ledger entry.
+- A reset removes the points that belong to the history it removes (see 4.12). Starting over deletes every derived ledger entry, the executions and the four bonus kinds, and clears the points snapshots of the occurrences it reopens; an entry of another kind is never deleted. Purging before a date deletes the derived entries dated before that date and leaves the others; a bonus is dated on the last day of its period, so these are the bonuses of the periods that ended before the boundary, and a period that straddles the boundary keeps its entries until the next reconciliation evaluates it on the history that remains. The number of removed entries is recorded as `removedPointEntries` in the one reset audit entry; no audit entry is written per removed ledger entry.
 
 ### 4.8 Completion management
 
@@ -284,18 +289,18 @@ Every state change is recorded with who, when, which entity, which action, the c
 
 - Completing, undoing, skipping, rescheduling, assigning and claiming are each their own entry. Undoing is a new entry, never the removal of the original.
 - Creating an extra execution writes one `create` entry with its final fields, including status and completion, and `meta: { origin: 'adhoc', kind: 'extra' | 'one_off', recordedDone, requestId }` (a one-off task uses `kind: 'one_off'`). Retracting recorded work is the one exception to the previous rule: the occurrence is deleted, so the entry is a `delete` with `meta.reason: 'retract'` that keeps the removed fields. A replayed request writes no entry.
-- Task, room, user, plan and settings changes record old and new values per changed field.
+- Task, room, user, plan and settings changes record old and new values per changed field. Setting the bonus amounts is a settings `update` that records the bonus schedule before and after.
 - Applying an AI proposal is recorded with an AI origin, so a machine-made plan is always distinguishable from a hand-made one.
 - Generation is recorded with a system origin, so an unexpected occurrence can be traced to the run that created it.
 - A change to a ledger entry (see 4.12) is its own entry, entity `points` with `create`, `update` or `delete`, the entry's fields before and after, and `meta: { occurrenceId, reason }` where the reason is `complete`, `recorded`, `uncomplete`, `retract` or `correction`. A check-off therefore writes at most three entries: the occurrence, the task's `lastCompletedAt` and the points entry. The history feed renders a points entry as what the person gained or lost.
-- A reconciliation of the ledger (see 4.12) that changes anything records one summary entry: entity `points`, a fixed ledger id, action `recompute`, the actor that started it (the system for startup and the scheduled nightly run, the requesting profile for an import, a manual nightly run and the recompute endpoint), and `meta: { trigger, tasksDefaulted, snapshotsSet, created, updated, removed, unattributed, skipped, corrections, correctionsTotal, correctionsTruncated }`. `trigger` is `startup`, `nightly`, `import` or `admin`. `corrections` lists, for the entries that were changed or removed, its key and its old and new person and amount, because such a change means the ledger had drifted from the occurrences; it holds at most 100 items, `correctionsTotal` counts all of them and `correctionsTruncated` says whether it was cut. `skipped` counts occurrences that could not be read and were left as they are. Entries that are only created are counted. No entry is written per ledger entry, and a run that changes nothing writes and records nothing.
+- A reconciliation of the ledger (see 4.12) that changes anything records one summary entry: entity `points`, a fixed ledger id, action `recompute`, the actor that started it (the system for startup and the scheduled nightly run, the requesting profile for an import, a manual nightly run and the recompute endpoint), and `meta: { trigger, tasksDefaulted, snapshotsSet, created, updated, removed, unattributed, skipped, corrections, correctionsTotal, correctionsTruncated, bonusesCreated, bonusesRemoved, bonusChanges, bonusChangesTotal, bonusChangesTruncated }`. `trigger` is `startup`, `nightly`, `import` or `admin`. `corrections` lists, for the entries that were changed or removed, its key and its old and new person and amount, because such a change means the ledger had drifted from the occurrences; it holds at most 100 items, `correctionsTotal` counts all of them and `correctionsTruncated` says whether it was cut. `skipped` counts occurrences that could not be read and were left as they are. `bonusChanges` lists, for each week or cycle bonus that was created or removed, its key, person and amount and `created` or `removed`, with the same limit of 100 items, `bonusChangesTotal` and `bonusChangesTruncated`, so the history shows who earned or lost which bonus. Entries that are only created are counted. No entry is written per ledger entry, and a run that changes nothing writes and records nothing.
 - A change that changes nothing writes nothing and records nothing.
 - The log is append-only. No interface path edits an entry. An optional retention job removes entries older than a configured age and is the only exception.
 - History is viewable per entity and as a global chronological feed, filterable by actor, entity type, action and date range, with a panel showing the referenced entity.
 
 ### 4.10 Notifications and scheduled jobs
 
-- A nightly job generates upcoming occurrences, reconciles the points ledger with the occurrences (see 4.12) and, when configured, applies audit retention.
+- A nightly job generates upcoming occurrences, reconciles the points ledger with the occurrences (see 4.12), which also finalises the week and cycle bonuses of the periods that ended (the run at Monday 03:00 finalises the week that ended at midnight), and, when configured, applies audit retention.
 - A morning notification summarises the day: what is planned per person and what is overdue. It is suppressed when there is nothing to report.
 - Supported server channels are none, an ntfy topic, and a Home Assistant webhook. The channel and its credentials come from the environment. These reach the household whether or not a browser is open, and stay a separate setting from browser notifications.
 - Generation, the morning notification and audit retention can each be triggered manually from the settings screen, which is also how an installation is verified after a change.
@@ -312,7 +317,7 @@ Browser notifications (ADR-0010) are a second, personal channel:
 
 ### 4.11 Data management
 
-- Full JSON export of the dataset, and import of such an export. The export carries `schemaVersion: 3`. Version 2 added `recordedDone`, `requestId` and a nullable occurrence `taskId` (extra executions and one-off tasks; ADR-0009); version 3 adds `tasks.points` and `occurrences.pointsSnapshot` (ADR-0011). The points ledger is not exported: an import replaces the ledger and rebuilds it from the imported occurrences, which also fills in the points of an older file with the same defaults as at startup (see 4.12). Import accepts versions 1, 2 and 3; an older file is valid unchanged. A later version is rejected.
+- Full JSON export of the dataset, and import of such an export. The export carries `schemaVersion: 4`. Version 2 added `recordedDone`, `requestId` and a nullable occurrence `taskId` (extra executions and one-off tasks; ADR-0009); version 3 adds `tasks.points` and `occurrences.pointsSnapshot` (ADR-0011); version 4 adds the bonus schedule `settings.bonusSchedule` (ADR-0012). The points ledger is not exported: an import replaces the ledger and rebuilds it from the imported occurrences, which also fills in the points of an older file with the same defaults as at startup (see 4.12). Import accepts versions 1 to 4; an older file is valid unchanged, and a file without a bonus schedule rebuilds without bonuses. A later version is rejected.
 - Before anything is deleted, import checks the file for duplicates on the unique indexes: two generated occurrences with the same `(cycleId, taskId, plannedDate)` and two occurrences with the same `requestId`. Such a file is rejected as a whole with `validation_error` (`duplicate_slot`, `duplicate_request_id`) and nothing is written, because the replacement would otherwise fail halfway, after the collections were emptied.
 - Import validates the entire file against both the API shape and the storage shape before writing anything, reports what it will replace, and requires explicit confirmation.
 - A nightly database dump is written to a mounted backup path by a separate container.
@@ -330,7 +335,21 @@ Every execution of a task earns the points of that task for the person who did t
 - **Retroactive points.** One reconciliation makes the whole ledger match the occurrences, idempotently. It first migrates the fields: a task without points gets the default for its duration, and a done occurrence without a snapshot gets the task's points, or the default for its duration when the task no longer exists, it is a one-off task without `pointsOverride` (one with `pointsOverride` gets that value), or the task's points were just filled in by this migration (the duration the occurrence had then counts, not the task's current one). It then computes the expected entry of every done occurrence, and inserts the missing entries, updates the entries that differ and deletes the entries without an occurrence, as bulk writes. A done occurrence without `completedBy` is credited to its assignee; without an assignee too, it earns no entry and is counted as `unattributed`. History itself is never rewritten.
 - **When it runs.** At startup before the server accepts requests, where a failing run is logged and never keeps the application from starting (on the first start after the upgrade it awards all existing history its points; every later start writes nothing), in the scheduled nightly job, which repairs drift between an occurrence and its ledger entry, for example after a crash, within a day (the manual nightly run, which planners may start, does not reconcile; only an administrator can, through the recompute endpoint), after an import, and on request through `POST /api/points/recompute` (administrators only). A run that changes something records one summary entry (see 4.9); a run that changes nothing writes and audits nothing, so running it twice never counts anything twice.
 - **Balances.** The balance of a person is the sum of their entries in a period, and the entries of a person are listed for a period, newest first (see 8). Reading needs no profile.
-- **Out of scope.** Week and cycle bonuses and the conversion of points into money with redemptions are specified later; they use the same ledger as entries of their own kinds, which a reconciliation of executions never touches.
+- **Out of scope.** The conversion of points into money with redemptions is specified later; it uses the same ledger as entries of a kind of its own, which a reconciliation never touches.
+
+#### Bonuses
+
+A person earns a bonus per calendar week and per cycle for doing everything, and a further bonus for doing everything on time. The bonuses are derived ledger entries that only the reconciliation writes (ADR-0012).
+
+- **The set.** A period is a calendar week (Monday to Sunday) or a cycle (28 days from a Monday; any index, also negative). The set of a person for a period is every occurrence they own whose period day lies in it. The period day is the planned day (`plannedDate`) for planned work and the date for recorded work (extra executions and one-off tasks recorded as done), so dragging overdue work to today never removes it from the week it was planned in. The owner of done work is the credited person (`completedBy`, else the assignee); of open or skipped work the assignee; unassigned open or skipped work is in nobody's set, and completing it claims it for the person who did it. A take-over moves the occurrence to the actor's set and out of the old assignee's; work credited to a named third person is neutral for the assignee.
+- **Eligibility.** A person earns nothing for a period whose set is empty or holds only recorded work; at least one planned occurrence is needed. A partial period (the first cycle, a plan activated midway, a vacation) counts what exists and earns the full amount.
+- **Done and on time.** Everything done: every occurrence in the set is done, whenever it was completed; open and skipped work is not done, skipped work that is completed later is done. Everything on time: everything is done and every completion lies before local midnight after the period's last day in the household timezone (so a DST week is 167 or 169 hours long); done work without a completion instant is done but not on time. Work planned in week 1 and completed in week 2 of the same cycle is late for the week and on time for the cycle.
+- **Ended.** A period has ended when its last day is before today in the household timezone; a period that has not ended earns nothing, however complete it is.
+- **Entries.** `bonus_week_done`, `bonus_week_ontime`, `bonus_cycle_done` and `bonus_cycle_ontime`, each evaluated on its own; an amount of 0 produces no entry, and the on-time bonus is in addition to the done bonus. The key is `<kind>:<personId>:<periodStart>`; the entry is dated on the last day of the period, so a balance range that includes that day includes the bonus.
+- **Schedule.** The amounts are a schedule over time, not a snapshot: the amounts of a period are those in force on its last day. An administrator sets the four amounts (integers from 0 to 1000) with `PATCH /api/settings` field `periodBonuses`; they apply from today in the household timezone, as a new schedule row or by replacing the row that already starts today, and equal amounts write and audit nothing. A change therefore never alters an ended period, is never retroactive, and turning bonuses on never awards the past; a rebuild after an import gives the same amounts. The default is that every amount is 0, which disables the bonuses.
+- **Finalisation.** The reconciliation gains a fourth step that inserts the missing bonus entries and deletes the stored entries that are no longer expected, as one bulk write under the same exclusive run, with deletes compare-and-set on the entry that was read. No live write path touches a bonus: a late check-off or a correction inside an ended period shows at the next nightly run, at startup, after an import, or through the recompute endpoint. An occurrence that cannot be read is counted in `skipped`, and the bonus entries of its owner are left as they are in that run.
+- **Corrections follow the history.** An uncomplete, an administrator's deletion or a correction of the completion past the cut-off removes the affected bonus; a late check-off of the last open item adds the done bonus but not the on-time bonus; a take-over or reassignment of overdue work moves the blocker to the other person; moving the cycle anchor removes and recomputes the cycle bonuses of ended cycles, while week bonuses do not depend on the anchor.
+- **Reading.** `bonusPoints` in the balances is the sum of the bonus entries in the range; `points` stays the total and `executions` counts only executions. The Points report shows the bonus column and the bonus entries (see 4.7).
 
 ## 5. AI assistance
 
@@ -392,7 +411,7 @@ The fridge is a legitimate output device. The schedule must work without a phone
 - A compact overview is the default at every screen width: the week grid, the day view, the overdue list and the task list.
 - Management screens — planner, tasks, distribution, statistics, history, notifications, completions and settings — live behind a separate management area and are reachable from anywhere. The notifications page is available to every role, because each person sets their own browser notifications.
 - The overview and the management area switch with a button in the same top-right spot: a management button in the overview, and a Home button in management that always returns to the week overview. The management side menu stays available.
-- The settings screen is organised in tabs so that cycle, intervals, AI, scheduled jobs (including the ntfy and Home Assistant morning notification), appearance and maintenance stay separable.
+- The settings screen is organised in tabs so that cycle, intervals, AI, scheduled jobs (including the ntfy and Home Assistant morning notification), appearance and maintenance stay separable. The calendar tab holds a "Bonussen" card, visible to administrators only, in which the four bonus amounts (integers from 0 to 1000, 0 turns a bonus off) are set; it says since when the amounts apply and lists the schedule rows.
 - An About page, reachable for every role from the management menu, shows the running version, the date and time of the latest release labelled as such, and links to the license and the changelog that belong to the running build. A local build that is not a release shows no release date.
 
 ### 7.2 Interaction
@@ -478,7 +497,9 @@ GET    /api/export/json                     POST /api/import/json
 
 `POST /api/tasks` and `PATCH /api/tasks/:id` take an optional integer `points` from 0 to 1000; task views always carry `points`.
 
-`GET /api/points/balances?from&to` takes two optional day keys (`from` must not be after `to`) and answers `{ from, to, balances: [{ personId, points, executions }] }`, with `from` and `to` `null` when absent. It lists every active user, also at 0, and every inactive user with entries in the range, in the order of the user list. `GET /api/points/entries?personId&from&to` requires all three, allows a range of at most 371 days, both days included, and answers `{ entries }`, newest `date` first and then by id; an entry carries `_id`, `key`, `kind`, `personId`, `amount`, `date`, `weekStart`, `occurrenceId`, `taskId`, `titleSnapshot`, `source`, `createdAt` and `updatedAt`. Errors: `400 validation_error` with `from_after_to` on `from`, `range_too_large` on `to`, or the field of a missing or malformed parameter. Neither read needs a profile. `POST /api/points/recompute` takes no body, requires an administrator and answers `200` with `{ trigger: 'admin', tasksDefaulted, snapshotsSet, created, updated, removed, unattributed, corrections }`; it audits and writes nothing when the ledger already matches.
+`GET /api/points/balances?from&to` takes two optional day keys (`from` must not be after `to`) and answers `{ from, to, balances: [{ personId, points, executions, bonusPoints }] }`, with `from` and `to` `null` when absent. It lists every active user, also at 0, and every inactive user with entries in the range, in the order of the user list. `GET /api/points/entries?personId&from&to` requires all three, allows a range of at most 371 days, both days included, and answers `{ entries }`, newest `date` first and then by id; an entry carries `_id`, `key`, `kind` (`execution` or one of the four bonus kinds), `personId`, `amount`, `date`, `weekStart`, `periodStart` (a day key for a bonus, `null` for an execution), `occurrenceId`, `taskId`, `titleSnapshot`, `source`, `createdAt` and `updatedAt`. Errors: `400 validation_error` with `from_after_to` on `from`, `range_too_large` on `to`, or the field of a missing or malformed parameter. Neither read needs a profile. `POST /api/points/recompute` takes no body, requires an administrator and answers `200` with `{ trigger: 'admin', tasksDefaulted, snapshotsSet, created, updated, removed, unattributed, skipped, corrections, correctionsTotal, correctionsTruncated, bonusesCreated, bonusesRemoved, bonusChanges, bonusChangesTotal, bonusChangesTruncated }`; it audits and writes nothing when the ledger already matches.
+
+`GET /api/settings` always returns `bonusSchedule` (`[]` when none). `PATCH /api/settings` (administrators only) takes the optional `periodBonuses: { weekDone, weekOnTime, cycleDone, cycleOnTime }`, four integers from 0 to 1000, which the server turns into a schedule row from today (see 4.12); a client never sends the schedule itself, and amounts that equal the ones in force write and audit nothing.
 
 Every error response uses one envelope with a stable machine-readable code and optional field-level details. Validation failures, permission failures and conflicts are distinguishable by status and code, and configuration values never appear in an error message.
 

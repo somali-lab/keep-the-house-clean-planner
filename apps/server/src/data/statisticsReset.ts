@@ -4,7 +4,7 @@ import { record } from '../audit/record.ts';
 import { SETTINGS_ID } from './settings.ts';
 import { COLLECTIONS } from './db.ts';
 import { occurrencesCollection } from './occurrences.ts';
-import { deleteExecutionPointEntries } from './points.ts';
+import { deleteDerivedPointEntries } from './points.ts';
 
 export interface ResetStatisticsResult {
   /** Occurrences before the boundary. */
@@ -14,7 +14,7 @@ export interface ResetStatisticsResult {
   resetOccurrences: number;
   resetTasks: number;
   deletedPastCycles: number;
-  /** Execution entries of the points ledger that went with the history (ADR-0011). */
+  /** Execution and bonus entries of the points ledger that went with the history (ADR-0011, ADR-0012). */
   removedPointEntries: number;
 }
 
@@ -63,8 +63,8 @@ export async function resetStatisticsData(
       .collection(COLLECTIONS.tasks)
       .updateMany({ lastCompletedAt: { $ne: null } }, { $set: { lastCompletedAt: null, updatedAt: ctx.clock.now() } });
   }
-  // The ledger follows the history it is derived from: starting over removes every execution entry, a purge those before the boundary.
-  const removedPointEntries = await deleteExecutionPointEntries(ctx.db, options.restartFromToday ? undefined : boundary);
+  // The ledger follows the history it is derived from: starting over removes every derived entry (executions and bonuses), a purge those dated before the boundary.
+  const removedPointEntries = await deleteDerivedPointEntries(ctx.db, options.restartFromToday ? undefined : boundary);
   const deletedPastCycles = await ctx.db.collection(COLLECTIONS.cycles).deleteMany({ index: { $lt: boundaryCycle } });
 
   const result: ResetStatisticsResult = {

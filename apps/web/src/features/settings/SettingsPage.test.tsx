@@ -189,3 +189,13 @@ describe('SettingsPage — jobs', () => {
     ]);
   });
 });
+
+describe('SettingsPage — bonuses', () => {
+  it('has the bonus card next to the cycle start and the vacations for an administrator', async () => {
+    setup();
+    renderWithProviders(<SettingsPage initialTab="calendar" />);
+    expect(await screen.findByRole('form', { name: 'Cyclusstart' })).toBeInTheDocument();
+    expect(await screen.findByRole('form', { name: 'Bonussen' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Week: alles gedaan')).toHaveValue(0);
+  });
+});

@@ -4,7 +4,7 @@ import { getSettings } from '../src/data/settings.ts';
 import { createTask } from '../src/data/tasks.ts';
 import type { UserDoc } from '../src/data/users.ts';
 import { findInterval } from '../src/domain/intervals.ts';
-import { expectAudited } from './helpers/audit.ts';
+import { captureWrites, expectAudited } from './helpers/audit.ts';
 import { asProfile, seededRoom, seededUsers } from './helpers/http.ts';
 import { createTestApp, type TestApp } from './helpers/testApp.ts';
 
@@ -161,5 +161,94 @@ describe('settings API', () => {
       { entity: 'settings', action: 'update', count: 0 },
     );
     expect(result.statusCode).toBe(200);
+  });
+});
+
+describe('period bonuses (ADR-0012)', () => {
+  const AMOUNTS = { weekDone: 5, weekOnTime: 3, cycleDone: 20, cycleOnTime: 10 };
+  const ZERO = { weekDone: 0, weekOnTime: 0, cycleDone: 0, cycleOnTime: 0 };
+  let bonuses: TestApp;
+  let admin: UserDoc;
+  let member: UserDoc;
+
+  beforeAll(async () => {
+    bonuses = await createTestApp({ now: '2026-09-16T08:00:00.000Z' });
+    [admin, member] = await seededUsers(bonuses);
+  });
+
+  afterAll(async () => {
+    await bonuses.close();
+  });
+
+  const patch = (payload: Record<string, unknown>, actor: UserDoc = admin) =>
+    bonuses.app.inject({ method: 'PATCH', url: '/api/settings', headers: asProfile(actor), payload });
+  const schedule = async () =>
+    (await bonuses.app.inject({ method: 'GET', url: '/api/settings' })).json<{ bonusSchedule: unknown[] }>().bonusSchedule;
+
+  it('returns an empty schedule by default, so bonuses are disabled', async () => {
+    expect(await schedule()).toEqual([]);
+    expect((await getSettings(bonuses.db))!.bonusSchedule).toBeUndefined();
+  });
+
+  it('writes and audits nothing for amounts that equal the amounts in force, also when all are 0', async () => {
+    const capture = await captureWrites(bonuses, () => patch({ periodBonuses: ZERO }));
+    expect(capture.result.statusCode, capture.result.body).toBe(200);
+    expect(capture.writes).toEqual([]);
+    expect(capture.auditInserts).toBe(0);
+  });
+
+  it('writes a row from today with an audited before and after, for administrators only', async () => {
+    const denied = await patch({ periodBonuses: AMOUNTS }, member);
+    expect(denied.statusCode).toBe(403);
+    expect(await schedule()).toEqual([]);
+
+    const { result, entries } = await expectAudited(bonuses, () => patch({ periodBonuses: AMOUNTS }), {
+      entity: 'settings',
+      action: 'update',
+      source: 'ui',
+      count: 1,
+    });
+    expect(result.statusCode, result.body).toBe(200);
+    expect(result.json()).toMatchObject({ bonusSchedule: [{ from: '2026-09-16', ...AMOUNTS }] });
+    expect(entries[0]!.before).toEqual({ bonusSchedule: [] });
+    expect(entries[0]!.after).toEqual({ bonusSchedule: [{ from: '2026-09-16', ...AMOUNTS }] });
+    expect(await schedule()).toEqual([{ from: '2026-09-16', ...AMOUNTS }]);
+  });
+
+  it('writes nothing for the same amounts again, and replaces the row that starts today', async () => {
+    const same = await captureWrites(bonuses, () => patch({ periodBonuses: AMOUNTS }));
+    expect(same.writes).toEqual([]);
+    expect(same.auditInserts).toBe(0);
+
+    const changed = { ...AMOUNTS, weekDone: 6 };
+    const { entries } = await expectAudited(bonuses, () => patch({ periodBonuses: changed }), { entity: 'settings', action: 'update', count: 1 });
+    expect(entries[0]!.before).toEqual({ bonusSchedule: [{ from: '2026-09-16', ...AMOUNTS }] });
+    expect(await schedule()).toEqual([{ from: '2026-09-16', ...changed }]);
+  });
+
+  it('keeps the earlier rows and adds a row on a later day, so an ended period keeps its amounts', async () => {
+    bonuses.clock.set('2026-09-30T08:00:00.000Z');
+    const next = { weekDone: 1, weekOnTime: 2, cycleDone: 3, cycleOnTime: 4 };
+    expect((await patch({ periodBonuses: next })).statusCode).toBe(200);
+    expect(await schedule()).toEqual([
+      { from: '2026-09-16', ...AMOUNTS, weekDone: 6 },
+      { from: '2026-09-30', ...next },
+    ]);
+    // Switching a kind off is an amount of 0, which is also a row.
+    expect((await patch({ periodBonuses: { ...next, cycleOnTime: 0 } })).statusCode).toBe(200);
+    expect((await schedule())[1]).toMatchObject({ from: '2026-09-30', cycleOnTime: 0 });
+  });
+
+  it('rejects amounts outside 0 to 1000 and incomplete or fractional amounts', async () => {
+    for (const periodBonuses of [{ ...AMOUNTS, weekDone: 1001 }, { ...AMOUNTS, weekDone: -1 }, { ...AMOUNTS, cycleOnTime: 1.5 }, { weekDone: 1 }]) {
+      const res = await patch({ periodBonuses });
+      expect(res.statusCode, JSON.stringify(periodBonuses)).toBe(400);
+      expect(res.json<{ code: string }>().code).toBe('validation_error');
+    }
+    expect((await patch({ periodBonuses: { ...AMOUNTS, weekDone: 1000 } })).statusCode).toBe(200);
+    // The schedule itself is never accepted from a client.
+    const direct = await patch({ bonusSchedule: [{ from: '2026-01-01', ...AMOUNTS }] });
+    expect(direct.statusCode).toBe(200);
+    expect((await schedule()).some((row) => (row as { from: string }).from === '2026-01-01')).toBe(false);
   });
 });

@@ -26,7 +26,7 @@ The screenshots show a scripted demo household with fictional people and sample 
 - Shows today's chores, the upcoming days, and overdue work.
 - Records extra executions of a task and one-off tasks that never enter the task list, with an undo, so work that was not in the plan still counts in history and statistics.
 - Assigns chores to household members and separates weekday from weekend workload.
-- Awards points per completed chore to the person who did the work, kept in a ledger that corrects itself when a completion is undone or corrected, with balances and entries on the statistics page.
+- Awards points per completed chore to the person who did the work, kept in a ledger that corrects itself when a completion is undone or corrected, with balances and entries on the statistics page. Administrators can set bonuses for doing everything in a week or a cycle, and for doing it all on time, under **Settings → Calendar**; a bonus is paid out after the period has ended and is only ever based on the amounts that applied then.
 - Reviews workload per person, per week, and across the full cycle.
 - Searches tasks by name in the planner and week overview, shows cycle-week information, and keeps each person's filter choices after a reload.
 - Groups My tasks into dated, sliding week blocks so the task date and cycle week stay clear.
@@ -129,7 +129,7 @@ Some database, backup, package, and browser-storage identifiers retain the origi
 
 All times follow `TZ_APP`:
 
-- `03:00` — generate upcoming cycles and reconcile the points ledger with the completed work.
+- `03:00` — generate upcoming cycles and reconcile the points ledger with the completed work, which also finalises the week and cycle bonuses of the periods that ended.
 - `03:30` — the separate backup container creates a database backup.
 - `03:45` — remove old history when audit retention is enabled.
 - `07:30` — send the ntfy or Home Assistant morning notification when `NOTIFY_TYPE` is set. Browser notifications use each person's own times and do not run on the server.

@@ -30,10 +30,11 @@ import { toApi } from '../http/serialize.ts';
 /**
  * Written by every export. Version 2 adds `recordedDone`, `requestId` and a nullable occurrence
  * `taskId` (ADR-0009). Version 3 adds `tasks.points`, `occurrences.pointsSnapshot` and `occurrences.pointsOverride`; the points
- * ledger itself is not exported but rebuilt on import (ADR-0011). An import also accepts versions 1
- * and 2, which are valid unchanged because the new fields are optional; the rebuild fills them in.
+ * ledger itself is not exported but rebuilt on import (ADR-0011). Version 4 adds the bonus schedule
+ * to the settings (ADR-0012); a file without it rebuilds without bonuses. An import also accepts
+ * versions 1 to 3, which are valid unchanged because the new fields are optional; the rebuild fills them in.
  */
-export const EXPORT_SCHEMA_VERSION = 3;
+export const EXPORT_SCHEMA_VERSION = 4;
 
 /**
  * Export file. `collections` is MongoDB relaxed Extended JSON (`{"$oid"}`,
@@ -48,7 +49,7 @@ export interface ExportFile {
 const rawDocs = z.array(z.record(z.string(), z.unknown()));
 
 const envelopeSchema = z.object({
-  schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
   exportedAt: isoDateTimeSchema,
   collections: z.object({
     settings: rawDocs,
