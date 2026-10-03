@@ -36,6 +36,6 @@ public static class MongoAdapterRegistration
             new MongoHealthCheck(sp.GetRequiredService<IMongoClient>(), sp.GetRequiredService<MongoOptions>()));
         services.AddSingleton<ForFindingUsers>(sp =>
             new MongoUserLookup(sp.GetRequiredService<IMongoClient>(), sp.GetRequiredService<MongoOptions>()));
-        return services;
+        return services.AddMongoAuditRecorder();
     }
 }

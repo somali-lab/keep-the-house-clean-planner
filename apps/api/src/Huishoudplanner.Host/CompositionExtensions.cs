@@ -6,6 +6,7 @@ using Huishoudplanner.Adapters.Mongo;
 using Huishoudplanner.Application;
 using Huishoudplanner.Domain.Ports.Driving;
 using Huishoudplanner.Host.Configuration;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Scalar.AspNetCore;
 
@@ -18,6 +19,7 @@ public static class CompositionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
         services.AddHttpAdapter();
+        services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton(new AppVersion(CurrentVersion()));
         services.AddScoped<IHealthService, HealthService>();
         services.AddMongoAdapter(sp => sp.GetRequiredService<IOptions<AppOptions>>().Value.MongoUrl);
