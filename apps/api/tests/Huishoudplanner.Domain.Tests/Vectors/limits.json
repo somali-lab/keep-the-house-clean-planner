@@ -144,6 +144,78 @@
         "minutes": 5000
       },
       "expected": 1000
+    },
+    {
+      "name": "a half rounds up, like Math.round (0.5 gives 1)",
+      "function": "defaultPointsForDuration",
+      "input": {
+        "minutes": 0.5
+      },
+      "expected": 1
+    },
+    {
+      "name": "a half rounds up, not to even (2.5 gives 3)",
+      "function": "defaultPointsForDuration",
+      "input": {
+        "minutes": 2.5
+      },
+      "expected": 3
+    },
+    {
+      "name": "a half rounds up (1.5 gives 2)",
+      "function": "defaultPointsForDuration",
+      "input": {
+        "minutes": 1.5
+      },
+      "expected": 2
+    },
+    {
+      "name": "just below a half rounds down",
+      "function": "defaultPointsForDuration",
+      "input": {
+        "minutes": 2.4
+      },
+      "expected": 2
+    },
+    {
+      "name": "a half rounds up at 44.5",
+      "function": "defaultPointsForDuration",
+      "input": {
+        "minutes": 44.5
+      },
+      "expected": 45
+    },
+    {
+      "name": "a negative half is floored at one (-0.5)",
+      "function": "defaultPointsForDuration",
+      "input": {
+        "minutes": -0.5
+      },
+      "expected": 1
+    },
+    {
+      "name": "a negative half is floored at one (-2.5)",
+      "function": "defaultPointsForDuration",
+      "input": {
+        "minutes": -2.5
+      },
+      "expected": 1
+    },
+    {
+      "name": "a half just below the maximum rounds up to it",
+      "function": "defaultPointsForDuration",
+      "input": {
+        "minutes": 999.5
+      },
+      "expected": 1000
+    },
+    {
+      "name": "a fraction above the maximum is capped",
+      "function": "defaultPointsForDuration",
+      "input": {
+        "minutes": 1000.4
+      },
+      "expected": 1000
     }
   ]
 }
