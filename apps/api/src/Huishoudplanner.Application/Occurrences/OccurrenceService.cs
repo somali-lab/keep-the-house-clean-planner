@@ -6,6 +6,7 @@ using Huishoudplanner.Domain.Generation;
 using Huishoudplanner.Domain.Identity;
 using Huishoudplanner.Domain.Limits;
 using Huishoudplanner.Domain.Occurrences;
+using Huishoudplanner.Domain.Points;
 using Huishoudplanner.Domain.Ports.Driven;
 using Huishoudplanner.Domain.Ports.Driving;
 using Huishoudplanner.Domain.Settings;
@@ -21,8 +22,8 @@ namespace Huishoudplanner.Application.Occurrences;
 /// state that was read, so a lost race becomes <c>invalid_transition</c> (or <c>already_claimed</c>) instead of a silent overwrite.
 /// </summary>
 /// <remarks>
-/// Not here yet: the points ledger that follows a completion (<c>syncExecutionPoints</c>, phase 4) and the extra and one-off executions with their
-/// request keys and the retract (slice 3.3). The <c>pointsSnapshot</c> of a completion is written, because it is a field of the occurrence.
+/// Not here yet: the extra and one-off executions with their request keys and the retract (slice 3.3). The points ledger entry that follows a
+/// completion, an undo, a correction and a deletion is made by <see cref="IExecutionPointsService"/> in the same transaction (slice 4.1). The <c>pointsSnapshot</c> of a completion is written, because it is a field of the occurrence.
 /// </remarks>
 public sealed class OccurrenceService(
     ForStoringOccurrences occurrences,
@@ -32,7 +33,8 @@ public sealed class OccurrenceService(
     ForStoringCycles cycles,
     ForRunningTransactions transactions,
     ForRecordingAudit audit,
-    TimeProvider time) : IOccurrenceService
+    TimeProvider time,
+    IExecutionPointsService points) : IOccurrenceService
 {
     /// <summary>What one use case reads once: the settings, the zone they name and the moment (whole milliseconds, as stored).</summary>
     private sealed record Context(HouseholdSettings Settings, TimeZoneInfo Zone, DateTimeOffset Now)
@@ -224,7 +226,11 @@ public sealed class OccurrenceService(
             return refreshFailure;
         }
 
-        // The points ledger entry of this execution follows in phase 4 (syncExecutionPoints).
+        if (!(await SyncPointsAsync(actor, id, PointsSyncReason.Complete, ct).ConfigureAwait(false)).TryGet(out _, out var syncFailure))
+        {
+            return syncFailure;
+        }
+
         return (context, applied.Stored);
     }
 
@@ -272,6 +278,11 @@ public sealed class OccurrenceService(
         if (!(await RefreshLastCompletedAtAsync(actor, current.TaskId, id, context, ct).ConfigureAwait(false)).TryGet(out _, out var refreshFailure))
         {
             return refreshFailure;
+        }
+
+        if (!(await SyncPointsAsync(actor, id, PointsSyncReason.Uncomplete, ct).ConfigureAwait(false)).TryGet(out _, out var syncFailure))
+        {
+            return syncFailure;
         }
 
         return (context, applied.Stored);
@@ -351,7 +362,11 @@ public sealed class OccurrenceService(
             return refreshFailure;
         }
 
-        // The ledger entry follows the correction in phase 4 (syncExecutionPoints, reason correction).
+        if (!(await SyncPointsAsync(actor, id, PointsSyncReason.Correction, ct).ConfigureAwait(false)).TryGet(out _, out var syncFailure))
+        {
+            return syncFailure;
+        }
+
         return (context, applied.Stored);
     }
 
@@ -405,7 +420,11 @@ public sealed class OccurrenceService(
             return refreshFailure;
         }
 
-        // The ledger entry is removed with it in phase 4 (syncExecutionPoints, reason correction).
+        if (!(await SyncPointsAsync(actor, id, PointsSyncReason.Correction, ct).ConfigureAwait(false)).TryGet(out _, out var syncFailure))
+        {
+            return syncFailure;
+        }
+
         return true;
     }
 
@@ -792,6 +811,10 @@ public sealed class OccurrenceService(
         OccurrenceWarning[] warnings = [.. OccurrenceRules.UnavailableWarnings(person, day)];
         return warnings;
     }
+
+    /// <summary>Makes the ledger entry of the execution follow the change (ADR-0011, <c>syncExecutionPoints</c>), inside the same transaction.</summary>
+    private async Task<Step<bool>> SyncPointsAsync(AuditActor actor, string occurrenceId, PointsSyncReason reason, CancellationToken ct) =>
+        (await points.SyncAsync(actor, occurrenceId, reason, ct).ConfigureAwait(false)).Match<Step<bool>>(_ => true, error => error);
 
     private async Task<Step<bool>> RecordAsync(AuditEntry entry, CancellationToken ct)
     {

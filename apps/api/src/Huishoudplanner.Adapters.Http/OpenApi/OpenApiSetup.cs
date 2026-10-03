@@ -4,6 +4,7 @@ using Huishoudplanner.Adapters.Http.Cycles;
 using Huishoudplanner.Adapters.Http.Due;
 using Huishoudplanner.Adapters.Http.Health;
 using Huishoudplanner.Adapters.Http.Occurrences;
+using Huishoudplanner.Adapters.Http.Points;
 using Huishoudplanner.Adapters.Http.Tasks;
 using Huishoudplanner.Adapters.Http.Users;
 using Microsoft.AspNetCore.OpenApi;
@@ -58,6 +59,7 @@ public static class OpenApiSetup
                 new() { Name = CyclePlanEndpoints.CyclePlansTag, Description = "The four-week cycle plans: everyone reads and compares them, planners create, change, delete, save slots and validate." },
                 new() { Name = CycleEndpoints.CyclesTag, Description = "The generated four-week cycles: a read-only list, created by generation only." },
                 new() { Name = OccurrenceEndpoints.OccurrencesTag, Description = "What actually happened on a day: everyone reads the occurrences; members complete, uncomplete, skip, reschedule, assign and claim them, administrators correct or delete a completion." },
+                new() { Name = PointsEndpoints.PointsTag, Description = "The points ledger: everyone reads the balances and the entries, administrators reconcile the ledger with the occurrences." },
                 new() { Name = UserEndpoints.UsersTag, Description = "The people of the household: list, create, change, and their browser notification moments." },
                 new() { Name = AiEndpoints.AiTag, Description = "The AI assistant: prompt information, connection test, plan proposals and rebalancing (stored as drafts), task suggestions and plan explanations (stored nowhere); planners use it." },
             };
