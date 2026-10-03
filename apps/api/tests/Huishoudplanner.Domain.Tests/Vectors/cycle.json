@@ -1,0 +1,854 @@
+{
+  "module": "cycle",
+  "cases": [
+    {
+      "name": "a Monday is accepted",
+      "function": "assertValidAnchor",
+      "input": {
+        "anchor": "2026-09-14"
+      },
+      "expected": null
+    },
+    {
+      "name": "a Sunday throws",
+      "function": "assertValidAnchor",
+      "input": {
+        "anchor": "2026-09-13"
+      },
+      "throws": "RangeError"
+    },
+    {
+      "name": "a Tuesday throws",
+      "function": "assertValidAnchor",
+      "input": {
+        "anchor": "2026-09-15"
+      },
+      "throws": "RangeError"
+    },
+    {
+      "name": "not a date throws",
+      "function": "assertValidAnchor",
+      "input": {
+        "anchor": "not-a-date"
+      },
+      "throws": "RangeError"
+    },
+    {
+      "name": "a Monday next to a leap day is accepted",
+      "function": "assertValidAnchor",
+      "input": {
+        "anchor": "2028-02-28"
+      },
+      "expected": null
+    },
+    {
+      "name": "the anchor itself",
+      "function": "cycleIndexFor",
+      "input": {
+        "date": "2026-09-14",
+        "anchor": "2026-09-14"
+      },
+      "expected": 0
+    },
+    {
+      "name": "last day of cycle 0",
+      "function": "cycleIndexFor",
+      "input": {
+        "date": "2026-10-11",
+        "anchor": "2026-09-14"
+      },
+      "expected": 0
+    },
+    {
+      "name": "first day of cycle 1",
+      "function": "cycleIndexFor",
+      "input": {
+        "date": "2026-10-12",
+        "anchor": "2026-09-14"
+      },
+      "expected": 1
+    },
+    {
+      "name": "day before the anchor is cycle -1",
+      "function": "cycleIndexFor",
+      "input": {
+        "date": "2026-09-13",
+        "anchor": "2026-09-14"
+      },
+      "expected": -1
+    },
+    {
+      "name": "first day of cycle -1",
+      "function": "cycleIndexFor",
+      "input": {
+        "date": "2026-08-17",
+        "anchor": "2026-09-14"
+      },
+      "expected": -1
+    },
+    {
+      "name": "day before cycle -1 is cycle -2",
+      "function": "cycleIndexFor",
+      "input": {
+        "date": "2026-08-16",
+        "anchor": "2026-09-14"
+      },
+      "expected": -2
+    },
+    {
+      "name": "inside the fall back day",
+      "function": "cycleIndexFor",
+      "input": {
+        "date": "2026-10-25",
+        "anchor": "2026-09-14"
+      },
+      "expected": 1
+    },
+    {
+      "name": "the Monday after fall back",
+      "function": "cycleIndexFor",
+      "input": {
+        "date": "2026-10-26",
+        "anchor": "2026-09-14"
+      },
+      "expected": 1
+    },
+    {
+      "name": "spring forward day, several cycles later",
+      "function": "cycleIndexFor",
+      "input": {
+        "date": "2027-03-28",
+        "anchor": "2026-09-14"
+      },
+      "expected": 6
+    },
+    {
+      "name": "the day after spring forward",
+      "function": "cycleIndexFor",
+      "input": {
+        "date": "2027-03-29",
+        "anchor": "2026-09-14"
+      },
+      "expected": 7
+    },
+    {
+      "name": "across a leap day",
+      "function": "cycleIndexFor",
+      "input": {
+        "date": "2028-03-01",
+        "anchor": "2026-09-14"
+      },
+      "expected": 19
+    },
+    {
+      "name": "across a year boundary",
+      "function": "cycleIndexFor",
+      "input": {
+        "date": "2027-01-01",
+        "anchor": "2026-09-14"
+      },
+      "expected": 3
+    },
+    {
+      "name": "spring forward day inside cycle 0",
+      "function": "cycleIndexFor",
+      "input": {
+        "date": "2026-03-29",
+        "anchor": "2026-03-16"
+      },
+      "expected": 0
+    },
+    {
+      "name": "anchor that is not a Monday throws",
+      "function": "cycleIndexFor",
+      "input": {
+        "date": "2026-09-20",
+        "anchor": "2026-09-15"
+      },
+      "throws": "RangeError"
+    },
+    {
+      "name": "invalid date throws",
+      "function": "cycleIndexFor",
+      "input": {
+        "date": "nope",
+        "anchor": "2026-09-14"
+      },
+      "throws": "RangeError"
+    },
+    {
+      "name": "cycle 0 is the anchor",
+      "function": "cycleStart",
+      "input": {
+        "index": 0,
+        "anchor": "2026-09-14"
+      },
+      "expected": "2026-09-14"
+    },
+    {
+      "name": "cycle 1",
+      "function": "cycleStart",
+      "input": {
+        "index": 1,
+        "anchor": "2026-09-14"
+      },
+      "expected": "2026-10-12"
+    },
+    {
+      "name": "cycle -1",
+      "function": "cycleStart",
+      "input": {
+        "index": -1,
+        "anchor": "2026-09-14"
+      },
+      "expected": "2026-08-17"
+    },
+    {
+      "name": "cycle 2",
+      "function": "cycleStart",
+      "input": {
+        "index": 2,
+        "anchor": "2026-09-14"
+      },
+      "expected": "2026-11-09"
+    },
+    {
+      "name": "cycle 7 (contains spring forward 2027)",
+      "function": "cycleStart",
+      "input": {
+        "index": 7,
+        "anchor": "2026-09-14"
+      },
+      "expected": "2027-03-29"
+    },
+    {
+      "name": "cycle across a year boundary",
+      "function": "cycleStart",
+      "input": {
+        "index": 4,
+        "anchor": "2026-09-14"
+      },
+      "expected": "2027-01-04"
+    },
+    {
+      "name": "cycle across a leap day",
+      "function": "cycleStart",
+      "input": {
+        "index": 20,
+        "anchor": "2026-09-14"
+      },
+      "expected": "2028-03-27"
+    },
+    {
+      "name": "non-Monday anchor throws",
+      "function": "cycleStart",
+      "input": {
+        "index": 0,
+        "anchor": "2026-09-13"
+      },
+      "throws": "RangeError"
+    },
+    {
+      "name": "cycle 0 ends on a Sunday",
+      "function": "cycleEnd",
+      "input": {
+        "index": 0,
+        "anchor": "2026-09-14"
+      },
+      "expected": "2026-10-11"
+    },
+    {
+      "name": "cycle 1 ends after the fall back day",
+      "function": "cycleEnd",
+      "input": {
+        "index": 1,
+        "anchor": "2026-09-14"
+      },
+      "expected": "2026-11-08"
+    },
+    {
+      "name": "cycle -1",
+      "function": "cycleEnd",
+      "input": {
+        "index": -1,
+        "anchor": "2026-09-14"
+      },
+      "expected": "2026-09-13"
+    },
+    {
+      "name": "cycle across a leap day",
+      "function": "cycleEnd",
+      "input": {
+        "index": 20,
+        "anchor": "2026-09-14"
+      },
+      "expected": "2028-04-23"
+    },
+    {
+      "name": "non-Monday anchor throws",
+      "function": "cycleEnd",
+      "input": {
+        "index": 0,
+        "anchor": "2026-09-13"
+      },
+      "throws": "RangeError"
+    },
+    {
+      "name": "the anchor itself",
+      "function": "weekIndexFor",
+      "input": {
+        "date": "2026-09-14",
+        "anchor": "2026-09-14"
+      },
+      "expected": 0
+    },
+    {
+      "name": "end of week 0",
+      "function": "weekIndexFor",
+      "input": {
+        "date": "2026-09-20",
+        "anchor": "2026-09-14"
+      },
+      "expected": 0
+    },
+    {
+      "name": "start of week 1",
+      "function": "weekIndexFor",
+      "input": {
+        "date": "2026-09-21",
+        "anchor": "2026-09-14"
+      },
+      "expected": 1
+    },
+    {
+      "name": "end of cycle is week 3",
+      "function": "weekIndexFor",
+      "input": {
+        "date": "2026-10-11",
+        "anchor": "2026-09-14"
+      },
+      "expected": 3
+    },
+    {
+      "name": "start of week 0 in the next cycle",
+      "function": "weekIndexFor",
+      "input": {
+        "date": "2026-10-12",
+        "anchor": "2026-09-14"
+      },
+      "expected": 0
+    },
+    {
+      "name": "day before the anchor is week 3 of cycle -1",
+      "function": "weekIndexFor",
+      "input": {
+        "date": "2026-09-13",
+        "anchor": "2026-09-14"
+      },
+      "expected": 3
+    },
+    {
+      "name": "day 8 before the anchor (negative cycle)",
+      "function": "weekIndexFor",
+      "input": {
+        "date": "2026-09-06",
+        "anchor": "2026-09-14"
+      },
+      "expected": 2
+    },
+    {
+      "name": "first day of cycle -1 is week 0",
+      "function": "weekIndexFor",
+      "input": {
+        "date": "2026-08-17",
+        "anchor": "2026-09-14"
+      },
+      "expected": 0
+    },
+    {
+      "name": "fall back day (week 1 of cycle 1)",
+      "function": "weekIndexFor",
+      "input": {
+        "date": "2026-10-25",
+        "anchor": "2026-09-14"
+      },
+      "expected": 1
+    },
+    {
+      "name": "Monday after fall back",
+      "function": "weekIndexFor",
+      "input": {
+        "date": "2026-10-26",
+        "anchor": "2026-09-14"
+      },
+      "expected": 2
+    },
+    {
+      "name": "spring forward day",
+      "function": "weekIndexFor",
+      "input": {
+        "date": "2027-03-28",
+        "anchor": "2026-09-14"
+      },
+      "expected": 3
+    },
+    {
+      "name": "across a leap day",
+      "function": "weekIndexFor",
+      "input": {
+        "date": "2028-02-29",
+        "anchor": "2026-09-14"
+      },
+      "expected": 0
+    },
+    {
+      "name": "non-Monday anchor throws",
+      "function": "weekIndexFor",
+      "input": {
+        "date": "2026-09-14",
+        "anchor": "2026-09-15"
+      },
+      "throws": "RangeError"
+    },
+    {
+      "name": "cycle 2: weekIndex 0, weekday 0",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-11-09",
+        "weekIndex": 0,
+        "weekday": 0
+      },
+      "expected": "2026-11-15"
+    },
+    {
+      "name": "cycle 2: weekIndex 0, weekday 1",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-11-09",
+        "weekIndex": 0,
+        "weekday": 1
+      },
+      "expected": "2026-11-09"
+    },
+    {
+      "name": "cycle 2: weekIndex 0, weekday 2",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-11-09",
+        "weekIndex": 0,
+        "weekday": 2
+      },
+      "expected": "2026-11-10"
+    },
+    {
+      "name": "cycle 2: weekIndex 0, weekday 3",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-11-09",
+        "weekIndex": 0,
+        "weekday": 3
+      },
+      "expected": "2026-11-11"
+    },
+    {
+      "name": "cycle 2: weekIndex 0, weekday 4",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-11-09",
+        "weekIndex": 0,
+        "weekday": 4
+      },
+      "expected": "2026-11-12"
+    },
+    {
+      "name": "cycle 2: weekIndex 0, weekday 5",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-11-09",
+        "weekIndex": 0,
+        "weekday": 5
+      },
+      "expected": "2026-11-13"
+    },
+    {
+      "name": "cycle 2: weekIndex 0, weekday 6",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-11-09",
+        "weekIndex": 0,
+        "weekday": 6
+      },
+      "expected": "2026-11-14"
+    },
+    {
+      "name": "cycle 2: weekIndex 1, weekday 0",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-11-09",
+        "weekIndex": 1,
+        "weekday": 0
+      },
+      "expected": "2026-11-22"
+    },
+    {
+      "name": "cycle 2: weekIndex 1, weekday 1",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-11-09",
+        "weekIndex": 1,
+        "weekday": 1
+      },
+      "expected": "2026-11-16"
+    },
+    {
+      "name": "cycle 2: weekIndex 1, weekday 2",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-11-09",
+        "weekIndex": 1,
+        "weekday": 2
+      },
+      "expected": "2026-11-17"
+    },
+    {
+      "name": "cycle 2: weekIndex 1, weekday 3",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-11-09",
+        "weekIndex": 1,
+        "weekday": 3
+      },
+      "expected": "2026-11-18"
+    },
+    {
+      "name": "cycle 2: weekIndex 1, weekday 4",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-11-09",
+        "weekIndex": 1,
+        "weekday": 4
+      },
+      "expected": "2026-11-19"
+    },
+    {
+      "name": "cycle 2: weekIndex 1, weekday 5",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-11-09",
+        "weekIndex": 1,
+        "weekday": 5
+      },
+      "expected": "2026-11-20"
+    },
+    {
+      "name": "cycle 2: weekIndex 1, weekday 6",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-11-09",
+        "weekIndex": 1,
+        "weekday": 6
+      },
+      "expected": "2026-11-21"
+    },
+    {
+      "name": "cycle 2: weekIndex 2, weekday 0",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-11-09",
+        "weekIndex": 2,
+        "weekday": 0
+      },
+      "expected": "2026-11-29"
+    },
+    {
+      "name": "cycle 2: weekIndex 2, weekday 1",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-11-09",
+        "weekIndex": 2,
+        "weekday": 1
+      },
+      "expected": "2026-11-23"
+    },
+    {
+      "name": "cycle 2: weekIndex 2, weekday 2",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-11-09",
+        "weekIndex": 2,
+        "weekday": 2
+      },
+      "expected": "2026-11-24"
+    },
+    {
+      "name": "cycle 2: weekIndex 2, weekday 3",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-11-09",
+        "weekIndex": 2,
+        "weekday": 3
+      },
+      "expected": "2026-11-25"
+    },
+    {
+      "name": "cycle 2: weekIndex 2, weekday 4",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-11-09",
+        "weekIndex": 2,
+        "weekday": 4
+      },
+      "expected": "2026-11-26"
+    },
+    {
+      "name": "cycle 2: weekIndex 2, weekday 5",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-11-09",
+        "weekIndex": 2,
+        "weekday": 5
+      },
+      "expected": "2026-11-27"
+    },
+    {
+      "name": "cycle 2: weekIndex 2, weekday 6",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-11-09",
+        "weekIndex": 2,
+        "weekday": 6
+      },
+      "expected": "2026-11-28"
+    },
+    {
+      "name": "cycle 2: weekIndex 3, weekday 0",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-11-09",
+        "weekIndex": 3,
+        "weekday": 0
+      },
+      "expected": "2026-12-06"
+    },
+    {
+      "name": "cycle 2: weekIndex 3, weekday 1",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-11-09",
+        "weekIndex": 3,
+        "weekday": 1
+      },
+      "expected": "2026-11-30"
+    },
+    {
+      "name": "cycle 2: weekIndex 3, weekday 2",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-11-09",
+        "weekIndex": 3,
+        "weekday": 2
+      },
+      "expected": "2026-12-01"
+    },
+    {
+      "name": "cycle 2: weekIndex 3, weekday 3",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-11-09",
+        "weekIndex": 3,
+        "weekday": 3
+      },
+      "expected": "2026-12-02"
+    },
+    {
+      "name": "cycle 2: weekIndex 3, weekday 4",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-11-09",
+        "weekIndex": 3,
+        "weekday": 4
+      },
+      "expected": "2026-12-03"
+    },
+    {
+      "name": "cycle 2: weekIndex 3, weekday 5",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-11-09",
+        "weekIndex": 3,
+        "weekday": 5
+      },
+      "expected": "2026-12-04"
+    },
+    {
+      "name": "cycle 2: weekIndex 3, weekday 6",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-11-09",
+        "weekIndex": 3,
+        "weekday": 6
+      },
+      "expected": "2026-12-05"
+    },
+    {
+      "name": "Monday of the first week",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-09-14",
+        "weekIndex": 0,
+        "weekday": 1
+      },
+      "expected": "2026-09-14"
+    },
+    {
+      "name": "Sunday is the end of the first week",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-09-14",
+        "weekIndex": 0,
+        "weekday": 0
+      },
+      "expected": "2026-09-20"
+    },
+    {
+      "name": "Saturday of the last week",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-09-14",
+        "weekIndex": 3,
+        "weekday": 6
+      },
+      "expected": "2026-10-10"
+    },
+    {
+      "name": "Sunday of the last week is the cycle end",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-09-14",
+        "weekIndex": 3,
+        "weekday": 0
+      },
+      "expected": "2026-10-11"
+    },
+    {
+      "name": "fall back cycle, Sunday week 0",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-10-12",
+        "weekIndex": 0,
+        "weekday": 0
+      },
+      "expected": "2026-10-18"
+    },
+    {
+      "name": "fall back cycle, Sunday week 1 is the fall back day",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-10-12",
+        "weekIndex": 1,
+        "weekday": 0
+      },
+      "expected": "2026-10-25"
+    },
+    {
+      "name": "fall back cycle, Sunday week 2",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-10-12",
+        "weekIndex": 2,
+        "weekday": 0
+      },
+      "expected": "2026-11-01"
+    },
+    {
+      "name": "fall back cycle, Sunday week 3",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-10-12",
+        "weekIndex": 3,
+        "weekday": 0
+      },
+      "expected": "2026-11-08"
+    },
+    {
+      "name": "cycle with the spring forward day",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2027-03-15",
+        "weekIndex": 1,
+        "weekday": 0
+      },
+      "expected": "2027-03-28"
+    },
+    {
+      "name": "cycle with a leap day",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2028-02-14",
+        "weekIndex": 2,
+        "weekday": 2
+      },
+      "expected": "2028-02-29"
+    },
+    {
+      "name": "weekIndex 4 throws",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-09-14",
+        "weekIndex": 4,
+        "weekday": 0
+      },
+      "throws": "RangeError"
+    },
+    {
+      "name": "weekday 7 throws",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-09-14",
+        "weekIndex": 0,
+        "weekday": 7
+      },
+      "throws": "RangeError"
+    },
+    {
+      "name": "negative weekIndex throws",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-09-14",
+        "weekIndex": -1,
+        "weekday": 0
+      },
+      "throws": "RangeError"
+    },
+    {
+      "name": "negative weekday throws",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-09-14",
+        "weekIndex": 0,
+        "weekday": -1
+      },
+      "throws": "RangeError"
+    },
+    {
+      "name": "fractional weekIndex throws",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-09-14",
+        "weekIndex": 1.5,
+        "weekday": 0
+      },
+      "throws": "RangeError"
+    },
+    {
+      "name": "fractional weekday throws",
+      "function": "slotDate",
+      "input": {
+        "cycleStartDate": "2026-09-14",
+        "weekIndex": 0,
+        "weekday": 1.5
+      },
+      "throws": "RangeError"
+    }
+  ]
+}
