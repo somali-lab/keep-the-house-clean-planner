@@ -40,7 +40,7 @@ describe('DELETE /api/stats', () => {
         ],
       },
     });
-    await t.app.inject({ method: 'POST', url: '/api/jobs/nightly', headers });
+    await t.app.inject({ method: 'POST', url: '/api/jobs/generation', headers });
 
     const monday = (await t.app.inject({ method: 'GET', url: '/api/occurrences?from=2026-09-14&to=2026-09-14' })).json<OccurrenceView[]>()[0]!;
     await t.app.inject({ method: 'PATCH', url: `/api/occurrences/${monday._id}`, headers, payload: { action: 'complete' } });
@@ -88,7 +88,7 @@ describe('DELETE /api/stats', () => {
       payload: { name: 'Aanrecht', roomId: room._id.toHexString(), intervalKey: '1w', durationMinutes: 15 },
     });
     const taskId = taskResponse.json<{ _id: string }>()._id;
-    await t.app.inject({ method: 'POST', url: '/api/jobs/nightly', headers });
+    await t.app.inject({ method: 'POST', url: '/api/jobs/generation', headers });
     const planned = await t.app.inject({
       method: 'POST',
       url: '/api/occurrences',
@@ -147,7 +147,7 @@ describe('DELETE /api/stats', () => {
       payload: { slots: [0, 1, 2, 3].map((weekIndex) => ({ taskId, weekIndex, weekday: 3, assigneeId: person._id.toHexString() })) },
     });
     // One nightly run at the anchor already generates the current cycle (0) and the next (1).
-    await t.app.inject({ method: 'POST', url: '/api/jobs/nightly', headers });
+    await t.app.inject({ method: 'POST', url: '/api/jobs/generation', headers });
 
     const staleWednesday = (await t.app.inject({ method: 'GET', url: '/api/occurrences?from=2026-09-16&to=2026-09-16' })).json<OccurrenceView[]>()[0]!;
     await t.app.inject({ method: 'PATCH', url: `/api/occurrences/${staleWednesday._id}`, headers, payload: { action: 'complete' } });

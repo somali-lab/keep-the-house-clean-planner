@@ -54,7 +54,7 @@ export async function createTask(
 
 /** Generates the current and next cycle (the scheduler is off in E2E). */
 export async function generateCycles(app: AppServer, as: ApiUser) {
-  await app.api('POST', '/api/jobs/nightly', { as });
+  await app.api('POST', '/api/jobs/generation', { as });
 }
 
 /** Puts a task on a day as an ad-hoc occurrence. */

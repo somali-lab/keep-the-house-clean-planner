@@ -8,33 +8,46 @@ import { generateUpcoming, type GenerationResult } from '../domain/generation.ts
 import { runMorningNotify } from '../domain/notify/morning.ts';
 import { reconcilePointsSafely } from '../domain/points.ts';
 
-export interface NightlyResult {
+export interface GenerationRunResult {
   runId: string;
   removed: number;
   generated: GenerationResult[];
   due: { due: number; overdue: number };
 }
 
-export interface NightlyOptions {
-  /**
-   * Reconcile the points ledger as well (default true). The manual route is open to planners, while
-   * the reconciliation is an administrator's action (POST /api/points/recompute), so it passes false.
-   */
-  reconcilePoints?: boolean;
-}
-
-/** Generates the current and next cycle, reconciles the points ledger, then logs the due-engine summary. Safe to run repeatedly. */
-export async function runNightly(ctx: AuditContext, options: NightlyOptions = {}): Promise<NightlyResult> {
+/**
+ * Generates the current and next cycle and logs the due-engine summary. This is what the manual
+ * "generate schedule" action runs (planners may start it); it never touches the points ledger.
+ * Safe to run repeatedly.
+ */
+export async function runGeneration(ctx: AuditContext): Promise<GenerationRunResult> {
   const runId = randomUUID();
   const { generated, removed } = await generateUpcoming(ctx, runId);
-  // Repairs ledger drift (a crash between an occurrence write and its ledger write) within a day (ADR-0011).
-  const points = options.reconcilePoints === false ? null : await reconcilePointsSafely(ctx, 'nightly');
   const { items } = await computeDueList(ctx.db, ctx.clock.now());
   const due = summarizeDue(items);
   ctx.log.info(
     {
       runId,
       removed,
+      generated: generated.map((g) => ({ cycleIndex: g.cycleIndex, inserted: g.inserted, skipped: g.skipped })),
+      due,
+    },
+    'generation run completed',
+  );
+  return { runId, removed, generated, due };
+}
+
+/**
+ * The scheduled nightly job: generation followed by the reconciliation of the points ledger, the
+ * bonuses and the badge awards, which repairs drift (a crash between an occurrence write and its
+ * ledger write) within a day (ADR-0011). Only the scheduler runs it, with a system origin.
+ */
+export async function runNightly(ctx: AuditContext): Promise<GenerationRunResult> {
+  const result = await runGeneration(ctx);
+  const points = await reconcilePointsSafely(ctx, 'nightly');
+  ctx.log.info(
+    {
+      runId: result.runId,
       points: points && {
         created: points.created,
         updated: points.updated,
@@ -42,12 +55,10 @@ export async function runNightly(ctx: AuditContext, options: NightlyOptions = {}
         skipped: points.skipped,
         corrections: points.correctionsTotal,
       },
-      generated: generated.map((g) => ({ cycleIndex: g.cycleIndex, inserted: g.inserted, skipped: g.skipped })),
-      due,
     },
     'nightly run completed',
   );
-  return { runId, removed, generated, due };
+  return result;
 }
 
 export interface SchedulerHandle {

@@ -53,7 +53,7 @@ async function fixture(options: CreateTestAppOptions = {}): Promise<Fixture> {
     { taskId: task, weekIndex: 0, weekday: 3, assigneeId: null },
   ];
   expect((await call('PUT', `/api/cycle-plans/${plan._id.toHexString()}/slots`, { slots })).statusCode).toBe(200);
-  expect((await call('POST', '/api/jobs/nightly')).statusCode).toBe(200);
+  expect((await call('POST', '/api/jobs/generation')).statusCode).toBe(200);
   const occurrence = async (date: string) => {
     const res = await t.app.inject({ method: 'GET', url: `/api/occurrences?from=${date}&to=${date}` });
     return res.json<OccurrenceView[]>().find((o) => o.taskId === task)!._id;
@@ -478,13 +478,31 @@ describe('reconcilePoints: robustness', () => {
   });
 });
 
-describe('the manual nightly route and the points reconciliation', () => {
-  it('does not reconcile through POST /api/jobs/nightly, which a planner may call, but does in the scheduled run', async () => {
+describe('the manual generation route, the scheduled nightly run and the points reconciliation', () => {
+  it('reconciles through the administrator-only recompute route', async () => {
     const { t, p1, occurrence, call } = await fixture();
     const monday = await occurrence('2026-09-14');
     await makeLegacyDone(t, monday, { completedBy: p1._id });
 
-    expect((await call('POST', '/api/jobs/nightly')).statusCode).toBe(200);
+    expect((await call('POST', '/api/jobs/generation')).statusCode).toBe(200);
+    expect(await findPointEntryByKey(t.db, executionKey(new ObjectId(monday)))).toBeNull();
+
+    expect((await call('POST', '/api/points/recompute')).statusCode).toBe(200);
+    expect(await findPointEntryByKey(t.db, executionKey(new ObjectId(monday)))).toMatchObject({ amount: 30 });
+    expect((await reconcileAudit(t))[0]!.meta).toMatchObject({ trigger: 'admin', created: 1 });
+  });
+
+  it('no longer answers on the old manual nightly route', async () => {
+    const { call } = await fixture();
+    expect((await call('POST', '/api/jobs/nightly')).statusCode).toBe(404);
+  });
+
+  it('never reconciles through POST /api/jobs/generation, which a planner may call, but does in the scheduled run', async () => {
+    const { t, p1, occurrence, call } = await fixture();
+    const monday = await occurrence('2026-09-14');
+    await makeLegacyDone(t, monday, { completedBy: p1._id });
+
+    expect((await call('POST', '/api/jobs/generation')).statusCode).toBe(200);
     expect(await findPointEntryByKey(t.db, executionKey(new ObjectId(monday)))).toBeNull();
     expect(await reconcileAudit(t)).toHaveLength(0);
 

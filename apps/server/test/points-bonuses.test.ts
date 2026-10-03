@@ -63,7 +63,7 @@ async function fixture(options: { amounts?: boolean } = {}): Promise<Fixture> {
     { taskId: task, weekIndex: 0, weekday: 3, assigneeId: null },
   ];
   expect((await call('PUT', `/api/cycle-plans/${plan._id.toHexString()}/slots`, { slots })).statusCode).toBe(200);
-  expect((await call('POST', '/api/jobs/nightly')).statusCode).toBe(200);
+  expect((await call('POST', '/api/jobs/generation')).statusCode).toBe(200);
   if (options.amounts !== false) {
     const res = await call('PATCH', '/api/settings', { periodBonuses: AMOUNTS });
     expect(res.statusCode, res.body).toBe(200);

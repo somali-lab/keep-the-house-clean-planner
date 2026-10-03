@@ -229,11 +229,11 @@ async function buildHousehold(app: AppServer, people: ApiUser[]) {
     as: admin,
     body: { name: 'Standard', weekThemes: WEEK_THEMES },
   });
-  await app.api('PUT', `/api/cycle-plans/${plan._id}/slots?sync=true`, {
+  await app.api('PUT', `/api/cycle-plans/${plan._id}/slots`, {
     as: admin,
     body: { slots },
   });
-  await app.api('POST', '/api/jobs/nightly', { as: admin });
+  await app.api('POST', '/api/jobs/generation', { as: admin });
 }
 
 /** Checks off that day's chores as the person they were planned for. */

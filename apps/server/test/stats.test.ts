@@ -81,7 +81,7 @@ beforeAll(async () => {
     },
   });
   expect(put.statusCode, put.body).toBe(200);
-  expect((await t.app.inject({ method: 'POST', url: '/api/jobs/nightly', headers })).statusCode).toBe(200);
+  expect((await t.app.inject({ method: 'POST', url: '/api/jobs/generation', headers })).statusCode).toBe(200);
 
   await act(task.A, '2026-09-14', '2026-09-14T18:00:00.000Z', { action: 'complete' });
   await act(task.B, '2026-09-17', '2026-09-17T18:00:00.000Z', { action: 'complete', completedBy: P2 });
