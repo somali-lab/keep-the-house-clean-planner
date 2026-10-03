@@ -85,10 +85,10 @@ describe('GET /api/points/balances', () => {
     expect(body.to).toBeNull();
     // Persoon 1, Persoon 2, Logé (active, 0), Oud-bewoner (inactive, with entries); Vertrokken has none.
     expect(body.balances).toEqual([
-      { personId: p1._id.toHexString(), points: 11, executions: 4 },
-      { personId: p2._id.toHexString(), points: 10, executions: 1 },
-      { personId: guest, points: 0, executions: 0 },
-      { personId: former, points: 4, executions: 1 },
+      { personId: p1._id.toHexString(), points: 11, executions: 4, bonusPoints: 0 },
+      { personId: p2._id.toHexString(), points: 10, executions: 1, bonusPoints: 0 },
+      { personId: guest, points: 0, executions: 0, bonusPoints: 0 },
+      { personId: former, points: 4, executions: 1, bonusPoints: 0 },
     ]);
     expect(body.balances.map((b) => b.personId)).not.toContain(gone);
   });
@@ -100,19 +100,19 @@ describe('GET /api/points/balances', () => {
       from: '2026-09-14',
       to: '2026-09-20',
       balances: [
-        { personId: p1._id.toHexString(), points: 8, executions: 3 },
-        { personId: p2._id.toHexString(), points: 10, executions: 1 },
-        { personId: guest, points: 0, executions: 0 },
+        { personId: p1._id.toHexString(), points: 8, executions: 3, bonusPoints: 0 },
+        { personId: p2._id.toHexString(), points: 10, executions: 1, bonusPoints: 0 },
+        { personId: guest, points: 0, executions: 0, bonusPoints: 0 },
       ],
     });
   });
 
   it('accepts a single bound', async () => {
     const onlyTo = (await get('/api/points/balances?to=2026-09-01')).json<PointsBalancesResponse>();
-    expect(onlyTo.balances.find((b) => b.personId === p1._id.toHexString())).toMatchObject({ points: 3, executions: 1 });
+    expect(onlyTo.balances.find((b) => b.personId === p1._id.toHexString())).toMatchObject({ points: 3, executions: 1, bonusPoints: 0 });
     expect(onlyTo.balances.find((b) => b.personId === former)).toMatchObject({ points: 4 });
     const onlyFrom = (await get('/api/points/balances?from=2026-09-16')).json<PointsBalancesResponse>();
-    expect(onlyFrom.balances.find((b) => b.personId === p1._id.toHexString())).toMatchObject({ points: 1, executions: 1 });
+    expect(onlyFrom.balances.find((b) => b.personId === p1._id.toHexString())).toMatchObject({ points: 1, executions: 1, bonusPoints: 0 });
     expect(onlyFrom.balances.map((b) => b.personId)).not.toContain(former);
   });
 
@@ -158,6 +158,7 @@ describe('GET /api/points/entries', () => {
       amount: 1,
       date: '2026-09-20',
       weekStart: '2026-09-20',
+      periodStart: null,
       occurrenceId: expect.stringMatching(/^[0-9a-f]{24}$/),
       taskId: null,
       titleSnapshot: 'Taak',

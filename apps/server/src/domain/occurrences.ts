@@ -5,6 +5,8 @@ import {
   today,
   toDayKey,
   weekdaySun0,
+  periodEnded,
+  weekOf,
   type ApiWarning,
   type OccurrenceView,
 } from '@huishoudplanner/shared';
@@ -52,6 +54,22 @@ async function requireOccurrence(ctx: AuditContext, id: ObjectId): Promise<Occur
   return occ;
 }
 
+/**
+ * Freezes the period owner (ADR-0012): the first time work whose planned week has already ended is
+ * assigned, claimed, taken over or completed, the assignee of that moment (before the change) is
+ * remembered as the person the week's bonus is counted for. It is part of the same audited update.
+ * Recorded work has no plan, and an owner that is already frozen stays.
+ */
+export function periodOwnerFreeze(
+  current: Pick<OccurrenceDoc, 'plannedDate' | 'assigneeId' | 'periodOwnerId' | 'recordedDone'>,
+  timezone: string,
+  now: Date,
+): { periodOwnerId?: ObjectId | null } {
+  if (current.periodOwnerId !== undefined || current.recordedDone === true) return {};
+  const week = weekOf(toDayKey(current.plannedDate, timezone));
+  return periodEnded(week, toDayKey(now, timezone)) ? { periodOwnerId: current.assigneeId } : {};
+}
+
 const invalidTransition = (from: string, action: string) =>
   new HttpError(409, 'invalid_transition', `Cannot ${action} an occurrence that is ${from}`, { status: from, action });
 
@@ -72,6 +90,8 @@ export async function completeOccurrence(
   completedByInput?: ObjectId,
   takeOver = false,
 ): Promise<OccurrenceDoc> {
+  const settings = await getSettings(ctx.db);
+  if (!settings) throw new HttpError(500, 'settings_missing');
   const current = await requireOccurrence(ctx, id);
   if (current.status === 'done') throw invalidTransition('done', 'complete');
 
@@ -108,6 +128,7 @@ export async function completeOccurrence(
       pointsSnapshot: await pointsSnapshotFor(ctx, current),
       // Completing unassigned work claims it; taking over assigned work transfers it to the actor.
       ...(claimed || takeOver ? { assigneeId: completedBy } : {}),
+      ...periodOwnerFreeze(current, settings.timezone, ctx.clock.now()),
     },
     {
       action: 'complete',
@@ -306,7 +327,10 @@ export async function assignOccurrence(ctx: AuditContext, id: ObjectId, assignee
     }
   }
 
-  const result = await updateOccurrence(ctx, id, { assigneeId }, { action: 'assign' }, { status: 'open' });
+  // Assigning the person who already has it changes nothing, so it freezes nothing either.
+  const sameAssignee = assigneeId === null ? current.assigneeId === null : (current.assigneeId?.equals(assigneeId) ?? false);
+  const freeze = sameAssignee ? {} : periodOwnerFreeze(current, settings.timezone, ctx.clock.now());
+  const result = await updateOccurrence(ctx, id, { assigneeId, ...freeze }, { action: 'assign' }, { status: 'open' });
   if (!result) throw invalidTransition('changed', 'assign');
   const changed = result.after !== result.before;
   return {
@@ -582,10 +606,13 @@ export async function createOneOffOccurrence(ctx: AuditContext, input: OneOffOcc
 
 /** Sets the actor as assignee only while unassigned (atomic); otherwise 409. */
 export async function claimOccurrence(ctx: AuditContext, id: ObjectId): Promise<OccurrenceDoc> {
+  const settings = await getSettings(ctx.db);
+  if (!settings) throw new HttpError(500, 'settings_missing');
+  const current = await requireOccurrence(ctx, id);
   const result = await updateOccurrence(
     ctx,
     id,
-    { assigneeId: ctx.actorId },
+    { assigneeId: ctx.actorId, ...periodOwnerFreeze(current, settings.timezone, ctx.clock.now()) },
     { action: 'assign', meta: { claim: true } },
     { assigneeId: null },
   );

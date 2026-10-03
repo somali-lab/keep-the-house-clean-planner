@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import type { AuditContext } from '../audit/context.ts';
 import { record } from '../audit/record.ts';
-import { SETTINGS_ID } from './settings.ts';
+import { getSettings, SETTINGS_ID } from './settings.ts';
 import { COLLECTIONS } from './db.ts';
 import { occurrencesCollection } from './occurrences.ts';
-import { deleteExecutionPointEntries } from './points.ts';
+import { deleteDerivedPointEntries } from './points.ts';
 
 export interface ResetStatisticsResult {
   /** Occurrences before the boundary. */
@@ -14,13 +14,15 @@ export interface ResetStatisticsResult {
   resetOccurrences: number;
   resetTasks: number;
   deletedPastCycles: number;
-  /** Execution entries of the points ledger that went with the history (ADR-0011). */
+  /** Execution and bonus entries of the points ledger that went with the history (ADR-0011, ADR-0012). */
   removedPointEntries: number;
 }
 
 interface ResetStatisticsOptions {
   /** Reset every non-open occurrence and task back to open, not just the ones being deleted. */
   restartFromToday: boolean;
+  /** The boundary as a day key; it becomes the bonus floor in the settings (ADR-0012). */
+  boundaryKey: string;
 }
 
 /** Audited destructive reset; household definitions and plans are never touched. */
@@ -63,9 +65,16 @@ export async function resetStatisticsData(
       .collection(COLLECTIONS.tasks)
       .updateMany({ lastCompletedAt: { $ne: null } }, { $set: { lastCompletedAt: null, updatedAt: ctx.clock.now() } });
   }
-  // The ledger follows the history it is derived from: starting over removes every execution entry, a purge those before the boundary.
-  const removedPointEntries = await deleteExecutionPointEntries(ctx.db, options.restartFromToday ? undefined : boundary);
+  // The ledger follows the history it is derived from: starting over removes every derived entry (executions and bonuses), a purge those dated before the boundary.
+  const removedPointEntries = await deleteDerivedPointEntries(ctx.db, options.restartFromToday ? undefined : boundary);
   const deletedPastCycles = await ctx.db.collection(COLLECTIONS.cycles).deleteMany({ index: { $lt: boundaryCycle } });
+  // Periods that start before the boundary lost (part of) their history, so they never earn a bonus from what remains.
+  // The floor only moves forward: a later purge before an earlier day does not give old periods their bonuses back.
+  const bonusFloorBefore = (await getSettings(ctx.db))?.bonusFloor;
+  const bonusFloor = bonusFloorBefore !== undefined && bonusFloorBefore > options.boundaryKey ? bonusFloorBefore : options.boundaryKey;
+  if (bonusFloor !== bonusFloorBefore) {
+    await ctx.db.collection(COLLECTIONS.settings).updateOne({ _id: SETTINGS_ID }, { $set: { bonusFloor, updatedAt: ctx.clock.now() } });
+  }
 
   const result: ResetStatisticsResult = {
     deletedOccurrences: deletedOccurrences.deletedCount,
@@ -79,8 +88,8 @@ export async function resetStatisticsData(
     entity: 'settings',
     entityId: SETTINGS_ID,
     action: 'reset',
-    before: { statistics: 'bestaande uitvoeringsgeschiedenis' },
-    after: { statistics: options.restartFromToday ? 'opnieuw gestart' : 'oude data opgeschoond' },
+    before: { statistics: 'bestaande uitvoeringsgeschiedenis', ...(bonusFloorBefore === undefined ? {} : { bonusFloor: bonusFloorBefore }) },
+    after: { statistics: options.restartFromToday ? 'opnieuw gestart' : 'oude data opgeschoond', bonusFloor },
     meta: { ...result, resetId: randomUUID(), scoped: !options.restartFromToday },
   });
   return result;

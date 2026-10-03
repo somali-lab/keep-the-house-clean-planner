@@ -19,6 +19,7 @@ import { panelTabsListClass, panelTabsTriggerClass, Tabs, TabsContent, TabsList,
 import { api, ApiRequestError } from '../../api/index.ts';
 import { queryKeys, useSettings } from '../../api/queries.ts';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
+import { BonusSection } from './BonusSection.tsx';
 import { CalendarSection } from './CalendarSection.tsx';
 import { AiPromptsPage } from '../ai-prompts/AiPromptsPage.tsx';
 import { DataSection } from './DataSection.tsx';
@@ -58,7 +59,12 @@ export function SettingsPage({ initialTab = 'calendar' }: { initialTab?: 'calend
           <TabsTrigger className={panelTabsTriggerClass} value="jobs"><CalendarClock />{t('settings.tab.jobs')}</TabsTrigger>
           <TabsTrigger className={panelTabsTriggerClass} value="data"><Database />{t('settings.tab.data')}</TabsTrigger>
         </TabsList>
-        <TabsContent value="calendar"><CalendarSection settings={settings.data} /></TabsContent>
+        <TabsContent value="calendar">
+          <div className="flex flex-col gap-6">
+            <CalendarSection settings={settings.data} />
+            <BonusSection settings={settings.data} />
+          </div>
+        </TabsContent>
         <TabsContent value="people"><UsersSection /></TabsContent>
         <TabsContent value="rooms"><RoomsSection /></TabsContent>
         <TabsContent value="interface"><CompletionControlForm key={settings.data.updatedAt} settings={settings.data} /></TabsContent>

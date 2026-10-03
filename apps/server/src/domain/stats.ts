@@ -40,7 +40,7 @@ export async function resetStatistics(ctx: AuditContext, before?: string): Promi
   const boundary = fromDayKey(boundaryKey, settings.timezone);
   const boundaryCycle = cycleIndexFor(boundaryKey, settings.cycleAnchorDate);
 
-  return resetStatisticsData(ctx, boundary, boundaryCycle, { restartFromToday: before === undefined });
+  return resetStatisticsData(ctx, boundary, boundaryCycle, { restartFromToday: before === undefined, boundaryKey });
 }
 
 /**

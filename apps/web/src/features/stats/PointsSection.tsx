@@ -1,4 +1,4 @@
-import { Award } from 'lucide-react';
+import { Award, Gift } from 'lucide-react';
 import { useId, useState } from 'react';
 import { NativeSelect } from '@/components/NativeSelect';
 import { Label } from '@/components/ui/label';
@@ -9,7 +9,8 @@ import { useProfile } from '../../identity/index.ts';
 import { dayKeyInZone } from '../today/todayModel.ts';
 import { usePointsBalances, usePointsEntries, type StatsPeriod } from './api.ts';
 import { statsTableClass } from './ChartFrame.tsx';
-import { pointsRange } from './pointsModel.ts';
+import { bonusText } from './bonusText.ts';
+import { bonusLabel, pointsRange } from './pointsModel.ts';
 import { formatNumber } from './scale.ts';
 
 const sectionCardClass = 'flex flex-col gap-5 rounded-2xl border bg-card p-6 text-card-foreground shadow-sm';
@@ -21,7 +22,7 @@ function longDate(dayKey: string): string {
 }
 
 /**
- * The Points tab (ADR-0011): the balance of every person and the entries of one person for the
+ * The Points tab (ADR-0011, ADR-0012): the balance of every person and the entries of one person for the
  * period chosen with the statistics period control.
  */
 export function PointsSection({ period, now }: { period: StatsPeriod; now?: Date }) {
@@ -62,7 +63,7 @@ export function PointsSection({ period, now }: { period: StatsPeriod; now?: Date
     );
   }
 
-  const earned = rows.some((row) => row.executions > 0);
+  const earned = rows.some((row) => row.executions > 0 || row.points !== 0);
 
   return (
     <section className={sectionCardClass} aria-labelledby={`${idPrefix}-points`}>
@@ -89,6 +90,7 @@ export function PointsSection({ period, now }: { period: StatsPeriod; now?: Date
                 <th scope="col">{t('stats.person')}</th>
                 <th scope="col">{t('stats.points.balance')}</th>
                 <th scope="col">{t('stats.points.executions')}</th>
+                <th scope="col">{t('stats.points.bonus')}</th>
               </tr>
             </thead>
             <tbody>
@@ -97,6 +99,7 @@ export function PointsSection({ period, now }: { period: StatsPeriod; now?: Date
                   <th scope="row">{label(row.personId)}</th>
                   <td className="font-bold text-primary tabular-nums">{formatNumber(row.points)}</td>
                   <td className="tabular-nums">{formatNumber(row.executions)}</td>
+                  <td className="tabular-nums">{formatNumber(row.bonusPoints)}</td>
                 </tr>
               ))}
             </tbody>
@@ -134,15 +137,27 @@ export function PointsSection({ period, now }: { period: StatsPeriod; now?: Date
                   </tr>
                 </thead>
                 <tbody>
-                  {entries.data.entries.map((entry) => (
+                  {entries.data.entries.map((entry) => {
+                    const bonus = bonusLabel(entry);
+                    return (
                     <tr key={entry._id}>
                       <th scope="row" className="whitespace-nowrap">
                         {longDate(entry.date)}
                       </th>
-                      <td>{entry.titleSnapshot}</td>
+                      <td>
+                        {bonus ? (
+                          <span className="inline-flex items-center gap-2 font-semibold">
+                            <Gift className="size-4 shrink-0 text-primary" aria-hidden="true" />
+                            {bonusText(bonus)}
+                          </span>
+                        ) : (
+                          entry.titleSnapshot
+                        )}
+                      </td>
                       <td className="font-bold tabular-nums">{entry.amount > 0 ? `+${entry.amount}` : entry.amount}</td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

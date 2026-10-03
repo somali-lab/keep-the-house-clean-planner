@@ -1,3 +1,4 @@
+export * from './bonuses.ts';
 export * from './cycle.ts';
 export * from './due.ts';
 export * from './points.ts';

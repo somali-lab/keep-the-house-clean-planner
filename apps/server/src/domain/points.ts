@@ -1,12 +1,17 @@
 import {
   addDays,
   defaultPointsForDuration,
+  expectedBonusEntries,
   fromDayKey,
   mondayOf,
   toDayKey,
   MAX_POINTS_CORRECTIONS,
+  type BonusOccurrence,
+  type BonusScheduleRow,
+  type ExpectedBonusEntry,
   type PointsBalancesQuery,
   type PointsBalancesResponse,
+  type PointsBonusChange,
   type PointsCorrection,
   type PointsEntriesQuery,
   type PointsEntriesResponse,
@@ -18,15 +23,19 @@ import { ObjectId, type Db } from 'mongodb';
 import type { AuditContext } from '../audit/context.ts';
 import { record } from '../audit/record.ts';
 import {
+  findBonusOccurrences,
   findDoneOccurrences,
   findOccurrenceById,
   setMissingPointsSnapshots,
+  type BonusOccurrenceDoc,
   type OccurrenceDoc,
 } from '../data/occurrences.ts';
 import {
+  applyBonusEntryChanges,
   applyPointEntryChanges,
   deletePointEntry,
   executionKey,
+  findBonusPointEntries,
   findPointEntries,
   findPointEntriesInRange,
   findPointEntryByKey,
@@ -34,7 +43,9 @@ import {
   POINTS_LEDGER_ID,
   sumPointEntries,
   updatePointEntry,
+  type BonusEntryChanges,
   type PointEntryChanges,
+  type PointEntryDoc,
   type PointEntryFields,
 } from '../data/points.ts';
 import { getSettings } from '../data/settings.ts';
@@ -126,6 +137,119 @@ function sameFields(a: PointEntryFields, b: PointEntryFields): boolean {
   );
 }
 
+/** Maps an occurrence document to the shared bonus model; throws on a value that cannot be read (an invalid date, for example). */
+function toBonusOccurrence(doc: BonusOccurrenceDoc, timezone: string): BonusOccurrence {
+  if (doc.status !== 'open' && doc.status !== 'done' && doc.status !== 'skipped') throw new RangeError(`Unknown status: ${String(doc.status)}`);
+  return {
+    status: doc.status,
+    plannedDate: toDayKey(doc.plannedDate, timezone),
+    date: toDayKey(doc.date, timezone),
+    recordedDone: doc.recordedDone === true,
+    assigneeId: doc.assigneeId ? doc.assigneeId.toHexString() : null,
+    // Missing means the assignee; a frozen null means it was unassigned.
+    ...(doc.periodOwnerId === undefined ? {} : { periodOwnerId: doc.periodOwnerId ? doc.periodOwnerId.toHexString() : null }),
+    completedBy: doc.completedBy ? doc.completedBy.toHexString() : null,
+    completedAt: doc.completedAt ? doc.completedAt.toISOString() : null,
+  };
+}
+
+/** The ledger fields of an expected bonus: dated on the last day of the period, at local midnight (ADR-0012). */
+function bonusFields(entry: ExpectedBonusEntry, timezone: string): PointEntryFields {
+  return {
+    personId: new ObjectId(entry.personId),
+    amount: entry.amount,
+    date: fromDayKey(entry.periodEnd, timezone),
+    weekStart: fromDayKey(mondayOf(entry.periodEnd), timezone),
+    periodStart: fromDayKey(entry.periodStart, timezone),
+    occurrenceId: null,
+    taskId: null,
+    titleSnapshot: '',
+  };
+}
+
+function sameBonus(stored: PointEntryDoc, fields: PointEntryFields): boolean {
+  return (
+    stored.personId.equals(fields.personId) &&
+    stored.amount === fields.amount &&
+    stored.date.getTime() === fields.date.getTime() &&
+    (stored.periodStart?.getTime() ?? null) === (fields.periodStart?.getTime() ?? null)
+  );
+}
+
+/**
+ * Step 4 of the reconciliation (ADR-0012): the week and cycle bonuses. They are a pure function of
+ * the occurrences, the anchor, the timezone, today and the bonus schedule, and are only inserted or
+ * deleted, never updated. An occurrence that cannot be read is counted in `skippedIds`; the bonus
+ * entries of its owner are left as they are in this run, because their sets cannot be evaluated.
+ */
+async function reconcileBonuses(
+  ctx: AuditContext,
+  settings: { cycleAnchorDate: string; timezone: string; bonusSchedule?: BonusScheduleRow[] | undefined; bonusFloor?: string | undefined },
+  storedBonuses: PointEntryDoc[],
+  skippedIds: Set<string>,
+  result: PointsRecomputeResult,
+): Promise<void> {
+  const timezone = settings.timezone;
+  const items: BonusOccurrence[] = [];
+  const blocked = new Set<string>();
+  for (const doc of await findBonusOccurrences(ctx.db)) {
+    try {
+      items.push(toBonusOccurrence(doc, timezone));
+    } catch (err) {
+      ctx.log.warn({ err, occurrenceId: String(doc._id) }, 'bonus reconciliation skipped an unreadable occurrence');
+      skippedIds.add(String(doc._id));
+      // Every person the occurrence could count for: its owner and the person who did it.
+      for (const person of [doc.assigneeId, doc.periodOwnerId, doc.completedBy]) if (person) blocked.add(String(person));
+    }
+  }
+
+  const expected = new Map(
+    expectedBonusEntries(items, {
+      anchor: settings.cycleAnchorDate,
+      timezone,
+      today: toDayKey(ctx.clock.now(), timezone),
+      schedule: settings.bonusSchedule ?? [],
+      floor: settings.bonusFloor,
+    })
+      .filter((entry) => !blocked.has(entry.personId))
+      .map((entry) => [entry.key, { entry, fields: bonusFields(entry, timezone) }] as const),
+  );
+
+  const changes: BonusEntryChanges = { inserts: [], deletes: [] };
+  const storedByKey = new Map(storedBonuses.map((doc) => [doc.key, doc]));
+  for (const [key, current] of storedByKey) {
+    if (blocked.has(current.personId.toHexString())) continue;
+    const want = expected.get(key);
+    if (want && sameBonus(current, want.fields)) continue;
+    changes.deletes.push(current);
+  }
+  for (const [key, { entry, fields }] of expected) {
+    const current = storedByKey.get(key);
+    if (current && sameBonus(current, fields)) continue;
+    changes.inserts.push({ key, kind: entry.kind, fields });
+  }
+
+  const applied = await applyBonusEntryChanges(ctx, changes);
+  // Only the writes that happened are counted and listed: a delete that missed its compare-and-set
+  // and an insert that hit a duplicate key are not.
+  const removedLog: PointsBonusChange[] = applied.removed.map((key) => {
+    const doc = storedByKey.get(key)!;
+    return { key, personId: doc.personId.toHexString(), amount: doc.amount, change: 'removed' };
+  });
+  const createdLog: PointsBonusChange[] = applied.created.map((key) => {
+    const { entry } = expected.get(key)!;
+    return { key, personId: entry.personId, amount: entry.amount, change: 'created' };
+  });
+  result.bonusesCreated = createdLog.length;
+  result.bonusesRemoved = removedLog.length;
+  const byKey = (a: PointsBonusChange, b: PointsBonusChange) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
+  const log = [...removedLog.sort(byKey), ...createdLog.sort(byKey)];
+  result.bonusChangesTotal = log.length;
+  result.bonusChangesTruncated = log.length > MAX_POINTS_CORRECTIONS;
+  result.bonusChanges = log.slice(0, MAX_POINTS_CORRECTIONS);
+  if (applied.error !== undefined) throw applied.error;
+}
+
 /** Reconciliations never overlap in this process: a second run waits for the first one (ADR-0005: one process). */
 const reconcileQueues = new Map<string, Promise<unknown>>();
 
@@ -143,10 +267,11 @@ function exclusively<T>(db: Db, run: () => Promise<T>): Promise<T> {
 /**
  * Makes the whole ledger match the occurrences (ADR-0011), idempotently. It migrates the fields
  * (tasks without points, done occurrences without a snapshot), computes the expected execution
- * entry of every done occurrence and applies the differences in bulk. A run that changes
+ * entry of every done occurrence and applies the differences in bulk. A fourth step inserts and
+ * deletes the week and cycle bonuses of every ended period (ADR-0012). A run that changes
  * something writes one summary audit entry (`points` / `recompute`) and nothing per entry; a run
- * that changes nothing writes and audits nothing. Entries that are not of kind `execution` are
- * never touched. Without settings there is nothing to reconcile.
+ * that changes nothing writes and audits nothing. Entries of another kind than `execution` and the
+ * four bonus kinds are never touched. Without settings there is nothing to reconcile.
  *
  * Runs never overlap, the stored entries are read before the occurrences, and every change is a
  * compare-and-set on the entry that was read, so a check-off that lands meanwhile is never undone.
@@ -186,6 +311,11 @@ async function reconcileNow(ctx: AuditContext, trigger: PointsRecomputeTrigger):
     corrections: [],
     correctionsTotal: 0,
     correctionsTruncated: false,
+    bonusesCreated: 0,
+    bonusesRemoved: 0,
+    bonusChanges: [],
+    bonusChangesTotal: 0,
+    bonusChangesTruncated: false,
   };
   const settings = await getSettings(ctx.db);
   if (!settings) return result;
@@ -193,6 +323,7 @@ async function reconcileNow(ctx: AuditContext, trigger: PointsRecomputeTrigger):
   // Read the ledger before the occurrences: an entry written in between is then unknown to this
   // run and is left alone, instead of being deleted as an entry without an occurrence.
   const stored = new Map((await findPointEntries(ctx.db, { kind: 'execution' })).map((entry) => [entry.key, entry]));
+  const storedBonuses = await findBonusPointEntries(ctx.db);
 
   // Step 1: migrate the fields. Both writes filter on the missing field, so a second run matches nothing.
   const defaulted = await defaultMissingTaskPoints(ctx.db);
@@ -220,6 +351,8 @@ async function reconcileNow(ctx: AuditContext, trigger: PointsRecomputeTrigger):
   // Step 2: the expected entry of every done occurrence.
   const expected = new Map<string, PointEntryFields>();
   const unreadable = new Set<string>();
+  // Occurrences that could not be read in any step, counted once each.
+  const skippedIds = new Set<string>();
   for (const occurrence of done) {
     const key = executionKey(occurrence._id);
     try {
@@ -230,7 +363,7 @@ async function reconcileNow(ctx: AuditContext, trigger: PointsRecomputeTrigger):
       // Old data can hold anything; one bad row must not stop the others. Its stored entry stays as it is.
       ctx.log.warn({ err, occurrenceId: key }, 'points reconciliation skipped an unreadable occurrence');
       unreadable.add(key);
-      result.skipped += 1;
+      skippedIds.add(occurrence._id.toHexString());
     }
   }
 
@@ -263,9 +396,24 @@ async function reconcileNow(ctx: AuditContext, trigger: PointsRecomputeTrigger):
   result.correctionsTruncated = corrections.length > MAX_POINTS_CORRECTIONS;
   result.corrections = corrections.slice(0, MAX_POINTS_CORRECTIONS);
 
-  if (result.tasksDefaulted + result.snapshotsSet + result.created + result.updated + result.removed > 0) {
+  // Step 4: the week and cycle bonuses (ADR-0012), inserted or deleted, never updated.
+  // A failure here must not hide what steps 1 to 3 and the part of step 4 that ran have written, so
+  // the summary is recorded first and the failure rethrown after it.
+  let bonusFailure: { error: unknown } | null = null;
+  try {
+    await reconcileBonuses(ctx, settings, storedBonuses, skippedIds, result);
+  } catch (error) {
+    bonusFailure = { error };
+  }
+  result.skipped = skippedIds.size;
+
+  if (
+    result.tasksDefaulted + result.snapshotsSet + result.created + result.updated + result.removed + result.bonusesCreated + result.bonusesRemoved >
+    0
+  ) {
     await record(ctx, { entity: 'points', entityId: POINTS_LEDGER_ID, action: 'recompute', meta: { ...result } });
   }
+  if (bonusFailure) throw bonusFailure.error;
   return result;
 }
 
@@ -286,7 +434,12 @@ export async function pointsBalances(db: Db, query: PointsBalancesQuery): Promis
     .filter((user) => user.active || totals.has(user._id.toHexString()))
     .map((user) => {
       const total = totals.get(user._id.toHexString());
-      return { personId: user._id.toHexString(), points: total?.points ?? 0, executions: total?.executions ?? 0 };
+      return {
+        personId: user._id.toHexString(),
+        points: total?.points ?? 0,
+        executions: total?.executions ?? 0,
+        bonusPoints: total?.bonusPoints ?? 0,
+      };
     });
   return { from: query.from ?? null, to: query.to ?? null, balances };
 }
@@ -307,6 +460,7 @@ export async function pointEntriesOfPerson(db: Db, query: PointsEntriesQuery): P
         ...doc,
         date: toDayKey(doc.date, settings.timezone),
         weekStart: toDayKey(doc.weekStart, settings.timezone),
+        periodStart: doc.periodStart ? toDayKey(doc.periodStart, settings.timezone) : null,
       }),
     ) as PointsEntriesResponse['entries'],
   };

@@ -200,3 +200,51 @@ describe('formatValue', () => {
     expect(formatValue('cycleAnchorDate', '2026-09-14', names)).toBe('14-09-2026');
   });
 });
+
+describe('describeEntry for bonuses', () => {
+  const weekDone = `bonus_week_done:${BRAM}:2026-09-28`;
+  const cycleOnTime = `bonus_cycle_ontime:${ANNA}:2026-09-07`;
+  const recompute = (meta: Record<string, unknown>) =>
+    entry({ actorId: SYSTEM_ACTOR_ID, source: 'system', entity: 'points', entityId: 'ledger', action: 'recompute', meta });
+
+  it('lists who earned or lost which bonus in a reconciliation, per person, kind and period', () => {
+    const lines = describeEntry(
+      recompute({
+        bonusChanges: [
+          { key: weekDone, personId: BRAM, amount: 5, change: 'created' },
+          { key: cycleOnTime, personId: ANNA, amount: 10, change: 'removed' },
+        ],
+        bonusChangesTotal: 2,
+        bonusChangesTruncated: false,
+      }),
+      names,
+    );
+    expect(lines).toEqual([
+      'Systeem berekende de punten opnieuw',
+      'Bram kreeg 5 punten: Weekbonus: alles gedaan, week 40',
+      'Anna verloor 10 punten: Cyclusbonus: alles op tijd, 7 sep – 4 okt',
+    ]);
+  });
+
+  it('says how many more bonuses a truncated list holds, and still reads an entry without any bonus changes', () => {
+    const lines = describeEntry(
+      recompute({ bonusChanges: [{ key: weekDone, personId: BRAM, amount: 5, change: 'created' }], bonusChangesTotal: 103, bonusChangesTruncated: true }),
+      names,
+    );
+    expect(lines.at(-1)).toBe('… en nog 102 bonussen');
+    expect(describeEntry(recompute({ created: 2 }), names)).toEqual(['Systeem berekende de punten opnieuw']);
+  });
+
+  it('shows a change of the bonus schedule as readable rows, before and after', () => {
+    const lines = describeEntry(
+      entry({
+        entity: 'settings',
+        entityId: 's1',
+        before: { bonusSchedule: [] },
+        after: { bonusSchedule: [{ from: '2026-09-16', weekDone: 5, weekOnTime: 3, cycleDone: 20, cycleOnTime: 10 }] },
+      }),
+      names,
+    );
+    expect(lines).toEqual(['Anna wijzigde bonusbedragen van de instellingen: — → vanaf 16-09-2026: week 5/3, cyclus 20/10']);
+  });
+});

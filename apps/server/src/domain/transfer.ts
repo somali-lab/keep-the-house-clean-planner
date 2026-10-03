@@ -8,6 +8,7 @@ import {
   roomSchema,
   settingsSchema,
   taskSchema,
+  toDayKey,
   userSchema,
 } from '@huishoudplanner/shared';
 import { BSON, ObjectId, type Db, type Document } from 'mongodb';
@@ -30,10 +31,11 @@ import { toApi } from '../http/serialize.ts';
 /**
  * Written by every export. Version 2 adds `recordedDone`, `requestId` and a nullable occurrence
  * `taskId` (ADR-0009). Version 3 adds `tasks.points`, `occurrences.pointsSnapshot` and `occurrences.pointsOverride`; the points
- * ledger itself is not exported but rebuilt on import (ADR-0011). An import also accepts versions 1
- * and 2, which are valid unchanged because the new fields are optional; the rebuild fills them in.
+ * ledger itself is not exported but rebuilt on import (ADR-0011). Version 4 adds the bonus schedule
+ * to the settings (ADR-0012); a file without it rebuilds without bonuses. An import also accepts
+ * versions 1 to 3, which are valid unchanged because the new fields are optional; the rebuild fills them in.
  */
-export const EXPORT_SCHEMA_VERSION = 3;
+export const EXPORT_SCHEMA_VERSION = 4;
 
 /**
  * Export file. `collections` is MongoDB relaxed Extended JSON (`{"$oid"}`,
@@ -48,7 +50,7 @@ export interface ExportFile {
 const rawDocs = z.array(z.record(z.string(), z.unknown()));
 
 const envelopeSchema = z.object({
-  schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
   exportedAt: isoDateTimeSchema,
   collections: z.object({
     settings: rawDocs,
@@ -85,11 +87,14 @@ const TYPED_FIELDS: Record<TransferCollection, { ids: string[]; dates: string[] 
   cyclePlans: { ids: [], dates: TIMESTAMPS },
   cycles: { ids: ['planId'], dates: ['generatedAt'] },
   occurrences: {
-    ids: ['taskId', 'cycleId', 'planId', 'assigneeId', 'completedBy'],
+    ids: ['taskId', 'cycleId', 'planId', 'assigneeId', 'periodOwnerId', 'completedBy'],
     dates: ['date', 'plannedDate', 'completedAt', ...TIMESTAMPS],
   },
   auditLog: { ids: ['actorId', 'entityId'], dates: ['at'] },
 };
+
+/** Id fields that may be missing from a file (ADR-0012: a missing period owner means the assignee). */
+const OPTIONAL_ID_FIELDS = new Set(['periodOwnerId']);
 
 function typeIssues(name: TransferCollection, doc: Document, path: string): FieldIssue[] {
   const issues: FieldIssue[] = [];
@@ -97,7 +102,11 @@ function typeIssues(name: TransferCollection, doc: Document, path: string): Fiel
     if (!(value instanceof ObjectId) && !(nullable && value === null)) issues.push({ field, message: 'expected_object_id' });
   };
   expectId(doc._id, `${path}._id`, false);
-  for (const field of TYPED_FIELDS[name].ids) expectId(doc[field], `${path}.${field}`, true);
+  for (const field of TYPED_FIELDS[name].ids) {
+    // Fields that older files do not have are optional; when present they must be real ids.
+    if (doc[field] === undefined && OPTIONAL_ID_FIELDS.has(field)) continue;
+    expectId(doc[field], `${path}.${field}`, true);
+  }
   for (const field of TYPED_FIELDS[name].dates) {
     const value = doc[field];
     if (!(value instanceof Date) && value !== null) issues.push({ field: `${path}.${field}`, message: 'expected_date' });
@@ -149,8 +158,35 @@ export interface ParsedImport {
   docs: TransferDocs;
 }
 
+/**
+ * The bonus schedule only holds rows that already apply: a future row would be applied by a later
+ * run without anybody having set it, and a floor in the future would hide periods that ended. Both are
+ * judged against today in the timezone of the file's settings.
+ */
+function bonusScheduleIssues(settings: Document | undefined, now: Date): FieldIssue[] {
+  if (!settings || typeof settings.timezone !== 'string') return [];
+  let todayKey: string;
+  try {
+    todayKey = toDayKey(now, settings.timezone);
+  } catch {
+    return [];
+  }
+  const issues: FieldIssue[] = [];
+  if (Array.isArray(settings.bonusSchedule)) {
+    settings.bonusSchedule.forEach((row: Document, i: number) => {
+      if (typeof row?.from === 'string' && row.from > todayKey) {
+        issues.push({ field: `collections.settings.0.bonusSchedule.${i}.from`, message: 'bonus_schedule_in_future' });
+      }
+    });
+  }
+  if (typeof settings.bonusFloor === 'string' && settings.bonusFloor > todayKey) {
+    issues.push({ field: 'collections.settings.0.bonusFloor', message: 'bonus_floor_in_future' });
+  }
+  return issues;
+}
+
 /** Validates the whole file before anything is written; throws 400 validation_error listing every issue. */
-export function parseImport(body: unknown): ParsedImport {
+export function parseImport(body: unknown, now: Date = new Date()): ParsedImport {
   const envelope = parseOrThrow(envelopeSchema, body);
   let deserialized: Record<TransferCollection, Document[]>;
   try {
@@ -182,6 +218,7 @@ export function parseImport(body: unknown): ParsedImport {
   if (!docs.users.some((u) => u.active === true)) {
     issues.push({ field: 'collections.users', message: 'no_active_user' });
   }
+  issues.push(...bonusScheduleIssues(docs.settings[0], now));
   // The keys are built from typed values, so check them only once every document has the right types.
   if (issues.length === 0) issues.push(...duplicateKeyIssues(docs.occurrences));
   if (issues.length > 0) throw new HttpError(400, 'validation_error', 'Invalid import file', issues);

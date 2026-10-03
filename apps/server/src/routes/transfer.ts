@@ -33,7 +33,7 @@ export const transferRoutes: FastifyPluginAsync = async (app) => {
     if (query.confirm !== 'true') {
       throw new HttpError(400, 'confirmation_required', 'Importing replaces all data; add confirm=true');
     }
-    const parsed = parseImport(request.body);
+    const parsed = parseImport(request.body, app.deps.clock.now());
     return importData(auditContext(request), parsed);
   });
 };

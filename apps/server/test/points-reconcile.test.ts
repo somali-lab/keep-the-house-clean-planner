@@ -295,11 +295,11 @@ describe('statistics reset removes the matching points', () => {
 });
 
 describe('import rebuilds the ledger', () => {
-  it('exports schema version 3 without the ledger', async () => {
+  it('exports schema version 4 without the ledger', async () => {
     const { t, occurrence, call } = await fixture();
     expect((await call('PATCH', `/api/occurrences/${await occurrence('2026-09-14')}`, { action: 'complete' })).statusCode).toBe(200);
     const file = (await t.app.inject({ method: 'GET', url: '/api/export/json' })).json<ExportFile>();
-    expect(file.schemaVersion).toBe(3);
+    expect(file.schemaVersion).toBe(4);
     expect(Object.keys(file.collections)).not.toContain('pointEntries');
     expect(file.collections.tasks[0]).toHaveProperty('points');
     expect(file.collections.occurrences.some((o) => o.pointsSnapshot === 30)).toBe(true);
