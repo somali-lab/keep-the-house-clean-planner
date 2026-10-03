@@ -11,8 +11,8 @@ file differs from what the TypeScript functions return today.
 
 ## Files
 
-One file per TypeScript module: `time.json`, `cycle.json`, `due.json`, `validation.json` (`isWeekendDay`, `budgetFor`, `validatePlan` of `validation/plan.ts`). `limits.json` is the odd one out: it pins every limit and default of `GET /api/v2/meta/limits` (the function `limits`, keys `group.name`) and `defaultPointsForDuration`. Later slices add
-`bonuses.json`, `points.json`, `badges.json` and `rewards.json` in the same format.
+One file per TypeScript module: `time.json`, `cycle.json`, `due.json`, `bonuses.json` (the schedule rules `bonusAmountsOn`, `sameBonusAmounts`, `scheduleWithAmounts`; the other functions of `bonuses.ts` are `pending` in `scripts/vectors.ts` until slice 4.2), `validation.json` (`isWeekendDay`, `budgetFor`, `validatePlan` of `validation/plan.ts`). `limits.json` is the odd one out: it pins every limit and default of `GET /api/v2/meta/limits` (the function `limits`, keys `group.name`) and `defaultPointsForDuration`. Later slices add
+`points.json`, `badges.json` and `rewards.json` in the same format.
 
 ## Format
 

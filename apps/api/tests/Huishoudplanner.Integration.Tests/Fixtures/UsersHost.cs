@@ -93,13 +93,13 @@ public sealed class UsersHost : IAsyncDisposable
         return document.RootElement.Clone();
     }
 
-    /// <summary>The audit entries written since <paramref name="skip"/> entries existed, oldest first.</summary>
+    /// <summary>The audit entries of users (the startup also audits the settings seed) written since <paramref name="skip"/> entries existed, oldest first.</summary>
     public async Task<List<BsonDocument>> AuditSince(long skip = 0) =>
-        await AuditLog.Find(FilterDefinition<BsonDocument>.Empty).Sort(Builders<BsonDocument>.Sort.Ascending("_id")).Skip((int)skip)
+        await AuditLog.Find(Builders<BsonDocument>.Filter.Eq("entity", "user")).Sort(Builders<BsonDocument>.Sort.Ascending("_id")).Skip((int)skip)
             .ToListAsync(TestContext.Current.CancellationToken);
 
     public async Task<long> AuditCount() =>
-        await AuditLog.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: TestContext.Current.CancellationToken);
+        await AuditLog.CountDocumentsAsync(Builders<BsonDocument>.Filter.Eq("entity", "user"), cancellationToken: TestContext.Current.CancellationToken);
 
     public async Task<BsonDocument> StoredUser(string id) =>
         await Users.Find(Builders<BsonDocument>.Filter.Eq("_id", ObjectId.Parse(id))).FirstAsync(TestContext.Current.CancellationToken);
