@@ -18,6 +18,7 @@ using Huishoudplanner.Host.Startup;
 using Huishoudplanner.Host.Users;
 using Huishoudplanner.Host.Rooms;
 using Huishoudplanner.Host.Tasks;
+using Huishoudplanner.Host.Due;
 using Huishoudplanner.Host.CyclePlans;
 using Huishoudplanner.Host.Generation;
 using Huishoudplanner.Host.Notifications;
@@ -47,6 +48,7 @@ public static class CompositionExtensions
         services.AddSettings();
         services.AddRooms();
         services.AddTasks();
+        services.AddDue();
         services.AddGeneration();
         services.AddOccurrences();
         services.AddCyclePlans();
@@ -65,6 +67,7 @@ public static class CompositionExtensions
         app.MapUserEndpoints();
         app.MapRoomEndpoints();
         app.MapTasks();
+        app.MapDue();
         app.MapCyclePlans();
         app.MapActivation();
         app.MapAi();

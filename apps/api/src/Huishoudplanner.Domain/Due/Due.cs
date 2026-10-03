@@ -46,6 +46,18 @@ public static class DueCalculator
         new("quarter", "1x per kwartaal", null, 91),
     ];
 
+    /// <summary>
+    /// The day a never-completed task first counts as due: the day it was first planned in a generated cycle or, when it never was,
+    /// one interval after the day its record was created (requirements 4.5).
+    /// </summary>
+    public static DateOnly InitialDueDateOf(DateTimeOffset? firstPlanned, DateTimeOffset createdAt, int periodDays, TimeZoneInfo timezone)
+    {
+        ArgumentNullException.ThrowIfNull(timezone);
+        return firstPlanned is { } planned
+            ? DayKeys.ToDayKey(planned, timezone)
+            : DayKeys.AddDays(DayKeys.ToDayKey(createdAt, timezone), periodDays);
+    }
+
     public static DueState DueStateOf(double ratio) =>
         ratio >= OverdueRatio ? DueState.Overdue : ratio >= DueRatio ? DueState.Due : DueState.Ok;
 
