@@ -20,4 +20,4 @@ Activation recomputes the projection immediately before its first write and reje
 
 ## Amendment 2026-10-03 — serialisable activation
 
-In the rebuilt backend MongoDB runs as a single-node replica set. Activation rechecks the preview token inside a transaction that also holds its writes and audit entries, so it is serialisable and the race described above no longer exists. The preview itself stays read-only and optimistic. See ADR-0021.
+In the rebuilt backend MongoDB runs as a single-node replica set. Activation rechecks the preview token inside a transaction that also holds its writes and audit entries, and also writes a shared guard document (a version field on the plan or settings document) so that two concurrent activations conflict under snapshot isolation; it is then serialisable and the race described above no longer exists. The preview itself stays read-only and optimistic. See ADR-0021.
