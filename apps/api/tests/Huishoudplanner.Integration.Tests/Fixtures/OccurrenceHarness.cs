@@ -139,9 +139,21 @@ public sealed class OccurrenceHarness : IAsyncLifetime
         return id.ToString();
     }
 
-    private async Task<string> NewTaskAsync(string name, string intervalKey, int minutes)
+    /// <summary>A new active task in the household's room, made through the API as the planner; the optional default assignee and points are part of the request.</summary>
+    public async Task<string> NewTaskAsync(string name, string intervalKey, int minutes, string? defaultAssigneeId = null, int? points = null)
     {
-        var response = await SendAsync(HttpMethod.Post, "/api/v2/tasks", new { name, roomId = Room, intervalKey, durationMinutes = minutes }, Planner);
+        var body = new Dictionary<string, object?> { ["name"] = name, ["roomId"] = Room, ["intervalKey"] = intervalKey, ["durationMinutes"] = minutes };
+        if (defaultAssigneeId is not null)
+        {
+            body["defaultAssigneeId"] = defaultAssigneeId;
+        }
+
+        if (points is not null)
+        {
+            body["points"] = points;
+        }
+
+        var response = await SendAsync(HttpMethod.Post, "/api/v2/tasks", body, Planner);
         response.Status.Should().Be(HttpStatusCode.Created, response.Body.ToString());
         return response.Body.GetProperty("id").GetString()!;
     }

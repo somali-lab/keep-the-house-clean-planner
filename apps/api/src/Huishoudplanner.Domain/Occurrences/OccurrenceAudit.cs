@@ -117,6 +117,40 @@ public static class OccurrenceAudit
         return change.ToEntry(actor, AuditEntity.Occurrence, before.Id, action, new AuditObject(properties));
     }
 
+    /// <summary>
+    /// An ad-hoc occurrence that was created (<c>insertAdhocOccurrence</c>): one <c>create</c> entry with every final field in <c>after</c> (also
+    /// <c>recordedDone</c> and <c>requestId</c>, which are <c>false</c> and <c>null</c> rather than absent) and <c>meta</c>
+    /// <c>{ origin: 'adhoc', kind, recordedDone, requestId }</c>.
+    /// </summary>
+    public static AuditEntry ForAdhocCreated(AuditActor actor, Occurrence occurrence, AdhocKind kind)
+    {
+        ArgumentNullException.ThrowIfNull(occurrence);
+        var requestId = occurrence.RequestId is { } key ? AuditValue.FromString(key) : AuditNull.Instance;
+        var fields = new AuditObject([.. Fields(occurrence).Properties, Pair("recordedDone", occurrence.RecordedDone), Pair("requestId", requestId)]);
+        return ChangeSet.Between(null, fields, Ignore).ToEntry(
+            actor,
+            AuditEntity.Occurrence,
+            occurrence.Id,
+            AuditAction.Create,
+            AuditObject.Of(
+                ("origin", "adhoc"),
+                ("kind", AdhocKindNames.ToWire(kind)),
+                ("recordedDone", occurrence.RecordedDone),
+                ("requestId", requestId)));
+    }
+
+    /// <summary>Recorded work that was retracted (<c>retractRecordedOccurrence</c>): a <c>delete</c> that keeps every removed field in <c>before</c>, with the reason <c>retract</c>.</summary>
+    public static AuditEntry ForRetracted(AuditActor actor, Occurrence occurrence)
+    {
+        ArgumentNullException.ThrowIfNull(occurrence);
+        return ChangeSet.Between(Fields(occurrence), null, Ignore).ToEntry(
+            actor,
+            AuditEntity.Occurrence,
+            occurrence.Id,
+            AuditAction.Delete,
+            AuditObject.Of(("reason", "retract")));
+    }
+
     /// <summary>An administrator deleted a completed occurrence (<c>deleteOccurrences</c> with the correction reason): every field in <c>before</c>.</summary>
     public static AuditEntry ForCorrectionDelete(AuditActor actor, Occurrence occurrence)
     {

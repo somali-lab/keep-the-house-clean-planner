@@ -14,8 +14,9 @@ public static class OccurrencesComposition
     {
         ArgumentNullException.ThrowIfNull(services);
         services.AddScoped<IOccurrenceService, OccurrenceService>();
+        services.AddScoped<IAdhocOccurrenceService, AdhocOccurrenceService>();
         return services;
     }
 
-    public static IEndpointRouteBuilder MapOccurrences(this IEndpointRouteBuilder routes) => routes.MapOccurrenceEndpoints();
+    public static IEndpointRouteBuilder MapOccurrences(this IEndpointRouteBuilder routes) => routes.MapOccurrenceEndpoints().MapAdhocEndpoints();
 }
