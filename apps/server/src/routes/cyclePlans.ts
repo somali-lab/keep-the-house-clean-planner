@@ -27,7 +27,6 @@ import { replaceUpcomingOccurrences } from '../domain/generation.ts';
 import { slotsToDocs, validateSlotsAgainstDb } from '../domain/plans.ts';
 
 const diffQuerySchema = z.object({ against: z.literal('active').optional() });
-const putSlotsQuerySchema = z.object({ sync: z.enum(['true', 'false']).optional() });
 import { HttpError, notFound, parseOrThrow } from '../http/errors.ts';
 import { parseIdParam } from '../http/params.ts';
 import { toApi } from '../http/serialize.ts';
@@ -144,7 +143,6 @@ export const cyclePlanRoutes: FastifyPluginAsync = async (app) => {
   app.put('/cycle-plans/:id/slots', { preHandler: requirePlanner }, async (request) => {
     const id = parseIdParam(request.params);
     const input = parseOrThrow(putSlotsInputSchema, request.body);
-    const query = parseOrThrow(putSlotsQuerySchema, request.query);
     if (!(await findPlanById(app.deps.db, id))) throw notFound('cycle plan');
 
     const slots = slotsToDocs(input.slots);
@@ -156,15 +154,10 @@ export const cyclePlanRoutes: FastifyPluginAsync = async (app) => {
     const ctx = auditContext(request);
     const plan = await replaceSlots(ctx, id, slots);
     if (!plan) throw notFound('cycle plan');
-    const synchronized =
-      query.sync === 'true' && plan.active
-        ? await replaceUpcomingOccurrences(
-            { ...ctx, source: 'system' },
-            plan,
-            randomUUID(),
-            'plan_update',
-          )
-        : null;
+    // Saving slots of the active plan always synchronizes the future occurrences (requirements 4.3).
+    const synchronized = plan.active
+      ? await replaceUpcomingOccurrences({ ...ctx, source: 'system' }, plan, randomUUID(), 'plan_update')
+      : null;
     return {
       plan: toApi(plan),
       warnings: validation.warnings,
