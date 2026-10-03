@@ -3,7 +3,7 @@ using MongoDB.Bson;
 namespace Huishoudplanner.Adapters.Mongo;
 
 /// <summary>Every index the app relies on (requirements 2, 3.8; reference: apps/server/src/data/db.ts INDEXES).</summary>
-public static class IndexCatalog
+internal static class IndexCatalog
 {
     public const string GeneratedSlotIndex = "occurrences_generated_slot_unique";
 

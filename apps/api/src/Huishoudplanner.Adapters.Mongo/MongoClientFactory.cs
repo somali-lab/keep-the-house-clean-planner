@@ -2,7 +2,7 @@ using MongoDB.Driver;
 
 namespace Huishoudplanner.Adapters.Mongo;
 
-public static class MongoClientFactory
+internal static class MongoClientFactory
 {
     private static readonly TimeSpan ServerSelectionTimeout = TimeSpan.FromSeconds(10);
 

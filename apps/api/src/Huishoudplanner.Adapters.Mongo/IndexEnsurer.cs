@@ -5,7 +5,7 @@ namespace Huishoudplanner.Adapters.Mongo;
 /// <summary>
 /// Creates every collection and index at startup; idempotent. Port of ensureIndexes in apps/server/src/data/db.ts.
 /// </summary>
-public sealed class IndexEnsurer
+internal sealed class IndexEnsurer
 {
     /// <summary>MongoDB error code for dropping an index that no longer exists.</summary>
     private const int IndexNotFound = 27;

@@ -3,7 +3,7 @@ using MongoDB.Bson;
 namespace Huishoudplanner.Adapters.Mongo;
 
 /// <summary>One index: ordered key fields (1 ascending, -1 descending), optional name, unique flag and partial filter.</summary>
-public sealed record IndexSpec(
+internal sealed record IndexSpec(
     IReadOnlyList<(string Field, int Direction)> Keys,
     string? ExplicitName = null,
     bool Unique = false,
