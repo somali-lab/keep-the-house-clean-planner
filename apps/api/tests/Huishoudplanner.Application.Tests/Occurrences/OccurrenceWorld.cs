@@ -1,5 +1,6 @@
 using Huishoudplanner.Application.Occurrences;
 using Huishoudplanner.Application.Tests.Generation;
+using Huishoudplanner.Application.Tests.Points;
 using Huishoudplanner.Application.Tests.Rooms;
 using Huishoudplanner.Application.Tests.Settings;
 using Huishoudplanner.Application.Tests.Tasks;
@@ -78,6 +79,8 @@ internal sealed class OccurrenceWorld
 
     public FixedClock Clock { get; } = new(Now);
 
+    public FakeExecutionPoints Points { get; } = new();
+
     public OccurrenceService Service { get; }
 
     public AdhocOccurrenceService Adhoc { get; }
@@ -103,8 +106,8 @@ internal sealed class OccurrenceWorld
     public OccurrenceWorld()
     {
         Transactions = new OccurrenceTransactions(Occurrences, TaskStore, Audit);
-        Service = new OccurrenceService(Occurrences, TaskStore, new FakeUserStore(People), SettingsStore, CycleStore, Transactions, Audit, Clock);
-        Adhoc = new AdhocOccurrenceService(Occurrences, TaskStore, new FakeUserStore(People), Rooms, SettingsStore, CycleStore, Transactions, Audit, Clock);
+        Service = new OccurrenceService(Occurrences, TaskStore, new FakeUserStore(People), SettingsStore, CycleStore, Transactions, Audit, Clock, Points);
+        Adhoc = new AdhocOccurrenceService(Occurrences, TaskStore, new FakeUserStore(People), Rooms, SettingsStore, CycleStore, Transactions, Audit, Clock, Points);
         Room = new Room("0000000000000000000000aa", "Badkamer", 10, true, false, Now.AddDays(-30), Now.AddDays(-30));
         Rooms.Items.Add(Room);
         P1 = People.Add("Persoon 1");
