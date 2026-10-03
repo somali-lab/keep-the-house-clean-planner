@@ -13,7 +13,7 @@ namespace Huishoudplanner.Architecture.Tests;
 /// </summary>
 internal static class BuildRules
 {
-    internal sealed record ProjectFacts(string Sdk, IReadOnlyList<string> Packages, IReadOnlyList<string> FrameworkReferences);
+    internal sealed record ProjectFacts(string Sdk, IReadOnlyList<string> Packages, IReadOnlyList<string> FrameworkReferences, IReadOnlyList<string> ProjectReferences);
 
     private sealed record Restriction(string Description, string Pattern, string[] AllowedProjects);
 
@@ -25,6 +25,19 @@ internal static class BuildRules
         new("Microsoft.Extensions.AI packages", @"^Microsoft\.Extensions\.AI(\..*)?$", ["Adapters.Ai"]),
     ];
 
+    /// <summary>Host (the composition root) is absent on purpose: it may reference everything.</summary>
+    private static readonly Dictionary<string, string[]> AllowedProjectReferences = new()
+    {
+        ["Domain"] = [],
+        ["Application"] = ["Domain"],
+        ["Adapters.Mongo"] = ["Domain"],
+        ["Adapters.Http"] = ["Domain", "Application"],
+        ["Adapters.Jobs"] = ["Domain", "Application"],
+        ["Adapters.Ai"] = ["Domain"],
+        ["Adapters.Notify"] = ["Domain"],
+        ["Adapters.Pdf"] = ["Domain"],
+    };
+
     /// <summary>Reads the SDK, package references and framework references of a csproj.</summary>
     public static ProjectFacts ParseCsproj(string csproj)
     {
@@ -33,7 +46,11 @@ internal static class BuildRules
         var sdk = (string?)root.Attribute("Sdk") ?? "Microsoft.NET.Sdk";
         var packages = root.Descendants("PackageReference").Select(e => (string?)e.Attribute("Include") ?? "").Where(n => n.Length > 0);
         var frameworks = root.Descendants("FrameworkReference").Select(e => (string?)e.Attribute("Include") ?? "").Where(n => n.Length > 0);
-        return new ProjectFacts(sdk, [.. packages], [.. frameworks]);
+        var projects = root.Descendants("ProjectReference")
+            .Select(e => ((string?)e.Attribute("Include") ?? "").Replace('\\', '/'))
+            .Where(n => n.Length > 0)
+            .Select(n => Regex.Replace(Path.GetFileNameWithoutExtension(n), @"^Huishoudplanner\.", ""));
+        return new ProjectFacts(sdk, [.. packages], [.. frameworks], [.. projects]);
     }
 
     /// <summary>Adds the direct dependencies restore resolved (catches references injected by props files).</summary>
@@ -59,7 +76,7 @@ internal static class BuildRules
             }
         }
 
-        return new ProjectFacts(facts.Sdk, [.. packages.Distinct()], [.. frameworks.Distinct()]);
+        return new ProjectFacts(facts.Sdk, [.. packages.Distinct()], [.. frameworks.Distinct()], facts.ProjectReferences);
     }
 
     /// <summary>Violations for one project (named like <c>Adapters.Mongo</c>, without the solution prefix).</summary>
@@ -72,6 +89,14 @@ internal static class BuildRules
         {
             found.AddRange(references.Where(r => Regex.IsMatch(r, restriction.Pattern))
                 .Select(r => $"{project} references {r}, which belongs only in {string.Join(" and ", restriction.AllowedProjects)} ({restriction.Description})"));
+        }
+
+        // Framework and package references flow through ProjectReferences, so the reference graph is part of
+        // the rule: a project may only reference the projects the plan (section 3.1) lets it reference.
+        if (AllowedProjectReferences.TryGetValue(project, out var allowed))
+        {
+            found.AddRange(facts.ProjectReferences.Where(r => !allowed.Contains(r))
+                .Select(r => $"{project} references project {r}; it may reference only {(allowed.Length == 0 ? "nothing" : string.Join(", ", allowed))}"));
         }
 
         if (project == "Domain")

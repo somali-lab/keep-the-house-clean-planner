@@ -57,7 +57,7 @@ public class ArchitectureRuleTests
             ["Wall clock only in SystemClock"] = IlCase(IlRules.WallClockOutsideClockAdapter,
                 [
                     "DomainReadsClock", "DomainReadsClockInAsyncLambda", "DomainReadsClockInAsyncLocalFunction",
-                    "DomainReadsClockInAsyncIterator", "Scheduler", "NotQuiteSystemClock", "UnwelcomeClock",
+                    "DomainReadsClockInAsyncIterator", "FileLocalClock", "Scheduler", "NotQuiteSystemClock", "UnwelcomeClock",
                 ]),
             ["TimeProvider.System only in Host"] = IlCase(IlRules.TimeProviderSystemOutsideHost,
                 ["DomainUsesTimeProvider"]),
@@ -131,7 +131,7 @@ public class ArchitectureRuleTests
         offenders.Should().NotBeEmpty("the rule must catch the fixture violations");
         foreach (var expected in rule.Offenders)
         {
-            offenders.Should().Contain(o => o.EndsWith("." + expected, StringComparison.Ordinal),
+            offenders.Should().Contain(o => o.EndsWith("." + expected, StringComparison.Ordinal) || o.EndsWith("__" + expected, StringComparison.Ordinal),
                 $"{expected} breaks this rule");
         }
 
@@ -167,26 +167,37 @@ public class ArchitectureRuleTests
         ArchitectureRules.AssemblyKeepsToItsNamespaceRoot(
                 $@"^{Regex.Escape(assembly)}(,.*)?$",
                 $@"^{Regex.Escape(assembly)}(\..*)?$",
-                "^.*$")
+                "^.*$",
+                Layout.Production.HostAssemblyPattern)
             .Check(Architectures.Production);
     }
+
+    private const string FixtureAssembly = @"^Huishoudplanner\.Architecture\.Tests\.Fixtures(,.*)?$";
+
+    private static List<string> Strays(string scope, string hostAssemblyPattern) =>
+        ArchitectureRules.AssemblyKeepsToItsNamespaceRoot(FixtureAssembly, Layout.Bad.Domain, scope, hostAssemblyPattern)
+            .Evaluate(Architectures.Fixtures).Where(r => !r.Passed)
+            .Select(f => ((IHasName)f.EvaluatedObject).FullName).ToList();
 
     [Fact]
     public void An_assembly_holding_types_of_another_ring_breaks_the_namespace_root_rule()
     {
         // The fixture assembly stands in for "the Domain assembly": everything of Bad outside Bad.Domain is a stray.
-        var rule = ArchitectureRules.AssemblyKeepsToItsNamespaceRoot(
-            @"^Huishoudplanner\.Architecture\.Tests\.Fixtures(,.*)?$",
-            Layout.Bad.Domain,
-            Layout.Bad.Everything);
-
-        var offenders = rule.Evaluate(Architectures.Fixtures).Where(r => !r.Passed)
-            .Select(f => ((IHasName)f.EvaluatedObject).FullName).ToList();
+        var offenders = Strays(Layout.Bad.Everything, "^$");
 
         offenders.Should().Contain(o => o.EndsWith(".StrayType", StringComparison.Ordinal));
         offenders.Should().Contain(o => o.EndsWith(".ApplicationTarget", StringComparison.Ordinal));
         offenders.Should().NotContain(o => o.EndsWith(".DomainReachesApplication", StringComparison.Ordinal));
         offenders.Should().OnlyContain(o => o.Contains(".Bad.", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_global_namespace_program_is_exempt_only_in_the_host_assembly()
+    {
+        var scopeWithGlobalNamespace = @"^(Huishoudplanner\.Fixtures\.Bad(\..*)?)?$";
+
+        Strays(scopeWithGlobalNamespace, "^$").Should().Contain("Program", "outside the Host assembly Program is a stray");
+        Strays(scopeWithGlobalNamespace, FixtureAssembly).Should().NotContain("Program", "inside the Host assembly Program is exempt");
     }
 
     // -- Non-vacuity ------------------------------------------------------------------------------

@@ -126,14 +126,15 @@ internal static class ArchitectureRules
 
     /// <summary>
     /// Rings are judged by namespace, so an assembly must not host types of another ring. Every type in the
-    /// assembly (within <paramref name="scope"/>) must live under <paramref name="ringNamespace"/>; Program and
+    /// assembly (within <paramref name="scope"/>) must live under <paramref name="ringNamespace"/>; the Host assembly's global-namespace Program and
     /// compiler-emitted attributes are exempt.
     /// </summary>
-    public static IArchRule AssemblyKeepsToItsNamespaceRoot(string assemblyPattern, string ringNamespace, string scope) =>
+    public static IArchRule AssemblyKeepsToItsNamespaceRoot(string assemblyPattern, string ringNamespace, string scope, string hostAssemblyPattern) =>
         Types().That().ResideInAssemblyMatching(assemblyPattern)
             .And().ResideInNamespaceMatching(scope)
             .And().DoNotResideInNamespaceMatching(@"^(System|Microsoft\.CodeAnalysis)(\..*)?$")
-            .And().DoNotHaveFullName("Program")
+            .And().AreNot(Types().That().HaveFullName("Program").And().ResideInAssemblyMatching(hostAssemblyPattern)
+                .As("Program in the Host assembly"))
             .Should().ResideInNamespaceMatching(ringNamespace)
             .Because("an assembly holds only types under its own root namespace");
 }

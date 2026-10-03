@@ -7,8 +7,17 @@ using QuestPDF.Fluent;
 // Every type below breaks exactly the rule named in its summary. The architecture tests assert that
 // the production rules, pointed at this namespace root, flag the type. None of this ships.
 
+/// <summary>A global-namespace Program outside the Host assembly: a stray.</summary>
+public sealed class Program;
+
 namespace Huishoudplanner.Fixtures.Bad.Domain
 {
+    /// <summary>A file-local type (compiled as a top-level type whose name starts with a angle bracket) reading the clock.</summary>
+    file static class FileLocalClock
+    {
+        public static DateTime Read() => DateTime.UtcNow;
+    }
+
     /// <summary>Domain depends on Application.</summary>
     public sealed class DomainReachesApplication
     {

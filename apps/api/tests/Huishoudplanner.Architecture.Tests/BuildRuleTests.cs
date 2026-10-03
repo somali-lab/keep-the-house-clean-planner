@@ -71,4 +71,39 @@ public class BuildRuleTests
         BuildRules.Violations("Adapters.Ai", BuildRules.ParseCsproj(head + "<PackageReference Include=\"Microsoft.Extensions.AI\" />" + tail)).Should().BeEmpty();
         BuildRules.Violations("Adapters.Pdf", BuildRules.ParseCsproj(head + "<PackageReference Include=\"QuestPDF\" />" + tail)).Should().BeEmpty();
     }
+
+    public static TheoryData<string, string> ViolatingProjectReferences => new()
+    {
+        { "Domain", "Application" },
+        { "Application", "Adapters.Mongo" },
+        { "Adapters.Mongo", "Adapters.Pdf" },
+        { "Adapters.Http", "Adapters.Mongo" },
+        { "Adapters.Jobs", "Adapters.Notify" },
+        { "Adapters.Ai", "Application" },
+        { "Adapters.Pdf", "Host" },
+        { "Application", "Host" },
+    };
+
+    [Theory]
+    [MemberData(nameof(ViolatingProjectReferences))]
+    public void A_project_reference_outside_the_allowed_graph_is_flagged(string project, string target)
+    {
+        var csproj = $"<Project Sdk=\"Microsoft.NET.Sdk\"><ItemGroup><ProjectReference Include=\"..\\Huishoudplanner.{target}\\Huishoudplanner.{target}.csproj\" /></ItemGroup></Project>";
+
+        BuildRules.Violations(project, BuildRules.ParseCsproj(csproj))
+            .Should().Contain(v => v.Contains($"references project {target};", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void The_allowed_project_references_are_not_flagged()
+    {
+        static string Csproj(params string[] targets) =>
+            "<Project Sdk=\"Microsoft.NET.Sdk\"><ItemGroup>"
+            + string.Concat(targets.Select(t => $"<ProjectReference Include=\"..\\Huishoudplanner.{t}\\Huishoudplanner.{t}.csproj\" />"))
+            + "</ItemGroup></Project>";
+
+        BuildRules.Violations("Application", BuildRules.ParseCsproj(Csproj("Domain"))).Should().BeEmpty();
+        BuildRules.Violations("Adapters.Http", BuildRules.ParseCsproj(Csproj("Domain", "Application"))).Should().BeEmpty();
+        BuildRules.Violations("Host", BuildRules.ParseCsproj(Csproj("Domain", "Application", "Adapters.Mongo", "Adapters.Http", "Adapters.Ai", "Adapters.Notify", "Adapters.Pdf", "Adapters.Jobs"))).Should().BeEmpty();
+    }
 }

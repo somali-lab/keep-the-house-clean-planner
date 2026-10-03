@@ -49,7 +49,7 @@ internal static class IlRules
         using var module = ModuleDefinition.ReadModule(path);
         var assemblyName = module.Assembly.Name.FullName;
         var calls = new List<Call>();
-        foreach (var top in module.Types.Where(t => !t.Name.StartsWith('<')))
+        foreach (var top in module.Types.Where(t => !IsCompilerEmitted(t)))
         {
             foreach (var type in Flatten(top))
             {
@@ -70,11 +70,22 @@ internal static class IlRules
         return calls;
     }
 
+    /// <summary>
+    /// Only what the compiler emits on its own is skipped. File-local types (named like <c>&lt;File&gt;F0__Name</c>)
+    /// are written by the author and are scanned.
+    /// </summary>
+    private static bool IsCompilerEmitted(TypeDefinition type) =>
+        type.Name == "<Module>"
+        || type.Name.StartsWith("<PrivateImplementationDetails>", StringComparison.Ordinal)
+        || type.CustomAttributes.Any(a => a.AttributeType.FullName == "System.Runtime.CompilerServices.CompilerGeneratedAttribute");
+
     private static IEnumerable<TypeDefinition> Flatten(TypeDefinition type) =>
         new[] { type }.Concat(type.NestedTypes.SelectMany(Flatten));
 
     private static bool InScope(Layout l, Call c) =>
-        Regex.IsMatch(c.CallerNamespace, l.Everything) || Regex.IsMatch(c.CallerAssembly, l.HostAssemblyPattern);
+        Regex.IsMatch(c.CallerNamespace, l.Everything)
+        || Regex.IsMatch(c.CallerAssembly, l.HostAssemblyPattern)
+        || c.CallerNamespace.Length == 0;
 
     private static bool InHost(Layout l, Call c) =>
         Regex.IsMatch(c.CallerNamespace, l.Host) || Regex.IsMatch(c.CallerAssembly, l.HostAssemblyPattern);
