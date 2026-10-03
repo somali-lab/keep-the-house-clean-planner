@@ -10,10 +10,11 @@ export default defineConfig({
   testMatch: '**/*.spec.ts',
   globalSetup: './e2e/globalSetup.ts',
   fullyParallel: false,
-  workers: 1,
+  // Every test owns its server, port and database, so spec files can run side by side; CI runners have 4 vCPUs.
+  workers: process.env.CI ? 4 : 1,
   timeout: 90_000,
   expect: { timeout: 10_000 },
-  retries: 0,
+  retries: process.env.CI ? 1 : 0,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     ...devices['Desktop Chrome'],

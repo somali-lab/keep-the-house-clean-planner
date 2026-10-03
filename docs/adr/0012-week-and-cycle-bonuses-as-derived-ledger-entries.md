@@ -1,6 +1,6 @@
 # ADR-0012 — Week and cycle bonuses as derived ledger entries
 
-Status: Proposed
+Status: Accepted
 
 ## Context
 
