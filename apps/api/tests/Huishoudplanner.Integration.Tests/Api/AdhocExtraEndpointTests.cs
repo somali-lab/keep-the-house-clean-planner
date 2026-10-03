@@ -494,7 +494,10 @@ public sealed class AdhocExtraEndpointTests(OccurrenceHarness h) : IClassFixture
         var response = await Retract(recorded, h.P2);
 
         response.Status.Should().Be(HttpStatusCode.OK, response.Body.ToString());
-        (await h.AuditOfAsync("occurrence", recorded, "delete")).Single()["actorId"].Should().Be(Oid(h.P2.Id));
+        var entry = (await h.AuditOfAsync("occurrence", recorded, "delete")).Single();
+        entry["actorId"].Should().Be(Oid(h.P2.Id));
+        entry["before"]["requestId"].IsBsonNull.Should().BeTrue();
+        entry["before"]["recordedDone"].AsBoolean.Should().BeTrue();
         (await h.LastCompletedAtAsync(task)).IsBsonNull.Should().BeTrue();
         h.Clock.Set(OccurrenceHarness.Wednesday);
     }

@@ -78,7 +78,7 @@ public static class OccurrenceAudit
     public static AuditEntry ForRemoved(AuditActor actor, Occurrence occurrence, string runId, string planId, string reason)
     {
         ArgumentNullException.ThrowIfNull(occurrence);
-        return ChangeSet.Between(Fields(occurrence), null, Ignore).ToEntry(
+        return ChangeSet.Between(StoredFields(occurrence), null, Ignore).ToEntry(
             actor,
             AuditEntity.Occurrence,
             occurrence.Id,
@@ -126,7 +126,7 @@ public static class OccurrenceAudit
     {
         ArgumentNullException.ThrowIfNull(occurrence);
         var requestId = occurrence.RequestId is { } key ? AuditValue.FromString(key) : AuditNull.Instance;
-        var fields = new AuditObject([.. Fields(occurrence).Properties, Pair("recordedDone", occurrence.RecordedDone), Pair("requestId", requestId)]);
+        var fields = StoredFields(occurrence, adhoc: true);
         return ChangeSet.Between(null, fields, Ignore).ToEntry(
             actor,
             AuditEntity.Occurrence,
@@ -143,7 +143,7 @@ public static class OccurrenceAudit
     public static AuditEntry ForRetracted(AuditActor actor, Occurrence occurrence)
     {
         ArgumentNullException.ThrowIfNull(occurrence);
-        return ChangeSet.Between(Fields(occurrence), null, Ignore).ToEntry(
+        return ChangeSet.Between(StoredFields(occurrence), null, Ignore).ToEntry(
             actor,
             AuditEntity.Occurrence,
             occurrence.Id,
@@ -155,12 +155,28 @@ public static class OccurrenceAudit
     public static AuditEntry ForCorrectionDelete(AuditActor actor, Occurrence occurrence)
     {
         ArgumentNullException.ThrowIfNull(occurrence);
-        return ChangeSet.Between(Fields(occurrence), null, Ignore).ToEntry(
+        return ChangeSet.Between(StoredFields(occurrence), null, Ignore).ToEntry(
             actor,
             AuditEntity.Occurrence,
             occurrence.Id,
             AuditAction.Delete,
             AuditObject.Of(("correction", "completion")));
+    }
+
+    /// <summary>
+    /// The document as Node stores it: an ad-hoc document always has <c>recordedDone</c> and <c>requestId</c> (<c>false</c> and <c>null</c> when unset), a generated one
+    /// has neither unless set. Used where a whole document is audited (create, removal, retract, correction delete).
+    /// </summary>
+    private static AuditObject StoredFields(Occurrence occurrence, bool adhoc = false)
+    {
+        var fields = Fields(occurrence);
+        if (!adhoc && occurrence.Origin != OccurrenceOrigin.Adhoc)
+        {
+            return fields;
+        }
+
+        var requestId = occurrence.RequestId is { } key ? AuditValue.FromString(key) : AuditNull.Instance;
+        return new AuditObject([.. fields.Properties, Pair("recordedDone", occurrence.RecordedDone), Pair("requestId", requestId)]);
     }
 
     private static AuditValue Id(string? id) => id is null ? AuditNull.Instance : new AuditObjectId(id);

@@ -215,4 +215,36 @@ public sealed class AdhocRulesTests
         entry.Meta!.Properties.Should().ContainSingle().Which.Value.Should().Be(new AuditString("retract"));
         entry.Meta["reason"].Should().Be(new AuditString("retract"));
     }
+
+    [Fact]
+    public void ForRetracted_aKeylessRecordedExtraKeepsExplicitRequestIdNullAndRecordedDoneTrueInBefore()
+    {
+        var entry = OccurrenceAudit.ForRetracted(AuditActor.System, Recorded(requestId: null));
+
+        entry.Before["requestId"].Should().Be(AuditNull.Instance);
+        entry.Before["recordedDone"].Should().Be(new AuditBool(true));
+    }
+
+    [Fact]
+    public void ForCorrectionDeleteAndForRemoved_anAdhocDocumentKeepsTheExplicitNullAndFalseNodeStores()
+    {
+        var planned = Recorded(done: false, requestId: null);
+
+        var correction = OccurrenceAudit.ForCorrectionDelete(AuditActor.System, planned);
+        var removed = OccurrenceAudit.ForRemoved(AuditActor.System, planned, "run", "444444444444444444444444", "plan_update");
+
+        foreach (var entry in new[] { correction, removed })
+        {
+            entry.Before["requestId"].Should().Be(AuditNull.Instance);
+            entry.Before["recordedDone"].Should().Be(new AuditBool(false));
+        }
+    }
+
+    [Fact]
+    public void ForCorrectionDelete_aGeneratedDocumentStillOmitsThem()
+    {
+        var generated = Recorded(done: false, requestId: null) with { Origin = OccurrenceOrigin.Generated };
+
+        OccurrenceAudit.ForCorrectionDelete(AuditActor.System, generated).Before.Properties.Select(p => p.Key).Should().NotContain(["requestId", "recordedDone"]);
+    }
 }
