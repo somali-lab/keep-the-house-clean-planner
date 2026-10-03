@@ -195,3 +195,65 @@
   border-radius: 999px;
   background: color-mix(in oklch, var(--muted-foreground) 38%, transparent);
 }
+
+/*
+ * Reward meter (ADR-0015): the chicken walks with a transform and the eggs bounce into the basket once. All motion is
+ * switched off for people who asked for reduced motion; the progress is written out as text next to the picture.
+ */
+.reward-chicken {
+  transition: transform 1.6s ease-in-out;
+}
+
+.reward-walking .reward-chicken-body {
+  animation: reward-chicken-bob 0.4s ease-in-out infinite;
+}
+
+.reward-celebrating .reward-egg {
+  animation: reward-egg-drop 0.9s ease-out both;
+  animation-delay: calc(var(--egg-index, 0) * 140ms);
+}
+
+@keyframes reward-chicken-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes reward-egg-drop {
+  0% {
+    transform: translateY(-70px);
+    opacity: 0;
+  }
+  55% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  72% {
+    transform: translateY(-9px);
+  }
+  88% {
+    transform: translateY(0);
+  }
+  94% {
+    transform: translateY(-3px);
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reward-chicken {
+    transition: none;
+  }
+
+  .reward-walking .reward-chicken-body,
+  .reward-celebrating .reward-egg {
+    animation: none;
+  }
+}

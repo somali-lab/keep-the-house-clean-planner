@@ -6,6 +6,7 @@ import type {
   CompletionControl,
   DismissedPromotion,
   Interval,
+  RewardGoals,
   UpdateSettingsInput,
   VacationRange,
 } from '@huishoudplanner/shared';
@@ -40,6 +41,8 @@ export interface SettingsDoc {
   currencyCode?: string;
   /** Cents one point is worth (ADR-0013), 0 to 10000; missing means 0, no money shown. */
   centsPerPoint?: number;
+  /** Goals of the reward meter (ADR-0015); missing means both are automatic. */
+  rewardGoals?: RewardGoals;
   createdAt: Date;
   updatedAt: Date;
 }

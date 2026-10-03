@@ -1,8 +1,8 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from './App.tsx';
 import { APP_VERSION } from './version.ts';
-import { ANNA, BRAM, mockApi, storeProfile, testQueryClient } from './test/fixtures.ts';
+import { ANNA, BRAM, makeProgress, mockApi, storeProfile, testQueryClient } from './test/fixtures.ts';
 import { makeSettings } from './test/render.tsx';
 import { setViewportWidth } from './test/setup.ts';
 
@@ -46,6 +46,46 @@ describe('app shell', () => {
     expect(reset.nextElementSibling?.nextElementSibling).toBe(language);
     // The overview screen with default filters has nothing to reset yet.
     expect(reset).toBeDisabled();
+  });
+
+  it.each([320, 375])('lists the five overview tabs, with the reward tab, in a keyboard accessible menu at %i px', async (width) => {
+    setViewportWidth(width);
+    render(<App queryClient={testQueryClient()} />);
+    const nav = await screen.findByRole('navigation', { name: 'Hoofdmenu' });
+    const links = within(nav).getAllByRole('link');
+    expect(links.map((link) => link.textContent)).toEqual(['Week', 'Vandaag', 'Taken', 'Achterstand', 'Beloning']);
+    expect(links.map((link) => link.getAttribute('href'))).toEqual(['/', '/today', '/tasks', '/due', '/reward']);
+    // Five equal columns that may shrink below their text, so the longest label wraps instead of pushing the menu wider.
+    expect(links[0]!.parentElement).toHaveClass('grid-cols-5');
+    for (const link of links) {
+      expect(link).toHaveClass('min-w-0');
+      expect(link).not.toHaveAttribute('tabindex', '-1');
+      link.focus();
+      expect(link).toHaveFocus();
+    }
+    // Each tab is an icon and a word, so none relies on the icon alone.
+    for (const link of links) expect(link.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('opens the reward tab from the menu, for the active profile', async () => {
+    setViewportWidth(375);
+    mockApi({
+      '/api/users': [ANNA, BRAM],
+      '/api/tasks': [],
+      '/api/rooms': [],
+      '/api/settings': makeSettings(),
+      '/api/cycle-plans': [],
+      '/api/occurrences': [],
+      '/api/points/progress': makeProgress({ personId: ANNA._id }),
+      '/api/badges': { badges: [] },
+      '/api/badges/progress': { personId: ANNA._id, items: [] },
+    });
+    render(<App queryClient={testQueryClient()} />);
+    fireEvent.click(await screen.findByRole('link', { name: 'Beloning' }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Beloning' })).toBeInTheDocument();
+    expect(await screen.findByText('3 van 4 punten (75%)')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/reward');
+    expect(screen.getByRole('link', { name: 'Beloning' })).toHaveAttribute('aria-current', 'page');
   });
 
   it('makes the focused standard view directly accessible on wide screens', async () => {

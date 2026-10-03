@@ -22,3 +22,4 @@ Records are never rewritten to hide history. When a decision is replaced, the ol
 | [0012](0012-week-and-cycle-bonuses-as-derived-ledger-entries.md)                     | Week and cycle bonuses as derived ledger entries                     | Proposed |
 | [0013](0013-redemptions-as-booked-ledger-entries.md)                                 | Redemptions as booked ledger entries                                 | Proposed |
 | [0014](0014-badges-as-derived-awards.md)                                             | Badges as derived awards                                             | Proposed |
+| [0015](0015-reward-meter-progress.md)                                                | Reward meter progress                                                | Proposed |

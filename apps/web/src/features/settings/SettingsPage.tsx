@@ -25,6 +25,7 @@ import { ConversionSection } from './ConversionSection.tsx';
 import { AiPromptsPage } from '../ai-prompts/AiPromptsPage.tsx';
 import { DataSection } from './DataSection.tsx';
 import { JobsSection } from './JobsSection.tsx';
+import { RewardGoalsSection } from './RewardGoalsSection.tsx';
 import { RoomsSection } from './RoomsSection.tsx';
 import { Field, FormActions, FormMessage, SettingsCardHeader, settingsCardClass } from './SettingsCard.tsx';
 import { UsersSection } from './UsersSection.tsx';
@@ -65,6 +66,7 @@ export function SettingsPage({ initialTab = 'calendar' }: { initialTab?: 'calend
             <CalendarSection settings={settings.data} />
             <BonusSection settings={settings.data} />
             <ConversionSection settings={settings.data} />
+            <RewardGoalsSection settings={settings.data} />
           </div>
         </TabsContent>
         <TabsContent value="people"><UsersSection /></TabsContent>

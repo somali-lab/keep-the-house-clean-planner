@@ -190,7 +190,7 @@ function sameFields(a: PointEntryFields, b: PointEntryFields): boolean {
 }
 
 /** Maps an occurrence document to the shared bonus model; throws on a value that cannot be read (an invalid date, for example). */
-function toBonusOccurrence(doc: BonusOccurrenceDoc, timezone: string): BonusOccurrence {
+export function toBonusOccurrence(doc: BonusOccurrenceDoc, timezone: string): BonusOccurrence {
   if (doc.status !== 'open' && doc.status !== 'done' && doc.status !== 'skipped') throw new RangeError(`Unknown status: ${String(doc.status)}`);
   return {
     status: doc.status,

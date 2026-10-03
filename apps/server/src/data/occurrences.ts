@@ -133,6 +133,36 @@ export function findBonusOccurrences(db: Db): Promise<BonusOccurrenceDoc[]> {
     .toArray() as Promise<BonusOccurrenceDoc[]>;
 }
 
+/** What the automatic goal of the reward meter needs of an occurrence (ADR-0015). */
+export type GoalOccurrenceDoc = BonusOccurrenceDoc & Pick<OccurrenceDoc, 'taskId' | 'durationMinutesSnapshot' | 'pointsSnapshot'>;
+
+/**
+ * The occurrences that were planned for a day in `[from, to)`: everything that was not recorded as done, by the
+ * day it was planned for (it survives a reschedule). The reward meter turns them into the automatic goal (ADR-0015).
+ */
+export function findPlannedOccurrences(db: Db, from: Date, to: Date): Promise<GoalOccurrenceDoc[]> {
+  return occurrencesCollection(db)
+    .find(
+      { plannedDate: { $gte: from, $lt: to }, recordedDone: { $ne: true } },
+      {
+        projection: {
+          status: 1,
+          plannedDate: 1,
+          date: 1,
+          recordedDone: 1,
+          assigneeId: 1,
+          periodOwnerId: 1,
+          completedBy: 1,
+          completedAt: 1,
+          taskId: 1,
+          durationMinutesSnapshot: 1,
+          pointsSnapshot: 1,
+        },
+      },
+    )
+    .toArray() as Promise<GoalOccurrenceDoc[]>;
+}
+
 /**
  * Writes missing points snapshots as a bulk migration: `updatedAt` stays and nothing is audited
  * per occurrence, because the reconciliation records one summary. The filter keeps a snapshot

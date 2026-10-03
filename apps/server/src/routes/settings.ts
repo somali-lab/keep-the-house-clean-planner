@@ -1,9 +1,12 @@
 import {
   DEFAULT_CURRENCY_CODE,
+  NO_REWARD_GOALS,
+  sameRewardGoals,
   scheduleWithAmounts,
   toDayKey,
   updateSettingsInputSchema,
   type BonusScheduleRow,
+  type RewardGoals,
 } from '@huishoudplanner/shared';
 import type { FastifyPluginAsync } from 'fastify';
 import { getSettings, StaleBonusScheduleError, updateSettings } from '../data/settings.ts';
@@ -15,14 +18,16 @@ import { auditContext, requireAdmin } from '../identity/index.ts';
 
 /**
  * The API always returns the bonus schedule and the conversion from points to currency; a missing
- * list means no bonuses, a missing currency means EUR and a missing factor means 0 (ADR-0012, ADR-0013).
+ * list means no bonuses, a missing currency means EUR, a missing factor means 0 and missing goals mean both are
+ * automatic (ADR-0012, ADR-0013, ADR-0015).
  */
-function withDefaults<T extends { bonusSchedule?: unknown; currencyCode?: string; centsPerPoint?: number }>(settings: T) {
+function withDefaults<T extends { bonusSchedule?: unknown; currencyCode?: string; centsPerPoint?: number; rewardGoals?: RewardGoals }>(settings: T) {
   return {
     ...settings,
     bonusSchedule: settings.bonusSchedule ?? [],
     currencyCode: settings.currencyCode ?? DEFAULT_CURRENCY_CODE,
     centsPerPoint: settings.centsPerPoint ?? 0,
+    rewardGoals: settings.rewardGoals ?? NO_REWARD_GOALS,
   };
 }
 
@@ -55,6 +60,8 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
     // A conversion equal to the one in force (a missing value is the default) is a no-op: it writes and audits nothing (ADR-0013).
     if (patch.currencyCode === (current.currencyCode ?? DEFAULT_CURRENCY_CODE)) delete patch.currencyCode;
     if (patch.centsPerPoint === (current.centsPerPoint ?? 0)) delete patch.centsPerPoint;
+    // The goals of the reward meter equal to the ones in force (a missing value is automatic for both) are a no-op too (ADR-0015).
+    if (patch.rewardGoals && sameRewardGoals(patch.rewardGoals, current.rewardGoals ?? NO_REWARD_GOALS)) delete patch.rewardGoals;
     let basedOn: { rows: BonusScheduleRow[] | undefined } | undefined;
     if (periodBonuses) {
       const today = toDayKey(app.deps.clock.now(), current.timezone);
