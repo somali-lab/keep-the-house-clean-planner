@@ -165,7 +165,7 @@ describe('PlannerPage — drops', () => {
     expect(JSON.parse(String((putCalls(fetchMock)[0]![1] as RequestInit).body))).toEqual({
       slots: [slot('t1', 0, 2, BRAM._id)],
     });
-    expect(String(putCalls(fetchMock)[0]![0])).toBe('/api/cycle-plans/p1/slots?sync=true');
+    expect(String(putCalls(fetchMock)[0]![0])).toBe('/api/cycle-plans/p1/slots');
     expect(await screen.findByText('Opgeslagen')).toBeInTheDocument();
   });
 

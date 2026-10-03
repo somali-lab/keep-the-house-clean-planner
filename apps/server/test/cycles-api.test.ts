@@ -23,7 +23,7 @@ describe('GET /api/cycles', () => {
   });
 
   it('lists generated cycles in order with day-key boundaries', async () => {
-    expect((await t.app.inject({ method: 'POST', url: '/api/jobs/nightly', headers: asProfile(p1) })).statusCode).toBe(200);
+    expect((await t.app.inject({ method: 'POST', url: '/api/jobs/generation', headers: asProfile(p1) })).statusCode).toBe(200);
     const res = await t.app.inject({ method: 'GET', url: '/api/cycles' });
     const cycles = res.json<{ index: number; startDate: string; endDate: string; planId: string | null }[]>();
     expect(cycles.map((c) => [c.index, c.startDate, c.endDate])).toEqual([

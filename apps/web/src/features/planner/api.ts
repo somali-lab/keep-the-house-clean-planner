@@ -37,7 +37,7 @@ export function usePutSlots() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ planId, slots }: { planId: string; slots: Slot[] }) =>
-      (await api.put<PutSlotsResponse>(`/api/cycle-plans/${planId}/slots?sync=true`, { slots }))
+      (await api.put<PutSlotsResponse>(`/api/cycle-plans/${planId}/slots`, { slots }))
         .data,
     onSuccess: (data) => {
       queryClient.setQueryData<CyclePlan[]>(planKeys.all, (plans) => replacePlan(plans, data.plan));

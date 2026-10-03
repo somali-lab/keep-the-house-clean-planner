@@ -4,7 +4,7 @@ import { ANNA, BRAM, mockApi, storeProfile } from '../../test/fixtures.ts';
 import { makeSettings, renderWithProviders } from '../../test/render.tsx';
 import { SettingsPage } from './SettingsPage.tsx';
 
-function setup() {
+function setup(overrides: Record<string, unknown> = {}) {
   storeProfile(ANNA._id);
   return mockApi({
     '/api/users': [ANNA, BRAM],
@@ -20,13 +20,23 @@ function setup() {
     },
     'PATCH /api/settings': (init: RequestInit) => makeSettings(JSON.parse(String(init.body))),
     'POST /api/ai/test': { ok: true },
-    'POST /api/jobs/nightly': {
+    'POST /api/jobs/generation': {
       removed: 7,
       generated: [{ inserted: 2 }, { inserted: 3 }],
       due: { due: 4, overdue: 1 },
     },
+    'POST /api/points/recompute': {
+      tasksDefaulted: 0,
+      snapshotsSet: 1,
+      created: 1,
+      updated: 1,
+      removed: 1,
+      bonusesCreated: 1,
+      bonusesRemoved: 0,
+    },
     'POST /api/jobs/audit-retention': { status: 'done', cutoff: '2026-08-17T08:00:00.000Z', deleted: 6 },
     'POST /api/jobs/morning-notify': { status: 'done', date: '2026-09-16', sent: 2, failed: 0, quiet: 1 },
+    ...overrides,
   });
 }
 
@@ -174,19 +184,41 @@ describe('SettingsPage — jobs', () => {
     ).toBeInTheDocument();
 
     fireEvent.click(buttons[1]!);
-    expect(await screen.findByText('Klaar: 6 oude auditregels verwijderd.')).toBeInTheDocument();
+    expect(await screen.findByText('Klaar: 2 aangemaakt, 2 bijgewerkt en 1 verwijderd.')).toBeInTheDocument();
 
     fireEvent.click(buttons[2]!);
+    expect(await screen.findByText('Klaar: 6 oude auditregels verwijderd.')).toBeInTheDocument();
+
+    fireEvent.click(buttons[3]!);
     expect(await screen.findByText('Klaar: 2 verstuurd, 0 mislukt en 1 zonder melding.')).toBeInTheDocument();
 
     const posts = fetchMock.mock.calls
       .filter(([, init]) => (init as RequestInit | undefined)?.method === 'POST')
       .map(([url]) => url);
     expect(posts).toEqual([
-      '/api/jobs/nightly',
+      '/api/jobs/generation',
+      '/api/points/recompute',
       '/api/jobs/audit-retention',
       '/api/jobs/morning-notify',
     ]);
+  });
+
+  it('says nothing changed when the recompute finds no drift', async () => {
+    setup({
+      'POST /api/points/recompute': {
+        tasksDefaulted: 0,
+        snapshotsSet: 0,
+        created: 0,
+        updated: 0,
+        removed: 0,
+        bonusesCreated: 0,
+        bonusesRemoved: 0,
+      },
+    });
+    renderWithProviders(<SettingsPage initialTab="jobs" />);
+    await screen.findByRole('heading', { name: 'Geplande jobs' });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Nu starten' })[1]!);
+    expect(await screen.findByText('Klaar: er is niets veranderd.')).toBeInTheDocument();
   });
 });
 

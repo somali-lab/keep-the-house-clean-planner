@@ -23,12 +23,12 @@ engine:
   # of the context maintainer offers; a Sonnet-class model is the cheapest step up.
   model: claude-sonnet-5
 strict: true
-timeout-minutes: 30
-# 1 AI credit is $0.01. A release run reads the diffs of a whole release and the requirement
-# sections they touch, so it gets twice the budget of the context maintainer. The daily cap lets
+timeout-minutes: 40
+# 1 AI credit is # 1 AI credit is $0.01. .01. The run first harvests routes, errors, settings, and schema defaults from the code (a rebuild-level comparison), which is why the budget and timeout are 1.5 times the earlier values. A release run reads the diffs of a whole release and the requirement
+# sections they touch, so it gets 1.5 times the budget of the context maintainer. The daily cap lets
 # a release run and the weekly run of the same day both finish, with room for one manual run.
-max-ai-credits: 200
-max-daily-ai-credits: 400
+max-ai-credits: 300
+max-daily-ai-credits: 600
 
 imports:
   - shared/docs-maintainer.md

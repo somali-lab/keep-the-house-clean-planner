@@ -36,7 +36,7 @@ let lastNightly: { due: { due: number; overdue: number } };
 const headers = () => asProfile(p1);
 
 async function nightly() {
-  const res = await t.app.inject({ method: 'POST', url: '/api/jobs/nightly', headers: headers() });
+  const res = await t.app.inject({ method: 'POST', url: '/api/jobs/generation', headers: headers() });
   expect(res.statusCode, res.body).toBe(200);
   return res.json<{ due: { due: number; overdue: number } }>();
 }
@@ -160,7 +160,7 @@ describe('GET /api/due', () => {
           })),
         },
       });
-      await app.app.inject({ method: 'POST', url: '/api/jobs/nightly', headers: asProfile(user) });
+      await app.app.inject({ method: 'POST', url: '/api/jobs/generation', headers: asProfile(user) });
 
       const before = await app.app.inject({ method: 'GET', url: '/api/due' });
       expect(before.json<DueJson[]>().find((item) => item.taskId === taskId)).toMatchObject({

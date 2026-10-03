@@ -76,7 +76,7 @@ async function fixture(options: { now?: string } = {}): Promise<Fixture> {
     ]),
   );
   expect((await call('PUT', `/api/cycle-plans/${plan._id.toHexString()}/slots`, { slots })).statusCode).toBe(200);
-  expect((await call('POST', '/api/jobs/nightly')).statusCode).toBe(200);
+  expect((await call('POST', '/api/jobs/generation')).statusCode).toBe(200);
 
   const occurrence: Fixture['occurrence'] = async (date, taskId) => {
     const res = await t.app.inject({ method: 'GET', url: `/api/occurrences?from=${date}&to=${date}` });

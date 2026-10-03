@@ -25,13 +25,13 @@ engine:
   # of the context maintainer offers; a Sonnet-class model is the cheapest step up.
   model: claude-sonnet-5
 strict: true
-timeout-minutes: 30
-# 1 AI credit is $0.01. A full audit reads the code behind every section of the requirements, so
-# a run gets twice the budget of the context maintainer. The daily cap lets a scheduled run and a
+timeout-minutes: 40
+# 1 AI credit is # 1 AI credit is $0.01. .01. The run first harvests routes, errors, settings, and schema defaults from the code (a rebuild-level comparison), which is why the budget and timeout are 1.5 times the earlier values. A full audit reads the code behind every section of the requirements, so
+# a run gets 1.5 times the budget of the context maintainer. The daily cap lets a scheduled run and a
 # manual full audit of the same day both finish. A run that reaches its cap must report the
 # sections it did not reach instead of guessing.
-max-ai-credits: 200
-max-daily-ai-credits: 400
+max-ai-credits: 300
+max-daily-ai-credits: 600
 
 imports:
   - shared/docs-maintainer.md

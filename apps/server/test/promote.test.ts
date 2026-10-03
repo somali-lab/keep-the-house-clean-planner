@@ -2,6 +2,7 @@ import { cycleStart, slotDate, toDayKey, type PromoteSuggestion } from '@huishou
 import { ObjectId } from 'mongodb';
 import { afterEach, describe, expect, it } from 'vitest';
 import { findActivePlan } from '../src/data/cyclePlans.ts';
+import { COLLECTIONS } from '../src/data/db.ts';
 import { findOccurrences } from '../src/data/occurrences.ts';
 import type { UserDoc } from '../src/data/users.ts';
 import { expectAudited } from './helpers/audit.ts';
@@ -51,7 +52,7 @@ async function setup(): Promise<Ctx> {
     payload: { slots: [{ taskId, weekIndex: 1, weekday: 2, assigneeId: p1._id.toHexString() }] },
   });
   expect(put.statusCode, put.body).toBe(200);
-  expect((await app.app.inject({ method: 'POST', url: '/api/jobs/nightly', headers })).statusCode).toBe(200);
+  expect((await app.app.inject({ method: 'POST', url: '/api/jobs/generation', headers })).statusCode).toBe(200);
 
   return {
     t: app,
@@ -151,7 +152,7 @@ describe('GET /api/promote-suggestions', () => {
 
     // A cycle later the same move happens again.
     c.t.clock.set('2026-10-12T06:00:00.000Z');
-    await c.t.app.inject({ method: 'POST', url: '/api/jobs/nightly', headers: asProfile(c.p1) });
+    await c.t.app.inject({ method: 'POST', url: '/api/jobs/generation', headers: asProfile(c.p1) });
     const third = await c.move(2, '2026-11-18');
     expect((await c.get()).map((s) => s.evidence[0])).toEqual([third]);
   });
@@ -208,6 +209,28 @@ describe('POST /api/promote-suggestions/apply', () => {
     ]);
     expect(entries[0]!.meta).toMatchObject({ promotedFrom: { weekIndex: 1, weekday: 2 }, toWeekday: 3 });
     expect(await c.get()).toEqual([]);
+  });
+
+  it('synchronizes the future occurrences immediately, like a slot save, recorded with a system origin', async () => {
+    const c = await setup();
+    const days = async () =>
+      (await findOccurrences(c.t.db, { taskId: new ObjectId(c.taskId) })).map((o) => toDayKey(o.date)).sort();
+    expect(await days()).toEqual(['2026-09-22', '2026-10-20']);
+
+    const res = await c.t.app.inject({
+      method: 'POST',
+      url: '/api/promote-suggestions/apply',
+      headers: asProfile(c.p1),
+      payload: { planId: c.planId, taskId: c.taskId, weekIndex: 1, weekday: 2, toWeekday: 3 },
+    });
+    expect(res.statusCode, res.body).toBe(200);
+    expect(await days()).toEqual(['2026-09-23', '2026-10-21']);
+    const deletions = await c.t.db
+      .collection(COLLECTIONS.auditLog)
+      .find({ entity: 'occurrence', action: 'delete', 'meta.reason': 'plan_update' })
+      .toArray();
+    expect(deletions).toHaveLength(2);
+    expect(deletions.every((d) => d.source === 'system')).toBe(true);
   });
 
   it('only changes the active plan and an existing slot', async () => {

@@ -79,7 +79,7 @@ beforeAll(async () => {
   );
   const put = await call('PUT', `/api/cycle-plans/${plan._id.toHexString()}/slots`, { slots });
   expect(put.statusCode, put.body).toBe(200);
-  expect((await call('POST', '/api/jobs/nightly')).statusCode).toBe(200);
+  expect((await call('POST', '/api/jobs/generation')).statusCode).toBe(200);
 });
 
 afterAll(async () => {

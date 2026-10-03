@@ -11,8 +11,8 @@ export const promoteRoutes: FastifyPluginAsync = async (app) => {
 
   app.post('/promote-suggestions/apply', { preHandler: requirePlanner }, async (request) => {
     const input = parseOrThrow(applyPromotionInputSchema, request.body);
-    const { plan, validation } = await applyPromotion(auditContext(request), input);
-    return { plan: toApi(plan), warnings: validation.warnings, summary: validation.summary };
+    const { plan, validation, synchronized } = await applyPromotion(auditContext(request), input);
+    return { plan: toApi(plan), warnings: validation.warnings, summary: validation.summary, synchronized };
   });
 
   app.post('/promote-suggestions/dismiss', { preHandler: requirePlanner }, async (request) => {

@@ -48,7 +48,7 @@ async function fixture(): Promise<Fixture> {
   const [p1, p2] = await seededUsers(t);
   const call: Fixture['call'] = (method, url, payload, actor = p1) =>
     t.app.inject({ method, url, headers: asProfile(actor), ...(payload ? { payload } : {}) });
-  expect((await call('POST', '/api/jobs/nightly')).statusCode).toBe(200);
+  expect((await call('POST', '/api/jobs/generation')).statusCode).toBe(200);
   const earn: Fixture['earn'] = async (points, actor = p1, date = t.clock.now().toISOString().slice(0, 10)) => {
     const res = await call(
       'POST',

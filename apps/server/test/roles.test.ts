@@ -67,7 +67,7 @@ describe('role permissions without passwords', () => {
     });
     const taskId = task.json<{ _id: string }>()._id;
 
-    const generated = await t.app.inject({ method: 'POST', url: '/api/jobs/nightly', headers: asProfile(admin) });
+    const generated = await t.app.inject({ method: 'POST', url: '/api/jobs/generation', headers: asProfile(admin) });
     expect(generated.statusCode, generated.body).toBe(200);
 
     const occurrence = await t.app.inject({

@@ -4,6 +4,8 @@ Each record states one durable architectural decision, the problem it solves, an
 
 A record is only added when a decision picks one option over a real alternative and the reason is not derivable from the requirement itself. Behaviour the system must exhibit belongs in `../huishoudplanner-requirements.md`; repository conventions belong in `../../AGENTS.md`; implementation detail that the code already states — library versions, function names, constants — belongs nowhere but the code.
 
+Numbers are not reused: 0013 and 0015 were retired when their content turned out to be behaviour and moved to the requirements, which is why the list skips them.
+
 Records are never rewritten to hide history. When a decision is replaced, the old record is marked `Superseded by ADR-xxxx` and the new record explains what changed and why.
 
 | #                                                                                   | Title                                                               | Status   |
@@ -16,8 +18,8 @@ Records are never rewritten to hide history. When a decision is replaced, the ol
 | [0006](0006-server-side-pdf-rendering.md)                                           | Server-side PDF rendering                                           | Accepted |
 | [0007](0007-release-automation-and-build-identity.md)                               | Release automation and build identity                               | Accepted |
 | [0008](0008-optimistic-activation-preview.md)                                        | Optimistic activation preview                                        | Accepted |
-| [0009](0009-extra-executions-and-one-off-tasks.md)                                   | Extra executions and one-off tasks as ad-hoc occurrences             | Proposed |
-| [0010](0010-browser-notifications-while-the-planner-is-open.md)                      | Browser notifications while the planner is open                     | Proposed |
-| [0011](0011-points-ledger-as-a-projection-of-executions.md)                          | Points ledger as a projection of executions                          | Proposed |
-| [0012](0012-week-and-cycle-bonuses-as-derived-ledger-entries.md)                     | Week and cycle bonuses as derived ledger entries                     | Proposed |
-| [0014](0014-badges-as-derived-awards.md)                                             | Badges as derived awards                                             | Proposed |
+| [0009](0009-extra-executions-and-one-off-tasks.md)                                   | Extra executions and one-off tasks as ad-hoc occurrences             | Accepted |
+| [0010](0010-browser-notifications-while-the-planner-is-open.md)                      | Browser notifications while the planner is open                     | Accepted |
+| [0011](0011-points-ledger-as-a-projection-of-executions.md)                          | Points ledger as a projection of executions                          | Accepted |
+| [0012](0012-week-and-cycle-bonuses-as-derived-ledger-entries.md)                     | Week and cycle bonuses as derived ledger entries                     | Accepted |
+| [0014](0014-badges-as-derived-awards.md)                                             | Badges as derived awards                                             | Accepted |

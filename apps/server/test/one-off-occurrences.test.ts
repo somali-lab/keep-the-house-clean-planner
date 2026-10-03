@@ -54,7 +54,7 @@ beforeAll(async () => {
     payload: { slots: [{ taskId: weekly, weekIndex: 0, weekday: 3, assigneeId: p1._id.toHexString() }] },
   });
   expect(slots.statusCode, slots.body).toBe(200);
-  expect((await t.app.inject({ method: 'POST', url: '/api/jobs/nightly', headers: asProfile(p1) })).statusCode).toBe(200);
+  expect((await t.app.inject({ method: 'POST', url: '/api/jobs/generation', headers: asProfile(p1) })).statusCode).toBe(200);
 });
 
 afterAll(async () => {
@@ -315,7 +315,7 @@ describe('activation of another plan', () => {
       payload: { previewToken: preview.previewToken },
     });
     expect(activated.statusCode, activated.body).toBe(200);
-    expect((await t.app.inject({ method: 'POST', url: '/api/jobs/nightly', headers: asProfile(p1) })).statusCode).toBe(200);
+    expect((await t.app.inject({ method: 'POST', url: '/api/jobs/generation', headers: asProfile(p1) })).statusCode).toBe(200);
 
     const remaining = await oneOffs();
     expect(remaining.map((o) => o._id.toHexString())).toEqual(expect.arrayContaining([open._id, done._id]));
