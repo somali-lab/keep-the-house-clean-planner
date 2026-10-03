@@ -128,6 +128,8 @@ public sealed class EnsureIndexesTests(MongoContainerFixture mongo) : IAsyncLife
             var rejected = async () => await occurrences.InsertOneAsync(Doc("adhoc"), cancellationToken: ct);
             await rejected.Should().ThrowAsync<MongoWriteException>();
 
+            // Slice 0.6b: the legacy drop is migration 001; migrations run before the ensurer at startup.
+            await MigrationRunner.CreateDefault(legacy, TimeProvider.System).RunAsync(ct);
             await new IndexEnsurer(legacy).EnsureAsync(ct);
             async Task<List<string>> Names() => (await IndexesOf(legacy, MongoCollections.Occurrences)).Select(i => i["name"].AsString).Order().ToList();
             var migrated = await Names();
@@ -144,6 +146,7 @@ public sealed class EnsureIndexesTests(MongoContainerFixture mongo) : IAsyncLife
             await duplicate.Should().ThrowAsync<MongoWriteException>();
             (await occurrences.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: ct)).Should().Be(3);
 
+            await MigrationRunner.CreateDefault(legacy, TimeProvider.System).RunAsync(ct);
             await new IndexEnsurer(legacy).EnsureAsync(ct);
             (await Names()).Should().Equal(migrated);
         }
