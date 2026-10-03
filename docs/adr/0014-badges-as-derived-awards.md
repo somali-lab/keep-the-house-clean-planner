@@ -1,6 +1,6 @@
 # ADR-0014 — Badges as derived awards
 
-Status: Proposed
+Status: Accepted
 
 ## Context
 
@@ -8,7 +8,7 @@ An administrator defines badges with a rule and a picture, and people earn them 
 
 ## Decision
 
-**Awards are derived from the executions and recomputed, not stored once when earned.** An award is a pure function of the active badge and the data, keyed per badge and person, and its moment comes from the data that crossed the threshold. It is inserted, moved or removed in place by the same per-database queue and reconcile that maintain the points ledger (ADR-0011, ADR-0012), so recomputing is idempotent and an import rebuilds every award with the same moments.
+**Awards are derived from the executions and recomputed, not stored once when earned.** An award is a pure function of the active badge and the data, keyed per badge and person, and its moment comes from the data that crossed the threshold. It is inserted, moved or removed in place under the same per-database queue that serializes the points ledger (ADR-0011, ADR-0012), by a reconcile that follows the points reconcile and also runs when badges, tasks or statistics change, so recomputing is idempotent and an import rebuilds every award with the same moments.
 
 **Badge images are stored in MongoDB**, as binary in the badge document, not as files on disk or a volume. They then travel with the existing backup and export and add nothing to restore.
 
