@@ -13,9 +13,8 @@ namespace Huishoudplanner.Domain.Ports.Driven;
 /// <see cref="PortError"/> whose message starts with <c>occurrences.no_transaction</c>. Reads join the running transaction when there is one.
 /// </summary>
 /// <remarks>
-/// Deliberately focused on what generation needs. Slice 3.2 adds the reads (by id, by range) and the per-action updates (complete, skip,
-/// reschedule, assign, claim) to this port, and 3.3 the ad-hoc inserts and the request key lookup, on top of the <see cref="Occurrence"/>
-/// type that already holds every stored field.
+/// Slice 3.1 added what generation needs; slice 3.2 adds the reads (by id, by range) and the update the occurrence actions share. Slice 3.3
+/// adds the ad-hoc inserts and the request key lookup on top of the <see cref="Occurrence"/> type that already holds every stored field.
 /// </remarks>
 public interface ForStoringOccurrences
 {
@@ -43,4 +42,22 @@ public interface ForStoringOccurrences
     /// work while completed history keeps its snapshot. Not audited and without a new <c>updatedAt</c>, as in the Node server. Returns the number changed.
     /// </summary>
     Task<OneOf<int, PortError>> UpdateUpcomingRoomSnapshotsAsync(string taskId, DateTimeOffset from, string roomId, string roomName, CancellationToken cancellationToken);
+
+    /// <summary><see cref="NotFound"/> also for an id that is not a valid id.</summary>
+    Task<OneOf<Occurrence, NotFound, PortError>> FindAsync(string id, CancellationToken cancellationToken);
+
+    /// <summary>At most <see cref="OccurrenceQuery.Take"/> occurrences of the query, in the display order (day, task name, id), after the cursor.</summary>
+    Task<OneOf<IReadOnlyList<Occurrence>, PortError>> ListAsync(OccurrenceQuery query, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Writes the fields that differ between <paramref name="before"/> (what the use case read) and <paramref name="after"/> (one <c>$set</c> per
+    /// field, plus <c>updatedAt</c>), only while the stored occurrence still matches <paramref name="guard"/>. Returns the occurrence as stored
+    /// afterwards; <see cref="NotFound"/> when it no longer exists and <see cref="OccurrenceStateChanged"/> when it exists but a concurrent
+    /// write changed the guarded state. Needs a transaction (the audit entry belongs to it).
+    /// </summary>
+    Task<OneOf<Occurrence, NotFound, OccurrenceStateChanged, PortError>> UpdateAsync(
+        Occurrence before, Occurrence after, OccurrenceGuard guard, DateTimeOffset updatedAt, CancellationToken cancellationToken);
+
+    /// <summary>The newest <c>completedAt</c> among the done occurrences of the task (the index serves it); <see cref="LatestCompletion.At"/> is <see langword="null"/> when there is none.</summary>
+    Task<OneOf<LatestCompletion, PortError>> FindLatestCompletionAsync(string taskId, CancellationToken cancellationToken);
 }

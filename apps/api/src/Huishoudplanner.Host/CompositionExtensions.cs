@@ -21,6 +21,7 @@ using Huishoudplanner.Host.Tasks;
 using Huishoudplanner.Host.CyclePlans;
 using Huishoudplanner.Host.Generation;
 using Huishoudplanner.Host.Notifications;
+using Huishoudplanner.Host.Occurrences;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Scalar.AspNetCore;
@@ -47,6 +48,7 @@ public static class CompositionExtensions
         services.AddRooms();
         services.AddTasks();
         services.AddGeneration();
+        services.AddOccurrences();
         services.AddCyclePlans();
         services.AddAi();
         services.AddNotifications();
@@ -65,6 +67,7 @@ public static class CompositionExtensions
         app.MapCyclePlans();
         app.MapAi();
         app.MapGeneration();
+        app.MapOccurrences();
         app.MapAuditEndpoints();
         app.MapMetaEndpoints();
         app.MapCalendarEndpoints();

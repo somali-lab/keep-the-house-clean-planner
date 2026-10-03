@@ -14,7 +14,7 @@ using Room = Huishoudplanner.Domain.Rooms.Room;
 namespace Huishoudplanner.Application.Tests.Tasks;
 
 /// <summary>An in-memory task store that counts writes, can fail, and answers the usage questions of the room and settings use cases.</summary>
-internal sealed class FakeTaskStore : ForStoringTasks
+internal sealed partial class FakeTaskStore : ForStoringTasks
 {
     private int counter;
 

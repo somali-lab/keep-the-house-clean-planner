@@ -55,6 +55,28 @@ public static class TaskAudit
         return entries;
     }
 
+    /// <summary>
+    /// The denormalised <c>lastCompletedAt</c> followed a completion (<c>setTaskLastCompletedAt</c>): an <c>update</c> of that field alone, with the
+    /// occurrence that caused it in <c>meta</c>. <see langword="null"/> when the value did not change.
+    /// </summary>
+    public static AuditEntry? ForLastCompletedAt(AuditActor actor, string taskId, DateTimeOffset? before, DateTimeOffset? after, string occurrenceId)
+    {
+        ArgumentNullException.ThrowIfNull(actor);
+        if (before == after)
+        {
+            return null;
+        }
+
+        static AuditValue At(DateTimeOffset? value) => value is { } at ? AuditValue.FromInstant(at) : AuditNull.Instance;
+        return AuditEntry.For(
+            actor,
+            AuditEntity.Task,
+            taskId,
+            AuditAction.Update,
+            new FieldDiff(AuditObject.Of(("lastCompletedAt", At(before))), AuditObject.Of(("lastCompletedAt", At(after)))),
+            AuditObject.Of(("occurrenceId", new AuditObjectId(occurrenceId))));
+    }
+
     private static AuditObject Without(AuditObject source, string key) =>
         new(source.Properties.Where(p => p.Key != key));
 }

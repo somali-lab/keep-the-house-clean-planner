@@ -235,7 +235,7 @@ Each phase ends in something demonstrable. Slices are small enough for one pull 
 ### Phase 3 — Cycles, generation, daily use
 
 - [x] 3.1 Cycles and generation (current and next cycle, `removed`/`generated`, idempotent). Port `generation.test.ts`, `cycles-api.test.ts`.
-- [ ] 3.2 Occurrences: list, complete/uncomplete/edit completion/skip/reschedule/assign/claim as intent endpoints, `invalid_transition`, `already_claimed`, `completion_choice_*`, warnings. Port `occurrences.test.ts`, `completion-choice.test.ts`, `reschedule.test.ts`.
+- [x] 3.2 Occurrences: list, complete/uncomplete/edit completion/skip/reschedule/assign/claim as intent endpoints, `invalid_transition`, `already_claimed`, `completion_choice_*`, warnings. Port `occurrences.test.ts`, `completion-choice.test.ts`, `reschedule.test.ts`. (Deferred: the points ledger that follows a completion goes to phase 4 and the ad-hoc scenarios of `occurrences.test.ts` to 3.3; `DELETE /occurrences/{id}`, the administrator correction of `occurrences.test.ts`, is included here.)
 - [ ] 3.3 Extra executions and one-off tasks with idempotency keys and retract (ADR-0009). Port `adhoc-occurrences.test.ts`, `one-off-occurrences.test.ts`.
 - [ ] 3.4 Due engine. Port `due-api.test.ts`.
 

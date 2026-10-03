@@ -23,7 +23,7 @@ namespace Huishoudplanner.Adapters.Mongo.Occurrences;
 /// change without its audit entry must never exist. Reads join the transaction when there is one. A transient transaction error propagates so
 /// the runner retries the attempt; any other infrastructure failure is a <see cref="PortError"/> without configuration values.</para>
 /// </remarks>
-internal sealed class MongoOccurrenceStore : ForStoringOccurrences
+internal sealed partial class MongoOccurrenceStore : ForStoringOccurrences
 {
     private const string TransientLabel = "TransientTransactionError";
 
@@ -233,7 +233,8 @@ internal sealed class MongoOccurrenceStore : ForStoringOccurrences
             Text(document, "requestId"),
             Number(document, "pointsSnapshot"),
             Number(document, "pointsOverride"),
-            Id(document, "periodOwnerId"));
+            Id(document, "periodOwnerId"),
+            document.Contains("periodOwnerId"));
     }
 
     private static string? Id(BsonDocument document, string field) =>

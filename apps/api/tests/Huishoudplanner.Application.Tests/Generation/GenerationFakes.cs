@@ -78,7 +78,7 @@ internal sealed class FakeCycleStore : ForStoringCycles
 /// An in-memory occurrence store with the semantics of the unique slot index: a generated draft is skipped when a generated occurrence of
 /// the same cycle, task and day exists, an ad-hoc occurrence never occupies a slot.
 /// </summary>
-internal sealed class FakeOccurrenceStore : ForStoringOccurrences
+internal sealed partial class FakeOccurrenceStore : ForStoringOccurrences
 {
     private int counter;
 
