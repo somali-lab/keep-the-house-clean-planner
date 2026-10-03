@@ -1,6 +1,7 @@
 import { weekIndexFor } from '@huishoudplanner/shared/cycle';
 import { ListChecks } from 'lucide-react';
 import { useMemo } from 'react';
+import { useFilterReset } from '@/components/FilterReset';
 import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -27,6 +28,7 @@ export function MobileTasksPage({ now }: { now?: Date }) {
   const { profile } = useProfile();
   const [weeks, setWeeks, resetWeeks] = usePersistedFilter<WeekRange>('mobileTasks.period', profile?._id ?? null, 1);
   const [hiddenRoomIds, setHiddenRoomIds, resetRooms] = usePersistedFilter<string[]>('mobileTasks.rooms', profile?._id ?? null, []);
+  useFilterReset(() => { resetWeeks(); resetRooms(); }, weeks !== 1 || hiddenRoomIds.length > 0);
   const from = dayKeyInZone(now ?? new Date(), settings.data?.timezone ?? 'Europe/Amsterdam');
   const to = addDaysKey(from, weeks * 7 - 1);
   const cycleWeek = settings.data ? weekIndexFor(from, settings.data.cycleAnchorDate) + 1 : null;
@@ -113,9 +115,6 @@ export function MobileTasksPage({ now }: { now?: Date }) {
             })}
           </div>
         </fieldset>
-        <Button type="button" variant="outline" onClick={() => { resetWeeks(); resetRooms(); }}>
-          {t('mobileTasks.resetFilters')}
-        </Button>
         <fieldset className="grid gap-1.5">
           <legend className="text-sm font-semibold">{t('mobileTasks.period')}</legend>
           <div className="grid grid-cols-3 rounded-lg bg-muted p-1" aria-label={t('mobileTasks.period')}>

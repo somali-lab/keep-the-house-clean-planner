@@ -11,8 +11,9 @@ import {
 import type { CyclePlan, Interval, Room, Slot, Task, User } from '@huishoudplanner/shared';
 // Subpath import keeps Luxon and Zod out of the web bundle.
 import { validatePlan } from '@huishoudplanner/shared/validation/plan';
-import { Ban, Menu, RotateCcw, X } from 'lucide-react';
+import { Ban, Menu, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useFilterReset } from '@/components/FilterReset';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/NativeSelect';
@@ -92,6 +93,20 @@ export function PlanEditor({
     profileId,
     '',
   );
+  useFilterReset(
+    () => {
+      resetWeek();
+      resetAssignee();
+      resetRoom();
+      resetInterval();
+      resetSearch();
+    },
+    selectedWeek !== 0
+      || assigneeFilter !== 'all'
+      || roomFilter !== 'all'
+      || intervalFilter !== 'all'
+      || searchTerm !== '',
+  );
   const [poolCollapsed, setPoolCollapsed] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>('idle');
@@ -158,13 +173,6 @@ export function PlanEditor({
       week.unassignedMinutes,
     0,
   );
-  const resetFilters = () => {
-    resetWeek();
-    resetAssignee();
-    resetRoom();
-    resetInterval();
-    resetSearch();
-  };
 
   useEffect(() => {
     if (!hasTasksToDistribute) setPoolCollapsed(true);
@@ -273,10 +281,6 @@ export function PlanEditor({
             ))}
             <option value="unassigned">{t('planner.anyone')}</option>
           </NativeSelect>
-          <Button type="button" variant="outline" size="sm" onClick={resetFilters}>
-            <RotateCcw aria-hidden="true" />
-            {t('planner.resetFilters')}
-          </Button>
           <span
             role="status"
             className={cn(

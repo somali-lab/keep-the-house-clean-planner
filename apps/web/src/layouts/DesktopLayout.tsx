@@ -18,6 +18,7 @@ import {
 import { NavLink, Navigate, Route, Routes } from 'react-router';
 import { AppLogo } from '@/components/AppLogo';
 import { AppVersion } from '@/components/AppVersion';
+import { FilterResetButton } from '@/components/FilterReset';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { ThemeSwitcher } from '@/components/ThemeSwitcher';
 import { Button } from '@/components/ui/button';
@@ -125,6 +126,7 @@ export function DesktopLayout({ onOpenOverview }: { onOpenOverview: () => void }
       </aside>
       <div className="flex min-w-0 flex-col">
         <header className="sticky top-0 z-20 flex h-16 items-center justify-end gap-2 border-b bg-background/90 px-6 backdrop-blur">
+          <FilterResetButton />
           <LanguageSwitcher />
           <ThemeSwitcher />
           {/* Same top-right spot as the overview's management button. */}
