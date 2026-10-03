@@ -22,6 +22,7 @@ using Huishoudplanner.Host.Due;
 using Huishoudplanner.Host.CyclePlans;
 using Huishoudplanner.Host.Generation;
 using Huishoudplanner.Host.Notifications;
+using Huishoudplanner.Host.Occurrences;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Scalar.AspNetCore;
@@ -49,6 +50,7 @@ public static class CompositionExtensions
         services.AddTasks();
         services.AddDue();
         services.AddGeneration();
+        services.AddOccurrences();
         services.AddCyclePlans();
         services.AddActivation();
         services.AddAi();
@@ -70,6 +72,7 @@ public static class CompositionExtensions
         app.MapActivation();
         app.MapAi();
         app.MapGeneration();
+        app.MapOccurrences();
         app.MapAuditEndpoints();
         app.MapMetaEndpoints();
         app.MapCalendarEndpoints();

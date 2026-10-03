@@ -594,6 +594,7 @@ PATCH  /api/occurrences/:id                 POST /api/occurrences/:id/claim
 POST   /api/occurrences/one-off             POST /api/occurrences/:id/retract
 DELETE /api/occurrences/:id
 GET    /api/due
+                                            (v2, slice 3.2: GET /api/v2/occurrences and GET /api/v2/occurrences/{id}; one POST per intent instead of PATCH with an action, see the v2 paragraph under PATCH; POST .../claim and DELETE /api/v2/occurrences/{id}; POST /api/v2/occurrences, .../one-off and .../retract follow with slice 3.3)
 
 GET    /api/points/balances                  GET  /api/points/entries
 GET    /api/points/progress
@@ -640,6 +641,21 @@ GET    /api/export/json                     POST /api/import/json
 `POST /api/occurrences/one-off` takes `{ name, roomId?, durationMinutes, date, assigneeId?, done?, points?, requestId? }` and answers like `POST /api/occurrences`: `201` with the occurrence (`taskId: null`) and `warnings`, or `200` on a replay. Errors: `400 validation_error` (`unknown_room`, `inactive_room`, `unknown_user`, `inactive_user`, `done_requires_today`, `done_requires_person`), `409 cycle_not_generated`, `409 idempotency_key_conflict`. A repeated key matches when the stored one-off task has the same name, date and `recordedDone`.
 
 `PATCH /api/occurrences/:id` is a single endpoint carrying an explicit action: complete, uncomplete, edit a completion, skip, reschedule or assign. The action is part of the request, so history records intent rather than an inferred difference. A `complete` action takes `completedBy` or `takeOver: true`, never both (`completion_choice_conflict`), and work of someone else without either is rejected with `400 completion_choice_required` (see 4.4). An `edit_completion` action takes `{ date, completedAt, completedBy }` and needs the administrator role; it requires a done occurrence (`409 invalid_transition` otherwise), an existing person (`400 validation_error` `unknown_user` on `completedBy`) and, when `date` differs from the occurrence's date, a generated cycle for that day (`409 cycle_not_generated`). A `skip` action takes an optional `reason` of at most 500 characters, a `reschedule` action a `date`, and an `assign` action an `assigneeId` (`null` for "anyone"); the last two answer with the occurrence and its `warnings` (`assignee_unavailable`, see 4.4), and every other action answers with the occurrence alone. A status that does not allow the action, or that changed in the meantime, is refused with `409 invalid_transition` (details `status` and `action`); a claim of work that already has an assignee with `409 already_claimed`. Occurrence views carry `pointsSnapshot`, `pointsOverride`, `isOverdue` (open and dated before today) and `movedFrom` (the planned day when the occurrence sits on another day, else `null`).
+
+In v2 (slice 3.2) the single `PATCH` is one endpoint per intent, so the OpenAPI document describes each body exactly, and every occurrence view carries `id` instead of `_id`, the day keys `date` and `plannedDate`, and `cycleIndex` and `weekIndex` (where the day falls in the cycles, so the web app computes neither). The mapping:
+
+| Node `PATCH /occurrences/:id` action | v2 endpoint | Body | Who |
+| ------------------------------------ | ----------- | ---- | --- |
+| `complete` | `POST /api/v2/occurrences/{id}/complete` | optional `{ completedBy?, takeOver? }` (`takeOver` only as `true`) | any profile |
+| `uncomplete` | `POST /api/v2/occurrences/{id}/uncomplete` | none | any profile |
+| `edit_completion` | `POST /api/v2/occurrences/{id}/completion` | `{ date, completedAt, completedBy }` | administrator |
+| `skip` | `POST /api/v2/occurrences/{id}/skip` | optional `{ reason? }` | any profile |
+| `reschedule` | `POST /api/v2/occurrences/{id}/reschedule` | `{ date }` | any profile |
+| `assign` | `POST /api/v2/occurrences/{id}/assignment` | `{ assigneeId }` (required, `null` for anyone) | any profile |
+| (separate route) | `POST /api/v2/occurrences/{id}/claim` | none | any profile |
+| (separate route) | `DELETE /api/v2/occurrences/{id}` answers `200 { deleted: true }` | none | administrator |
+
+`GET /api/v2/occurrences?from&to` takes the two required day keys (both included, `from` not after `to`: `400 validation_error` with `from_after_to` on `from`), the optional filters `assigneeId` and `status` (`open`, `done`, `skipped`), and is paged like the other lists: `limit` (1 to 500, default 100) and `cursor`, answering `{ items, nextCursor }` in the display order (day, task name, id). `GET /api/v2/occurrences/{id}` answers one view or `404 not_found`. Both need no profile. The bodies are read by the server itself: malformed JSON, a wrong type, an explicit `null` where none is allowed, a day that is not `YYYY-MM-DD` and an instant without a time zone are `400 validation_error` problems keyed by field; the rules of the values are the ones above (`completion_choice_required`, `completion_choice_conflict`, `unknown_user`, `inactive_user`, `invalid_object_id`). A refused action is `409 invalid_transition` with the extensions `status` and `action` (the status that was found, `changed` when it changed in the meantime), `409 already_claimed`, `409 cycle_not_generated` with the extension `date`, or `409 retract_required` for recorded work. `reschedule` and `assignment` answer the view with the extra member `warnings` (each `{ code, message, details }`, empty when there are none). Only the occurrence entry and, when `lastCompletedAt` changes, the task entry are written, in one transaction. The points ledger that follows a completion, a correction and a deletion arrives with phase 4; the `pointsSnapshot` of the occurrence is written already.
 
 `POST /api/tasks` and `PATCH /api/tasks/:id` take an optional integer `points` from 0 to 1000; task views always carry `points`.
 
