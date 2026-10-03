@@ -25,3 +25,6 @@ public sealed record ValidationErrors(IReadOnlyDictionary<string, string[]> Erro
 /// is never sent to a client. Maps to <c>500 internal_error</c>.
 /// </summary>
 public sealed record PortError(string Message);
+
+/// <summary>The installation has no settings document yet (requirements section 8). Maps to <c>500 settings_missing</c>.</summary>
+public readonly record struct SettingsMissing;

@@ -564,11 +564,14 @@ The active profile travels in the header `x-profile-id` (the id of an active use
 ```
 GET    /api/health   (v2: GET /api/v2/health answers { status, version, database } and reports a failed database ping as 503 with "error" in both status fields)
 
+GET    /api/v2/meta/limits   GET /api/v2/calendar?from&to   (v2 only, see below)
+
 GET    /api/users                           POST /api/users            PATCH /api/users/:id
 PUT    /api/users/:id/browser-notifications (own moments, or any person's for an admin)
        (v2: /api/v2/users with the same verbs. GET answers { items, nextCursor } and takes the optional filters active=true|false, limit (1 to 500, default 100) and cursor; a person carries id instead of _id; the PUT answers 403 permission_denied for another person unless the actor is an administrator; a field error is a validation_error problem whose errors object is keyed by the dotted field path, for example unavailableWeekdays.0)
 GET    /api/rooms                           POST /api/rooms            PATCH /api/rooms/:id
 DELETE /api/rooms/:id
+                                            (v2: /api/v2/rooms; GET is paged like the audit log, `?active&limit&cursor`, and answers `{ items, nextCursor }`; a room has `id` instead of `_id`; DELETE answers `200 { deleted: true }`)
 GET    /api/tasks                           POST /api/tasks            PATCH /api/tasks/:id
 DELETE /api/tasks/:id                       POST /api/rooms/:id/tasks/bulk
 
@@ -620,6 +623,10 @@ GET    /api/export/pdf/due                  GET  /api/export/pdf/tasks
 GET    /api/export/json                     POST /api/import/json
 ```
 
+`GET /api/v2/meta/limits` (v2 only) answers every limit and default the web app needs as one document grouped by resource (`calendar`, `tasks`, `points`, `bonuses`, `rewards`, `badges`, `notifications`, `ai`, `audit`, `statistics`, `defaults`, names in camelCase), so the web app holds no copy of them; the values equal the constants of the Node implementation. `defaults` carries the currency, the AI timeout and the default intervals. The default points of a task (one point per minute, between 1 and `tasks.maxPoints`) are not published as a rule: `POST /api/v2/tasks` and a one-off task apply it on the server when `points` is omitted. It needs no profile and cannot fail except with `500 internal_error`.
+
+`GET /api/v2/calendar?from&to` (v2 only) takes two required day keys and answers `{ timezone, days }` with one entry per day from `from` to `to`, both included: `dayKey`, `weekday` (0 Sunday to 6 Saturday), `cycleIndex` (negative before the anchor), `weekIndex` (0 to 3 inside the cycle), `isoWeek` (for example `2026-W38`) and `weekStart` (the Monday of the week). The days come from the shared day-key and cycle helpers with the cycle anchor of the settings, so a DST day is one day like any other, and `timezone` names the household timezone the day keys are read in. The range is at most 371 days (`limits.calendar.maxRangeDays`). It needs no profile. Errors: `400 validation_error` with `required` or `invalid_day_key` on `from` or `to`, `from_after_to` on `from`, `range_too_long` on `to`; `500 settings_missing` when the installation has no settings.
+
 `POST /api/occurrences` takes `{ taskId, date, assigneeId?, done?, requestId? }` and answers `201` with the occurrence and its `warnings`, or `200` when a repeated `requestId` replays the stored record. Errors: `400 validation_error` (`unknown_task`, `inactive_task`, `unknown_user`, `inactive_user`, `done_requires_today`, `done_requires_person`), `409 cycle_not_generated`, `409 idempotency_key_conflict`. `POST /api/occurrences/:id/retract` answers `200 { retracted: true, id }`, `409 not_retractable` for anything but recorded extra work, `409 retract_not_today` when the record's date is not today in the household timezone, and `404` when it is already gone.
 
 `POST /api/occurrences/one-off` takes `{ name, roomId?, durationMinutes, date, assigneeId?, done?, points?, requestId? }` and answers like `POST /api/occurrences`: `201` with the occurrence (`taskId: null`) and `warnings`, or `200` on a replay. Errors: `400 validation_error` (`unknown_room`, `inactive_room`, `unknown_user`, `inactive_user`, `done_requires_today`, `done_requires_person`), `409 cycle_not_generated`, `409 idempotency_key_conflict`. A repeated key matches when the stored one-off task has the same name, date and `recordedDone`.
@@ -631,6 +638,8 @@ GET    /api/export/json                     POST /api/import/json
 `GET /api/due` returns the ranked list of every active task with its state `ok`, `due` or `overdue`, so a task that is fine is in it as well; leaving out the `ok` items is up to the client (see 4.5).
 
 `GET /api/cycle-plans/:id/activation-preview` (planner) answers `{ planId, previewToken, asOfDate, removed, added, preserved: { done, skipped, moved, adhoc } }`: each of the lists holds items `{ occurrenceId, cycleIndex, taskId, taskName, date, assigneeId }` (`occurrenceId` is `null` for an occurrence that does not exist yet and `taskId` is `null` for a one-off task), and `previewToken` is an opaque fingerprint of the state that was previewed. `POST /api/cycle-plans/:id/activate` takes `{ previewToken }` and answers `409 stale_activation_preview` when the preview recomputed at that moment has another token (see 4.3).
+
+In v2, `room_in_use` carries the number of tasks as the `taskCount` extension of the problem (v1: `details.taskCount`), and a malformed `limit`, `cursor` or `id` is `400 validation_error` on that field.
 
 `GET /api/audit` takes the optional filters `entity`, `entityId`, `actorId`, `source` (`ui`, `api`, `ai` or `system`; it is `source`, not `origin`), `from` and `to` (ISO instants), a `cursor` and a `limit` (a whole number from 1 to 200, default 50). It answers `{ items, nextCursor }`, newest first; `nextCursor` is `null` on the last page and the opaque value to pass as `cursor` for the next one, and a malformed cursor is `400 validation_error` with `invalid_cursor` on `cursor`. An entry of the legacy action `ai-apply` can still be returned. `DELETE /api/audit` (administrators only) answers `{ deleted }`.
 
