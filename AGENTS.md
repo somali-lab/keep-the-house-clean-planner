@@ -70,7 +70,7 @@ Empty these documents as part of finishing the work, and report anything left in
 - `apps/web/src/features`: feature UI plus colocated component/model tests.
 - `apps/web/src/i18n`: Dutch and English message catalogs and language runtime.
 - `apps/web/e2e`: isolated Playwright journeys against the real server and a fresh database.
-- `docker`, `docker-compose.yml`, `scripts/smoke.mjs`: production image and isolated container smoke test.
+- `docker`, `docker-compose.yml`, `scripts/smoke.mjs`, `scripts/smoke-dotnet.mjs`: production image, the .NET image (`docker/Dockerfile.dotnet`, until the switch) and their isolated container smoke tests.
 - `docs/adr`: architecture decision records.
 - `AGENTS.md`, `.github/instructions`, `.cursor/rules`, `.agents/skills`, `.github/copilot-instructions.md`, `CLAUDE.md`: the agent-context layer, maintained by the `context-maintainer` agentic workflow.
 - `docs/huishoudplanner-requirements.md` and the **What it does** section of `README.md`: kept aligned with the code by the `docs-maintainer` agentic workflow, which proposes changes in a `[docs]` pull request.

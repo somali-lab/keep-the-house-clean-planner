@@ -1,0 +1,27 @@
+# Override for scripts/smoke-dotnet.mjs: builds the app from docker/Dockerfile.dotnet and turns the compose
+# Mongo into the single-node replica set the .NET application expects (ADR-0021). Never used by a real installation.
+services:
+  app:
+    # The base file loads .env; the smoke must only see the explicit values below, never a developer's real settings.
+    env_file: !reset []
+    build:
+      dockerfile: docker/Dockerfile.dotnet
+    environment:
+      MONGO_URL: mongodb://mongo:27017/huishoudplanner?replicaSet=rs0
+    healthcheck:
+      test: !override
+        - CMD
+        - bash
+        - -c
+        - "exec 3<>/dev/tcp/127.0.0.1/3000; printf 'GET /api/v2/health HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3; head -n 1 <&3 | grep -q ' 200 '"
+
+  mongo:
+    command: ['--replSet', 'rs0', '--bind_ip_all']
+    healthcheck:
+      # Initiates the replica set on first run; healthy once this node is primary.
+      test: !override
+        - CMD
+        - mongosh
+        - --quiet
+        - --eval
+        - "try { rs.status() } catch (e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'mongo:27017' }] }) }; if (!db.hello().isWritablePrimary) quit(1)"
