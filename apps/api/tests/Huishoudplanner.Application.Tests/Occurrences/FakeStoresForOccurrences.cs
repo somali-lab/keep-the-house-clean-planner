@@ -83,6 +83,112 @@ namespace Huishoudplanner.Application.Tests.Generation
             return Task.FromResult<OneOf<Occurrence, NotFound, OccurrenceStateChanged, PortError>>(Items[index]);
         }
 
+        /// <summary>Runs once, just before the next ad-hoc insert checks the request key: another request with the same key that got there first.</summary>
+        public Action? ConcurrentInsertBeforeNextAdhoc { get; set; }
+
+        private readonly List<Occurrence> committedByOthers = [];
+
+        /// <summary>A concurrent writer committed this occurrence: it survives the rollback of the transaction that is running.</summary>
+        public void CommitOther(Occurrence occurrence)
+        {
+            Items.Add(occurrence);
+            committedByOthers.Add(occurrence);
+        }
+
+        public IReadOnlyList<Occurrence> TakeCommittedByOthers()
+        {
+            var taken = committedByOthers.ToList();
+            committedByOthers.Clear();
+            return taken;
+        }
+
+        /// <summary>Runs once, just before the next guarded delete looks at the stored state: another retract that got there first.</summary>
+        public Action? ConcurrentDeleteBeforeNextRetract { get; set; }
+
+        public int AdhocInserts { get; private set; }
+
+        public int AdhocInsertAttempts { get; private set; }
+
+        /// <summary>Every insert fails on the unique request key, as when the record that holds it is never visible to the use case.</summary>
+        public bool KeyAlwaysTaken { get; set; }
+
+        public Task<OneOf<Occurrence, NotFound, PortError>> FindByRequestIdAsync(string requestId, CancellationToken cancellationToken)
+        {
+            if (Failure is { } failure)
+            {
+                return Task.FromResult<OneOf<Occurrence, NotFound, PortError>>(failure);
+            }
+
+            var found = Items.FirstOrDefault(o => o.RequestId == requestId);
+            return Task.FromResult<OneOf<Occurrence, NotFound, PortError>>(found is null ? new NotFound() : found);
+        }
+
+        public Task<OneOf<int, PortError>> CountOpenOfTaskOnAsync(string taskId, DateTimeOffset day, CancellationToken cancellationToken)
+        {
+            if (Failure is { } failure)
+            {
+                return Task.FromResult<OneOf<int, PortError>>(failure);
+            }
+
+            return Task.FromResult<OneOf<int, PortError>>(Items.Count(o => o.TaskId == taskId && o.Status == OccurrenceStatus.Open && o.Date == day));
+        }
+
+        public Task<OneOf<Occurrence, RequestKeyTaken, PortError>> InsertAdhocAsync(NewAdhocOccurrence draft, CancellationToken cancellationToken)
+        {
+            if (Failure is { } failure)
+            {
+                return Task.FromResult<OneOf<Occurrence, RequestKeyTaken, PortError>>(failure);
+            }
+
+            AdhocInsertAttempts++;
+            if (KeyAlwaysTaken)
+            {
+                return Task.FromResult<OneOf<Occurrence, RequestKeyTaken, PortError>>(new RequestKeyTaken());
+            }
+
+            if (ConcurrentInsertBeforeNextAdhoc is { } race)
+            {
+                ConcurrentInsertBeforeNextAdhoc = null;
+                race();
+            }
+
+            // The unique index on requestId: a key that is already stored cannot be inserted again.
+            if (draft.RequestId is not null && Items.Any(o => o.RequestId == draft.RequestId))
+            {
+                return Task.FromResult<OneOf<Occurrence, RequestKeyTaken, PortError>>(new RequestKeyTaken());
+            }
+
+            AdhocInserts++;
+            Writes++;
+            var stored = draft.ToOccurrence(NextId());
+            Items.Add(stored);
+            return Task.FromResult<OneOf<Occurrence, RequestKeyTaken, PortError>>(stored);
+        }
+
+        public Task<OneOf<Occurrence, NotFound, PortError>> DeleteRecordedAsync(string id, CancellationToken cancellationToken)
+        {
+            if (Failure is { } failure)
+            {
+                return Task.FromResult<OneOf<Occurrence, NotFound, PortError>>(failure);
+            }
+
+            if (ConcurrentDeleteBeforeNextRetract is { } race)
+            {
+                ConcurrentDeleteBeforeNextRetract = null;
+                race();
+            }
+
+            var found = Items.FirstOrDefault(o => o.Id == id && o.Origin == OccurrenceOrigin.Adhoc && o.RecordedDone && o.Status == OccurrenceStatus.Done);
+            if (found is null)
+            {
+                return Task.FromResult<OneOf<Occurrence, NotFound, PortError>>(new NotFound());
+            }
+
+            Items.Remove(found);
+            Writes++;
+            return Task.FromResult<OneOf<Occurrence, NotFound, PortError>>(found);
+        }
+
         public Task<OneOf<LatestCompletion, PortError>> FindLatestCompletionAsync(string taskId, CancellationToken cancellationToken)
         {
             if (Failure is { } failure)
