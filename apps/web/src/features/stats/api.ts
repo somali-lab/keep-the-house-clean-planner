@@ -1,4 +1,12 @@
-import type { CompletionResponse, DeviationsResponse, IntervalsResponse, StatsGroupBy, WorkloadResponse } from '@huishoudplanner/shared';
+import type {
+  CompletionResponse,
+  DeviationsResponse,
+  IntervalsResponse,
+  PointsBalancesResponse,
+  PointsEntriesResponse,
+  StatsGroupBy,
+  WorkloadResponse,
+} from '@huishoudplanner/shared';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/index.ts';
 
@@ -44,6 +52,30 @@ export function useDeviations(period: StatsPeriod) {
   });
 }
 
+export function usePointsBalances(range: { from: string; to: string } | null) {
+  return useQuery({
+    queryKey: ['points', 'balances', range?.from, range?.to],
+    queryFn: async () =>
+      (await api.get<PointsBalancesResponse>(`/api/points/balances?from=${range!.from}&to=${range!.to}`)).data,
+    enabled: range !== null,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function usePointsEntries(personId: string | null, range: { from: string; to: string } | null) {
+  return useQuery({
+    queryKey: ['points', 'entries', personId, range?.from, range?.to],
+    queryFn: async () =>
+      (
+        await api.get<PointsEntriesResponse>(
+          `/api/points/entries?personId=${personId}&from=${range!.from}&to=${range!.to}`,
+        )
+      ).data,
+    enabled: personId !== null && range !== null,
+    placeholderData: keepPreviousData,
+  });
+}
+
 export function useResetStatistics() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -51,6 +83,7 @@ export function useResetStatistics() {
     onSuccess: () =>
       Promise.all([
         queryClient.invalidateQueries({ queryKey: ['stats'] }),
+        queryClient.invalidateQueries({ queryKey: ['points'] }),
         queryClient.invalidateQueries({ queryKey: ['occurrences'] }),
         queryClient.invalidateQueries({ queryKey: ['due'] }),
         queryClient.invalidateQueries({ queryKey: ['tasks'] }),

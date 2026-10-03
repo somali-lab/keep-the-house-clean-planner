@@ -23,17 +23,21 @@ async function freshApp(options: Parameters<typeof createTestApp>[0] = {}): Prom
 }
 
 const importUrl = '/api/import/json?mode=replace&confirm=true';
-const withoutImports = (entries: Document[]) => entries.filter((e) => e.entity !== 'import');
+// The import itself, and the rebuild of the ledger it triggers (ADR-0011), are the only new audit entries.
+const withoutImports = (entries: Document[]) =>
+  entries.filter((e) => e.entity !== 'import' && !(e.entity === 'points' && e.action === 'recompute'));
 const EXTRA_KEY = 'transfer-extra-request-key-0001';
 const ONE_OFF_KEY = 'transfer-one-off-request-key-0001';
 
-/** A version-1 file predates recordedDone and requestId; strip them to get one from a current export. */
+/** A version-1 file predates recordedDone, requestId and points; strip them to get one from a current export. */
 function asVersion1(source: ExportFile): ExportFile {
   const legacy = structuredClone(source);
   legacy.schemaVersion = 1 as never;
+  for (const doc of legacy.collections.tasks) delete doc.points;
   for (const doc of legacy.collections.occurrences) {
     delete doc.recordedDone;
     delete doc.requestId;
+    delete doc.pointsSnapshot;
   }
   return legacy;
 }
@@ -104,7 +108,7 @@ describe('GET /api/export/json', () => {
   it('exports every collection as extended JSON with a schema version and a dated filename', () => {
     expect(exportResponse.statusCode).toBe(200);
     expect(exportResponse.headers['content-disposition']).toBe('attachment; filename="huishoudplanner-20260916.json"');
-    expect(file.schemaVersion).toBe(2);
+    expect(file.schemaVersion).toBe(3);
     expect(file.exportedAt).toBe('2026-09-16T08:00:00.000Z');
     expect(Object.keys(file.collections).sort()).toEqual([...TRANSFER_COLLECTIONS].sort());
     expect(file.collections.users[0]!._id).toEqual({ $oid: expect.stringMatching(/^[0-9a-f]{24}$/) });
@@ -143,7 +147,13 @@ describe('import', () => {
     await importData(empty.systemCtx(), parsed);
 
     const after = await readAllCollections(empty.db);
-    expect(after.occurrences).toEqual(snapshot.occurrences.map(({ recordedDone: _r, requestId: _k, ...rest }) => rest));
+    // The rebuild (ADR-0011) fills in the points of a file that has none: the same values the live paths wrote.
+    expect(after.tasks).toEqual(snapshot.tasks);
+    expect(after.occurrences).toEqual(
+      snapshot.occurrences.map(({ recordedDone: _r, requestId: _k, pointsSnapshot, ...rest }) =>
+        rest.status === 'done' ? { ...rest, pointsSnapshot } : rest,
+      ),
+    );
     expect(after.occurrences.some((o) => 'recordedDone' in o || 'requestId' in o)).toBe(false);
     const audit = after.auditLog.filter((e) => e.entity === 'import');
     expect(audit).toHaveLength(1);
@@ -173,10 +183,12 @@ describe('import', () => {
     const after = await readAllCollections(target.db);
     expect(after.users).toEqual(snapshot.users);
     expect(after.occurrences).toEqual(snapshot.occurrences);
-    expect(after.auditLog).toHaveLength(auditBefore.length + snapshot.auditLog.length + 1);
+    // The import entry, and one summary of the ledger rebuild (the ledger is not part of the file).
+    expect(after.auditLog).toHaveLength(auditBefore.length + snapshot.auditLog.length + 2);
+    expect(after.auditLog.filter((e) => e.entity === 'points' && e.action === 'recompute')).toHaveLength(1);
     const imports = after.auditLog.filter((e) => e.entity === 'import');
     expect(imports).toHaveLength(1);
-    expect(imports[0]).toMatchObject({ action: 'create', source: 'ui', meta: { mode: 'replace', schemaVersion: 2, exportedAt: file.exportedAt } });
+    expect(imports[0]).toMatchObject({ action: 'create', source: 'ui', meta: { mode: 'replace', schemaVersion: 3, exportedAt: file.exportedAt } });
     expect((imports[0]!.actorId as ObjectId).equals(actor._id)).toBe(true);
   });
 
@@ -209,7 +221,7 @@ describe('import', () => {
     });
 
     const cases: [string, (f: ExportFile) => void, FieldIssue][] = [
-      ['an unknown schema version', (f) => Object.assign(f, { schemaVersion: 3 }), { field: 'schemaVersion', message: expect.any(String) }],
+      ['an unknown schema version', (f) => Object.assign(f, { schemaVersion: 4 }), { field: 'schemaVersion', message: expect.any(String) }],
       ['an invalid field value', (f) => Object.assign(f.collections.users[0]!, { color: 'rood' }), { field: 'collections.users.0.color', message: 'invalid_color' }],
       ['a plain string where an ObjectId belongs', (f) => Object.assign(f.collections.tasks[0]!, { roomId: '0123456789abcdef01234567' }), { field: 'collections.tasks.0.roomId', message: 'expected_object_id' }],
       ['a plain string where a date belongs', (f) => Object.assign(f.collections.occurrences[0]!, { date: '2026-09-16T00:00:00.000Z' }), { field: 'collections.occurrences.0.date', message: 'expected_date' }],

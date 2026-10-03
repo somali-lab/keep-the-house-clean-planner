@@ -57,6 +57,7 @@ const FORM_FIELDS = new Set<keyof TaskFormValues>([
   'roomId',
   'intervalKey',
   'durationMinutes',
+  'points',
   'defaultAssigneeId',
 ]);
 

@@ -1,5 +1,6 @@
 import { MongoBulkWriteError, type Db, type Document } from 'mongodb';
 import { COLLECTIONS } from './db.ts';
+import { clearPointEntries } from './points.ts';
 
 /** Every collection in an export, in the order they are replaced on import. */
 export const TRANSFER_COLLECTIONS = [
@@ -45,6 +46,9 @@ export async function replaceAllCollections(db: Db, docs: TransferDocs): Promise
     if (docs[name].length > 0) await collection.insertMany(docs[name], { ordered: true });
     replaced[name] = docs[name].length;
   }
+
+  // The ledger is derived, not exported: the old one is dropped and the caller rebuilds it from the new occurrences.
+  await clearPointEntries(db);
 
   const audit = docs[COLLECTIONS.auditLog];
   let duplicates = 0;

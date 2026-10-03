@@ -137,6 +137,7 @@ describe('TasksPage — form validation', () => {
       roomId: 'r1',
       intervalKey: '4wk',
       durationMinutes: 25,
+      points: 3,
       defaultAssigneeId: null,
       notes: '',
       tags: [],

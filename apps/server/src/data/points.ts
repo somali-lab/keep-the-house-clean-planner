@@ -1,4 +1,4 @@
-import { MongoServerError, ObjectId, type Db } from 'mongodb';
+import { MongoBulkWriteError, MongoServerError, ObjectId, type AnyBulkWriteOperation, type Db } from 'mongodb';
 import type { PointEntryKind, PointEntrySource, PointsSyncReason } from '@huishoudplanner/shared';
 import type { AuditContext } from '../audit/context.ts';
 import { diffFields, isEmptyDiff } from '../audit/diff.ts';
@@ -34,6 +34,9 @@ export type PointEntryFields = Pick<
   PointEntryDoc,
   'personId' | 'amount' | 'date' | 'weekStart' | 'occurrenceId' | 'taskId' | 'titleSnapshot'
 >;
+
+/** Fixed id of the ledger as a whole, the audit entityId of a reconciliation summary (like SETTINGS_ID). */
+export const POINTS_LEDGER_ID = new ObjectId('000000000000000000000002');
 
 const AUDIT_IGNORE = ['_id', 'createdAt', 'updatedAt'];
 
@@ -106,4 +109,89 @@ export async function deletePointEntry(ctx: AuditContext, current: PointEntryDoc
   const { before } = diffFields({ ...deleted }, {}, { ignore: AUDIT_IGNORE });
   await record(ctx, { entity: 'points', entityId: deleted._id, action: 'delete', before, meta: { ...meta } });
   return true;
+}
+
+export interface PointEntryChanges {
+  inserts: { key: string; kind: PointEntryKind; fields: PointEntryFields }[];
+  updates: { current: PointEntryDoc; fields: PointEntryFields }[];
+  deletes: PointEntryDoc[];
+}
+
+export interface AppliedPointEntryChanges {
+  created: number;
+  updated: number;
+  removed: number;
+}
+
+/**
+ * Applies a reconciliation as one unordered bulk write, without a per-entry audit entry: the
+ * caller records one summary (ADR-0011). Created entries get source 'backfill', changed entries
+ * 'recompute'. A duplicate key on an insert (a concurrent sync created it first) is skipped.
+ */
+export async function applyPointEntryChanges(
+  ctx: AuditContext,
+  changes: PointEntryChanges,
+): Promise<AppliedPointEntryChanges> {
+  const now = ctx.clock.now();
+  const operations: AnyBulkWriteOperation<PointEntryDoc>[] = [
+    ...changes.inserts.map(({ key, kind, fields }) => ({
+      insertOne: {
+        document: { _id: new ObjectId(), key, kind, ...fields, source: 'backfill' as const, createdAt: now, updatedAt: now },
+      },
+    })),
+    ...changes.updates.map(({ current, fields }) => ({
+      updateOne: { filter: { _id: current._id }, update: { $set: { ...fields, source: 'recompute' as const, updatedAt: now } } },
+    })),
+    ...changes.deletes.map((current) => ({ deleteOne: { filter: { _id: current._id } } })),
+  ];
+  if (operations.length === 0) return { created: 0, updated: 0, removed: 0 };
+  try {
+    const result = await pointEntriesCollection(ctx.db).bulkWrite(operations, { ordered: false });
+    return { created: result.insertedCount, updated: result.modifiedCount, removed: result.deletedCount };
+  } catch (err) {
+    if (!(err instanceof MongoBulkWriteError)) throw err;
+    const writeErrors = Array.isArray(err.writeErrors) ? err.writeErrors : [err.writeErrors];
+    if (writeErrors.some((e) => e.code !== 11000)) throw err;
+    return { created: err.result.insertedCount, updated: err.result.modifiedCount, removed: err.result.deletedCount };
+  }
+}
+
+/** Entries of one person in `[from, to)`, newest date first, then by id. */
+export function findPointEntriesInRange(db: Db, personId: ObjectId, from: Date, to: Date): Promise<PointEntryDoc[]> {
+  return pointEntriesCollection(db)
+    .find({ personId, date: { $gte: from, $lt: to } })
+    .sort({ date: -1, _id: 1 })
+    .toArray();
+}
+
+export interface PointTotal {
+  personId: ObjectId;
+  points: number;
+  executions: number;
+}
+
+/** Sum and count of the entries per person; `range` bounds are `[from, to)` and both optional. */
+export function sumPointEntries(db: Db, range: { from?: Date; to?: Date }): Promise<PointTotal[]> {
+  const date = { ...(range.from ? { $gte: range.from } : {}), ...(range.to ? { $lt: range.to } : {}) };
+  return pointEntriesCollection(db)
+    .aggregate<PointTotal>([
+      { $match: Object.keys(date).length > 0 ? { date } : {} },
+      { $group: { _id: '$personId', points: { $sum: '$amount' }, executions: { $sum: 1 } } },
+      { $project: { _id: 0, personId: '$_id', points: 1, executions: 1 } },
+    ])
+    .toArray();
+}
+
+/** Removes every execution entry, or only those dated before `before`. Returns the number removed. */
+export async function deleteExecutionPointEntries(db: Db, before?: Date): Promise<number> {
+  const result = await pointEntriesCollection(db).deleteMany({
+    kind: 'execution',
+    ...(before ? { date: { $lt: before } } : {}),
+  });
+  return result.deletedCount;
+}
+
+/** Removes the whole ledger; an import rebuilds it from the imported occurrences. */
+export async function clearPointEntries(db: Db): Promise<void> {
+  await pointEntriesCollection(db).deleteMany({});
 }

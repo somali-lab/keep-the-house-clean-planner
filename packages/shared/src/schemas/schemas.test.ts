@@ -10,6 +10,8 @@ import {
   auditEntitySchema,
   occurrenceSchema,
   patchOccurrenceInputSchema,
+  pointsBalancesQuerySchema,
+  pointsEntriesQuerySchema,
   updateTaskInputSchema,
   updateSettingsInputSchema,
   userSchema,
@@ -152,6 +154,23 @@ describe('one-off task schemas', () => {
   it('knows the points audit entity and the recompute action', () => {
     expect(auditEntitySchema.safeParse('points').success).toBe(true);
     expect(auditActionSchema.safeParse('recompute').success).toBe(true);
+  });
+
+  it('validates the points balances query: optional days, never from after to', () => {
+    expect(pointsBalancesQuerySchema.safeParse({}).success).toBe(true);
+    expect(pointsBalancesQuerySchema.safeParse({ from: '2026-09-14', to: '2026-09-14' }).success).toBe(true);
+    const reversed = pointsBalancesQuerySchema.safeParse({ from: '2026-09-15', to: '2026-09-14' });
+    expect(reversed.success ? [] : reversed.error.issues.map((i) => [i.path.join('.'), i.message])).toEqual([['from', 'from_after_to']]);
+    expect(pointsBalancesQuerySchema.safeParse({ from: '2026-02-30' }).success).toBe(false);
+  });
+
+  it('validates the points entries query: person and both days, at most 371 days', () => {
+    const personId = '0123456789abcdef01234567';
+    expect(pointsEntriesQuerySchema.safeParse({ personId, from: '2026-01-01', to: '2027-01-06' }).success).toBe(true);
+    const tooLarge = pointsEntriesQuerySchema.safeParse({ personId, from: '2026-01-01', to: '2027-01-07' });
+    expect(tooLarge.success ? [] : tooLarge.error.issues.map((i) => [i.path.join('.'), i.message])).toEqual([['to', 'range_too_large']]);
+    expect(pointsEntriesQuerySchema.safeParse({ personId, from: '2026-09-14' }).success).toBe(false);
+    expect(pointsEntriesQuerySchema.safeParse({ from: '2026-09-14', to: '2026-09-20' }).success).toBe(false);
   });
 });
 

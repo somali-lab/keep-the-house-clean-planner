@@ -1,4 +1,5 @@
 import type { Interval, Room, User } from '@huishoudplanner/shared';
+import { MAX_TASK_POINTS, MIN_TASK_POINTS } from '@huishoudplanner/shared/points';
 import { useId, useState, type FormEvent, type ReactNode } from 'react';
 import { NativeSelect } from '@/components/NativeSelect';
 import { Button } from '@/components/ui/button';
@@ -7,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { t } from '../../i18n/nl.ts';
-import { validateTaskForm, type TaskFormErrors, type TaskFormValues } from './taskForm.ts';
+import { defaultPointsText, pointsEditedByHand, validateTaskForm, type TaskFormErrors, type TaskFormValues } from './taskForm.ts';
 
 export interface TaskFormProps {
   title: string;
@@ -44,11 +45,25 @@ export function TaskForm({
   const idPrefix = useId();
   const [values, setValues] = useState(initial);
   const [errors, setErrors] = useState<TaskFormErrors>({});
+  // Until the points are edited by hand they follow the duration (one point per ten minutes).
+  const [pointsTouched, setPointsTouched] = useState(() => pointsEditedByHand(initial));
   const shown: TaskFormErrors = { ...serverErrors, ...errors };
 
   const set = (field: keyof TaskFormValues) => (value: string) => {
     setValues((v) => ({ ...v, [field]: value }));
     setErrors((e) => ({ ...e, [field]: undefined }));
+  };
+
+  const setDuration = (duration: string) => {
+    setValues((v) => ({ ...v, durationMinutes: duration, ...(pointsTouched ? {} : { points: defaultPointsText(duration) }) }));
+    setErrors((e) => ({ ...e, durationMinutes: undefined, ...(pointsTouched ? {} : { points: undefined }) }));
+  };
+
+  const setPoints = (points: string) => {
+    // Clearing the field hands the value back to the duration.
+    setPointsTouched(points.trim() !== '');
+    setValues((v) => ({ ...v, points: points.trim() === '' ? defaultPointsText(v.durationMinutes) : points }));
+    setErrors((e) => ({ ...e, points: undefined }));
   };
 
   const handleSubmit = (event: FormEvent) => {
@@ -140,9 +155,29 @@ export function TaskForm({
             required
             className="h-10 bg-card"
             value={values.durationMinutes}
-            onChange={(e) => set('durationMinutes')(e.target.value)}
+            onChange={(e) => setDuration(e.target.value)}
           />
           {errorFor('durationMinutes')}
+        </Field>
+
+        <Field>
+          <Label htmlFor={`${idPrefix}-points`}>{t('tasks.field.points')}</Label>
+          <Input
+            {...fieldProps('points')}
+            type="number"
+            inputMode="numeric"
+            min={MIN_TASK_POINTS}
+            max={MAX_TASK_POINTS}
+            step={1}
+            className="h-10 bg-card"
+            aria-describedby={[`${idPrefix}-points-hint`, shown.points ? `${idPrefix}-points-error` : null].filter(Boolean).join(' ')}
+            value={values.points}
+            onChange={(e) => setPoints(e.target.value)}
+          />
+          <p id={`${idPrefix}-points-hint`} className="text-sm text-muted-foreground">
+            {t('tasks.field.pointsHint')}
+          </p>
+          {errorFor('points')}
         </Field>
 
         <Field>

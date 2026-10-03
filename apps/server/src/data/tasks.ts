@@ -1,3 +1,4 @@
+import { defaultPointsForDuration } from '@huishoudplanner/shared';
 import { ObjectId, type Db } from 'mongodb';
 import type { AuditContext } from '../audit/context.ts';
 import { diffFields, isEmptyDiff, type FieldDiff } from '../audit/diff.ts';
@@ -169,4 +170,25 @@ export async function bulkUpdateRoomTasks(
     await recordTaskChange(ctx, task._id, diff);
   }
   return changed.length;
+}
+
+const MISSING_POINTS = { $or: [{ points: { $exists: false } }, { points: null as unknown as number }] };
+
+/**
+ * Gives every task without points the default for its duration (ADR-0011). A schema migration,
+ * not an edit: `updatedAt` stays and nothing is audited here; the reconciliation summary counts it.
+ * The filter on the missing field makes a second run match nothing.
+ */
+export async function defaultMissingTaskPoints(db: Db): Promise<number> {
+  const missing = await tasksCollection(db).find(MISSING_POINTS, { projection: { durationMinutes: 1 } }).toArray();
+  if (missing.length === 0) return 0;
+  const result = await tasksCollection(db).bulkWrite(
+    missing.map((task) => ({
+      updateOne: {
+        filter: { _id: task._id, ...MISSING_POINTS },
+        update: { $set: { points: defaultPointsForDuration(task.durationMinutes) } },
+      },
+    })),
+  );
+  return result.modifiedCount;
 }

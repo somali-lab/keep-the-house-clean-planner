@@ -107,6 +107,26 @@ export async function backfillOccurrenceRoomSnapshots(db: Db): Promise<number> {
   return result.modifiedCount;
 }
 
+/** Every done occurrence; the points ledger is reconciled against these (ADR-0011). */
+export function findDoneOccurrences(db: Db): Promise<OccurrenceDoc[]> {
+  return occurrencesCollection(db).find({ status: 'done' }).toArray();
+}
+
+/**
+ * Writes missing points snapshots as a bulk migration: `updatedAt` stays and nothing is audited
+ * per occurrence, because the reconciliation records one summary. The filter keeps a snapshot
+ * that was written in the meantime.
+ */
+export async function setMissingPointsSnapshots(db: Db, snapshots: { id: ObjectId; points: number }[]): Promise<number> {
+  if (snapshots.length === 0) return 0;
+  const result = await occurrencesCollection(db).bulkWrite(
+    snapshots.map(({ id, points }) => ({
+      updateOne: { filter: { _id: id, status: 'done' as const, pointsSnapshot: null }, update: { $set: { pointsSnapshot: points } } },
+    })),
+  );
+  return result.modifiedCount;
+}
+
 /** A room move follows future open work while completed history keeps its snapshot. */
 export async function updateUpcomingOccurrenceRoomSnapshots(
   db: Db,

@@ -188,7 +188,7 @@ dismissedPromotions: [ ... ]
 
 - Create, update and deactivate rooms; ordering is explicit, not alphabetical.
 - Create, update and deactivate tasks, grouped by room.
-- A task has a points value, an integer from 0 to 100. When it is omitted on create, the server sets it to the default for the duration: one point for every ten minutes, or part of ten minutes, between 1 and 100 (`clamp(ceil(minutes / 10), 1, 100)`). A task from before points existed shows the same default. Points are changed through the existing task update and audited as a task update; a value outside 0 to 100 or a fraction is rejected with a `validation_error` on `points`.
+- A task has a points value, an integer from 0 to 100. When it is omitted on create, the server sets it to the default for the duration: one point for every ten minutes, or part of ten minutes, between 1 and 100 (`clamp(ceil(minutes / 10), 1, 100)`). A task from before points existed shows the same default. Points are changed through the existing task update and audited as a task update; a value outside 0 to 100 or a fraction is rejected with a `validation_error` on `points`. The task form has a points field that is filled in from the duration, one point for every ten minutes, until it is edited by hand; clearing the field hands it back to the duration.
 - Bulk operations per room: deactivate all, reassign all.
 - A room that still holds tasks cannot be deleted.
 
@@ -264,15 +264,18 @@ ratio     = daysSince / intervalPeriodDays
 ### 4.7 Statistics
 
 - A period is selected either as a number of recent cycles or as a range of calendar weeks.
-- Reports: an overview, fairness between users, workload per user over time, completion rate per task, room and user, configured versus actually achieved intervals, and deviations between planned and actual days.
+- Reports: an overview, fairness between users, workload per user over time, completion rate per task, room and user, configured versus actually achieved intervals, deviations between planned and actual days, and points (see 4.12).
+- The Points report shows the balance and the number of executions of every person, and a table with the ledger entries of one chosen person. It covers the period selected for the other reports: the current week and the weeks before it, or the current cycle and the cycles before it, both ends included. A person who is no longer active is listed when they earned points in the period.
 - Every chart has an equivalent table, so the same numbers are available without interpreting a graphic.
 - One-off tasks count like any other occurrence in workload, fairness, the overview and the completion totals per user. Per task, all one-off tasks share one combined row labelled "One-off Task". Per room they count under the room recorded on the occurrence, and one-off tasks without a room share one row without a room. They are left out of the interval report (they have no configured interval) and out of the deviation report, as are recorded extra executions, because nothing was planned.
 - An administrator can reset statistics completely, or purge only the completion data before a chosen date. Starting over deletes recorded extra executions instead of reopening them, because they have no planned state to return to.
+- A reset removes the points that belong to the history it removes (see 4.12). Starting over deletes every ledger entry of kind `execution` and clears the points snapshots of the occurrences it reopens. Purging before a date deletes the entries dated before that date and leaves the others. The number of removed entries is recorded as `removedPointEntries` in the one reset audit entry; no audit entry is written per removed ledger entry.
 
 ### 4.8 Completion management
 
 - An administrator can correct a recorded completion — its date, its timestamp, and who is credited — or delete it entirely.
 - Both are audited, including the values before the correction.
+- The points follow the correction (see 4.12). Changing who is credited or the date moves the ledger entry of that execution in place, to the other person and to the week of the new date; deleting the completion removes the entry. Each is audited as a points entry with the reason `correction`, and a correction that changes neither person nor date writes nothing.
 
 ### 4.9 Audit trail
 
@@ -284,13 +287,14 @@ Every state change is recorded with who, when, which entity, which action, the c
 - Applying an AI proposal is recorded with an AI origin, so a machine-made plan is always distinguishable from a hand-made one.
 - Generation is recorded with a system origin, so an unexpected occurrence can be traced to the run that created it.
 - A change to a ledger entry (see 4.12) is its own entry, entity `points` with `create`, `update` or `delete`, the entry's fields before and after, and `meta: { occurrenceId, reason }` where the reason is `complete`, `recorded`, `uncomplete`, `retract` or `correction`. A check-off therefore writes at most three entries: the occurrence, the task's `lastCompletedAt` and the points entry. The history feed renders a points entry as what the person gained or lost.
+- A reconciliation of the ledger (see 4.12) that changes anything records one summary entry: entity `points`, a fixed ledger id, action `recompute`, the actor that started it (the system for startup and the scheduled nightly run, the requesting profile for an import, a manual nightly run and the recompute endpoint), and `meta: { trigger, tasksDefaulted, snapshotsSet, created, updated, removed, unattributed, corrections }`. `trigger` is `startup`, `nightly`, `import` or `admin`. `corrections` lists, for every entry that was changed or removed, its key and its old and new person and amount, because such a change means the ledger had drifted from the occurrences. Entries that are only created are counted. No entry is written per ledger entry, and a run that changes nothing writes and records nothing.
 - A change that changes nothing writes nothing and records nothing.
 - The log is append-only. No interface path edits an entry. An optional retention job removes entries older than a configured age and is the only exception.
 - History is viewable per entity and as a global chronological feed, filterable by actor, entity type, action and date range, with a panel showing the referenced entity.
 
 ### 4.10 Notifications and scheduled jobs
 
-- A nightly job generates upcoming occurrences and, when configured, applies audit retention.
+- A nightly job generates upcoming occurrences, reconciles the points ledger with the occurrences (see 4.12) and, when configured, applies audit retention.
 - A morning notification summarises the day: what is planned per person and what is overdue. It is suppressed when there is nothing to report.
 - Supported server channels are none, an ntfy topic, and a Home Assistant webhook. The channel and its credentials come from the environment. These reach the household whether or not a browser is open, and stay a separate setting from browser notifications.
 - Generation, the morning notification and audit retention can each be triggered manually from the settings screen, which is also how an installation is verified after a change.
@@ -307,7 +311,7 @@ Browser notifications (ADR-0010) are a second, personal channel:
 
 ### 4.11 Data management
 
-- Full JSON export of the dataset, and import of such an export. The export carries `schemaVersion: 2`, which adds `recordedDone`, `requestId` and a nullable occurrence `taskId` (extra executions and one-off tasks; ADR-0009). Import accepts versions 1 and 2; a version-1 file is valid unchanged. A later version is rejected.
+- Full JSON export of the dataset, and import of such an export. The export carries `schemaVersion: 3`. Version 2 added `recordedDone`, `requestId` and a nullable occurrence `taskId` (extra executions and one-off tasks; ADR-0009); version 3 adds `tasks.points` and `occurrences.pointsSnapshot` (ADR-0011). The points ledger is not exported: an import replaces the ledger and rebuilds it from the imported occurrences, which also fills in the points of an older file with the same defaults as at startup (see 4.12). Import accepts versions 1, 2 and 3; an older file is valid unchanged. A later version is rejected.
 - Before anything is deleted, import checks the file for duplicates on the unique indexes: two generated occurrences with the same `(cycleId, taskId, plannedDate)` and two occurrences with the same `requestId`. Such a file is rejected as a whole with `validation_error` (`duplicate_slot`, `duplicate_request_id`) and nothing is written, because the replacement would otherwise fail halfway, after the collections were emptied.
 - Import validates the entire file against both the API shape and the storage shape before writing anything, reports what it will replace, and requires explicit confirmation.
 - A nightly database dump is written to a mounted backup path by a separate container.
@@ -322,7 +326,10 @@ Every execution of a task earns the points of that task for the person who did t
 - **Corrections follow the history.** Check-off and recording create the entry; uncomplete, retract and an administrator's deletion remove it; an administrator's correction of the person or the date updates it in place. A task points change does nothing to past entries.
 - **Audit.** Every real change of the ledger is audited (see 4.9); syncing an entry that already matches writes and audits nothing.
 
-The retroactive award of points to earlier history, the balances and the rules for bonuses and redemptions are specified in ADR-0011 and its follow-ups.
+- **Retroactive points.** One reconciliation makes the whole ledger match the occurrences, idempotently. It first migrates the fields: a task without points gets the default for its duration, and a done occurrence without a snapshot gets the task's points, or the default for its duration when the task no longer exists or it is a one-off task. It then computes the expected entry of every done occurrence, and inserts the missing entries, updates the entries that differ and deletes the entries without an occurrence, as bulk writes. A done occurrence without `completedBy` is credited to its assignee; without an assignee too, it earns no entry and is counted as `unattributed`. History itself is never rewritten.
+- **When it runs.** At startup before the server accepts requests (on the first start after the upgrade it awards all existing history its points; every later start writes nothing), in the nightly job (which repairs drift between an occurrence and its ledger entry, for example after a crash, within a day), after an import, and on request through `POST /api/points/recompute` (administrators only). A run that changes something records one summary entry (see 4.9); a run that changes nothing writes and audits nothing, so running it twice never counts anything twice.
+- **Balances.** The balance of a person is the sum of their entries in a period, and the entries of a person are listed for a period, newest first (see 8). Reading needs no profile.
+- **Out of scope.** Week and cycle bonuses and the conversion of points into money with redemptions are specified later; they use the same ledger as entries of their own kinds, which a reconciliation of executions never touches.
 
 ## 5. AI assistance
 
@@ -436,6 +443,9 @@ POST   /api/occurrences/one-off             POST /api/occurrences/:id/retract
 DELETE /api/occurrences/:id
 GET    /api/due
 
+GET    /api/points/balances                  GET  /api/points/entries
+POST   /api/points/recompute
+
 GET    /api/promote-suggestions
 POST   /api/promote-suggestions/apply       POST /api/promote-suggestions/dismiss
 
@@ -466,6 +476,8 @@ GET    /api/export/json                     POST /api/import/json
 `PATCH /api/occurrences/:id` is a single endpoint carrying an explicit action: complete, uncomplete, edit a completion, skip, reschedule or assign. The action is part of the request, so history records intent rather than an inferred difference. A `complete` action takes `completedBy` or `takeOver: true`, never both (`completion_choice_conflict`), and work of someone else without either is rejected with `400 completion_choice_required` (see 4.4). Occurrence views carry `pointsSnapshot`.
 
 `POST /api/tasks` and `PATCH /api/tasks/:id` take an optional integer `points` from 0 to 100; task views always carry `points`.
+
+`GET /api/points/balances?from&to` takes two optional day keys (`from` must not be after `to`) and answers `{ from, to, balances: [{ personId, points, executions }] }`, with `from` and `to` `null` when absent. It lists every active user, also at 0, and every inactive user with entries in the range, in the order of the user list. `GET /api/points/entries?personId&from&to` requires all three, allows a range of at most 371 days, both days included, and answers `{ entries }`, newest `date` first and then by id; an entry carries `_id`, `key`, `kind`, `personId`, `amount`, `date`, `weekStart`, `occurrenceId`, `taskId`, `titleSnapshot`, `source`, `createdAt` and `updatedAt`. Errors: `400 validation_error` with `from_after_to` on `from`, `range_too_large` on `to`, or the field of a missing or malformed parameter. Neither read needs a profile. `POST /api/points/recompute` takes no body, requires an administrator and answers `200` with `{ trigger: 'admin', tasksDefaulted, snapshotsSet, created, updated, removed, unattributed, corrections }`; it audits and writes nothing when the ledger already matches.
 
 Every error response uses one envelope with a stable machine-readable code and optional field-level details. Validation failures, permission failures and conflicts are distinguishable by status and code, and configuration values never appear in an error message.
 
