@@ -985,6 +985,64 @@
         }
       }
     },
+    "/api/v2/due": {
+      "get": {
+        "tags": [
+          "Due"
+        ],
+        "summary": "Lists every active task with its due state, ranked.",
+        "description": "Needs no profile. Highest ratio first, then most days since, then task id. A task that is fine is in the list as well (state ok); a client that wants only due and overdue work leaves the ok items out. The list is paged: pass the nextCursor of a page as cursor for the next one (limit 1 to 200, default 50). The summary counts the whole list. A task whose interval no longer exists is left out.",
+        "operationId": "listDue",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DueListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/cycle-plans": {
       "get": {
         "tags": [
@@ -4090,6 +4148,177 @@
           }
         }
       },
+      "DueItemResponse": {
+        "required": [
+          "taskId",
+          "taskName",
+          "roomId",
+          "roomName",
+          "intervalKey",
+          "intervalLabel",
+          "periodDays",
+          "daysSince",
+          "ratio",
+          "state",
+          "lastCompletedAt",
+          "initialDueDate",
+          "nextOccurrence"
+        ],
+        "type": "object",
+        "properties": {
+          "taskId": {
+            "type": "string"
+          },
+          "taskName": {
+            "type": "string"
+          },
+          "roomId": {
+            "type": "string"
+          },
+          "roomName": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Null when the room no longer exists."
+          },
+          "intervalKey": {
+            "type": "string"
+          },
+          "intervalLabel": {
+            "type": "string"
+          },
+          "periodDays": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "daysSince": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "Local calendar days since the last completion; for a task never completed zero before its initial due date, then one interval plus the days since that date.",
+            "format": "int32"
+          },
+          "ratio": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "daysSince divided by periodDays: 1 or more is due, 1.5 or more overdue.",
+            "format": "double"
+          },
+          "state": {
+            "type": "string"
+          },
+          "lastCompletedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "initialDueDate": {
+            "type": "string",
+            "description": "The day a never-completed task first counts as due.",
+            "format": "date"
+          },
+          "nextOccurrence": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DueNextOccurrenceResponse"
+              }
+            ]
+          }
+        }
+      },
+      "DueListResponse": {
+        "required": [
+          "today",
+          "items",
+          "nextCursor",
+          "summary"
+        ],
+        "type": "object",
+        "properties": {
+          "today": {
+            "type": "string",
+            "format": "date"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DueItemResponse"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "summary": {
+            "$ref": "#/components/schemas/DueSummaryResponse"
+          }
+        }
+      },
+      "DueNextOccurrenceResponse": {
+        "required": [
+          "id",
+          "date",
+          "assigneeId"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "assigneeId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "DueSummaryResponse": {
+        "required": [
+          "due",
+          "overdue"
+        ],
+        "type": "object",
+        "properties": {
+          "due": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "overdue": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "ExplainPlanRequest": {
         "required": [
           "planId"
@@ -6027,6 +6256,10 @@
     {
       "name": "Tasks",
       "description": "The recurring household tasks: everyone reads them, planners create, change, deactivate and bulk-change them."
+    },
+    {
+      "name": "Due",
+      "description": "The due engine: every active task ranked by how far it has drifted past its interval."
     },
     {
       "name": "Cycle plans",

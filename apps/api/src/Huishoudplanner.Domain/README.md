@@ -51,6 +51,14 @@ Differences: the timezone has no default (pass `DayKeys.FindZone(DayKeys.AppTime
 key (TypeScript skipped it through `!periodDays`). `ComputeDue` throws nothing itself; an invalid day key or timezone
 fails earlier, in `DayKeys.Parse` / `FindZone`.
 
+The due list of `GET /api/v2/due` (slice 3.4, `computeDueList` and `summarizeDue` of `apps/server/src/domain/due.ts`) adds
+`DueItem` (the ranked result with task, room and interval names, `InitialDueDate` and `DueNextOccurrence`), `DueList`
+(`Today`, one page of `Items`, `NextCursor`, `DueSummary` of the whole list), `DueSummary(Due, Overdue)` (pure,
+`DueSummary.Of(states | results | items)`; the `due` of the generation answer), `DueCursor` (position by days, period and task
+id, so a page continues correctly even when the task it points at has dropped out) and
+`DueCalculator.InitialDueDateOf(firstPlanned, createdAt, periodDays, tz)` (first planned day, else one interval after creation).
+The data gathering lives in `Application.Due.DueService` behind `IDueService` and the read-only port `ForReadingDueOccurrences`.
+
 ## Settings (`Huishoudplanner.Domain.Settings`)
 
 The singleton settings document (id `000000000000000000000001`). `HouseholdSettings` mirrors `apps/server/src/data/settings.ts`: optional values stay `null` when they are not stored and mean their default for the API (`SettingsDefaults`: EUR, 0 cents per point, automatic goals, no bonuses). There is no API key in it: `AI_API_KEY` is configuration only.
