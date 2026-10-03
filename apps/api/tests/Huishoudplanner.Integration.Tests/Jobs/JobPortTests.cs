@@ -2,6 +2,7 @@ using Huishoudplanner.Adapters.Jobs;
 using Huishoudplanner.Domain.Audit;
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Generation;
+using Huishoudplanner.Domain.Points;
 using Huishoudplanner.Domain.Ports.Driving;
 using Huishoudplanner.Integration.Tests.Fixtures;
 using Microsoft.Extensions.DependencyInjection;
@@ -26,13 +27,13 @@ public sealed class JobPortTests
     [Fact]
     public async Task The_nightly_generation_runs_as_the_system_with_a_fresh_run_id_and_succeeds()
     {
-        var generation = new Mock<IGenerationService>();
+        var nightly = new Mock<INightlyService>();
         AuditActor? actor = null;
-        generation.Setup(g => g.GenerateUpcomingAsync(It.IsAny<AuditActor>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        nightly.Setup(g => g.RunAsync(It.IsAny<AuditActor>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Callback<AuditActor, string, CancellationToken>((a, _, _) => actor = a)
-            .ReturnsAsync(new GenerationRun("run-1", 0, [new GenerationResult(0, "c0", "p", 4, 0)]));
+            .ReturnsAsync(new NightlyRun(new GenerationRun("run-1", 0, [new GenerationResult(0, "c0", "p", 4, 0)]), null));
         var logs = new LogCollector();
-        using var services = Services(s => s.AddSingleton(generation.Object));
+        using var services = Services(s => s.AddSingleton(nightly.Object));
         var job = new NightlyGenerationJob(new LoggerFactory([logs]).CreateLogger<NightlyGenerationJob>());
 
         var outcome = await job.RunAsync(services, Ct);
@@ -43,6 +44,26 @@ public sealed class JobPortTests
         logs.Entries.Should().ContainSingle(e => e.Level == LogLevel.Information).Which.Message.Should().Contain("run-1").And.Contain("inserted 4");
         job.Name.Should().Be("nightly-generation");
         job.Schedule.Should().Be("0 3 * * *");
+    }
+
+    [Fact]
+    public async Task The_nightly_run_logs_what_the_points_reconciliation_did_and_a_failed_reconciliation_does_not_fail_the_job()
+    {
+        var nightly = new Mock<INightlyService>();
+        var generation = new GenerationRun("run-1", 0, []);
+        var reconciled = PointsRecomputeResult.Empty(PointsRecomputeTrigger.Nightly) with { Created = 2, Updated = 1, Removed = 3, Skipped = 4, CorrectionsTotal = 4 };
+        var logs = new LogCollector();
+        using var services = Services(s => s.AddSingleton(nightly.Object));
+        var job = new NightlyGenerationJob(new LoggerFactory([logs]).CreateLogger<NightlyGenerationJob>());
+
+        nightly.Setup(g => g.RunAsync(It.IsAny<AuditActor>(), It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(new NightlyRun(generation, reconciled));
+        var done = await job.RunAsync(services, Ct);
+        var message = logs.Entries.Last(e => e.Level == LogLevel.Information).Message;
+        nightly.Setup(g => g.RunAsync(It.IsAny<AuditActor>(), It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(new NightlyRun(generation, null));
+        var failedReconcile = await job.RunAsync(services, Ct);
+
+        (done, failedReconcile).Should().Be((JobOutcome.Succeeded, JobOutcome.Succeeded));
+        message.Should().Contain("created 2").And.Contain("updated 1").And.Contain("removed 3").And.Contain("skipped 4").And.Contain("corrections 4");
     }
 
     public static TheoryData<OneOf<GenerationRun, SettingsMissing, ConflictError, PortError>> FailedGenerations => new()
@@ -56,10 +77,11 @@ public sealed class JobPortTests
     [MemberData(nameof(FailedGenerations))]
     public async Task The_nightly_generation_fails_without_logging_the_port_error_text(OneOf<GenerationRun, SettingsMissing, ConflictError, PortError> answer)
     {
-        var generation = new Mock<IGenerationService>();
-        generation.Setup(g => g.GenerateUpcomingAsync(It.IsAny<AuditActor>(), It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(answer);
+        var nightly = new Mock<INightlyService>();
+        nightly.Setup(g => g.RunAsync(It.IsAny<AuditActor>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(answer.Match<OneOf<NightlyRun, SettingsMissing, ConflictError, PortError>>(run => new NightlyRun(run, null), missing => missing, conflict => conflict, error => error));
         var logs = new LogCollector();
-        using var services = Services(s => s.AddSingleton(generation.Object));
+        using var services = Services(s => s.AddSingleton(nightly.Object));
         var job = new NightlyGenerationJob(new LoggerFactory([logs]).CreateLogger<NightlyGenerationJob>());
 
         var outcome = await job.RunAsync(services, Ct);

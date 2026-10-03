@@ -27,6 +27,7 @@ using Huishoudplanner.Host.Jobs;
 using Huishoudplanner.Host.Notifications;
 using Huishoudplanner.Host.Statistics;
 using Huishoudplanner.Host.Occurrences;
+using Huishoudplanner.Host.Points;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Scalar.AspNetCore;
@@ -62,6 +63,7 @@ public static class CompositionExtensions
         services.AddAi();
         services.AddNotifications();
         services.AddAuditLog();
+        services.AddPoints();
         services.AddStatistics();
         services.AddJobs();
         return services;
@@ -83,6 +85,7 @@ public static class CompositionExtensions
         app.MapAi();
         app.MapGeneration();
         app.MapOccurrences();
+        app.MapPoints();
         app.MapAuditEndpoints();
         app.MapStatistics();
         app.MapJobs();
