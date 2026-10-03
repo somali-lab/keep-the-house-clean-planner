@@ -203,7 +203,7 @@ internal sealed partial class MongoOccurrenceStore : ForStoringOccurrences
         return new UpdateOneModel<BsonDocument>(filter, new BsonDocument("$setOnInsert", onInsert)) { IsUpsert = true };
     }
 
-    private static Occurrence ToOccurrence(BsonDocument document)
+    internal static Occurrence ToOccurrence(BsonDocument document)
     {
         var createdAt = Instant(document, "createdAt") ?? DateTimeOffset.UnixEpoch;
         var date = Instant(document, "date") ?? DateTimeOffset.UnixEpoch;

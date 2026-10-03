@@ -14,7 +14,7 @@ namespace Huishoudplanner.Integration.Tests.Api;
 /// Ports apps/server/test/cyclePlans.test.ts scenario by scenario (read and create, copy with audit, rename and themes, delete with
 /// <c>default_plan</c>, slot saves with warnings, the audit of added/removed/changed slots, 422 <c>invalid_plan</c>, the identical
 /// save, body validation) and adds the diff, the two validation endpoints (slice 2.3), roles, paging and the Node-shaped documents.
-/// Deferred to slice 2.4: the activation preview and the activation scenarios of the Node file (<c>activation-preview</c>, <c>activate</c>,
+/// Ported in slice 2.4 (see ActivationTests): the activation preview and the activation scenarios of the Node file (<c>activation-preview</c>, <c>activate</c>,
 /// the preview token and the occurrence replacement); ported in slice 3.1 (see GenerationTests): the occurrence synchronisation when slots of the active plan are
 /// saved. Real HTTP pipeline and real MongoDB replica set.
 /// </summary>
@@ -386,7 +386,7 @@ public sealed class CyclePlanEndpointTests : IDisposable
     {
         await ArrangeAsync();
         var other = await NewPlanAsync("Actief");
-        // Activation arrives with slice 2.4; until then the state is set directly.
+        // The state is set directly: this test is about the delete rule, not about the activation.
         await Plans.UpdateManyAsync(FilterDefinition<BsonDocument>.Empty, new BsonDocument("$set", new BsonDocument("active", false)), cancellationToken: Ct);
         await Plans.UpdateOneAsync(new BsonDocument("_id", ObjectId.Parse(other)), new BsonDocument("$set", new BsonDocument("active", true)), cancellationToken: Ct);
 

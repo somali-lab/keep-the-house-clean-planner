@@ -258,7 +258,7 @@ internal sealed class MongoCyclePlanStore : ForStoringCyclePlans
         { "sortOrder", slot.SortOrder },
     }));
 
-    private static CyclePlan ToPlan(BsonDocument document)
+    internal static CyclePlan ToPlan(BsonDocument document)
     {
         var createdAt = Instant(document, "createdAt") ?? DateTimeOffset.UnixEpoch;
         var slots = document.TryGetValue("slots", out var slotValue) && slotValue.IsBsonArray
