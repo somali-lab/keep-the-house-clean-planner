@@ -2432,6 +2432,100 @@
         }
       }
     },
+    "/api/v2/jobs/generation": {
+      "post": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Generates the current and the next cycle now (planners).",
+        "description": "Does the generation part of the nightly job: the occurrences of the current and the next cycle are generated from the active plan, idempotently, and open generated occurrences that no longer match the active plan are replaced. The audit entries carry the requesting profile as actor (source ui) and the run id in meta.runId. It never touches the points ledger. Answers 500 settings_missing when the installation has no settings, and 409 when another change to the same data is running.",
+        "operationId": "runGeneration",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationRunResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/jobs/audit-retention": {
+      "post": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Applies the configured audit retention now (planners).",
+        "description": "Deletes the audit entries older than AUDIT_RETENTION_DAYS and answers the cutoff and the number deleted; without that setting it answers status disabled and deletes nothing. Writes no audit entry.",
+        "operationId": "runAuditRetention",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditRetentionResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/meta/limits": {
       "get": {
         "tags": [
@@ -3090,6 +3184,32 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "AuditRetentionResponse": {
+        "required": [
+          "status"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "cutoff": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "deleted": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },
@@ -4147,6 +4267,33 @@
               "string"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "GenerationRunResponse": {
+        "required": [
+          "runId",
+          "removed",
+          "generated"
+        ],
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string"
+          },
+          "removed": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "generated": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GenerationResultResponse"
+            }
           }
         }
       },
@@ -6019,6 +6166,10 @@
     {
       "name": "Rooms",
       "description": "The rooms of the house: everyone reads them, administrators create, change and delete them."
+    },
+    {
+      "name": "Jobs",
+      "description": "Manual triggers of the scheduled jobs: planners start them."
     },
     {
       "name": "Audit",

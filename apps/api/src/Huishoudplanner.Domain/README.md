@@ -79,11 +79,11 @@ Port of `routes/tasks.ts`, `domain/tasks.ts` and `data/tasks.ts`. Driving port `
 
 ## Notifications (`Huishoudplanner.Domain.Notifications`)
 
-`NotifyMessage` (title, body, structured data) and the driven port `ForSendingNotifications` (never throws; `PortError` messages carry the notifier and HTTP status only, never URL or token; `IsEnabled` is false for the none notifier). `MorningMessage.Compose(MorningCounts)` is the pure Dutch morning text of `domain/notify/morning.ts`; the orchestration (one message per active user, once a day) belongs to the jobs slice.
+`NotifyMessage` (title, body, structured data) and the driven port `ForSendingNotifications` (never throws; `PortError` messages carry the notifier and HTTP status only, never URL or token; `IsEnabled` is false for the none notifier). `MorningMessage.Compose(MorningCounts)` is the pure Dutch morning text of `domain/notify/morning.ts`; the orchestration (one message per active user, once a day) belongs to the jobs slice 6.3b.
 
 ## Audit log read (`Huishoudplanner.Domain.Audit`)
 
-`AuditLogEntry` is the read model of a stored entry (wire names as strings, `before`/`after`/`meta` as `AuditObject`), `AuditLogFilter` and `AuditLogPage` its query and page, and `AuditCursor` the keyset cursor (same base64url `"{ISO instant}|{id}"` encoding as the Node server). Driving ports `IAuditLogService` (list, clear) and `IAuditRetentionService`; driven ports `ForReadingAuditLog`, `ForDeletingAuditEntries` (the only deletes of the log: clear and retention), `ForReadingOccurrenceContext` and `ForReadingAuditRetention` (`AUDIT_RETENTION_DAYS`).
+`AuditLogEntry` is the read model of a stored entry (wire names as strings, `before`/`after`/`meta` as `AuditObject`), `AuditLogFilter` and `AuditLogPage` its query and page, and `AuditCursor` the keyset cursor (same base64url `"{ISO instant}|{id}"` encoding as the Node server). Driving ports `IAuditLogService` (list, clear) and `IAuditRetentionService` (run by the 03:45 job and by `POST /api/v2/jobs/audit-retention`); driven ports `ForReadingAuditLog`, `ForDeletingAuditEntries` (the only deletes of the log: clear and retention), `ForReadingOccurrenceContext` and `ForReadingAuditRetention` (`AUDIT_RETENTION_DAYS`).
 
 ## Cycle plans (`Huishoudplanner.Domain.CyclePlans`)
 
