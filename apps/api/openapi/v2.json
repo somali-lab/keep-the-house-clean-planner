@@ -985,6 +985,64 @@
         }
       }
     },
+    "/api/v2/due": {
+      "get": {
+        "tags": [
+          "Due"
+        ],
+        "summary": "Lists every active task with its due state, ranked.",
+        "description": "Needs no profile. Highest ratio first, then most days since, then task id. A task that is fine is in the list as well (state ok); a client that wants only due and overdue work leaves the ok items out. The list is paged: pass the nextCursor of a page as cursor for the next one (limit 1 to 200, default 50). The summary counts the whole list. A task whose interval no longer exists is left out.",
+        "operationId": "listDue",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DueListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/cycle-plans": {
       "get": {
         "tags": [
@@ -2456,6 +2514,798 @@
         }
       }
     },
+    "/api/v2/occurrences": {
+      "get": {
+        "tags": [
+          "Occurrences"
+        ],
+        "summary": "Lists the occurrences on the days from to to, in display order.",
+        "description": "Needs no profile. from and to are required day keys (YYYY-MM-DD), both included, and from must not be after to (from_after_to). assigneeId and status (open, done, skipped) filter the list. Every occurrence carries isOverdue, movedFrom and where its day falls in the cycles (cycleIndex, weekIndex). The list is paged: pass the nextCursor of a page as cursor for the next one (limit 1 to 500, default 100).",
+        "operationId": "listOccurrences",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "assigneeId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OccurrenceListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/occurrences/{id}": {
+      "get": {
+        "tags": [
+          "Occurrences"
+        ],
+        "summary": "Returns one occurrence.",
+        "description": "Needs no profile. Answers 404 not_found for an unknown occurrence.",
+        "operationId": "getOccurrence",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OccurrenceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Occurrences"
+        ],
+        "summary": "Permanently deletes a completed occurrence (administrators).",
+        "description": "An administrator's correction: only a done occurrence (409 invalid_transition otherwise). Audited as a delete with the correction reason completion; the task's lastCompletedAt falls back to the newest remaining completion.",
+        "operationId": "deleteOccurrence",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteOccurrenceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/occurrences/{id}/complete": {
+      "post": {
+        "tags": [
+          "Occurrences"
+        ],
+        "summary": "Completes an open or skipped occurrence.",
+        "description": "Work of someone else needs a choice (ADR-0011): completedBy names the person credited (an active person) or takeOver true makes the actor the one who did it and the assignee. Without either: 400 validation_error with completion_choice_required on completedBy; both: completion_choice_conflict; an unknown or inactive person: unknown_user or inactive_user. Unassigned work and work of the actor default to the actor and a completion claims unassigned work. A done occurrence answers 409 invalid_transition. The task's lastCompletedAt follows, audited as its own entry. The body may be left out.",
+        "operationId": "completeOccurrence",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteOccurrenceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OccurrenceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/occurrences/{id}/uncomplete": {
+      "post": {
+        "tags": [
+          "Occurrences"
+        ],
+        "summary": "Undoes a completion: back to the status before it.",
+        "description": "Only a done occurrence (409 invalid_transition otherwise). Recorded work has no planned state to return to: 409 retract_required. The points snapshot is cleared and the task's lastCompletedAt falls back to the newest remaining completion.",
+        "operationId": "uncompleteOccurrence",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OccurrenceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/occurrences/{id}/completion": {
+      "post": {
+        "tags": [
+          "Occurrences"
+        ],
+        "summary": "Corrects a recorded completion (administrators).",
+        "description": "Takes date, completedAt and completedBy. A done occurrence only (409 invalid_transition), an existing person (400 unknown_user on completedBy) and, when date differs from the occurrence's day, a generated cycle for that day (409 cycle_not_generated with the date). Audited as an update with the correction reason completion; the task's lastCompletedAt follows.",
+        "operationId": "editOccurrenceCompletion",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditCompletionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OccurrenceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/occurrences/{id}/skip": {
+      "post": {
+        "tags": [
+          "Occurrences"
+        ],
+        "summary": "Skips an open occurrence.",
+        "description": "An optional reason of at most 500 characters. Only an open occurrence (409 invalid_transition otherwise). A skipped occurrence does not roll over. The body may be left out.",
+        "operationId": "skipOccurrence",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SkipOccurrenceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OccurrenceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/occurrences/{id}/reschedule": {
+      "post": {
+        "tags": [
+          "Occurrences"
+        ],
+        "summary": "Moves an open occurrence to another day.",
+        "description": "The planned day stays, the cycle follows the new day. A day outside the generated cycles: 409 cycle_not_generated; a status other than open: 409 invalid_transition. A move to the same day writes and audits nothing. Moving onto a weekday the assignee is unavailable on is allowed and answers the warning assignee_unavailable.",
+        "operationId": "rescheduleOccurrence",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RescheduleOccurrenceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OccurrenceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/occurrences/{id}/assignment": {
+      "post": {
+        "tags": [
+          "Occurrences"
+        ],
+        "summary": "Assigns an open occurrence to a person, or to anyone.",
+        "description": "assigneeId is required: an active person (400 unknown_user or inactive_user otherwise), or null for anyone. Only an open occurrence (409 invalid_transition). Assigning the person who already has it writes nothing. Answers the warning assignee_unavailable when the person is unavailable on the occurrence's weekday.",
+        "operationId": "assignOccurrence",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignOccurrenceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OccurrenceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/occurrences/{id}/claim": {
+      "post": {
+        "tags": [
+          "Occurrences"
+        ],
+        "summary": "The actor takes an unassigned open occurrence.",
+        "description": "Atomic: of two claims exactly one wins. A done or skipped occurrence answers 409 invalid_transition, one that already has an assignee 409 already_claimed. Audited as an assign entry with meta.claim.",
+        "operationId": "claimOccurrence",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OccurrenceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/audit": {
       "get": {
         "tags": [
@@ -2885,6 +3735,100 @@
           },
           "409": {
             "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/jobs/generation": {
+      "post": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Generates the current and the next cycle now (planners).",
+        "description": "Does the generation part of the nightly job: the occurrences of the current and the next cycle are generated from the active plan, idempotently, and open generated occurrences that no longer match the active plan are replaced. The audit entries carry the requesting profile as actor (source ui) and the run id in meta.runId. It never touches the points ledger. Answers 500 settings_missing when the installation has no settings, and 409 when another change to the same data is running.",
+        "operationId": "runGeneration",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationRunResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/jobs/audit-retention": {
+      "post": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Applies the configured audit retention now (planners).",
+        "description": "Deletes the audit entries older than AUDIT_RETENTION_DAYS and answers the cutoff and the number deleted; without that setting it answers status disabled and deletes nothing. Writes no audit entry.",
+        "operationId": "runAuditRetention",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditRetentionResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -3558,6 +4502,21 @@
           }
         }
       },
+      "AssignOccurrenceRequest": {
+        "required": [
+          "assigneeId"
+        ],
+        "type": "object",
+        "properties": {
+          "assigneeId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "An active person, or null for \"anyone\"."
+          }
+        }
+      },
       "AuditClearedResponse": {
         "required": [
           "deleted"
@@ -3664,6 +4623,32 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "AuditRetentionResponse": {
+        "required": [
+          "status"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "cutoff": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "deleted": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },
@@ -4038,6 +5023,29 @@
             "items": {
               "$ref": "#/components/schemas/CalendarDay"
             }
+          }
+        }
+      },
+      "CompleteOccurrenceRequest": {
+        "required": [
+          "completedBy",
+          "takeOver"
+        ],
+        "type": "object",
+        "properties": {
+          "completedBy": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "An active person who performed the work; the points go to this person."
+          },
+          "takeOver": {
+            "type": [
+              "null",
+              "boolean"
+            ],
+            "description": "Only true is accepted: the actor performed the work and becomes the assignee."
           }
         }
       },
@@ -4596,6 +5604,17 @@
           }
         }
       },
+      "DeleteOccurrenceResponse": {
+        "required": [
+          "deleted"
+        ],
+        "type": "object",
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          }
+        }
+      },
       "DeviationReport": {
         "required": [
           "rows"
@@ -4820,6 +5839,208 @@
           }
         }
       },
+      "DueItemResponse": {
+        "required": [
+          "taskId",
+          "taskName",
+          "roomId",
+          "roomName",
+          "intervalKey",
+          "intervalLabel",
+          "periodDays",
+          "daysSince",
+          "ratio",
+          "state",
+          "lastCompletedAt",
+          "initialDueDate",
+          "nextOccurrence"
+        ],
+        "type": "object",
+        "properties": {
+          "taskId": {
+            "type": "string"
+          },
+          "taskName": {
+            "type": "string"
+          },
+          "roomId": {
+            "type": "string"
+          },
+          "roomName": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Null when the room no longer exists."
+          },
+          "intervalKey": {
+            "type": "string"
+          },
+          "intervalLabel": {
+            "type": "string"
+          },
+          "periodDays": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "daysSince": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "Local calendar days since the last completion; for a task never completed zero before its initial due date, then one interval plus the days since that date.",
+            "format": "int32"
+          },
+          "ratio": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "daysSince divided by periodDays: 1 or more is due, 1.5 or more overdue.",
+            "format": "double"
+          },
+          "state": {
+            "type": "string"
+          },
+          "lastCompletedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "initialDueDate": {
+            "type": "string",
+            "description": "The day a never-completed task first counts as due.",
+            "format": "date"
+          },
+          "nextOccurrence": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DueNextOccurrenceResponse"
+              }
+            ]
+          }
+        }
+      },
+      "DueListResponse": {
+        "required": [
+          "today",
+          "items",
+          "nextCursor",
+          "summary"
+        ],
+        "type": "object",
+        "properties": {
+          "today": {
+            "type": "string",
+            "format": "date"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DueItemResponse"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "summary": {
+            "$ref": "#/components/schemas/DueSummaryResponse"
+          }
+        }
+      },
+      "DueNextOccurrenceResponse": {
+        "required": [
+          "id",
+          "date",
+          "assigneeId"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "assigneeId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "DueSummaryResponse": {
+        "required": [
+          "due",
+          "overdue"
+        ],
+        "type": "object",
+        "properties": {
+          "due": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "overdue": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "EditCompletionRequest": {
+        "required": [
+          "date",
+          "completedAt",
+          "completedBy"
+        ],
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The day the completion belongs to, YYYY-MM-DD; a day outside the generated cycles is refused."
+          },
+          "completedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The moment of completion, an ISO 8601 instant with a time zone."
+          },
+          "completedBy": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The person credited; must exist."
+          }
+        }
+      },
       "ExplainPlanRequest": {
         "required": [
           "planId"
@@ -4877,6 +6098,33 @@
               "string"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "GenerationRunResponse": {
+        "required": [
+          "runId",
+          "removed",
+          "generated"
+        ],
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string"
+          },
+          "removed": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "generated": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GenerationResultResponse"
+            }
           }
         }
       },
@@ -5172,6 +6420,258 @@
               "string"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "OccurrenceListResponse": {
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OccurrenceResponse"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "OccurrenceResponse": {
+        "required": [
+          "id",
+          "taskId",
+          "cycleId",
+          "planId",
+          "date",
+          "plannedDate",
+          "assigneeId",
+          "status",
+          "statusBeforeCompletion",
+          "completedAt",
+          "completedBy",
+          "skipReason",
+          "durationMinutesSnapshot",
+          "taskNameSnapshot",
+          "roomIdSnapshot",
+          "roomNameSnapshot",
+          "origin",
+          "recordedDone",
+          "requestId",
+          "pointsSnapshot",
+          "pointsOverride",
+          "periodOwnerId",
+          "createdAt",
+          "updatedAt",
+          "isOverdue",
+          "movedFrom",
+          "cycleIndex",
+          "weekIndex"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "taskId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Null for a one-off task, whose name, duration and room live in the snapshot fields only."
+          },
+          "cycleId": {
+            "type": "string"
+          },
+          "planId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The plan it was generated from; null for ad-hoc occurrences."
+          },
+          "date": {
+            "type": "string",
+            "description": "The day it sits on now, YYYY-MM-DD."
+          },
+          "plannedDate": {
+            "type": "string",
+            "description": "The day of its slot, YYYY-MM-DD; kept when the occurrence is moved."
+          },
+          "assigneeId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "description": "open, done or skipped."
+          },
+          "statusBeforeCompletion": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "open or skipped: where an undo goes back to; null while not done."
+          },
+          "completedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "completedBy": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The person credited."
+          },
+          "skipReason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "durationMinutesSnapshot": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "taskNameSnapshot": {
+            "type": "string"
+          },
+          "roomIdSnapshot": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "roomNameSnapshot": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "origin": {
+            "type": "string",
+            "description": "generated or adhoc."
+          },
+          "recordedDone": {
+            "type": "boolean",
+            "description": "Created directly in the done state: no planned state to return to."
+          },
+          "requestId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The idempotency key of the creating request."
+          },
+          "pointsSnapshot": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "description": "The points of this execution, fixed when it became done; null while not done.",
+            "format": "int32"
+          },
+          "pointsOverride": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "description": "The points a one-off task was recorded with; null means the duration rule.",
+            "format": "int32"
+          },
+          "periodOwnerId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The assignee frozen when work of an ended planned week first changed hands; null means the assignee."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "isOverdue": {
+            "type": "boolean",
+            "description": "Open and dated before today."
+          },
+          "movedFrom": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The planned day when the occurrence sits on another day, else null."
+          },
+          "cycleIndex": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "The cycle the day belongs to (negative before the anchor).",
+            "format": "int32"
+          },
+          "weekIndex": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "The week of the cycle, 0 to 3.",
+            "format": "int32"
+          },
+          "warnings": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/OccurrenceWarningResponse"
+            },
+            "description": "Only on the answers of reschedule and assignment: the non-blocking warnings (empty when there are none)."
+          }
+        }
+      },
+      "OccurrenceWarningResponse": {
+        "required": [
+          "code",
+          "message",
+          "details"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "details": {
+            "type": "object"
           }
         }
       },
@@ -5769,6 +7269,21 @@
           }
         }
       },
+      "RescheduleOccurrenceRequest": {
+        "required": [
+          "date"
+        ],
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The new day, YYYY-MM-DD."
+          }
+        }
+      },
       "RewardGoalsDto": {
         "required": [
           "weekPoints",
@@ -6034,6 +7549,21 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "SkipOccurrenceRequest": {
+        "required": [
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "At most 500 characters after trimming; empty means no reason."
           }
         }
       },
@@ -7088,6 +8618,10 @@
       "description": "The rooms of the house: everyone reads them, administrators create, change and delete them."
     },
     {
+      "name": "Jobs",
+      "description": "Manual triggers of the scheduled jobs: planners start them."
+    },
+    {
       "name": "Audit",
       "description": "The history of changes: everyone reads it, administrators clear it."
     },
@@ -7100,12 +8634,20 @@
       "description": "The recurring household tasks: everyone reads them, planners create, change, deactivate and bulk-change them."
     },
     {
+      "name": "Due",
+      "description": "The due engine: every active task ranked by how far it has drifted past its interval."
+    },
+    {
       "name": "Cycle plans",
       "description": "The four-week cycle plans: everyone reads and compares them, planners create, change, delete, save slots and validate."
     },
     {
       "name": "Cycles",
       "description": "The generated four-week cycles: a read-only list, created by generation only."
+    },
+    {
+      "name": "Occurrences",
+      "description": "What actually happened on a day: everyone reads the occurrences; members complete, uncomplete, skip, reschedule, assign and claim them, administrators correct or delete a completion."
     },
     {
       "name": "Users",

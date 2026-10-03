@@ -51,6 +51,14 @@ Differences: the timezone has no default (pass `DayKeys.FindZone(DayKeys.AppTime
 key (TypeScript skipped it through `!periodDays`). `ComputeDue` throws nothing itself; an invalid day key or timezone
 fails earlier, in `DayKeys.Parse` / `FindZone`.
 
+The due list of `GET /api/v2/due` (slice 3.4, `computeDueList` and `summarizeDue` of `apps/server/src/domain/due.ts`) adds
+`DueItem` (the ranked result with task, room and interval names, `InitialDueDate` and `DueNextOccurrence`), `DueList`
+(`Today`, one page of `Items`, `NextCursor`, `DueSummary` of the whole list), `DueSummary(Due, Overdue)` (pure,
+`DueSummary.Of(states | results | items)`; the `due` of the generation answer), `DueCursor` (position by days, period and task
+id, so a page continues correctly even when the task it points at has dropped out) and
+`DueCalculator.InitialDueDateOf(firstPlanned, createdAt, periodDays, tz)` (first planned day, else one interval after creation).
+The data gathering lives in `Application.Due.DueService` behind `IDueService` and the read-only port `ForReadingDueOccurrences`.
+
 ## Settings (`Huishoudplanner.Domain.Settings`)
 
 The singleton settings document (id `000000000000000000000001`). `HouseholdSettings` mirrors `apps/server/src/data/settings.ts`: optional values stay `null` when they are not stored and mean their default for the API (`SettingsDefaults`: EUR, 0 cents per point, automatic goals, no bonuses). There is no API key in it: `AI_API_KEY` is configuration only.
@@ -79,11 +87,11 @@ Port of `routes/tasks.ts`, `domain/tasks.ts` and `data/tasks.ts`. Driving port `
 
 ## Notifications (`Huishoudplanner.Domain.Notifications`)
 
-`NotifyMessage` (title, body, structured data) and the driven port `ForSendingNotifications` (never throws; `PortError` messages carry the notifier and HTTP status only, never URL or token; `IsEnabled` is false for the none notifier). `MorningMessage.Compose(MorningCounts)` is the pure Dutch morning text of `domain/notify/morning.ts`; the orchestration (one message per active user, once a day) belongs to the jobs slice.
+`NotifyMessage` (title, body, structured data) and the driven port `ForSendingNotifications` (never throws; `PortError` messages carry the notifier and HTTP status only, never URL or token; `IsEnabled` is false for the none notifier). `MorningMessage.Compose(MorningCounts)` is the pure Dutch morning text of `domain/notify/morning.ts`; the orchestration (one message per active user, once a day) belongs to the jobs slice 6.3b.
 
 ## Audit log read (`Huishoudplanner.Domain.Audit`)
 
-`AuditLogEntry` is the read model of a stored entry (wire names as strings, `before`/`after`/`meta` as `AuditObject`), `AuditLogFilter` and `AuditLogPage` its query and page, and `AuditCursor` the keyset cursor (same base64url `"{ISO instant}|{id}"` encoding as the Node server). Driving ports `IAuditLogService` (list, clear) and `IAuditRetentionService`; driven ports `ForReadingAuditLog`, `ForDeletingAuditEntries` (the only deletes of the log: clear and retention), `ForReadingOccurrenceContext` and `ForReadingAuditRetention` (`AUDIT_RETENTION_DAYS`).
+`AuditLogEntry` is the read model of a stored entry (wire names as strings, `before`/`after`/`meta` as `AuditObject`), `AuditLogFilter` and `AuditLogPage` its query and page, and `AuditCursor` the keyset cursor (same base64url `"{ISO instant}|{id}"` encoding as the Node server). Driving ports `IAuditLogService` (list, clear) and `IAuditRetentionService` (run by the 03:45 job and by `POST /api/v2/jobs/audit-retention`); driven ports `ForReadingAuditLog`, `ForDeletingAuditEntries` (the only deletes of the log: clear and retention), `ForReadingOccurrenceContext` and `ForReadingAuditRetention` (`AUDIT_RETENTION_DAYS`).
 
 ## Cycle plans (`Huishoudplanner.Domain.CyclePlans`)
 
@@ -93,10 +101,31 @@ Port of `routes/cyclePlans.ts`, `domain/plans.ts`, `domain/slots.ts`, `domain/pl
 
 Port of `domain/generation.ts`, `data/cycles.ts`, `data/occurrences.ts` (the insert, read and room snapshot parts), `routes/cycles.ts` and the model of `domain/occurrences.ts`. Driving ports `ICycleService` (the read-only cycle list) and `IGenerationService` (`GenerateUpcomingAsync`, the nightly run; `GenerateCycleAsync`; `ReplaceUpcomingAsync`, the replacement rule used by the slot save of the active plan and later by the activation), driven ports `ForStoringCycles` and `ForStoringOccurrences`. Every call is one transaction, or joins the caller's, with its audit entries; a run that changes nothing writes and audits nothing.
 
-- `Occurrence` holds every stored field of an `occurrences` document (statuses `open`, `done`, `skipped`, origin `generated` or `adhoc`, the snapshots of name, duration and room, the optional points, request and period owner fields), so slice 3.2 adds actions on top of it without changing it. `NewGeneratedOccurrence` is what generation hands the store; `OccurrenceAudit` writes the Node shapes (a generated occurrence lists every field in `after`, a removal every field in `before`, `meta` carries the run id).
-- `ForStoringOccurrences` is deliberately focused: the idempotent insert of generated occurrences, the two range reads generation needs (the generated ones by planned day, the replaceable ones), delete by id and the room snapshot refresh. 3.2 and 3.3 extend it with the reads and updates of the actions and the ad-hoc inserts. The Mongo adapter inserts with one upsert per draft on the key of the partial unique index `occurrences_generated_slot_unique` because a duplicate key error would abort a MongoDB transaction; the index still enforces the rule for concurrent writers.
+- `Occurrence` holds every stored field of an `occurrences` document (statuses `open`, `done`, `skipped`, origin `generated` or `adhoc`, the snapshots of name, duration and room, the optional points, request and period owner fields), so the actions of slice 3.2 sit on top of it. `PeriodOwnerFrozen` tells a stored `periodOwnerId: null` (frozen as unassigned) from a missing field, which `PeriodOwnerId` alone cannot. `NewGeneratedOccurrence` is what generation hands the store; `OccurrenceAudit` writes the Node shapes (a generated occurrence lists every field in `after`, a removal every field in `before`, `meta` carries the run id).
+- `ForStoringOccurrences` started focused on generation: the idempotent insert of generated occurrences, the two range reads generation needs (the generated ones by planned day, the replaceable ones), delete by id and the room snapshot refresh. Slice 3.2 added the reads and the guarded update of the actions (see Occurrence actions); 3.3 adds the ad-hoc inserts and the request key lookup. The Mongo adapter inserts with one upsert per draft on the key of the partial unique index `occurrences_generated_slot_unique` because a duplicate key error would abort a MongoDB transaction; the index still enforces the rule for concurrent writers.
 - `OccurrencePlanner` is the pure rule: which occurrences the slots of a plan give in a cycle (inactive tasks, vacation days and days before today are skipped) and what a draft snapshots. `OccurrenceReconciliation` decides whether the upcoming occurrences must be replaced (a missing slot, or a replaceable occurrence with another day, assignee or plan; only generated occurrences occupy a slot, only open ones that were not dragged may be replaced). The TypeScript function takes database documents, so there are no golden vectors; the date scenarios of `generation.test.ts` are ported as direct tests.
 - `Cycle`, `CycleAudit` and `CycleCursor` hold the cycle document (day keys as `DateOnly`), its audit shapes (create, anchor alignment, plan change) and the index cursor.
+
+### Occurrence actions (slice 3.2)
+
+Port of `routes/occurrences.ts`, `domain/occurrences.ts` and the update helpers of `data/occurrences.ts`. Driving port `IOccurrenceService` (list, get, complete, uncomplete, edit completion, skip, reschedule, assign, claim, delete a completion); the HTTP adapter decides who may call what (any profile, administrators for the correction and the delete). The Node `PATCH /occurrences/:id` with an `action` is one method and one endpoint per intent:
+
+| Node action       | `IOccurrenceService`                                    | v2 endpoint                         |
+| ----------------- | ------------------------------------------------------- | ----------------------------------- |
+| `complete`        | `CompleteAsync(actor, id, CompleteCommand)`             | `POST /occurrences/{id}/complete`   |
+| `uncomplete`      | `UncompleteAsync`                                       | `POST /occurrences/{id}/uncomplete` |
+| `edit_completion` | `EditCompletionAsync(actor, id, EditCompletionCommand)` | `POST /occurrences/{id}/completion` |
+| `skip`            | `SkipAsync(actor, id, reason)`                          | `POST /occurrences/{id}/skip`       |
+| `reschedule`      | `RescheduleAsync(actor, id, day)`                       | `POST /occurrences/{id}/reschedule` |
+| `assign`          | `AssignAsync(actor, id, assigneeId)`                    | `POST /occurrences/{id}/assignment` |
+| (claim route)     | `ClaimAsync`                                            | `POST /occurrences/{id}/claim`      |
+| (`DELETE` route)  | `DeleteCompletedAsync`                                  | `DELETE /occurrences/{id}`          |
+
+- `OccurrenceRules` and `OccurrenceTransitions` are the pure half: the completion choice (`completion_choice_required`, `completion_choice_conflict`), the period owner freeze (ADR-0012, `FreezePeriodOwner`), the `assignee_unavailable` warning, and each action as a state transition with its audit action and `meta` exactly as Node writes it (`completedBy`, `wasAssignee`, `claimed`, `takenOver` with `previousAssigneeId`, `from` and `to` as day keys, `claim`, `correction`). The use case reads, checks the status (`invalid_transition` with the extensions `status` and `action`), and writes.
+- `OccurrenceAudit.ForChange` diffs before and after and adds `meta.occurrence` (task name, room name, day as they were); it is `null` for a no-op, which writes and audits nothing. A cleared points snapshot reads as an explicit `null` in the entry, like Node. `TaskAudit.ForLastCompletedAt` is the second entry of a completion, uncompletion, correction and delete: the denormalised `lastCompletedAt` of the task follows the newest remaining completion (`ForStoringTasks.SetLastCompletedAtAsync`, `ForStoringOccurrences.FindLatestCompletionAsync`).
+- `ForStoringOccurrences.UpdateAsync(before, after, guard, updatedAt)` writes one `$set` per changed field and filters on the state the use case read (`OccurrenceGuard`: the status, and for a claim that nobody has the occurrence). A document that exists but no longer matches is `OccurrenceStateChanged` (the use case answers `invalid_transition` with status `changed`, or for a claim says what the winner made of it); in a transaction the loser of a race is normally retried by the runner and then sees the new state.
+- `OccurrenceView` is the API shape: day keys in the household timezone, `IsOverdue`, `MovedFrom`, and `CycleIndex` and `WeekIndex` from `Cycles`. The list is paged with `OccurrenceCursor` (day instant, task name, id).
+- Not here yet: the points ledger that follows a completion, a correction and a delete (`syncExecutionPoints`, phase 4), the extra and one-off executions with their request keys and the retract (slice 3.3), the due engine (3.4). The `pointsSnapshot` itself is written.
 
 ## Plan activation (`Huishoudplanner.Domain.Activation`)
 

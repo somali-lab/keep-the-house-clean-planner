@@ -54,9 +54,9 @@ public static class OccurrenceAudit
             properties.Add(Pair("pointsOverride", points));
         }
 
-        if (occurrence.PeriodOwnerId is { } owner)
+        if (occurrence.HasPeriodOwner)
         {
-            properties.Add(Pair("periodOwnerId", new AuditObjectId(owner)));
+            properties.Add(Pair("periodOwnerId", Id(occurrence.PeriodOwnerId)));
         }
 
         return new AuditObject(properties);
@@ -84,6 +84,49 @@ public static class OccurrenceAudit
             occurrence.Id,
             AuditAction.Delete,
             AuditObject.Of(("runId", runId), ("planId", new AuditObjectId(planId)), ("reason", reason)));
+    }
+
+    /// <summary>
+    /// An action on an occurrence (<c>updateOccurrence</c> of the Node server): the changed fields between <paramref name="before"/> and
+    /// <paramref name="after"/>, and <c>meta</c> with the action detail plus <c>occurrence</c> (task name, room name and day as they were), which
+    /// the history shows without a lookup. <see langword="null"/> when nothing changed: a no-op writes and audits nothing (ADR-0004).
+    /// </summary>
+    public static AuditEntry? ForChange(AuditActor actor, Occurrence before, Occurrence after, AuditAction action, AuditObject? meta)
+    {
+        ArgumentNullException.ThrowIfNull(actor);
+        ArgumentNullException.ThrowIfNull(before);
+        ArgumentNullException.ThrowIfNull(after);
+        var afterFields = Fields(after);
+        if (before.PointsSnapshot is not null && after.PointsSnapshot is null)
+        {
+            // A snapshot that is cleared reads as an explicit null, like the Node server writes it.
+            afterFields = new AuditObject([.. afterFields.Properties, Pair("pointsSnapshot", AuditNull.Instance)]);
+        }
+
+        var change = ChangeSet.Between(Fields(before), afterFields);
+        if (change.IsNoOp)
+        {
+            return null;
+        }
+
+        var context = AuditObject.Of(
+            ("taskNameSnapshot", before.TaskNameSnapshot),
+            ("roomNameSnapshot", before.RoomNameSnapshot is { } room ? AuditValue.FromString(room) : AuditNull.Instance),
+            ("date", before.Date));
+        var properties = new List<KeyValuePair<string, AuditValue>>(meta?.Properties ?? []) { Pair("occurrence", context) };
+        return change.ToEntry(actor, AuditEntity.Occurrence, before.Id, action, new AuditObject(properties));
+    }
+
+    /// <summary>An administrator deleted a completed occurrence (<c>deleteOccurrences</c> with the correction reason): every field in <c>before</c>.</summary>
+    public static AuditEntry ForCorrectionDelete(AuditActor actor, Occurrence occurrence)
+    {
+        ArgumentNullException.ThrowIfNull(occurrence);
+        return ChangeSet.Between(Fields(occurrence), null, Ignore).ToEntry(
+            actor,
+            AuditEntity.Occurrence,
+            occurrence.Id,
+            AuditAction.Delete,
+            AuditObject.Of(("correction", "completion")));
     }
 
     private static AuditValue Id(string? id) => id is null ? AuditNull.Instance : new AuditObjectId(id);

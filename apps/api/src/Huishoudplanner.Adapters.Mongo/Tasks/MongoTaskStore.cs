@@ -241,6 +241,34 @@ internal sealed class MongoTaskStore : ForStoringTasks
         }
     }
 
+    public async Task<OneOf<Success, NotFound, PortError>> SetLastCompletedAtAsync(string id, DateTimeOffset? lastCompletedAt, DateTimeOffset updatedAt, CancellationToken cancellationToken)
+    {
+        if (MongoTransactionContext.Session is not { IsInTransaction: true } session)
+        {
+            return NoTransaction();
+        }
+
+        if (!ObjectIdConverter.TryParse(id, out var objectId))
+        {
+            return new NotFound();
+        }
+
+        var set = new BsonDocument
+        {
+            { "lastCompletedAt", lastCompletedAt is { } at ? new BsonDateTime(at.UtcDateTime) : BsonNull.Value },
+            { "updatedAt", new BsonDateTime(updatedAt.UtcDateTime) },
+        };
+        try
+        {
+            var result = await tasks.UpdateOneAsync(session, new BsonDocument("_id", objectId), new BsonDocument("$set", set), cancellationToken: cancellationToken).ConfigureAwait(false);
+            return result.MatchedCount == 0 ? new NotFound() : new Success();
+        }
+        catch (Exception e) when (IsFailure(e))
+        {
+            return Failed("set the last completion of", e);
+        }
+    }
+
     public async Task<OneOf<int, PortError>> CountInRoomAsync(string roomId, CancellationToken cancellationToken)
     {
         if (!ObjectIdConverter.TryParse(roomId, out var id))

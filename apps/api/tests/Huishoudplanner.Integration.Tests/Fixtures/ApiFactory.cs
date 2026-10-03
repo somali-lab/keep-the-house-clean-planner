@@ -116,6 +116,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         ArgumentNullException.ThrowIfNull(builder);
         builder.UseEnvironment(environment);
         builder.UseSetting("MONGO_URL", mongoUrl);
+        builder.UseSetting("DISABLE_SCHEDULER", "true"); // no job fires inside a test; WithSetting can turn it on
         if (webDistDir is not null)
         {
             builder.UseSetting("WEB_DIST_DIR", webDistDir);

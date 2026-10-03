@@ -18,10 +18,13 @@ using Huishoudplanner.Host.Startup;
 using Huishoudplanner.Host.Users;
 using Huishoudplanner.Host.Rooms;
 using Huishoudplanner.Host.Tasks;
+using Huishoudplanner.Host.Due;
 using Huishoudplanner.Host.CyclePlans;
 using Huishoudplanner.Host.Generation;
+using Huishoudplanner.Host.Jobs;
 using Huishoudplanner.Host.Notifications;
 using Huishoudplanner.Host.Statistics;
+using Huishoudplanner.Host.Occurrences;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Scalar.AspNetCore;
@@ -47,13 +50,16 @@ public static class CompositionExtensions
         services.AddSettings();
         services.AddRooms();
         services.AddTasks();
+        services.AddDue();
         services.AddGeneration();
+        services.AddOccurrences();
         services.AddCyclePlans();
         services.AddActivation();
         services.AddAi();
         services.AddNotifications();
         services.AddAuditLog();
         services.AddStatistics();
+        services.AddJobs();
         return services;
     }
 
@@ -65,12 +71,15 @@ public static class CompositionExtensions
         app.MapUserEndpoints();
         app.MapRoomEndpoints();
         app.MapTasks();
+        app.MapDue();
         app.MapCyclePlans();
         app.MapActivation();
         app.MapAi();
         app.MapGeneration();
+        app.MapOccurrences();
         app.MapAuditEndpoints();
         app.MapStatistics();
+        app.MapJobs();
         app.MapMetaEndpoints();
         app.MapCalendarEndpoints();
         app.MapSettings();

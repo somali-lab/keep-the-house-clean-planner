@@ -37,4 +37,10 @@ public interface ForStoringTasks
 
     /// <summary>The distinct interval keys of all tasks, active or inactive (an interval that tasks use cannot be removed).</summary>
     Task<OneOf<IReadOnlyList<string>, PortError>> GetIntervalKeysInUseAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Sets the denormalised <c>lastCompletedAt</c> (and <c>updatedAt</c>), <see langword="null"/> clears it. Written together with an audit entry by
+    /// the occurrence use cases, and only when the value changes.
+    /// </summary>
+    Task<OneOf<Success, NotFound, PortError>> SetLastCompletedAtAsync(string id, DateTimeOffset? lastCompletedAt, DateTimeOffset updatedAt, CancellationToken cancellationToken);
 }

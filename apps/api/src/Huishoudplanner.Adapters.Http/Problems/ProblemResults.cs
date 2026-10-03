@@ -18,7 +18,9 @@ public static partial class ProblemResults
     public static IResult From(ConflictError error)
     {
         ArgumentNullException.ThrowIfNull(error);
-        return Problem(StatusCodes.Status409Conflict, error.Code, error.Detail);
+        return error.Extensions is { Count: > 0 } extensions
+            ? Problem(StatusCodes.Status409Conflict, error.Code, error.Detail, extensions)
+            : Problem(StatusCodes.Status409Conflict, error.Code, error.Detail);
     }
 
     public static IResult From(SettingsMissing _) =>

@@ -92,7 +92,15 @@ public sealed record Occurrence(
     string? RequestId = null,
     int? PointsSnapshot = null,
     int? PointsOverride = null,
-    string? PeriodOwnerId = null);
+    string? PeriodOwnerId = null,
+    bool PeriodOwnerFrozen = false)
+{
+    /// <summary>
+    /// Whether <c>periodOwnerId</c> is stored at all. A stored <see langword="null"/> means "frozen as unassigned" (ADR-0012); a missing field means
+    /// "the assignee". <see cref="PeriodOwnerId"/> alone cannot tell them apart, so the stores set <see cref="PeriodOwnerFrozen"/> when the field exists.
+    /// </summary>
+    public bool HasPeriodOwner => PeriodOwnerFrozen || PeriodOwnerId is not null;
+}
 
 /// <summary>
 /// A generated occurrence as the store is asked to create it: open, unassigned work of a slot with its snapshots, on a day that equals its

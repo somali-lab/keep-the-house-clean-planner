@@ -8,10 +8,11 @@ public readonly record struct NotFound;
 
 /// <summary>
 /// A rule that depends on current state refuses the request. <paramref name="Code"/> is the stable snake_case
-/// code of requirements section 8 (for example <c>room_in_use</c>); it becomes part of the problem type.
+/// code of requirements section 8 (for example <c>room_in_use</c>); it becomes part of the problem type. <paramref name="Extensions"/> are the
+/// named members some codes carry next to the detail (<c>invalid_transition</c>: <c>status</c> and <c>action</c>; <c>cycle_not_generated</c>: <c>date</c>).
 /// Maps to <c>409</c>.
 /// </summary>
-public sealed record ConflictError(string Code, string Detail);
+public sealed record ConflictError(string Code, string Detail, IReadOnlyDictionary<string, object?>? Extensions = null);
 
 /// <summary>Field level problems, keyed by field name. Maps to <c>400 validation_error</c> with an <c>errors</c> extension.</summary>
 public sealed record ValidationErrors(IReadOnlyDictionary<string, string[]> Errors)

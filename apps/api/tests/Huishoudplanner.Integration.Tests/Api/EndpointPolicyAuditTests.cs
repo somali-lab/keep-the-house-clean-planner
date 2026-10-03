@@ -39,6 +39,15 @@ public sealed class EndpointPolicyAuditTests
         ["PUT /api/v2/cycle-plans/{id}/slots"] = AuthorizationPolicies.PlannerPolicy,
         ["POST /api/v2/cycle-plans/{id}/validation"] = AuthorizationPolicies.PlannerPolicy,
         ["POST /api/v2/cycle-plans/validation"] = AuthorizationPolicies.PlannerPolicy,
+        ["POST /api/v2/occurrences/{id}/complete"] = AuthorizationPolicies.ActorPolicy,
+        ["POST /api/v2/occurrences/{id}/uncomplete"] = AuthorizationPolicies.ActorPolicy,
+        ["POST /api/v2/occurrences/{id}/completion"] = AuthorizationPolicies.AdminPolicy,
+        ["POST /api/v2/occurrences/{id}/skip"] = AuthorizationPolicies.ActorPolicy,
+        ["POST /api/v2/occurrences/{id}/reschedule"] = AuthorizationPolicies.ActorPolicy,
+        ["POST /api/v2/occurrences/{id}/assignment"] = AuthorizationPolicies.ActorPolicy,
+        ["POST /api/v2/occurrences/{id}/claim"] = AuthorizationPolicies.ActorPolicy,
+        ["DELETE /api/v2/occurrences/{id}"] = AuthorizationPolicies.AdminPolicy,
+
         ["POST /api/v2/cycle-plans/{id}/activation"] = AuthorizationPolicies.PlannerPolicy,
         ["POST /api/v2/ai/test"] = AuthorizationPolicies.PlannerPolicy,
         ["POST /api/v2/ai/propose-plan"] = AuthorizationPolicies.PlannerPolicy,
@@ -46,6 +55,8 @@ public sealed class EndpointPolicyAuditTests
         ["POST /api/v2/ai/suggest-tasks"] = AuthorizationPolicies.PlannerPolicy,
         ["POST /api/v2/ai/explain"] = AuthorizationPolicies.PlannerPolicy,
         ["DELETE /api/v2/stats"] = AuthorizationPolicies.AdminPolicy,
+        ["POST /api/v2/jobs/generation"] = AuthorizationPolicies.PlannerPolicy,
+        ["POST /api/v2/jobs/audit-retention"] = AuthorizationPolicies.PlannerPolicy,
     };
 
     private static readonly string[] ReadMethods = [HttpMethods.Get, HttpMethods.Head, HttpMethods.Options];
@@ -104,6 +115,16 @@ public sealed class EndpointPolicyAuditTests
 
         endpoints.Should().NotBeEmpty();
         Violations(endpoints).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void TheDueList_staysOpenLikeTheNodeRoute()
+    {
+        using var factory = ApiFactory.WithoutDatabase();
+
+        var due = EndpointsOf(factory).Single(e => e.RoutePattern.RawText == "/api/v2/due");
+
+        due.Metadata.GetOrderedMetadata<IAuthorizeData>().Should().BeEmpty("routes/due.ts has no guard");
     }
 
     [Fact]
