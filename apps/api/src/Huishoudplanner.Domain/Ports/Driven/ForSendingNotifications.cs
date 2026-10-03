@@ -8,7 +8,7 @@ namespace Huishoudplanner.Domain.Ports.Driven;
 #pragma warning disable CA1715
 
 /// <summary>
-/// Delivers a notification to the configured receiver (ntfy, Home Assistant, or nowhere). Never throws: a refused or
+/// Delivers a notification to the configured receiver (ntfy, Home Assistant, or nowhere). Never throws on delivery trouble (only cancellation by the caller's token propagates): a refused or
 /// failed delivery is a <see cref="PortError"/> whose message names the notifier and the HTTP status only, never the
 /// URL (an ntfy topic URL is effectively a secret) or the token.
 /// </summary>

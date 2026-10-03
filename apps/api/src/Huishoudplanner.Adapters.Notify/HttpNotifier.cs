@@ -46,7 +46,12 @@ internal abstract class HttpNotifier(string type, NotifyEndpoint endpoint, IHttp
                 ? new Success()
                 : new PortError($"notify {type} failed with HTTP {(int)response.StatusCode}");
         }
-#pragma warning disable CA1031 // A port never throws: every failure, including cancellation and timeout, becomes a PortError.
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // The caller cancelled (shutdown, job cancel): not a delivery failure, so it is neither counted nor mapped.
+            throw;
+        }
+#pragma warning disable CA1031 // A port never throws on delivery trouble: every failure, including the adapter's own timeout, becomes a PortError.
         catch (Exception)
 #pragma warning restore CA1031
         {

@@ -147,14 +147,26 @@ public sealed class NotifierTests
     }
 
     [Fact]
-    public async Task CallerCancellation_isAPortError_notAnException()
+    public async Task CallerCancellation_propagates_andIsNotCountedAsAFailedDelivery()
     {
+        var count = 0;
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (instrument, l) =>
+        {
+            if (instrument.Meter.Name == NotifyTelemetry.Name && instrument.Name == NotifyTelemetry.DeliveriesName)
+            {
+                l.EnableMeasurementEvents(instrument);
+            }
+        };
+        listener.SetMeasurementEventCallback<long>((_, _, _, _) => Interlocked.Increment(ref count));
+        listener.Start();
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();
 
-        var result = await Build(NotifyKind.Ntfy, Hanging()).SendAsync(Message, cts.Token);
+        var act = () => Build(NotifyKind.Ntfy, Hanging()).SendAsync(Message, cts.Token);
 
-        result.IsT1.Should().BeTrue();
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        count.Should().Be(0);
     }
 
     [Fact]
