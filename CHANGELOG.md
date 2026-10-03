@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.7.1](https://github.com/somali-lab/keep-the-house-clean-planner/compare/v1.7.0...v1.7.1) (2026-10-03)
+
+
+### Bug fixes
+
+* **ci:** allow the context maintainer to change the root AGENTS.md ([#81](https://github.com/somali-lab/keep-the-house-clean-planner/issues/81)) ([1b70264](https://github.com/somali-lab/keep-the-house-clean-planner/commit/1b70264ecb54d1225de20564addf2848b179d499))
+* **jobs:** split the manual job into generation and a points recompute ([a72aa87](https://github.com/somali-lab/keep-the-house-clean-planner/commit/a72aa87cff42d6ee32dd5af9a6a542b87d951b1e))
+* **planner:** synchronize future occurrences on every slot save and promotion ([a72aa87](https://github.com/somali-lab/keep-the-house-clean-planner/commit/a72aa87cff42d6ee32dd5af9a6a542b87d951b1e))
+* **server:** only claim an open unassigned occurrence ([a72aa87](https://github.com/somali-lab/keep-the-house-clean-planner/commit/a72aa87cff42d6ee32dd5af9a6a542b87d951b1e))
+
+
+### Continuous integration
+
+* let the context maintainer propose skills for new business domains ([#79](https://github.com/somali-lab/keep-the-house-clean-planner/issues/79)) ([37a8de3](https://github.com/somali-lab/keep-the-house-clean-planner/commit/37a8de36f1d3f94f137b7539262756ea0b39bee8))
+* make the docs maintainer audit for rebuild-level precision ([#89](https://github.com/somali-lab/keep-the-house-clean-planner/issues/89)) ([d6b93d9](https://github.com/somali-lab/keep-the-house-clean-planner/commit/d6b93d98051bc0119191a09ea5b5b186ccda9fed))
+* run the context maintainer on Sonnet ([#77](https://github.com/somali-lab/keep-the-house-clean-planner/issues/77)) ([2584953](https://github.com/somali-lab/keep-the-house-clean-planner/commit/2584953edfcffd33cb67c0446ba6a587779535de))
+* run the Playwright e2e suite in a parallel job ([#87](https://github.com/somali-lab/keep-the-house-clean-planner/issues/87)) ([581d666](https://github.com/somali-lab/keep-the-house-clean-planner/commit/581d666242bf7d1eac74fc9ad4f17ed47f030c76))
+
+
+### Documentation
+
+* add the .NET 10 rewrite implementation plan ([33460f7](https://github.com/somali-lab/keep-the-house-clean-planner/commit/33460f767ad860de9e20cb3ffb265ab86f2781a7))
+* **adr:** accept the implemented ADRs and correct two stale descriptions ([#86](https://github.com/somali-lab/keep-the-house-clean-planner/issues/86)) ([8eab09e](https://github.com/somali-lab/keep-the-house-clean-planner/commit/8eab09ebe07f1bf486c07d611a116f3b721623df))
+* close rebuild gaps in the requirements ([#88](https://github.com/somali-lab/keep-the-house-clean-planner/issues/88)) ([a09ae53](https://github.com/somali-lab/keep-the-house-clean-planner/commit/a09ae53fdbbcb85c8368ddd582f0280441dbc9b7))
+* describe the AI prompt settings and two more audit reasons ([#91](https://github.com/somali-lab/keep-the-house-clean-planner/issues/91)) ([24926ef](https://github.com/somali-lab/keep-the-house-clean-planner/commit/24926ef058748ae96f5c40aaee9cd4eb87af23c2))
+* remove the wishlist implementation plan ([#92](https://github.com/somali-lab/keep-the-house-clean-planner/issues/92)) ([7f4a09d](https://github.com/somali-lab/keep-the-house-clean-planner/commit/7f4a09dc19e4aac26b194adaf6d26b94976b9215))
+* **skills:** describe the live execution sync in the rewards skill ([#85](https://github.com/somali-lab/keep-the-house-clean-planner/issues/85)) ([af7bd50](https://github.com/somali-lab/keep-the-house-clean-planner/commit/af7bd50739ca8efaf624a8a2e59b19e7f8efb3e8))
+
 ## [1.7.0](https://github.com/somali-lab/keep-the-house-clean-planner/compare/v1.6.2...v1.7.0) (2026-10-03)
 
 
