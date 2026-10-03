@@ -12,7 +12,7 @@ namespace Huishoudplanner.Adapters.Http.CyclePlans;
 /// <summary>
 /// <c>/api/v2/cycle-plans</c> (requirements 4.3, 8). Reads are open like in the Node server; create, change, delete, saving slots and
 /// the two validation endpoints need a planner (<c>requirePlanner</c> there, <see cref="AuthorizationPolicies.PlannerPolicy"/> here).
-/// The activation preview and the activation come with slice 2.4.
+/// The activation preview and the activation come with slice 2.4; saving the slots of the active plan synchronises the upcoming occurrences (slice 3.1).
 /// </summary>
 public static class CyclePlanEndpoints
 {
@@ -110,7 +110,7 @@ public static class CyclePlanEndpoints
             .WithName("replaceCyclePlanSlots")
             .WithTags(CyclePlansTag)
             .WithSummary("Replaces all slots of a plan (planners).")
-            .WithDescription("The plan is validated first: a plan that breaks a hard rule (unknown or inactive task or person, unavailable assignee, the same task twice on one day) is refused with 422 invalid_plan, carrying errors, issues, warnings and summary, and nothing is written. Otherwise the plan is saved and returned with the warnings and the summary. The audit entry holds only the added, removed and changed slots; saving what is stored writes and audits nothing.")
+            .WithDescription("The plan is validated first: a plan that breaks a hard rule (unknown or inactive task or person, unavailable assignee, the same task twice on one day) is refused with 422 invalid_plan, carrying errors, issues, warnings and summary, and nothing is written. Otherwise the plan is saved and returned with the warnings and the summary. The audit entry holds only the added, removed and changed slots; saving what is stored writes and audits nothing. Saving the slots of the ACTIVE plan always synchronises the upcoming occurrences in the same transaction (the open generated occurrences from today to the end of the next cycle are replaced; done, skipped, moved and ad-hoc ones stay): the replacement is reported in synchronized and audited with the system as source and the saving profile as actor. Saving a draft plan changes no occurrences and answers synchronized null. Answers 500 settings_missing when the installation has no settings.")
             .Accepts<PlanSlotsRequest>("application/json")
             .Produces<PlanSlotsSavedResponse>(StatusCodes.Status200OK)
             .ProducesValidationProblem()
@@ -284,7 +284,8 @@ public static class CyclePlanEndpoints
             ProblemResults.From,
             InvalidPlanProblem,
             ProblemResults.From,
-            error => ProblemResults.From(error, logger));
+            error => ProblemResults.From(error, logger),
+            ProblemResults.From);
     }
 
     private static async Task<IResult> ValidateAsync(string id, ICyclePlanService plans, ILogger<ICyclePlanService> logger, CancellationToken cancellationToken)

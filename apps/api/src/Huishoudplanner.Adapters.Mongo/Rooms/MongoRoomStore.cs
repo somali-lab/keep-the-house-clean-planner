@@ -75,6 +75,29 @@ internal sealed class MongoRoomStore : ForStoringRooms
         }
     }
 
+    public async Task<OneOf<IReadOnlyList<Room>, PortError>> FindManyAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+        var objectIds = ids.Where(id => ObjectIdConverter.TryParse(id, out _)).Select(ObjectIdConverter.Parse).ToList();
+        if (objectIds.Count == 0)
+        {
+            return OneOf<IReadOnlyList<Room>, PortError>.FromT0([]);
+        }
+
+        try
+        {
+            var documents = await FindFluent(new BsonDocument("_id", new BsonDocument("$in", new BsonArray(objectIds))))
+                .Sort(Builders<BsonDocument>.Sort.Ascending("sortOrder").Ascending("name").Ascending("_id"))
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+            return OneOf<IReadOnlyList<Room>, PortError>.FromT0(documents.ConvertAll(ToRoom));
+        }
+        catch (Exception e) when (IsFailure(e))
+        {
+            return Failed("find several", e);
+        }
+    }
+
     public async Task<OneOf<Room, NotFound, PortError>> FindLastAsync(CancellationToken cancellationToken)
     {
         try

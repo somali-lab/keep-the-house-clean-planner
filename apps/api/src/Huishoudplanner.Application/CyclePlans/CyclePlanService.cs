@@ -1,6 +1,7 @@
 using Huishoudplanner.Domain.Audit;
 using Huishoudplanner.Domain.CyclePlans;
 using Huishoudplanner.Domain.Errors;
+using Huishoudplanner.Domain.Generation;
 using Huishoudplanner.Domain.Identity;
 using Huishoudplanner.Domain.Planning;
 using Huishoudplanner.Domain.Ports.Driven;
@@ -12,7 +13,7 @@ namespace Huishoudplanner.Application.CyclePlans;
 /// <summary>
 /// The cycle plan use cases (requirements 4.3). Every state change runs in one transaction together with its audit entry; a change that
 /// changes nothing writes and audits nothing (ADR-0004). Port of <c>routes/cyclePlans.ts</c>, <c>domain/plans.ts</c> and
-/// <c>data/cyclePlans.ts</c> without activation (slice 2.4) and without the synchronisation of the upcoming occurrences (slice 3.1).
+/// <c>data/cyclePlans.ts</c> without activation (slice 2.4). Saving the slots of the active plan synchronises the upcoming occurrences in the same transaction.
 /// </summary>
 public sealed class CyclePlanService(
     ForStoringCyclePlans plans,
@@ -20,6 +21,7 @@ public sealed class CyclePlanService(
     ForStoringUsers users,
     ForStoringRooms rooms,
     ForStoringSettings settings,
+    IGenerationService generation,
     ForRunningTransactions transactions,
     ForRecordingAudit audit,
     TimeProvider time) : ICyclePlanService
@@ -259,7 +261,7 @@ public sealed class CyclePlanService(
 
     // ---- slots
 
-    public async Task<OneOf<PlanSlotsSaved, NotFound, ValidationErrors, InvalidPlan, ConflictError, PortError>> ReplaceSlotsAsync(
+    public async Task<OneOf<PlanSlotsSaved, NotFound, ValidationErrors, InvalidPlan, ConflictError, PortError, SettingsMissing>> ReplaceSlotsAsync(
         Actor actor, string id, IReadOnlyList<CyclePlanSlot> slots, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(actor);
@@ -276,17 +278,17 @@ public sealed class CyclePlanService(
 
         var normalised = CyclePlanRules.Normalise(slots);
         var ran = await transactions.RunAsync(ct => ReplaceSlotsInTransactionAsync(actor, id.ToLowerInvariant(), normalised, ct), cancellationToken).ConfigureAwait(false);
-        return ran.Match<OneOf<PlanSlotsSaved, NotFound, ValidationErrors, InvalidPlan, ConflictError, PortError>>(
-            outcome => outcome.Match<OneOf<PlanSlotsSaved, NotFound, ValidationErrors, InvalidPlan, ConflictError, PortError>>(
-                saved => saved, notFound => notFound, rejected => rejected, error => error),
+        return ran.Match<OneOf<PlanSlotsSaved, NotFound, ValidationErrors, InvalidPlan, ConflictError, PortError, SettingsMissing>>(
+            outcome => outcome.Match<OneOf<PlanSlotsSaved, NotFound, ValidationErrors, InvalidPlan, ConflictError, PortError, SettingsMissing>>(
+                saved => saved, notFound => notFound, rejected => rejected, error => error, missing => missing),
             conflict => conflict,
             error => error);
     }
 
-    private async Task<TransactionOutcome<OneOf<PlanSlotsSaved, NotFound, InvalidPlan, PortError>>> ReplaceSlotsInTransactionAsync(
+    private async Task<TransactionOutcome<OneOf<PlanSlotsSaved, NotFound, InvalidPlan, PortError, SettingsMissing>>> ReplaceSlotsInTransactionAsync(
         Actor actor, string id, IReadOnlyList<CyclePlanSlot> slots, CancellationToken ct)
     {
-        static TransactionOutcome<OneOf<PlanSlotsSaved, NotFound, InvalidPlan, PortError>> Abort(OneOf<PlanSlotsSaved, NotFound, InvalidPlan, PortError> value) => TransactionOutcome.Abort(value);
+        static TransactionOutcome<OneOf<PlanSlotsSaved, NotFound, InvalidPlan, PortError, SettingsMissing>> Abort(OneOf<PlanSlotsSaved, NotFound, InvalidPlan, PortError, SettingsMissing> value) => TransactionOutcome.Abort(value);
 
         var found = await plans.FindAsync(id, ct).ConfigureAwait(false);
         if (found.TryPickT1(out var notFound, out var rest))
@@ -313,27 +315,59 @@ public sealed class CyclePlanService(
 
         var next = CyclePlanSlots.Sort(slots);
         var diff = CyclePlanSlots.Diff(before.Slots, next);
-        if (diff.IsEmpty)
+        var plan = before;
+        if (!diff.IsEmpty)
         {
-            return TransactionOutcome.Commit<OneOf<PlanSlotsSaved, NotFound, InvalidPlan, PortError>>(
-                new PlanSlotsSaved(before, validation.Warnings, validation.Summary));
+            var replaced = await plans.ReplaceSlotsAsync(id, next, time.GetUtcNow(), ct).ConfigureAwait(false);
+            if (replaced.TryPickT1(out var gone, out var replacedRest))
+            {
+                return Abort(gone);
+            }
+
+            if (replacedRest.TryPickT1(out var replaceError, out plan))
+            {
+                return Abort(replaceError);
+            }
+
+            var recorded = await audit.RecordAsync(CyclePlanAudit.ForSlots(AuditActor.From(actor), id, diff), ct).ConfigureAwait(false);
+            if (recorded.TryPickT1(out var auditError, out _))
+            {
+                return Abort(auditError);
+            }
         }
 
-        var replaced = await plans.ReplaceSlotsAsync(id, next, time.GetUtcNow(), ct).ConfigureAwait(false);
-        if (replaced.TryPickT1(out var gone, out var replacedRest))
+        // Saving the slots of the ACTIVE plan always synchronises the upcoming occurrences, in this transaction, whether or not the slots
+        // changed (requirements 4.3). The replacement is attributed to the saving profile with the system as source.
+        ReplacementResult? synchronized = null;
+        if (plan.Active)
         {
-            return Abort(gone);
+            var replacement = await generation.ReplaceUpcomingAsync(
+                new AuditActor(actor.ActorId, AuditSource.System), id, GenerationRunIds.New(), ReplacementReasons.PlanUpdate, ct).ConfigureAwait(false);
+            if (replacement.TryPickT1(out var vanished, out var replacementRest))
+            {
+                return Abort(vanished);
+            }
+
+            if (replacementRest.TryPickT1(out var missing, out var settingsRest))
+            {
+                return Abort(missing);
+            }
+
+            if (settingsRest.TryPickT1(out var conflict, out var errorRest))
+            {
+                return Abort(new PortError($"generation.conflict: the synchronisation of the upcoming occurrences ended in a conflict ({conflict.Code})."));
+            }
+
+            if (errorRest.TryPickT1(out var syncError, out _))
+            {
+                return Abort(syncError);
+            }
+
+            synchronized = replacement.AsT0;
         }
 
-        if (replacedRest.TryPickT1(out var replaceError, out var plan))
-        {
-            return Abort(replaceError);
-        }
-
-        var recorded = await audit.RecordAsync(CyclePlanAudit.ForSlots(AuditActor.From(actor), id, diff), ct).ConfigureAwait(false);
-        return recorded.Match(
-            _ => TransactionOutcome.Commit<OneOf<PlanSlotsSaved, NotFound, InvalidPlan, PortError>>(new PlanSlotsSaved(plan, validation.Warnings, validation.Summary)),
-            error => Abort(error));
+        return TransactionOutcome.Commit<OneOf<PlanSlotsSaved, NotFound, InvalidPlan, PortError, SettingsMissing>>(
+            new PlanSlotsSaved(plan, validation.Warnings, validation.Summary, synchronized));
     }
 
     // ---- compare and validate

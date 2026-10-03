@@ -15,7 +15,7 @@ namespace Huishoudplanner.Integration.Tests.Api;
 /// <c>default_plan</c>, slot saves with warnings, the audit of added/removed/changed slots, 422 <c>invalid_plan</c>, the identical
 /// save, body validation) and adds the diff, the two validation endpoints (slice 2.3), roles, paging and the Node-shaped documents.
 /// Deferred to slice 2.4: the activation preview and the activation scenarios of the Node file (<c>activation-preview</c>, <c>activate</c>,
-/// the preview token and the occurrence replacement); deferred to 3.1: the occurrence synchronisation when slots of the active plan are
+/// the preview token and the occurrence replacement); ported in slice 3.1 (see GenerationTests): the occurrence synchronisation when slots of the active plan are
 /// saved. Real HTTP pipeline and real MongoDB replica set.
 /// </summary>
 public sealed class CyclePlanEndpointTests : IDisposable
