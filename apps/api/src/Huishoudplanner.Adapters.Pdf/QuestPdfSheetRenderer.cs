@@ -1,6 +1,7 @@
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Ports.Driven;
 using Huishoudplanner.Domain.Sheets;
+using Microsoft.Extensions.Logging;
 using OneOf;
 using QuestPDF.Drawing.Exceptions;
 using QuestPDF.Fluent;
@@ -11,13 +12,19 @@ namespace Huishoudplanner.Adapters.Pdf;
 /// <summary>
 /// <see cref="ForRenderingSheets"/> over QuestPDF (ADR-0020). Rendering twice gives byte-identical files: the layout
 /// has no random or clock-dependent part, the PDF metadata dates come from the injected <see cref="TimeProvider"/>
-/// (a fixed provider in tests), and QuestPDF writes no random document id.
+/// (a fixed provider in tests), and QuestPDF writes no random document id. A render that is already running cannot be
+/// cancelled: the token is checked before it starts and while it waits for a thread, not inside QuestPDF.
 /// </summary>
-public sealed class QuestPdfSheetRenderer : ForRenderingSheets
+public sealed partial class QuestPdfSheetRenderer : ForRenderingSheets
 {
-    private readonly TimeProvider _clock;
+    [LoggerMessage(Level = LogLevel.Error, Message = "Rendering the sheet {FileName} failed")]
+    private static partial void LogRenderFailed(ILogger logger, Exception exception, string fileName);
 
-    static QuestPdfSheetRenderer()
+    private readonly TimeProvider _clock;
+    private readonly ILogger? _logger;
+
+    /// <summary>Applies the global QuestPDF settings. Called inside the guarded render, so a failure becomes a PortError instead of an unusable type.</summary>
+    private static void Configure()
     {
         // QuestPDF Community licence. It is free for an individual or an organisation with an annual gross revenue
         // under USD 1,000,000 (checked against the licence of QuestPDF 2026.9.1: LICENSE.md in the package, license
@@ -33,10 +40,11 @@ public sealed class QuestPdfSheetRenderer : ForRenderingSheets
         QuestPDF.Settings.ThrowOnMissingTextGlyphs = false;
     }
 
-    public QuestPdfSheetRenderer(TimeProvider clock)
+    public QuestPdfSheetRenderer(TimeProvider clock, ILogger<QuestPdfSheetRenderer>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(clock);
         _clock = clock;
+        _logger = logger;
     }
 
     public Task<OneOf<RenderedSheet, PortError>> RenderWeekScheduleAsync(WeekScheduleSheet sheet, CancellationToken cancellationToken) =>
@@ -77,13 +85,24 @@ public sealed class QuestPdfSheetRenderer : ForRenderingSheets
 
         try
         {
-            var bytes = await Task.Run(() => Document.Create(compose).WithMetadata(metadata).GeneratePdf(), cancellationToken).ConfigureAwait(false);
+            var bytes = await Task.Run(
+                () =>
+                {
+                    Configure();
+                    return Document.Create(compose).WithMetadata(metadata).GeneratePdf();
+                },
+                cancellationToken).ConfigureAwait(false);
             return new RenderedSheet(bytes, fileName, RenderedSheet.PdfContentType);
         }
         catch (Exception e) when (e is DocumentComposeException or DocumentLayoutException or DocumentDrawingException
             or InitializationException or DllNotFoundException or TypeInitializationException or IOException)
         {
-            return new PortError($"PDF rendering failed: {e.GetType().Name}: {e.Message}");
+            // The message is value-free (exception messages can carry paths); the exception itself goes to the log.
+            if (_logger is not null)
+            {
+                LogRenderFailed(_logger, e, fileName);
+            }
+            return new PortError($"pdf.render_failed: the sheet could not be rendered ({e.GetType().Name}).");
         }
     }
 }

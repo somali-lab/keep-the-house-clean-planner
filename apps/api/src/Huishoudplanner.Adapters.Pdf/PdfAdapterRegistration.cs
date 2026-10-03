@@ -1,6 +1,7 @@
 using Huishoudplanner.Domain.Ports.Driven;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 
 namespace Huishoudplanner.Adapters.Pdf;
 
@@ -10,7 +11,7 @@ public static class PdfAdapterRegistration
     public static IServiceCollection AddPdfAdapter(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
-        services.TryAddSingleton<ForRenderingSheets>(sp => new QuestPdfSheetRenderer(sp.GetRequiredService<TimeProvider>()));
+        services.TryAddSingleton<ForRenderingSheets>(sp => new QuestPdfSheetRenderer(sp.GetRequiredService<TimeProvider>(), sp.GetService<ILogger<QuestPdfSheetRenderer>>()));
         return services;
     }
 }

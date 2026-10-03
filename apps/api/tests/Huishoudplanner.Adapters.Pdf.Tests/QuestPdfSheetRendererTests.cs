@@ -176,6 +176,28 @@ public sealed class QuestPdfSheetRendererTests
     }
 
     [Fact]
+    public async Task RenderWeekSchedule_twoWeeksLandscape_aDayThatOverflowsThePage_continuesInsteadOfFailing()
+    {
+        var lines = Enumerable.Range(1, 80).Select(i => Line($"Taak nummer {i:000}", "Keuken", i % 2 == 0 ? "Persoon 1" : "Persoon 2", 5)).ToArray();
+        var weeks = new[] { Week("2026-09-14", 1, "", (0, lines)), Week("2026-09-21", 2, "", (1, lines)) };
+
+        var result = await Renderer().RenderWeekScheduleAsync(SheetBuilder.Schedule(weeks, Options(SheetOrientation.Landscape, totals: true)), Ct);
+
+        result.IsT0.Should().BeTrue(result.IsT1 ? result.AsT1.Message : "an overflowing day is split over pages, not a layout failure");
+        var pdf = PdfProbe.Read(result.AsT0.Content);
+        pdf.Pages.Should().BeGreaterThan(1);
+        pdf.Text.Should().Contain("Taak nummer 001").And.Contain("Taak nummer 080");
+    }
+
+    [Fact]
+    public async Task Render_setsTheCommunityLicenceExplicitly()
+    {
+        await Renderer().RenderDayAsync(Day(), Ct);
+
+        QuestPDF.Settings.License.Should().Be(QuestPDF.Infrastructure.LicenseType.Community);
+    }
+
+    [Fact]
     public async Task RenderWeekSchedule_aDayWithMoreLinesThanAPage_continuesOnTheNextPage()
     {
         var lines = Enumerable.Range(1, 120).Select(i => Line($"Taak nummer {i:000}", "Keuken", "Persoon 1", 5)).ToArray();
