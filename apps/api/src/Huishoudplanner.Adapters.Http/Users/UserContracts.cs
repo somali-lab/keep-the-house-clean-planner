@@ -3,6 +3,9 @@ using Huishoudplanner.Domain.Users;
 
 namespace Huishoudplanner.Adapters.Http.Users;
 
+// The request records below only document the bodies in OpenAPI; the bodies are read by UserRequestParser (Zod-style
+// validation_error for a wrong type, null, malformed JSON or an empty body), never bound to these types.
+
 /// <summary>A budget or ceiling in minutes: Monday to Friday together and Saturday and Sunday together. Both values are required.</summary>
 public sealed record DailyMinutesBody(int? Weekday, int? Weekend);
 
@@ -66,28 +69,3 @@ public sealed record UserResponse(
 
 /// <summary>One page of people, oldest first. <c>nextCursor</c> is null on the last page and otherwise the value to pass as <c>cursor</c>.</summary>
 public sealed record UserListResponse(IReadOnlyList<UserResponse> Items, string? NextCursor);
-
-internal static class UserRequestMapping
-{
-    public static CreateUserInput ToInput(this CreateUserRequest request) => new(
-        request.Name,
-        request.Color,
-        request.Role,
-        request.UnavailableWeekdays,
-        request.DailyBudgetMinutes?.ToInput(),
-        request.MaxDailyMinutes?.ToInput());
-
-    public static UpdateUserInput ToInput(this UpdateUserRequest request) => new(
-        request.Name,
-        request.Color,
-        request.Active,
-        request.Role,
-        request.UnavailableWeekdays,
-        request.DailyBudgetMinutes?.ToInput(),
-        request.MaxDailyMinutes?.ToInput(),
-        request.BrowserNotifications?.ToInput());
-
-    public static BrowserNotificationsInput ToInput(this BrowserNotificationsBody body) => new(body.Enabled, body.Times);
-
-    private static DailyMinutesInput ToInput(this DailyMinutesBody body) => new(body.Weekday, body.Weekend);
-}

@@ -34,6 +34,7 @@ public static class UserEndpoints
             .WithName("createUser")
             .WithSummary("Creates a person.")
             .WithDescription("Administrators only. Audited as user/create.")
+            .Accepts<CreateUserRequest>("application/json")
             .Produces<UserResponse>(StatusCodes.Status201Created)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status403Forbidden)
@@ -42,6 +43,7 @@ public static class UserEndpoints
         routes.MapPatch("/api/v2/users/{id}", UpdateAsync)
             .WithTags(UsersTag)
             .RequireAdmin()
+            .Accepts<UpdateUserRequest>("application/json")
             .WithName("updateUser")
             .WithSummary("Changes a person, or deactivates one with active=false.")
             .WithDescription("Administrators only. A change that alters nothing writes and audits nothing. 409 last_admin when the last active administrator would be deactivated or demoted.")
@@ -55,6 +57,7 @@ public static class UserEndpoints
         routes.MapPut("/api/v2/users/{id}/browser-notifications", SetBrowserNotificationsAsync)
             .WithTags(UsersTag)
             .RequireActor()
+            .Accepts<BrowserNotificationsBody>("application/json")
             .WithName("setUserBrowserNotifications")
             .WithSummary("Sets the browser notification moments of a person.")
             .WithDescription("A person sets their own moments, an administrator anyone's (403 permission_denied otherwise). The complete setting replaces the stored one; an equal setting writes and audits nothing.")
@@ -110,14 +113,25 @@ public static class UserEndpoints
     }
 
     private static async Task<IResult> CreateAsync(
-        CreateUserRequest request, HttpContext http, IUserService users, ILoggerFactory loggers, CancellationToken cancellationToken)
+        HttpContext http, IUserService users, ILoggerFactory loggers, CancellationToken cancellationToken)
     {
         if (await http.GetActorAsync() is not { } actor)
         {
             return ProfileRequired();
         }
 
-        var result = await users.CreateAsync(actor, request.ToInput(), cancellationToken);
+        var body = await UserRequestParser.ReadBodyAsync(http, cancellationToken);
+        if (body.TryPickT1(out var invalidBody, out var json))
+        {
+            return ProblemResults.From(invalidBody);
+        }
+
+        if (UserRequestParser.ParseCreate(json, out var invalid) is not { } input)
+        {
+            return ProblemResults.From(invalid!);
+        }
+
+        var result = await users.CreateAsync(actor, input, cancellationToken);
         var logger = loggers.CreateLogger(typeof(UserEndpoints));
         return result.Match<IResult>(
             user => Results.Json(UserResponse.From(user), statusCode: StatusCodes.Status201Created),
@@ -127,14 +141,25 @@ public static class UserEndpoints
     }
 
     private static async Task<IResult> UpdateAsync(
-        string id, UpdateUserRequest request, HttpContext http, IUserService users, ILoggerFactory loggers, CancellationToken cancellationToken)
+        string id, HttpContext http, IUserService users, ILoggerFactory loggers, CancellationToken cancellationToken)
     {
         if (await http.GetActorAsync() is not { } actor)
         {
             return ProfileRequired();
         }
 
-        var result = await users.UpdateAsync(actor, id, request.ToInput(), cancellationToken);
+        var body = await UserRequestParser.ReadBodyAsync(http, cancellationToken);
+        if (body.TryPickT1(out var invalidBody, out var json))
+        {
+            return ProblemResults.From(invalidBody);
+        }
+
+        if (UserRequestParser.ParsePatch(json, out var invalid) is not { } input)
+        {
+            return ProblemResults.From(invalid!);
+        }
+
+        var result = await users.UpdateAsync(actor, id, input, cancellationToken);
         var logger = loggers.CreateLogger(typeof(UserEndpoints));
         return result.Match<IResult>(
             user => Results.Ok(UserResponse.From(user)),
@@ -145,14 +170,25 @@ public static class UserEndpoints
     }
 
     private static async Task<IResult> SetBrowserNotificationsAsync(
-        string id, BrowserNotificationsBody request, HttpContext http, IUserService users, ILoggerFactory loggers, CancellationToken cancellationToken)
+        string id, HttpContext http, IUserService users, ILoggerFactory loggers, CancellationToken cancellationToken)
     {
         if (await http.GetActorAsync() is not { } actor)
         {
             return ProfileRequired();
         }
 
-        var result = await users.SetBrowserNotificationsAsync(actor, id, request.ToInput(), cancellationToken);
+        var body = await UserRequestParser.ReadBodyAsync(http, cancellationToken);
+        if (body.TryPickT1(out var invalidBody, out var json))
+        {
+            return ProblemResults.From(invalidBody);
+        }
+
+        if (UserRequestParser.ParseNotifications(json, out var invalid) is not { } input)
+        {
+            return ProblemResults.From(invalid!);
+        }
+
+        var result = await users.SetBrowserNotificationsAsync(actor, id, input, cancellationToken);
         var logger = loggers.CreateLogger(typeof(UserEndpoints));
         return result.Match<IResult>(
             user => Results.Ok(UserResponse.From(user)),
