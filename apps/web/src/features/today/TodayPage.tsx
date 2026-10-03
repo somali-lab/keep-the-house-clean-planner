@@ -3,6 +3,7 @@ import { weekIndexFor } from '@huishoudplanner/shared/cycle';
 import { ChevronLeft, ChevronRight, Sun, TriangleAlert, Undo2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { EmptyState } from '@/components/EmptyState';
+import { useFilterReset } from '@/components/FilterReset';
 import { NativeSelect } from '@/components/NativeSelect';
 import { PageHeader } from '@/components/PageHeader';
 import { Badge } from '@/components/ui/badge';
@@ -49,9 +50,11 @@ export function TodayPage({ now }: { now?: Date }) {
   const timezone = settings.data?.timezone ?? 'Europe/Amsterdam';
   const todayKey = dayKeyInZone(now ?? new Date(), timezone);
   const [dayOffset, setDayOffset] = useState(0);
+  const defaultPersonFilter = profile?._id ?? getActiveProfileId() ?? 'all';
   const [personFilter, setPersonFilter, resetPersonFilter] = usePersistedFilter(
-    'today.person', profile?._id ?? null, profile?._id ?? getActiveProfileId() ?? 'all',
+    'today.person', profile?._id ?? null, defaultPersonFilter,
   );
+  useFilterReset(resetPersonFilter, personFilter !== defaultPersonFilter);
   const selectedDay = addDaysKey(todayKey, dayOffset);
   const from = addDaysKey(todayKey, -OVERDUE_LOOKBACK_DAYS);
   const occurrences = useOccurrences(from, selectedDay, settings.isSuccess);
@@ -199,9 +202,6 @@ export function TodayPage({ now }: { now?: Date }) {
           {activeUsers.map((user) => <option key={user._id} value={user._id}>{user.name}</option>)}
           <option value="unassigned">{t('today.anyone')}</option>
         </NativeSelect>
-        <Button type="button" variant="outline" onClick={resetPersonFilter}>
-          {t('today.resetFilters')}
-        </Button>
       </div>
       <PromoteBanner />
       {failed && (
@@ -219,50 +219,61 @@ export function TodayPage({ now }: { now?: Date }) {
         </EmptyState>
       )}
 
-      {SECTIONS.map(({ key, title }) =>
-        groups[key].length === 0 ? null : (
-          <section key={key} className="grid gap-3" aria-labelledby={`today-${key}`}>
-            <div className="flex items-center gap-2 px-1">
-              <h2
-                id={`today-${key}`}
-                className={cn(
-                  'text-lg font-extrabold',
-                  key === 'finished' && 'text-muted-foreground',
-                )}
-              >
-                {key === 'mine' && selectedPerson && selectedPerson._id !== profileId
-                  ? format('today.personTasks', { name: selectedPerson.name })
-                  : t(title)}
-              </h2>
-              <Badge
-                variant="secondary"
-                className={cn(
-                  'min-w-6 rounded-full',
-                  key === 'overdue' && 'bg-warning text-warning-foreground',
-                )}
-              >
-                {groups[key].length}
-              </Badge>
-            </div>
-            <ul className="grid gap-3">
-              {groups[key].map((occ) => (
-                <OccurrenceItem
-                  key={occ._id}
-                  occurrence={occ}
-                  roomName={occ.roomNameSnapshot ?? roomByTask.get(occ.taskId)}
-                  users={activeUsers}
-                  completionControl={settings.data.completionControl ?? 'circle'}
-                  onComplete={() => requestComplete(occ)}
-                  onUncomplete={() => run({ id: occ._id, kind: 'uncomplete' }, occ)}
-                  onSkip={(reason) => run({ id: occ._id, kind: 'skip', reason }, occ)}
-                  onClaim={() => run({ id: occ._id, kind: 'claim' }, occ)}
-                  onAssign={(assigneeId) => run({ id: occ._id, kind: 'assign', assigneeId }, occ)}
-                />
-              ))}
-            </ul>
-          </section>
-        ),
-      )}
+      <div
+        data-testid="today-sections"
+        className={cn(
+          'flex flex-col gap-6 empty:hidden',
+          // Everyone's tasks side by side once each column is wide enough to read; balanced
+          // columns let each group stack without leaving row gaps next to a long group.
+          personFilter === 'all'
+            && 'lg:block lg:columns-2 lg:gap-6 lg:[&>section]:mb-6 lg:[&>section]:break-inside-avoid',
+        )}
+      >
+        {SECTIONS.map(({ key, title }) =>
+          groups[key].length === 0 ? null : (
+            <section key={key} className="grid gap-3" aria-labelledby={`today-${key}`}>
+              <div className="flex items-center gap-2 px-1">
+                <h2
+                  id={`today-${key}`}
+                  className={cn(
+                    'text-lg font-extrabold',
+                    key === 'finished' && 'text-muted-foreground',
+                  )}
+                >
+                  {key === 'mine' && selectedPerson && selectedPerson._id !== profileId
+                    ? format('today.personTasks', { name: selectedPerson.name })
+                    : t(title)}
+                </h2>
+                <Badge
+                  variant="secondary"
+                  className={cn(
+                    'min-w-6 rounded-full',
+                    key === 'overdue' && 'bg-warning text-warning-foreground',
+                  )}
+                >
+                  {groups[key].length}
+                </Badge>
+              </div>
+              <ul className="grid gap-3">
+                {groups[key].map((occ) => (
+                  <OccurrenceItem
+                    key={occ._id}
+                    occurrence={occ}
+                    roomName={occ.roomNameSnapshot ?? roomByTask.get(occ.taskId)}
+                    users={activeUsers}
+                    completionControl={settings.data.completionControl ?? 'circle'}
+                    onComplete={() => requestComplete(occ)}
+                    onUncomplete={() => run({ id: occ._id, kind: 'uncomplete' }, occ)}
+                    onSkip={(reason) => run({ id: occ._id, kind: 'skip', reason }, occ)}
+                    onClaim={() => run({ id: occ._id, kind: 'claim' }, occ)}
+                    onAssign={(assigneeId) => run({ id: occ._id, kind: 'assign', assigneeId }, occ)}
+                  />
+                ))}
+              </ul>
+            </section>
+          ),
+        )}
+      </div>
 
       {completionChoice?.assigneeId && (
         <CompletionChoiceDialog

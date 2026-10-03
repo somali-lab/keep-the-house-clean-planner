@@ -46,7 +46,7 @@ describe('CompletionManagementPage', () => {
       },
     });
 
-    renderWithProviders(<CompletionManagementPage now={new Date('2026-09-27T12:00:00.000Z')} />);
+    renderWithProviders(<CompletionManagementPage now={new Date('2026-09-27T12:00:00.000Z')} />, { headerReset: true });
     expect(await screen.findByRole('heading', { name: 'Gereedmeldingen beheren' })).toBeInTheDocument();
     const row = (await screen.findByText('Kattenmandjes')).closest('li')!;
     fireEvent.click(within(row).getByRole('button', { name: 'Kattenmandjes bewerken' }));
@@ -72,9 +72,10 @@ describe('CompletionManagementPage', () => {
 
     await waitFor(() => expect(screen.queryByText('Kattenmandjes')).not.toBeInTheDocument());
     expect(fetchMock.mock.calls.some(([url, init]) => url === '/api/occurrences/o00000000000000000000001' && (init as RequestInit).method === 'DELETE')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Filters van dit scherm resetten' })).toBeDisabled();
     fireEvent.change(screen.getByLabelText('Vanaf'), { target: { value: '2026-09-01' } });
     expect(window.localStorage.getItem(`huishoudplanner.filters.${ANNA._id}.completions.from`)).toBe('"2026-09-01"');
-    fireEvent.click(screen.getByRole('button', { name: 'Filters wissen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Filters van dit scherm resetten' }));
     expect(screen.getByLabelText('Vanaf')).toHaveValue('2026-06-29');
   });
 });

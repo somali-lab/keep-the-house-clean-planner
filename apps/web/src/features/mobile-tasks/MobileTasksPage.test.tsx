@@ -149,15 +149,16 @@ describe('MobileTasksPage', () => {
   });
 
   it('splits seven-day blocks at cycle-week boundaries and labels each task cycle week', async () => {
-    const firstRender = renderWithProviders(<MobileTasksPage now={NOW} />);
+    const firstRender = renderWithProviders(<MobileTasksPage now={NOW} />, { headerReset: true });
     await screen.findByRole('row', { name: /Stofzuigen/ });
+    expect(screen.getByRole('button', { name: 'Filters van dit scherm resetten' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: '2 weken' }));
     firstRender.unmount();
-    renderWithProviders(<MobileTasksPage now={NOW} />);
+    renderWithProviders(<MobileTasksPage now={NOW} />, { headerReset: true });
     expect(await screen.findByRole('button', { name: '2 weken' })).toHaveAttribute('aria-pressed', 'true');
     const block = await screen.findByRole('region', { name: '23 sep t/m 29 sep' });
     expect(within(block).getByRole('row', { name: /Stofzuigen/ })).toHaveTextContent('Cyclusweek 2');
-    fireEvent.click(screen.getByRole('button', { name: 'Filters herstellen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Filters van dit scherm resetten' }));
     expect(await screen.findByRole('button', { name: '1 week' })).toHaveAttribute('aria-pressed', 'true');
   });
 });
