@@ -794,7 +794,6 @@ export const nl = {
   'settings.data.resetError': 'De uitvoeringsgegevens konden niet worden gereset.',
 
   'stats.filters': 'Filters',
-  'history.filter.reset': 'Filters wissen',
   'stats.tabs': 'Statistiekonderdeel',
   'stats.overview': 'Overzicht',
   'stats.tab.overview': 'Overzicht',

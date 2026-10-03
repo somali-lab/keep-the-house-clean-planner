@@ -2,6 +2,7 @@ import type { AuditEntity, AuditEntry } from '@huishoudplanner/shared';
 import { ArrowLeft, Bot, Clock, Filter, History, Sparkles, Trash2, UserRound } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
+import { useFilterReset } from '@/components/FilterReset';
 import { EmptyState } from '@/components/EmptyState';
 import { NativeSelect } from '@/components/NativeSelect';
 import { PageHeader } from '@/components/PageHeader';
@@ -43,6 +44,7 @@ function dayEndIso(day: string): string {
 export function HistoryPage() {
   const idPrefix = useId();
   const [params, setParams] = useSearchParams();
+  useFilterReset(() => setParams(new URLSearchParams(), { replace: true }), params.toString() !== '');
   const entity = (params.get('entity') ?? '') as AuditEntity | '';
   const entityId = params.get('entityId') ?? '';
   const actorId = params.get('actorId') ?? '';
@@ -198,7 +200,7 @@ export function HistoryPage() {
 
       {!panelMode && (
         <div
-          className="mb-6 grid items-end gap-4 rounded-2xl border bg-card p-5 shadow-sm sm:grid-cols-2 lg:grid-cols-[auto_1fr_1fr_1fr_1fr_auto]"
+          className="mb-6 grid items-end gap-4 rounded-2xl border bg-card p-5 shadow-sm sm:grid-cols-2 lg:grid-cols-[auto_1fr_1fr_1fr_1fr]"
           role="search"
         >
           <div className="hidden size-10 place-items-center rounded-xl bg-accent text-accent-foreground lg:grid">
@@ -247,9 +249,6 @@ export function HistoryPage() {
               onChange={(e) => setFilter('to', e.target.value)}
             />
           </div>
-          <Button type="button" variant="ghost" onClick={() => setParams(new URLSearchParams(), { replace: true })}>
-            {t('history.filter.reset')}
-          </Button>
         </div>
       )}
 

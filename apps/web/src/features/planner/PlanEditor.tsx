@@ -241,26 +241,25 @@ export function PlanEditor({
           role="group"
           aria-label={t('planner.chooseWeek')}
         >
-          <span className="px-2 text-sm font-bold text-muted-foreground">
-            {t('planner.chooseWeek')}:
-          </span>
-          {[0, 1, 2, 3].map((weekIndex) => (
-            <Button
-              key={weekIndex}
-              type="button"
-              variant={selectedWeek === weekIndex ? 'default' : 'ghost'}
-              className="h-10 rounded-xl px-5"
-              aria-pressed={selectedWeek === weekIndex}
-              onClick={() => setSelectedWeek(weekIndex)}
-            >
-              {format('planner.week', { n: weekIndex + 1 })}
-            </Button>
-          ))}
-          <label className="min-w-40 flex-1">
+          <div className="flex gap-0.5">
+            {[0, 1, 2, 3].map((weekIndex) => (
+              <Button
+                key={weekIndex}
+                type="button"
+                variant={selectedWeek === weekIndex ? 'default' : 'ghost'}
+                className="h-10 rounded-xl px-3"
+                aria-pressed={selectedWeek === weekIndex}
+                onClick={() => setSelectedWeek(weekIndex)}
+              >
+                {format('planner.week', { n: weekIndex + 1 })}
+              </Button>
+            ))}
+          </div>
+          <label className="min-w-32 flex-1">
             <span className="visually-hidden">{t('planner.searchTasks')}</span>
             <Input
               type="search"
-              className="h-10 min-w-40"
+              className="h-10 min-w-32"
               value={searchTerm}
               placeholder={t('planner.searchTasks')}
               aria-label={t('planner.searchTasks')}
@@ -268,7 +267,7 @@ export function PlanEditor({
             />
           </label>
           <NativeSelect
-            className="w-48"
+            className="w-36"
             aria-label={t('planner.filterAssignee')}
             value={assigneeFilter}
             onChange={(event) => setAssigneeFilter(event.target.value)}
