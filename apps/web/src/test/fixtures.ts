@@ -12,6 +12,7 @@ export function makeUser(overrides: Partial<User> & Pick<User, '_id' | 'name'>):
     unavailableWeekdays: [],
     dailyBudgetMinutes: { weekday: 60, weekend: 120 },
     maxDailyMinutes: { weekday: 480, weekend: 480 },
+    browserNotifications: { enabled: false, times: [] },
     createdAt: STAMP,
     updatedAt: STAMP,
     ...overrides,

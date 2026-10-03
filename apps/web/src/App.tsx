@@ -1,8 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
 import { BrowserRouter, useLocation, useNavigate } from 'react-router';
+import { FilterResetProvider } from '@/components/FilterReset';
 import { t } from './i18n/nl.ts';
 import { LanguageProvider } from './i18n/LanguageProvider.tsx';
+import { BrowserNotificationHost } from './features/notifications/BrowserNotificationHost.tsx';
 import { ProfilePicker, ProfileProvider, useProfile } from './identity/index.ts';
 import { DesktopLayout } from './layouts/DesktopLayout.tsx';
 import { MobileLayout } from './layouts/MobileLayout.tsx';
@@ -33,16 +35,18 @@ export function AppShell() {
   if (!profile) return <ProfilePicker />;
 
   const standardView = !location.pathname.startsWith('/manage/');
-  return standardView ? (
-    <MobileLayout
-      onOpenManagement={() =>
-        navigate(profile.role === 'member' ? '/manage/distribution' : '/manage/planner')
-      }
-    />
-  ) : (
-    <DesktopLayout
-      onOpenOverview={() => navigate('/')}
-    />
+  return (
+    <FilterResetProvider>
+      {standardView ? (
+        <MobileLayout
+          onOpenManagement={() =>
+            navigate(profile.role === 'member' ? '/manage/distribution' : '/manage/planner')
+          }
+        />
+      ) : (
+        <DesktopLayout onOpenOverview={() => navigate('/')} />
+      )}
+    </FilterResetProvider>
   );
 }
 
@@ -56,6 +60,7 @@ export function App({ queryClient }: { queryClient?: QueryClient }) {
             <BrowserRouter>
               <LanguageProvider>
                 <PwaStatus />
+                <BrowserNotificationHost />
                 <AppShell />
               </LanguageProvider>
             </BrowserRouter>

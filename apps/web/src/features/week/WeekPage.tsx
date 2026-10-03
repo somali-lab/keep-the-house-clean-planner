@@ -28,6 +28,7 @@ import {
   ThumbsUp,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { useFilterReset } from '@/components/FilterReset';
 import { NativeSelect } from '@/components/NativeSelect';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -89,6 +90,20 @@ export function WeekPage({ now }: { now?: Date }) {
   const [personFilter, setPersonFilter, resetPersonFilter] = usePersistedFilter('week.person', profileId, initialPersonFilter);
   const [taskSearch, setTaskSearch, resetTaskSearch] = usePersistedFilter('week.taskSearch', profileId, '');
   const [showCycleWeek, setShowCycleWeek, resetShowCycleWeek] = usePersistedFilter('week.showCycleWeek', profileId, false);
+  useFilterReset(
+    () => {
+      resetPersonFilter();
+      resetTaskSearch();
+      resetPeriodOffset();
+      resetPastExpanded();
+      resetShowCycleWeek();
+    },
+    personFilter !== initialPersonFilter
+      || taskSearch !== ''
+      || periodOffset !== 0
+      || pastExpanded
+      || showCycleWeek,
+  );
   const days = overviewDays(addDaysKey(todayKey, periodOffset * 7));
   const visibleDays = pastExpanded ? days : days.slice(3);
   const from = days[0]!;
@@ -272,20 +287,6 @@ export function WeekPage({ now }: { now?: Date }) {
             <ChevronRight aria-hidden="true" />
           </Button>
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          className="h-9 rounded-full px-3"
-          onClick={() => {
-            resetPersonFilter();
-            resetTaskSearch();
-            resetPeriodOffset();
-            resetPastExpanded();
-            resetShowCycleWeek();
-          }}
-        >
-          {t('week.resetFilters')}
-        </Button>
       </div>
       <PromoteBanner />
 

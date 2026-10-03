@@ -2,6 +2,7 @@ import type { OccurrenceView } from '@huishoudplanner/shared';
 import { CheckCircle2, Filter, Pencil, Trash2 } from 'lucide-react';
 import { useId, useMemo, useState } from 'react';
 import { EmptyState } from '@/components/EmptyState';
+import { useFilterReset } from '@/components/FilterReset';
 import { NativeSelect } from '@/components/NativeSelect';
 import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -43,8 +44,10 @@ export function CompletionManagementPage({ now }: { now?: Date }) {
   const timezone = settings.data?.timezone ?? 'Europe/Amsterdam';
   const today = dayKeyInZone(now ?? new Date(), timezone);
   const { profile } = useProfile();
-  const [from, setFrom, resetFrom] = usePersistedFilter('completions.from', profile?._id ?? null, addDaysKey(today, -90));
+  const defaultFrom = addDaysKey(today, -90);
+  const [from, setFrom, resetFrom] = usePersistedFilter('completions.from', profile?._id ?? null, defaultFrom);
   const [to, setTo, resetTo] = usePersistedFilter('completions.to', profile?._id ?? null, today);
+  useFilterReset(() => { resetFrom(); resetTo(); }, from !== defaultFrom || to !== today);
   const completions = useCompletionRecords(from, to);
   const editCompletion = useEditCompletion();
   const deleteCompletion = useDeleteCompletion();
@@ -78,7 +81,7 @@ export function CompletionManagementPage({ now }: { now?: Date }) {
       <PageHeader title={t('completions.title')} />
       <p className="mb-6 max-w-3xl text-sm text-muted-foreground">{t('completions.explainer')}</p>
 
-      <div className="mb-6 grid items-end gap-4 rounded-2xl border bg-card p-5 shadow-sm sm:grid-cols-[auto_1fr_1fr_auto]" role="search">
+      <div className="mb-6 grid items-end gap-4 rounded-2xl border bg-card p-5 shadow-sm sm:grid-cols-[auto_1fr_1fr]" role="search">
         <div className="hidden size-10 place-items-center rounded-xl bg-accent text-accent-foreground sm:grid">
           <Filter className="size-5" aria-hidden="true" />
         </div>
@@ -90,9 +93,6 @@ export function CompletionManagementPage({ now }: { now?: Date }) {
           <Label htmlFor={`${idPrefix}-to`}>{t('completions.to')}</Label>
           <Input id={`${idPrefix}-to`} type="date" value={to} min={from} onChange={(event) => setTo(event.target.value)} />
         </div>
-        <Button type="button" variant="ghost" onClick={() => { resetFrom(); resetTo(); }}>
-          {t('completions.resetFilters')}
-        </Button>
       </div>
 
       {message && <p role="status" className="mb-4 rounded-xl bg-success/10 p-4 font-semibold text-success">{message}</p>}

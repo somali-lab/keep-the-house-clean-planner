@@ -1,4 +1,10 @@
-import type { CreateUserInput, UpdateUserInput, UserRole } from '@huishoudplanner/shared';
+import {
+  DEFAULT_BROWSER_NOTIFICATIONS,
+  type BrowserNotifications,
+  type CreateUserInput,
+  type UpdateUserInput,
+  type UserRole,
+} from '@huishoudplanner/shared';
 import { ObjectId, type Db } from 'mongodb';
 import type { AuditContext } from '../audit/context.ts';
 import { diffFields, isEmptyDiff } from '../audit/diff.ts';
@@ -15,6 +21,8 @@ export interface UserDoc {
   unavailableWeekdays: number[];
   dailyBudgetMinutes: { weekday: number; weekend: number };
   maxDailyMinutes: { weekday: number; weekend: number };
+  /** Absent on documents that predate browser notifications; read through withDefaults(). */
+  browserNotifications: BrowserNotifications;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -28,6 +36,12 @@ const withDefaults = (user: UserDoc): UserDoc => ({
   // Existing installations predate roles. Preserve access until an admin assigns explicit roles.
   role: user.role ?? 'admin',
   maxDailyMinutes: user.maxDailyMinutes ?? { weekday: 480, weekend: 480 },
+  browserNotifications: user.browserNotifications ?? { ...DEFAULT_BROWSER_NOTIFICATIONS, times: [] },
+});
+
+const normalizeNotifications = (value: BrowserNotifications): BrowserNotifications => ({
+  enabled: value.enabled,
+  times: [...new Set(value.times)].sort(),
 });
 
 export async function findUserById(db: Db, id: ObjectId): Promise<UserDoc | null> {
@@ -58,6 +72,7 @@ export async function createUser(
     unavailableWeekdays: [...new Set(input.unavailableWeekdays)].sort(),
     dailyBudgetMinutes: input.dailyBudgetMinutes,
     maxDailyMinutes: input.maxDailyMinutes ?? { weekday: 60, weekend: 120 },
+    browserNotifications: { enabled: false, times: [] },
     createdAt: now,
     updatedAt: now,
   };
@@ -93,6 +108,9 @@ export async function updateUser(
   if (patch.unavailableWeekdays) {
     changes.unavailableWeekdays = [...new Set(patch.unavailableWeekdays)].sort();
   }
+  if (patch.browserNotifications) {
+    changes.browserNotifications = normalizeNotifications(patch.browserNotifications);
+  }
   const diff = diffFields({ ...before }, { ...before, ...changes });
   if (isEmptyDiff(diff)) return before;
 
@@ -103,5 +121,5 @@ export async function updateUser(
   );
   if (!after) return null;
   await record(ctx, { entity: 'user', entityId: id, action: 'update', ...diff });
-  return after;
+  return withDefaults(after);
 }

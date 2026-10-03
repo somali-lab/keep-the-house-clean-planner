@@ -75,6 +75,8 @@ Production can follow `latest` for automatic updates or pin the full semantic ve
 
 The version shown in the app also identifies its origin. Published GHCR images pass `APP_OFFICIAL_BUILD=true` and show the exact Release Please version, for example `1.3.0`. A build made directly from local source uses the same base version with a UTC build timestamp, for example `1.3.0-local-20260920-093245Z`. The timestamp is generated once when Vite starts the build, so every asset from that build reports the same identifier.
 
+Published images also pass `APP_RELEASE_DATE`: the commit timestamp of the release commit, read by the publish workflow with `git log -1 --format=%cI`. The About page shows it as the latest release. Republishing an existing release reads the same commit, so the moment does not change, and no GitHub request is needed at runtime. A local build has no release moment and says so instead of inventing one. The About page links to `LICENSE` and `CHANGELOG.md` at the release tag for a published image, and at `main` for a local build.
+
 The image currently targets `linux/amd64`, matching the Proxmox VM deployment target. It also contains OCI source, version, and revision labels, a software bill of materials, and build provenance.
 
 ### Rolling back across the occurrence index change

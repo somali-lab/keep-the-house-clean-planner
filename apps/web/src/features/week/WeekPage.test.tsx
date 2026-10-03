@@ -193,8 +193,9 @@ describe('WeekPage', () => {
   it('searches task names, shows cycle weeks, and persists week choices per profile', async () => {
     setup();
     db[0] = { ...db[0]!, taskNameSnapshot: 'Café badkamer', date: '2026-09-24' };
-    const first = renderWithProviders(<WeekPage now={NOW} />);
+    const first = renderWithProviders(<WeekPage now={NOW} />, { headerReset: true });
     fireEvent.click(await screen.findByRole('button', { name: /Afgelopen 3 dagen/ }));
+    expect(screen.getByRole('button', { name: 'Filters van dit scherm resetten' })).toBeEnabled();
     const search = screen.getByRole('textbox', { name: 'Zoek taken' });
     fireEvent.change(search, { target: { value: 'CAFE' } });
     expect(await screen.findByText('Café badkamer')).toBeInTheDocument();
@@ -205,16 +206,16 @@ describe('WeekPage', () => {
     expect(await screen.findByRole('heading', { name: /woensdag 23 sep/ })).toBeInTheDocument();
     first.unmount();
 
-    const persistedView = renderWithProviders(<WeekPage now={NOW} />);
+    const persistedView = renderWithProviders(<WeekPage now={NOW} />, { headerReset: true });
     expect(await screen.findByRole('heading', { name: /woensdag 23 sep/ })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'Zoek taken' })).toHaveValue('CAFE');
     expect(screen.getByRole('button', { name: 'Toon cyclusweek' })).toHaveAttribute('aria-pressed', 'true');
     expect(await screen.findByText('Café badkamer')).toBeInTheDocument();
 
-    const current = screen.getByRole('button', { name: 'Filters wissen' });
-    fireEvent.click(current);
+    fireEvent.click(screen.getByRole('button', { name: 'Filters van dit scherm resetten' }));
     expect(await screen.findByRole('textbox', { name: 'Zoek taken' })).toHaveValue('');
     expect(screen.getByRole('button', { name: 'Toon cyclusweek' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: 'Filters van dit scherm resetten' })).toBeDisabled();
 
     // A different selected profile gets its own defaults and period state.
     persistedView.unmount();

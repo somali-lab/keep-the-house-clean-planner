@@ -53,6 +53,7 @@ _id, name, color, active, role: 'admin' | 'planner' | 'member',
 unavailableWeekdays: [0..6]              // 0 = Sunday
 dailyBudgetMinutes: { weekday, weekend } // target load
 maxDailyMinutes:    { weekday, weekend } // hard ceiling
+browserNotifications: { enabled, times: ['HH:mm', ...] } // at most 6, unique, sorted, household timezone; absent reads as disabled
 ```
 
 The number of users is configuration, not an assumption in the code. A fresh installation seeds the configured set.
@@ -194,6 +195,7 @@ dismissedPromotions: [ ... ]
 ### 4.4 Daily use
 
 - A today view lists the open occurrences for the selected profile, then the other members', then overdue items, and can be filtered per profile.
+- When the today view shows everyone, its groups sit in two columns on screens wide enough for two readable columns; narrower screens keep one column.
 - The view can browse forward a day or two without leaving the day-oriented layout, and shows which cycle week the day belongs to.
 - No backlog is shown from before the cycle anchor date; there is nothing to be behind on yet.
 - Complete and undo. Undo restores the previous status.
@@ -204,7 +206,7 @@ dismissedPromotions: [ ... ]
 - A week overview is the default landing view at every screen width, shows the whole week with drag-to-reschedule, and can collapse past days.
 - The week overview can search by part of a task name and optionally show the cycle-week number on its cards.
 - My tasks groups its sliding 1-, 2-, or 4-week period into seven-day blocks starting today. Each block shows its date range; each task shows its own cycle-week number even when a block crosses a cycle boundary.
-- Filter choices throughout the app survive a hard reload. A person can visibly reset them, and one household member's saved choices are not silently applied to another member.
+- Filter choices throughout the app survive a hard reload. A single icon button in the top header, directly left of the language switch, resets the filters of the screen the person is on (today, week, my tasks, planner, tasks, statistics, completions and history) to their defaults and leaves the saved filters of every other screen untouched. It is disabled when the current screen has no filters or all of them are at their defaults, it has an accessible name and tooltip, and it announces the reset to assistive technology. One household member's saved choices are not silently applied to another member.
 - An extra execution of an existing task is an ad-hoc occurrence, planned or already done, and only within a cycle that has been generated. Several executions of one task on one day coexist, next to the generated occurrence of that day. Planning or recording a task on a day where it already has an open occurrence is allowed and returns the non-blocking warning `task_already_planned`, also when it is recorded as done; the record-work dialog then offers to check off the planned occurrence first.
   - *Deliberate change:* earlier versions allowed at most one ad-hoc occurrence per task per day, and an ad-hoc occurrence on a slot day suppressed that slot's generated occurrence. Both rules are gone (ADR-0009).
 - A one-off task is work that is done once and has no place in the central task list. It is an ad-hoc occurrence with `taskId: null`, created by `POST /api/occurrences/one-off` with a name (trimmed, 1 to 120 characters), an optional active room, a duration in whole minutes (at least 1), a date, an optional assignee (unassigned when omitted, the actor when it is recorded as done), `done` and `requestId`. No task record is created, so a one-off task never appears in the task list, the due list, the planner or the AI input, and it does not take part in the due engine. The same rules as for an extra execution apply to `done`, the idempotency key and retract. An inactive or unknown room is rejected (`inactive_room`, `unknown_room`).
@@ -264,9 +266,18 @@ Every state change is recorded with who, when, which entity, which action, the c
 
 - A nightly job generates upcoming occurrences and, when configured, applies audit retention.
 - A morning notification summarises the day: what is planned per person and what is overdue. It is suppressed when there is nothing to report.
-- Supported channels are none, an ntfy topic, and a Home Assistant webhook. The channel and its credentials come from the environment.
+- Supported server channels are none, an ntfy topic, and a Home Assistant webhook. The channel and its credentials come from the environment. These reach the household whether or not a browser is open, and stay a separate setting from browser notifications.
 - Generation, the morning notification and audit retention can each be triggered manually from the settings screen, which is also how an installation is verified after a change.
 - The scheduler can be disabled entirely, which is required for reproducible tests.
+
+Browser notifications (ADR-0010) are a second, personal channel:
+
+- They are shown only while the planner is open in a browser tab, also when that tab is not active. There is no service worker push and no delivery to a closed browser.
+- Each person sets their own moments: up to six unique `HH:mm` times in the household timezone, plus an on/off switch. A person changes their own moments; an administrator can change anyone's. Users without stored moments read as disabled with no times.
+- A notification summarises that person's open tasks for today and their overdue tasks, listing up to five task names and the number of others. When nothing is open, no notification is shown.
+- A moment is delivered when the tab is open at that time or within ten minutes after it; earlier moments are not caught up. With several tabs open, at most one summary is shown per person, day and moment.
+- The browser permission belongs to the device. The notifications page asks for it with an explicit button, shows whether it is not yet asked, allowed, blocked or unsupported, and can send a test notification. Notifications need a secure origin (HTTPS or localhost); on a plain-HTTP address the page reports that they cannot work and disables the permission and test buttons.
+- Changes to the moments are audited like other user changes; a change that changes nothing is neither written nor audited.
 
 ### 4.11 Data management
 
@@ -288,7 +299,10 @@ Every state change is recorded with who, when, which entity, which action, the c
 
 - Input: active tasks with room, interval and duration; users with availability and budgets; the current template when rebalancing; and optional free-text constraints.
 - Output: strict JSON matching the plan slot schema, plus a rationale per week.
-- The response is always a draft. It is stored as an inactive plan and presented as a diff against the active one. The user applies or discards it; nothing is ever activated automatically.
+- The response is always a draft. It is stored as an inactive plan; the user reviews it in plan management and activates or deletes it there. Nothing is ever activated automatically.
+- After a proposal or rebalance succeeds, the new draft opens in plan management by itself: it is selected, the result is announced, and keyboard focus moves to an AI card above the plan. The draft is then reviewed like any other plan and can be edited, deleted or activated there. The card states that the active plan does not change until the draft is activated, shows the stored rationale per week, and, right after creation, the validation warnings. A rejected proposal (validation failure) changes no selection and its error stays visible.
+- Activating an AI draft always goes through the same activation preview as any other plan.
+- The prompt asks, as a soft preference ranked below availability, the intervals and the hard daily limits, to keep recurring activities on the same weekdays and in a recognizable rhythm. It never outranks a hard rule.
 - The proposal is validated on the server against exactly the same rules as the manual editor. On failure the model is re-prompted once, after which the error is surfaced rather than a broken plan silently accepted.
 
 ### 5.3 Provider
@@ -330,8 +344,10 @@ The fridge is a legitimate output device. The schedule must work without a phone
 ### 7.1 Structure
 
 - A compact overview is the default at every screen width: the week grid, the day view, the overdue list and the task list.
-- Management screens — planner, tasks, distribution, statistics, history, completions and settings — live behind a separate management area and are reachable from anywhere.
-- The settings screen is organised in tabs so that cycle, intervals, AI, notifications, appearance and maintenance stay separable.
+- Management screens — planner, tasks, distribution, statistics, history, notifications, completions and settings — live behind a separate management area and are reachable from anywhere. The notifications page is available to every role, because each person sets their own browser notifications.
+- The overview and the management area switch with a button in the same top-right spot: a management button in the overview, and a Home button in management that always returns to the week overview. The management side menu stays available.
+- The settings screen is organised in tabs so that cycle, intervals, AI, scheduled jobs (including the ntfy and Home Assistant morning notification), appearance and maintenance stay separable.
+- An About page, reachable for every role from the management menu, shows the running version, the date and time of the latest release labelled as such, and links to the license and the changelog that belong to the running build. A local build that is not a release shows no release date.
 
 ### 7.2 Interaction
 
@@ -361,6 +377,7 @@ All endpoints live under `/api`. Identifiers are 24-character hexadecimal string
 GET    /api/health
 
 GET    /api/users                           POST /api/users            PATCH /api/users/:id
+PUT    /api/users/:id/browser-notifications (own moments, or any person's for an admin)
 GET    /api/rooms                           POST /api/rooms            PATCH /api/rooms/:id
 DELETE /api/rooms/:id
 GET    /api/tasks                           POST /api/tasks            PATCH /api/tasks/:id

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   CalendarRange,
   Copy,
@@ -34,9 +34,10 @@ import { useRooms, useSettings, useTasks } from '../../api/queries.ts';
 import { format, t } from '../../i18n/nl.ts';
 import { ApiRequestError } from '../../api/index.ts';
 import { getLocale } from '../../i18n/runtime.ts';
-import type { ActivationPreviewItem } from '@huishoudplanner/shared';
+import type { ActivationPreviewItem, AiProposalResponse } from '@huishoudplanner/shared';
 import { useProfile } from '../../identity/index.ts';
 import { ExportDialog } from '../export/ExportDialog.tsx';
+import { AiDraftCard } from '../ai/AiDraftCard.tsx';
 import { AiPage } from '../ai/AiPage.tsx';
 import { PromoteBanner } from '../promote/PromoteBanner.tsx';
 import {
@@ -68,6 +69,10 @@ export function PlannerPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [plansOpen, setPlansOpen] = useState(false);
   const [planName, setPlanName] = useState('');
+  // Warnings are only shown right after creation, for the draft that was just created.
+  const [createdProposal, setCreatedProposal] = useState<AiProposalResponse | null>(null);
+  const aiDraftCardRef = useRef<HTMLElement | null>(null);
+  const focusAiDraftRef = useRef(false);
   const createPlan = useCreatePlan();
   const activatePlan = useActivatePlan();
   const updatePlan = useUpdatePlan();
@@ -94,12 +99,22 @@ export function PlannerPage() {
     visiblePlans[0];
   const defaultPlan = visiblePlans[0];
   const isDefaultPlan = plan?._id === defaultPlan?._id;
+  // An AI draft that was activated or discarded is no longer a concept.
+  const isAiDraft = plan !== undefined && plan.draft && !plan.active && plan.source === 'ai';
 
   return (
     <section className="flex flex-col gap-5">
       {plan && (
         <Sheet open={plansOpen} onOpenChange={setPlansOpen}>
-          <SheetContent className="overflow-y-auto sm:max-w-lg">
+          <SheetContent
+            className="overflow-y-auto sm:max-w-lg"
+            onCloseAutoFocus={(event) => {
+              if (!focusAiDraftRef.current) return;
+              focusAiDraftRef.current = false;
+              event.preventDefault();
+              aiDraftCardRef.current?.focus();
+            }}
+          >
             <SheetHeader className="border-b pr-12">
               <SheetTitle>{t('planner.manage')}</SheetTitle>
               <SheetDescription>{t('planner.manageDescription')}</SheetDescription>
@@ -115,6 +130,7 @@ export function PlannerPage() {
                   value={plan._id}
                   onChange={(e) => {
                     setSelectedId(e.target.value);
+                    setCreatedProposal(null);
                     setRenaming(false);
                     setConfirmReset(false);
                     setConfirmDelete(false);
@@ -192,6 +208,7 @@ export function PlannerPage() {
                     {
                       onSuccess: (created) => {
                         setSelectedId(created._id);
+                        setCreatedProposal(null);
                         setPlansOpen(false);
                       },
                     },
@@ -261,7 +278,21 @@ export function PlannerPage() {
                 {t('export.open')}
               </Button>
               <section aria-label={t('settings.ai.title')} className="mt-3 border-t pt-6">
-                <AiPage section="plan" embedded />
+                <AiPage
+                  section="plan"
+                  embedded
+                  onPlanCreated={(result) => {
+                    setSelectedId(result.planId);
+                    setCreatedProposal(result);
+                    setRenaming(false);
+                    setConfirmReset(false);
+                    setConfirmDelete(false);
+                    setConfirmActivate(false);
+                    setNotice(null);
+                    focusAiDraftRef.current = true;
+                    setPlansOpen(false);
+                  }}
+                />
               </section>
             </div>
           </SheetContent>
@@ -363,6 +394,14 @@ export function PlannerPage() {
           </EmptyState>
         ) : (
           <>
+            {isAiDraft && createdProposal?.planId === plan._id && (
+              <p
+                role="status"
+                className="rounded-xl border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success"
+              >
+                {t('planner.aiDraftOpened')}
+              </p>
+            )}
             {notice && (
               <p
                 role="status"
@@ -373,7 +412,16 @@ export function PlannerPage() {
             )}
             {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} />}
 
-            {!plan.active && (
+            {isAiDraft && (
+              <AiDraftCard
+                cardRef={aiDraftCardRef}
+                onManage={() => setPlansOpen(true)}
+                rationale={plan.rationale}
+                warnings={createdProposal?.planId === plan._id ? createdProposal.warnings : []}
+              />
+            )}
+
+            {!plan.active && !isAiDraft && (
               <p
                 role="note"
                 className="rounded-xl border border-border bg-muted/50 px-4 py-3 text-sm"

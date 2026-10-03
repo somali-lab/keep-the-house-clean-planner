@@ -324,8 +324,9 @@ describe('StatsPage', () => {
 
   it('applies the period filter to every chart and table', async () => {
     const fetchMock = setup();
-    const firstView = renderWithProviders(<StatsPage />);
+    const firstView = renderWithProviders(<StatsPage />, { headerReset: true });
     const period = await screen.findByLabelText('Periode');
+    expect(screen.getByRole('button', { name: 'Filters van dit scherm resetten' })).toBeDisabled();
     expect(within(period).getByRole('option', { name: 'Laatste 13 cycli' })).toBeInTheDocument();
     fireEvent.change(period, { target: { value: 'weeks:3' } });
     await waitFor(() =>
@@ -351,9 +352,9 @@ describe('StatsPage', () => {
       ),
     );
     firstView.unmount();
-    renderWithProviders(<StatsPage />);
+    renderWithProviders(<StatsPage />, { headerReset: true });
     expect(await screen.findByLabelText('Periode')).toHaveValue('cycles:4');
-    fireEvent.click(screen.getByRole('button', { name: 'Filters wissen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Filters van dit scherm resetten' }));
     expect(screen.getByLabelText('Periode')).toHaveValue('weeks:1');
   });
 

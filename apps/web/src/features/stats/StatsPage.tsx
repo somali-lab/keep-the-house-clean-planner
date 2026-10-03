@@ -2,6 +2,7 @@ import type { IntervalRow, StatsGroupBy, UserWorkload, WorkloadCycle } from '@hu
 import { CalendarClock, CalendarX, ChartColumnBig, CircleCheck, Clock, Hourglass, ListChecks, Scale, Trash2, TrendingUp } from 'lucide-react';
 import { useId, useState, type ReactNode } from 'react';
 import { EmptyState } from '@/components/EmptyState';
+import { useFilterReset } from '@/components/FilterReset';
 import { NativeSelect } from '@/components/NativeSelect';
 import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -97,6 +98,10 @@ export function StatsPage() {
   const [activeTab, setActiveTab] = usePersistedFilter('stats.tab', profileId, 'overview');
   const [period, setPeriod, resetPeriod] = usePersistedFilter<StatsPeriod>('stats.period', profileId, { unit: 'weeks', count: 1 });
   const [groupBy, setGroupBy, resetGroupBy] = usePersistedFilter<StatsGroupBy>('stats.groupBy', profileId, 'task');
+  useFilterReset(
+    () => { resetPeriod(); resetGroupBy(); },
+    period.unit !== 'weeks' || period.count !== 1 || groupBy !== 'task',
+  );
   const [confirmReset, setConfirmReset] = useState(false);
   const [resetDone, setResetDone] = useState(false);
   const [confirmPurge, setConfirmPurge] = useState(false);
@@ -155,9 +160,6 @@ export function StatsPage() {
           </optgroup>
         </NativeSelect>
       </div>
-      <Button type="button" variant="ghost" onClick={() => { resetPeriod(); resetGroupBy(); }}>
-        {t('stats.resetFilters')}
-      </Button>
       {profile?.role === 'admin' && (
         <Button
           type="button"

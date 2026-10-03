@@ -45,6 +45,18 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
 
+      # The release commit's timestamp is the release moment; republishing a release reuses it.
+      - name: Read release moment
+        id: release-moment
+        run: |
+          set -euo pipefail
+          date="$(git log -1 --format=%cI HEAD)"
+          if [[ ! "$date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T ]]; then
+            echo "::error::Could not read the release commit timestamp."
+            exit 1
+          fi
+          echo "date=$date" >> "$GITHUB_OUTPUT"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 
@@ -80,6 +92,7 @@ jobs:
           file: docker/Dockerfile
           build-args: |
             APP_OFFICIAL_BUILD=true
+            APP_RELEASE_DATE=${{ steps.release-moment.outputs.date }}
           platforms: linux/amd64
           push: true
           tags: ${{ steps.metadata.outputs.tags }}

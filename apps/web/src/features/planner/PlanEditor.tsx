@@ -11,8 +11,9 @@ import {
 import type { CyclePlan, Interval, Room, Slot, Task, User } from '@huishoudplanner/shared';
 // Subpath import keeps Luxon and Zod out of the web bundle.
 import { validatePlan } from '@huishoudplanner/shared/validation/plan';
-import { Ban, Menu, RotateCcw, X } from 'lucide-react';
+import { Ban, Menu, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useFilterReset } from '@/components/FilterReset';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/NativeSelect';
@@ -92,6 +93,20 @@ export function PlanEditor({
     profileId,
     '',
   );
+  useFilterReset(
+    () => {
+      resetWeek();
+      resetAssignee();
+      resetRoom();
+      resetInterval();
+      resetSearch();
+    },
+    selectedWeek !== 0
+      || assigneeFilter !== 'all'
+      || roomFilter !== 'all'
+      || intervalFilter !== 'all'
+      || searchTerm !== '',
+  );
   const [poolCollapsed, setPoolCollapsed] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>('idle');
@@ -158,13 +173,6 @@ export function PlanEditor({
       week.unassignedMinutes,
     0,
   );
-  const resetFilters = () => {
-    resetWeek();
-    resetAssignee();
-    resetRoom();
-    resetInterval();
-    resetSearch();
-  };
 
   useEffect(() => {
     if (!hasTasksToDistribute) setPoolCollapsed(true);
@@ -233,26 +241,25 @@ export function PlanEditor({
           role="group"
           aria-label={t('planner.chooseWeek')}
         >
-          <span className="px-2 text-sm font-bold text-muted-foreground">
-            {t('planner.chooseWeek')}:
-          </span>
-          {[0, 1, 2, 3].map((weekIndex) => (
-            <Button
-              key={weekIndex}
-              type="button"
-              variant={selectedWeek === weekIndex ? 'default' : 'ghost'}
-              className="h-10 rounded-xl px-5"
-              aria-pressed={selectedWeek === weekIndex}
-              onClick={() => setSelectedWeek(weekIndex)}
-            >
-              {format('planner.week', { n: weekIndex + 1 })}
-            </Button>
-          ))}
-          <label className="min-w-40 flex-1">
+          <div className="flex gap-0.5">
+            {[0, 1, 2, 3].map((weekIndex) => (
+              <Button
+                key={weekIndex}
+                type="button"
+                variant={selectedWeek === weekIndex ? 'default' : 'ghost'}
+                className="h-10 rounded-xl px-3"
+                aria-pressed={selectedWeek === weekIndex}
+                onClick={() => setSelectedWeek(weekIndex)}
+              >
+                {format('planner.week', { n: weekIndex + 1 })}
+              </Button>
+            ))}
+          </div>
+          <label className="min-w-32 flex-1">
             <span className="visually-hidden">{t('planner.searchTasks')}</span>
             <Input
               type="search"
-              className="h-10 min-w-40"
+              className="h-10 min-w-32"
               value={searchTerm}
               placeholder={t('planner.searchTasks')}
               aria-label={t('planner.searchTasks')}
@@ -260,7 +267,7 @@ export function PlanEditor({
             />
           </label>
           <NativeSelect
-            className="w-48"
+            className="w-36"
             aria-label={t('planner.filterAssignee')}
             value={assigneeFilter}
             onChange={(event) => setAssigneeFilter(event.target.value)}
@@ -273,10 +280,6 @@ export function PlanEditor({
             ))}
             <option value="unassigned">{t('planner.anyone')}</option>
           </NativeSelect>
-          <Button type="button" variant="outline" size="sm" onClick={resetFilters}>
-            <RotateCcw aria-hidden="true" />
-            {t('planner.resetFilters')}
-          </Button>
           <span
             role="status"
             className={cn(

@@ -198,6 +198,29 @@ describe('POST /api/cycle-plans/:id/apply-proposal', () => {
   });
 });
 
+describe('POST /api/cycle-plans/:id/activate for an AI draft', () => {
+  it('clears the draft flag, audits it, and keeps the plan a non-draft after another plan is activated', async () => {
+    const c = await setup();
+    const preview = await c.call('GET', `/api/cycle-plans/${c.draftId}/activation-preview`);
+    const { result, entries } = await expectAudited(
+      c.t,
+      () => c.call('POST', `/api/cycle-plans/${c.draftId}/activate`, { previewToken: preview.json<{ previewToken: string }>().previewToken }),
+      { entity: 'cyclePlan', action: 'activate', count: 1 },
+    );
+    expect(result.statusCode, result.body).toBe(200);
+    expect(entries[0]!.entityId).toEqual(new ObjectId(c.draftId));
+    expect(entries[0]!.before).toEqual({ active: false, draft: true });
+    expect(entries[0]!.after).toEqual({ active: true, draft: false });
+    expect(await findPlanById(c.t.db, new ObjectId(c.draftId))).toMatchObject({ active: true, draft: false, source: 'ai' });
+
+    // Activating the original plan again leaves the former AI plan inactive and not a draft.
+    const back = await c.call('GET', `/api/cycle-plans/${c.activeId}/activation-preview`);
+    const reactivated = await c.call('POST', `/api/cycle-plans/${c.activeId}/activate`, { previewToken: back.json<{ previewToken: string }>().previewToken });
+    expect(reactivated.statusCode, reactivated.body).toBe(200);
+    expect(await findPlanById(c.t.db, new ObjectId(c.draftId))).toMatchObject({ active: false, draft: false, source: 'ai' });
+  });
+});
+
 describe('POST /api/cycle-plans/:id/discard', () => {
   it('marks the draft discarded and inactive, audited as update', async () => {
     const c = await setup();
