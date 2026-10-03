@@ -52,13 +52,13 @@ public static class CyclePlanAudit
         return ChangeSet.Between(Fields(plan), null).ToEntry(actor, AuditEntity.CyclePlan, plan.Id, AuditAction.Delete);
     }
 
-    public static AuditEntry ForSlots(AuditActor actor, string planId, SlotDiff diff)
+    public static AuditEntry ForSlots(AuditActor actor, string planId, SlotDiff diff, AuditObject? meta = null)
     {
         ArgumentNullException.ThrowIfNull(diff);
         var before = new AuditArray([.. diff.Removed.Concat(diff.Changed.Select(c => c.Before)).Select(s => (AuditValue)Slot(s))]);
         var after = new AuditArray([.. diff.Added.Concat(diff.Changed.Select(c => c.After)).Select(s => (AuditValue)Slot(s))]);
         return new AuditEntry(
-            actor, AuditEntity.CyclePlan, planId, AuditAction.Update, AuditObject.Of(("slots", before)), AuditObject.Of(("slots", after)));
+            actor, AuditEntity.CyclePlan, planId, AuditAction.Update, AuditObject.Of(("slots", before)), AuditObject.Of(("slots", after)), meta);
     }
 
     private static AuditArray Strings(IEnumerable<string> values) => new([.. values.Select(AuditValue.FromString)]);

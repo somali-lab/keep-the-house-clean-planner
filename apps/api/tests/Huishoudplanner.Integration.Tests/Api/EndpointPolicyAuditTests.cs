@@ -37,6 +37,8 @@ public sealed class EndpointPolicyAuditTests
         ["PATCH /api/v2/cycle-plans/{id}"] = AuthorizationPolicies.PlannerPolicy,
         ["DELETE /api/v2/cycle-plans/{id}"] = AuthorizationPolicies.PlannerPolicy,
         ["PUT /api/v2/cycle-plans/{id}/slots"] = AuthorizationPolicies.PlannerPolicy,
+        ["POST /api/v2/promote-suggestions/apply"] = AuthorizationPolicies.PlannerPolicy,
+        ["POST /api/v2/promote-suggestions/dismiss"] = AuthorizationPolicies.PlannerPolicy,
         ["POST /api/v2/cycle-plans/{id}/validation"] = AuthorizationPolicies.PlannerPolicy,
         ["POST /api/v2/cycle-plans/validation"] = AuthorizationPolicies.PlannerPolicy,
         ["POST /api/v2/occurrences/{id}/complete"] = AuthorizationPolicies.ActorPolicy,

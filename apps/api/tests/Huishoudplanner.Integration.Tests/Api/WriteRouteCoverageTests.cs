@@ -165,6 +165,14 @@ public sealed class WriteRouteCoverageTests(AuditCoverageHarness h) : IClassFixt
                 new { taskId = h.Weekly, weekIndex = 2, weekday = 1, assigneeId = (string?)null },
             },
         }, h.Planner)), "cyclePlan", "update"), // not idempotent by design: saving the slots of the active plan always replaces the open generated occurrences (requirements 4.3, as in Node)
+        new("POST /api/v2/promote-suggestions/apply", Kind.Audited, Fixed(h => new(HttpMethod.Post, "/api/v2/promote-suggestions/apply", new
+        {
+            planId = h.ActivePlan, taskId = h.Weekly, weekIndex = 1, weekday = 1, toWeekday = 2,
+        }, h.Planner)), "cyclePlan", "update"), // not idempotent by design: like a slot save of the active plan it replaces the open generated occurrences (system-sourced occurrence entries) and the repeat finds no slot on the old weekday
+        new("POST /api/v2/promote-suggestions/dismiss", Kind.Audited, Fixed(h => new(HttpMethod.Post, "/api/v2/promote-suggestions/dismiss", new
+        {
+            planId = h.ActivePlan, taskId = h.Weekly, weekIndex = 1, weekday = 2, toWeekday = 3, toAssigneeId = (string?)null, lastEvidenceId = "0123456789abcdef01234567",
+        }, h.Planner)), "settings", "update", Idempotent: true),
         new("POST /api/v2/jobs/generation", Kind.Audited, async h =>
         {
             // The slot save above already synchronized the future occurrences, so remove them to give the run work to repair.

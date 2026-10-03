@@ -1,3 +1,4 @@
+using Huishoudplanner.Domain.Audit;
 using Huishoudplanner.Domain.CyclePlans;
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Generation;
@@ -35,7 +36,7 @@ public interface ICyclePlanService
     /// Replaces all slots after the plan validation: a hard error is an <see cref="InvalidPlan"/> and nothing is written; otherwise the
     /// saved plan comes back with the warnings and the summary. Saving what is already stored writes and audits nothing.
     /// </summary>
-    Task<OneOf<PlanSlotsSaved, NotFound, ValidationErrors, InvalidPlan, ConflictError, PortError, SettingsMissing>> ReplaceSlotsAsync(Actor actor, string id, IReadOnlyList<CyclePlanSlot> slots, CancellationToken cancellationToken);
+    Task<OneOf<PlanSlotsSaved, NotFound, ValidationErrors, InvalidPlan, ConflictError, PortError, SettingsMissing>> ReplaceSlotsAsync(Actor actor, string id, IReadOnlyList<CyclePlanSlot> slots, CancellationToken cancellationToken, AuditObject? meta = null);
 
     /// <summary>The slot differences between the plan and the active plan, and the minutes per person per week before and after.</summary>
     Task<OneOf<PlanComparison, NotFound, ValidationErrors, PortError>> CompareWithActiveAsync(string id, CancellationToken cancellationToken);
