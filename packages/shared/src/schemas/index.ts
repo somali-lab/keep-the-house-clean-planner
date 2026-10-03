@@ -1,6 +1,7 @@
 export * from './ai.ts';
 export * from './api.ts';
 export * from './auditLog.ts';
+export * from './badges.ts';
 export * from './common.ts';
 export * from './cyclePlans.ts';
 export * from './cycles.ts';

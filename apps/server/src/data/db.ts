@@ -10,6 +10,8 @@ export const COLLECTIONS = {
   auditLog: 'auditLog',
   settings: 'settings',
   pointEntries: 'pointEntries',
+  badges: 'badges',
+  badgeAwards: 'badgeAwards',
 } as const;
 
 export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS];
@@ -57,6 +59,21 @@ export const INDEXES: Record<CollectionName, IndexDescription[]> = {
       unique: true,
       partialFilterExpression: { requestId: { $type: 'string' } },
     },
+  ],
+  // ADR-0014: a badge definition; an example is created once, by its stable key.
+  badges: [
+    {
+      key: { exampleKey: 1 },
+      name: 'badges_example_key_unique',
+      unique: true,
+      partialFilterExpression: { exampleKey: { $type: 'string' } },
+    },
+  ],
+  // ADR-0014: derived awards, one per badge and person.
+  badgeAwards: [
+    { key: { key: 1 }, name: 'badgeAwards_key_unique', unique: true },
+    { key: { personId: 1 } },
+    { key: { badgeId: 1 } },
   ],
 };
 

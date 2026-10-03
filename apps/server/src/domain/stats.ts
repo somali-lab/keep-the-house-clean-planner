@@ -23,6 +23,7 @@ import { resetStatisticsData, type ResetStatisticsResult } from '../data/statist
 import { listTasks } from '../data/tasks.ts';
 import { listUsers } from '../data/users.ts';
 import { HttpError } from '../http/errors.ts';
+import { reconcileBadges } from './badges.ts';
 
 /**
  * Clears execution history while preserving people, rooms, tasks and cycle plans.
@@ -40,7 +41,10 @@ export async function resetStatistics(ctx: AuditContext, before?: string): Promi
   const boundary = fromDayKey(boundaryKey, settings.timezone);
   const boundaryCycle = cycleIndexFor(boundaryKey, settings.cycleAnchorDate);
 
-  return resetStatisticsData(ctx, boundary, boundaryCycle, { restartFromToday: before === undefined, boundaryKey });
+  const result = await resetStatisticsData(ctx, boundary, boundaryCycle, { restartFromToday: before === undefined, boundaryKey });
+  // The awards follow the history they are derived from: they are rebuilt from what remains (ADR-0014).
+  await reconcileBadges(ctx, 'reset');
+  return result;
 }
 
 /**

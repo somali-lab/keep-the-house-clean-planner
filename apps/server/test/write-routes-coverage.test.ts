@@ -9,6 +9,7 @@ import { findOccurrences } from '../src/data/occurrences.ts';
 import type { UserDoc } from '../src/data/users.ts';
 import { captureWrites, expectAudited, expectWritesAudited, type ExpectedAudit } from './helpers/audit.ts';
 import { asProfile, seededRoom, seededUsers } from './helpers/http.ts';
+import { PNG_BASE64 } from './helpers/badgeImages.ts';
 import { createTestApp, type TestApp } from './helpers/testApp.ts';
 
 /**
@@ -256,6 +257,34 @@ const SCENARIOS: Scenario[] = [
         previewToken: preview.json<{ previewToken: string }>().previewToken,
       });
     },
+  },
+  {
+    route: 'POST /api/badges',
+    audit: { entity: 'badge', action: 'create' },
+    run: async () => {
+      const res = await call('POST', '/api/badges', {
+        name: 'Stoffenfan',
+        rule: { type: 'executions', taskIds: [ids.task], threshold: 1 },
+        image: { contentType: 'image/png', data: PNG_BASE64 },
+      });
+      ids.badge = res.json<{ _id: string }>()._id;
+      return res;
+    },
+  },
+  {
+    route: 'PATCH /api/badges/:id',
+    audit: { entity: 'badge', action: 'update' },
+    run: () => call('PATCH', `/api/badges/${ids.badge}`, { name: 'Stoffenkampioen', rule: { type: 'executions', taskIds: [ids.task], threshold: 2 } }),
+  },
+  {
+    route: 'POST /api/badges/examples',
+    audit: { entity: 'badge', action: 'create' },
+    run: () => call('POST', '/api/badges/examples', { language: 'nl' }),
+  },
+  {
+    route: 'DELETE /api/badges/:id',
+    audit: { entity: 'badge', action: 'delete' },
+    run: () => call('DELETE', `/api/badges/${ids.badge}`),
   },
   {
     // Recorded one-off work gives the administrator points to redeem; the booking itself is audited as a ledger create.

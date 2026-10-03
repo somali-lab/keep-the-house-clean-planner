@@ -1,12 +1,15 @@
+import { createHash } from 'node:crypto';
 import type { LightMyRequestResponse } from 'fastify';
-import { ObjectId, type Document } from 'mongodb';
+import { Binary, ObjectId, type Document } from 'mongodb';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { FieldIssue } from '../src/http/errors.ts';
 import { readAllCollections, TRANSFER_COLLECTIONS, type TransferDocs } from '../src/data/transfer.ts';
 import type { UserDoc } from '../src/data/users.ts';
 import { findActivePlan } from '../src/data/cyclePlans.ts';
 import { importData, parseImport, type ExportFile } from '../src/domain/transfer.ts';
+import { listBadgeAwards } from '../src/data/badges.ts';
 import { captureWrites } from './helpers/audit.ts';
+import { imageInput, JPEG_BYTES, PNG_BYTES, SVG_BYTES } from './helpers/badgeImages.ts';
 import { asProfile, seededRoom, seededUsers } from './helpers/http.ts';
 import { createTestApp, type TestApp } from './helpers/testApp.ts';
 
@@ -24,10 +27,24 @@ async function freshApp(options: Parameters<typeof createTestApp>[0] = {}): Prom
 
 const importUrl = '/api/import/json?mode=replace&confirm=true';
 // The import itself, and the rebuild of the ledger it triggers (ADR-0011), are the only new audit entries.
+// The badge awards are rebuilt as well, with a summary of their own (ADR-0014).
 const withoutImports = (entries: Document[]) =>
-  entries.filter((e) => e.entity !== 'import' && !(e.entity === 'points' && e.action === 'recompute'));
+  entries.filter(
+    (e) =>
+      e.entity !== 'import' &&
+      !(e.entity === 'points' && e.action === 'recompute') &&
+      !(e.entity === 'badgeAward' && e.action === 'recompute' && (e.meta as { trigger?: string } | undefined)?.trigger === 'import'),
+  );
 const EXTRA_KEY = 'transfer-extra-request-key-0001';
 const ONE_OFF_KEY = 'transfer-one-off-request-key-0001';
+
+/** A version-5 file predates the badges (ADR-0014). */
+function asVersion5(source: ExportFile): ExportFile {
+  const legacy = structuredClone(source) as unknown as { schemaVersion: number; collections: Record<string, unknown> };
+  legacy.schemaVersion = 5;
+  delete legacy.collections.badges;
+  return legacy as unknown as ExportFile;
+}
 
 /** A version-1 file predates recordedDone, requestId and points; strip them to get one from a current export. */
 function asVersion1(source: ExportFile): ExportFile {
@@ -79,6 +96,26 @@ beforeAll(async () => {
     payload: { action: 'complete' },
   });
   expect(done.statusCode, done.body).toBe(200);
+  // Two badges: one with a PNG for the task (earned, the person did it) and an inactive one with a JPEG for all tasks (ADR-0014).
+  const badge = await source.app.inject({
+    method: 'POST',
+    url: '/api/badges',
+    headers,
+    payload: {
+      name: 'Aanrechtheld',
+      description: 'Het aanrecht gedaan',
+      rule: { type: 'executions', taskIds: [task.json<{ _id: string }>()._id], threshold: 1 },
+      image: imageInput(PNG_BYTES, 'image/png'),
+    },
+  });
+  expect(badge.statusCode, badge.body).toBe(201);
+  const inactive = await source.app.inject({
+    method: 'POST',
+    url: '/api/badges',
+    headers,
+    payload: { name: 'Alles-doener', rule: { type: 'minutes', taskIds: [], threshold: 5 }, active: false, image: imageInput(JPEG_BYTES, 'image/jpeg') },
+  });
+  expect(inactive.statusCode, inactive.body).toBe(201);
   // Recorded work (ADR-0009): an extra execution and a one-off task, both created done with a request key.
   const extra = await source.app.inject({
     method: 'POST',
@@ -108,13 +145,23 @@ describe('GET /api/export/json', () => {
   it('exports every collection as extended JSON with a schema version and a dated filename', () => {
     expect(exportResponse.statusCode).toBe(200);
     expect(exportResponse.headers['content-disposition']).toBe('attachment; filename="huishoudplanner-20260916.json"');
-    expect(file.schemaVersion).toBe(5);
+    expect(file.schemaVersion).toBe(6);
     expect(file.exportedAt).toBe('2026-09-16T08:00:00.000Z');
     expect(Object.keys(file.collections).sort()).toEqual([...TRANSFER_COLLECTIONS].sort());
     expect(file.collections.users[0]!._id).toEqual({ $oid: expect.stringMatching(/^[0-9a-f]{24}$/) });
     expect(file.collections.occurrences[0]!.date).toEqual({ $date: expect.any(String) });
     for (const name of TRANSFER_COLLECTIONS) expect(file.collections[name]).toHaveLength(snapshot[name].length);
     expect(snapshot.occurrences.some((o) => o.status === 'done')).toBe(true);
+  });
+
+  it('includes the badge definitions with their images as binary, and no awards (ADR-0014)', () => {
+    expect(file.collections.badges).toHaveLength(2);
+    expect(file.collections.badges[0]).toMatchObject({
+      name: 'Aanrechtheld',
+      image: { contentType: 'image/png', size: PNG_BYTES.length, data: { $binary: { base64: PNG_BYTES.toString('base64') } } },
+    });
+    expect(file.collections).not.toHaveProperty('badgeAwards');
+    expect(snapshot.badges.every((doc) => (doc.image as { data: unknown }).data instanceof Binary)).toBe(true);
   });
 
   it('includes recorded work, request keys and one-off tasks without a task id', () => {
@@ -137,6 +184,30 @@ describe('import', () => {
     }
     expect(withoutImports(after.auditLog)).toEqual(snapshot.auditLog);
     expect(after.auditLog.filter((e) => e.entity === 'import')).toHaveLength(1);
+  });
+
+  it('rebuilds the badge awards from the imported data and keeps the moment they were earned (ADR-0014)', async () => {
+    const empty = await freshApp({ seed: false });
+    await importData(empty.systemCtx(), parseImport(file));
+    const byKey = (docs: { key: string; awardedAt: Date }[]) =>
+      docs.map(({ key, awardedAt }) => ({ key, awardedAt })).sort((a, b) => a.key.localeCompare(b.key));
+    const expected = await listBadgeAwards(source.db);
+    expect(expected).toHaveLength(1);
+    expect(byKey(await listBadgeAwards(empty.db))).toEqual(byKey(expected));
+    expect(await empty.db.collection('auditLog').countDocuments({ entity: 'badgeAward', action: 'recompute', 'meta.trigger': 'import' })).toBe(1);
+  });
+
+  it('imports a version-5 file without badges: the badges and awards it replaces are removed', async () => {
+    const target = await freshApp({ seed: false });
+    await importData(target.systemCtx(), parseImport(file));
+    expect(await listBadgeAwards(target.db)).toHaveLength(1);
+    const parsed = parseImport(asVersion5(file));
+    expect(parsed.schemaVersion).toBe(5);
+    const result = await importData(target.systemCtx(), parsed);
+    expect(result.replaced.badges).toBe(0);
+    expect(result.removedBadgeAwards).toBe(1);
+    expect((await readAllCollections(target.db)).badges).toEqual([]);
+    expect(await listBadgeAwards(target.db)).toEqual([]);
   });
 
   it('imports a version-1 file, which has no recordedDone or requestId, unchanged', async () => {
@@ -177,21 +248,23 @@ describe('import', () => {
         cycles: snapshot.cycles.length,
         occurrences: snapshot.occurrences.length,
         pointEntries: 0,
+        badges: snapshot.badges.length,
       },
       auditAdded: snapshot.auditLog.length,
       removedPointEntries: 0,
       removedRedemptions: 0,
+      removedBadgeAwards: 0,
     });
 
     const after = await readAllCollections(target.db);
     expect(after.users).toEqual(snapshot.users);
     expect(after.occurrences).toEqual(snapshot.occurrences);
-    // The import entry, and one summary of the ledger rebuild (the ledger is not part of the file).
-    expect(after.auditLog).toHaveLength(auditBefore.length + snapshot.auditLog.length + 2);
+    // The import entry, one summary of the ledger rebuild (the ledger is not part of the file) and one of the award rebuild.
+    expect(after.auditLog).toHaveLength(auditBefore.length + snapshot.auditLog.length + 3);
     expect(after.auditLog.filter((e) => e.entity === 'points' && e.action === 'recompute')).toHaveLength(1);
     const imports = after.auditLog.filter((e) => e.entity === 'import');
     expect(imports).toHaveLength(1);
-    expect(imports[0]).toMatchObject({ action: 'create', source: 'ui', meta: { mode: 'replace', schemaVersion: 5, exportedAt: file.exportedAt } });
+    expect(imports[0]).toMatchObject({ action: 'create', source: 'ui', meta: { mode: 'replace', schemaVersion: 6, exportedAt: file.exportedAt } });
     expect((imports[0]!.actorId as ObjectId).equals(actor._id)).toBe(true);
   });
 
@@ -224,7 +297,7 @@ describe('import', () => {
     });
 
     const cases: [string, (f: ExportFile) => void, FieldIssue][] = [
-      ['an unknown schema version', (f) => Object.assign(f, { schemaVersion: 6 }), { field: 'schemaVersion', message: expect.any(String) }],
+      ['an unknown schema version', (f) => Object.assign(f, { schemaVersion: 7 }), { field: 'schemaVersion', message: expect.any(String) }],
       ['an invalid field value', (f) => Object.assign(f.collections.users[0]!, { color: 'rood' }), { field: 'collections.users.0.color', message: 'invalid_color' }],
       ['a plain string where an ObjectId belongs', (f) => Object.assign(f.collections.tasks[0]!, { roomId: '0123456789abcdef01234567' }), { field: 'collections.tasks.0.roomId', message: 'expected_object_id' }],
       ['a plain string where a date belongs', (f) => Object.assign(f.collections.occurrences[0]!, { date: '2026-09-16T00:00:00.000Z' }), { field: 'collections.occurrences.0.date', message: 'expected_date' }],
@@ -240,6 +313,52 @@ describe('import', () => {
           f.collections.occurrences.push({ ...generated, _id: { $oid: new ObjectId().toHexString() } });
         },
         { field: expect.stringMatching(/^collections\.occurrences\.\d+\.plannedDate$/), message: 'duplicate_slot' },
+      ],
+      [
+        'a version 6 file without its badges',
+        (f) => {
+          delete (f.collections as Record<string, unknown>).badges;
+        },
+        { field: 'collections.badges', message: 'required' },
+      ],
+      [
+        'a badge rule that names a task which is not in the file',
+        (f) => {
+          (f.collections.badges[0]!.rule as { taskIds: unknown[] }).taskIds = [{ $oid: new ObjectId().toHexString() }];
+        },
+        { field: 'collections.badges.0.rule.taskIds.0', message: 'unknown_task' },
+      ],
+      [
+        'a badge image whose bytes do not match its hash',
+        (f) => {
+          Object.assign(f.collections.badges[0]!.image as object, { hash: 'a'.repeat(64) });
+        },
+        { field: 'collections.badges.0.image.hash', message: 'image_hash_mismatch' },
+      ],
+      [
+        'a badge image that is an SVG',
+        (f) => {
+          Object.assign(f.collections.badges[0]!.image as object, {
+            size: SVG_BYTES.length,
+            hash: createHash('sha256').update(SVG_BYTES).digest('hex'),
+            data: { $binary: { base64: SVG_BYTES.toString('base64'), subType: '00' } },
+          });
+        },
+        { field: 'collections.badges.0.image.data', message: 'unsupported_image_type' },
+      ],
+      [
+        'a badge image of another type than declared',
+        (f) => {
+          Object.assign(f.collections.badges[0]!.image as object, { contentType: 'image/webp' });
+        },
+        { field: 'collections.badges.0.image.contentType', message: 'image_type_mismatch' },
+      ],
+      [
+        'a duplicate example key',
+        (f) => {
+          for (const badge of f.collections.badges) badge.exampleKey = 'example:toilet';
+        },
+        { field: 'collections.badges.1.exampleKey', message: 'duplicate_example_key' },
       ],
       ['a missing settings document', (f) => Object.assign(f.collections, { settings: [] }), { field: 'collections.settings', message: 'settings_singleton' }],
       ['no active user', (f) => Object.assign(f.collections, { users: [] }), { field: 'collections.users', message: 'no_active_user' }],

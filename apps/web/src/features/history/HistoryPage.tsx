@@ -21,13 +21,14 @@ import { Label } from '@/components/ui/label';
 import { useRooms, useSettings, useTasks, useUsers } from '../../api/queries.ts';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
 import { getLocale } from '../../i18n/runtime.ts';
+import { useBadges } from '../badges/api.ts';
 import { Avatar } from '../../identity/Avatar.tsx';
 import { useProfile } from '../../identity/index.ts';
 import { usePlans } from '../planner/api.ts';
 import { useAuditFeed, useClearAudit, type AuditFilters } from './api.ts';
 import { collectOccurrenceNames, describeEntry, entityName, SYSTEM_ACTOR_ID, type NameLookup } from './describe.ts';
 
-const ENTITY_TYPES: AuditEntity[] = ['task', 'cyclePlan', 'occurrence', 'user', 'room', 'settings', 'cycle', 'points', 'import'];
+const ENTITY_TYPES: AuditEntity[] = ['task', 'cyclePlan', 'occurrence', 'user', 'room', 'settings', 'cycle', 'points', 'badge', 'badgeAward', 'import'];
 
 /** Browser-local day boundaries for the date filter. */
 function dayStartIso(day: string): string {
@@ -85,6 +86,7 @@ export function HistoryPage() {
   const rooms = useRooms();
   const plans = usePlans();
   const settings = useSettings();
+  const badges = useBadges();
   const clearAudit = useClearAudit();
 
   const entries: AuditEntry[] = useMemo(() => feed.data?.pages.flatMap((p) => p.items) ?? [], [feed.data]);
@@ -97,9 +99,10 @@ export function HistoryPage() {
       plans: new Map((plans.data ?? []).map((p) => [p._id, p.name])),
       intervals: new Map((settings.data?.intervals ?? []).map((i) => [i.key, i.label])),
       occurrences: collectOccurrenceNames(entries),
+      badges: new Map((badges.data ?? []).map((badge) => [badge._id, badge.name])),
       timezone: settings.data?.timezone ?? 'Europe/Amsterdam',
     }),
-    [users.data, tasks.data, rooms.data, plans.data, settings.data, entries],
+    [users.data, tasks.data, rooms.data, plans.data, settings.data, badges.data, entries],
   );
 
   const setFilter = (key: string, value: string) => {

@@ -285,3 +285,28 @@ export async function updateOccurrence(
   });
   return { before, after };
 }
+
+/** A done occurrence with the person it is credited to (`completedBy`, else the assignee), as badges need it (ADR-0014). */
+export interface CreditedExecutionDoc {
+  _id: ObjectId;
+  taskId: ObjectId | null;
+  durationMinutesSnapshot: number;
+  completedAt: Date | null;
+  date: Date;
+  personId: ObjectId;
+}
+
+/**
+ * Every done occurrence credited to somebody, or only to the given people; work nobody can be
+ * credited for is left out. The credit rule is the one of the points ledger (ADR-0011).
+ */
+export function findCreditedExecutions(db: Db, personIds: ObjectId[] | null): Promise<CreditedExecutionDoc[]> {
+  return occurrencesCollection(db)
+    .aggregate<CreditedExecutionDoc>([
+      { $match: { status: 'done' } },
+      { $addFields: { personId: { $ifNull: ['$completedBy', '$assigneeId'] } } },
+      { $match: { personId: personIds ? { $in: personIds } : { $ne: null } } },
+      { $project: { taskId: 1, durationMinutesSnapshot: 1, completedAt: 1, date: 1, personId: 1 } },
+    ])
+    .toArray();
+}

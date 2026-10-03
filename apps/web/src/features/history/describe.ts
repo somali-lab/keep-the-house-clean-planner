@@ -15,6 +15,8 @@ export interface NameLookup {
   intervals: Map<string, string>;
   /** Occurrence id → task name, collected from loaded create/delete entries. */
   occurrences: Map<string, string>;
+  /** Badge id → name, so an award reads as the badge it is about (ADR-0014). */
+  badges?: Map<string, string>;
   timezone: string;
 }
 
@@ -25,7 +27,7 @@ const isRecord = (value: unknown): value is Json =>
 const str = (value: unknown): string | undefined => (typeof value === 'string' && value ? value : undefined);
 
 const DATE_FIELDS = new Set(['date', 'plannedDate', 'cycleAnchorDate', 'weekStart']);
-const DATETIME_FIELDS = new Set(['completedAt', 'lastCompletedAt', 'at']);
+const DATETIME_FIELDS = new Set(['completedAt', 'lastCompletedAt', 'at', 'awardedAt']);
 const USER_FIELDS = new Set(['defaultAssigneeId', 'assigneeId', 'completedBy', 'personId']);
 
 function isMinutesPath(path: string): boolean {
@@ -40,6 +42,11 @@ function isMinutesPath(path: string): boolean {
 export function actorName(entry: AuditEntry, names: NameLookup): string {
   if (entry.actorId === SYSTEM_ACTOR_ID) return t('history.system');
   return names.users.get(entry.actorId) ?? t('tasks.unknownUser');
+}
+
+function badgeNameOf(entry: AuditEntry, names: NameLookup): string {
+  const id = str(entry.after.badgeId) ?? str(entry.before.badgeId) ?? str(entry.meta?.badgeId);
+  return (id ? names.badges?.get(id) : undefined) ?? t('history.unknownEntity');
 }
 
 export function entityName(entry: AuditEntry, names: NameLookup): string {
@@ -70,6 +77,10 @@ export function entityName(entry: AuditEntry, names: NameLookup): string {
       return format('history.cycleName', { index: typeof after.index === 'number' ? after.index + 1 : '?' });
     case 'import':
       return t('history.entity.import');
+    case 'badge':
+      return names.badges?.get(id) ?? str(after.name) ?? str(before.name) ?? unknown;
+    case 'badgeAward':
+      return badgeNameOf(entry, names);
     case 'points':
       // An update only lists what changed, so the title also travels in the meta.
       return str(after.titleSnapshot) ?? str(before.titleSnapshot) ?? str(entry.meta?.titleSnapshot) ?? unknown;
@@ -208,12 +219,46 @@ function bonusChangeLines(meta: Json, names: NameLookup): string[] {
   return lines;
 }
 
+/** Who earned or lost which badge in a reconciliation (ADR-0014), one line per change. */
+function badgeChangeLines(meta: Json, names: NameLookup): string[] {
+  const changes = Array.isArray(meta.changes) ? meta.changes.filter(isRecord) : [];
+  const lines = changes.map((change) =>
+    format(change.change === 'removed' ? 'history.action.badgeChangeRemoved' : change.change === 'updated' ? 'history.action.badgeChangeUpdated' : 'history.action.badgeChangeCreated', {
+      person: formatValue('personId', change.personId, names),
+      badge: (str(change.badgeId) ? names.badges?.get(str(change.badgeId)!) : undefined) ?? t('history.unknownEntity'),
+    }),
+  );
+  const total = typeof meta.changesTotal === 'number' ? meta.changesTotal : changes.length;
+  if (total > changes.length) lines.push(format('history.action.badgeMore', { count: total - changes.length }));
+  return lines;
+}
+
+/** A badge award reads as a person earning or losing a badge, not as a database change (ADR-0014). */
+function describeBadgeAward(entry: AuditEntry, names: NameLookup, actor: string): string[] {
+  const meta = entry.meta ?? {};
+  const badge = badgeNameOf(entry, names);
+  if (entry.action === 'recompute') {
+    const count = (value: unknown) => (typeof value === 'number' ? value : 0);
+    return [
+      format('history.action.badgeRecompute', { actor, created: count(meta.created), updated: count(meta.updated), removed: count(meta.removed) }),
+      ...badgeChangeLines(meta, names),
+    ];
+  }
+  const values = entry.action === 'delete' ? entry.before : entry.after;
+  const person = formatValue('personId', values.personId ?? meta.personId, names);
+  if (entry.action === 'create') return [format('history.action.badgeAwarded', { person, badge })];
+  if (entry.action === 'delete') return [format('history.action.badgeRevoked', { person, badge })];
+  return [format('history.action.badgeMoved', { person, badge, date: formatValue('awardedAt', entry.after.awardedAt, names) })];
+}
+
 /** One or more Dutch sentences describing an audit entry. */
 export function describeEntry(entry: AuditEntry, names: NameLookup): string[] {
   const actor = actorName(entry, names);
   const entity = entityName(entry, names);
   const { before, after } = entry;
   const meta = entry.meta ?? {};
+
+  if (entry.entity === 'badgeAward') return describeBadgeAward(entry, names, actor);
 
   // A redemption reads as points that were exchanged, with the note and who booked it (ADR-0013).
   if (entry.entity === 'points' && (entry.action === 'create' || entry.action === 'delete')) {

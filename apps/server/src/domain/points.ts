@@ -56,6 +56,7 @@ import { defaultMissingTaskPoints, findTaskById, listTasks, type TaskDoc } from 
 import { listUsers } from '../data/users.ts';
 import { HttpError } from '../http/errors.ts';
 import { toApi } from '../http/serialize.ts';
+import { evaluateBadgeAwards } from './badgeAwards.ts';
 
 /** Points of a task; a task from before points existed earns the default for its duration. */
 export function taskPoints(task: Pick<TaskDoc, 'points' | 'durationMinutes'>): number {
@@ -120,9 +121,19 @@ async function syncNow(ctx: AuditContext, occurrenceId: ObjectId, reason: Points
   const occurrence = await findOccurrenceById(ctx.db, occurrenceId);
   const expected = occurrence ? expectedExecutionEntry(occurrence, settings.timezone) : null;
   const key = executionKey(occurrenceId);
-  const meta = { occurrenceId, reason };
-
   const stored = await findPointEntryByKey(ctx.db, key);
+  const outcome = await syncLedgerEntry(ctx, key, expected, stored, { occurrenceId, reason });
+  await syncBadgesAfter(ctx, occurrence, stored, reason);
+  return outcome;
+}
+
+async function syncLedgerEntry(
+  ctx: AuditContext,
+  key: string,
+  expected: PointEntryFields | null,
+  stored: PointEntryDoc | null,
+  meta: { occurrenceId: ObjectId; reason: PointsSyncReason },
+): Promise<SyncOutcome> {
   if (!expected) {
     return stored && (await deletePointEntry(ctx, stored, meta)) ? 'deleted' : 'unchanged';
   }
@@ -135,6 +146,30 @@ async function syncNow(ctx: AuditContext, occurrenceId: ObjectId, reason: Points
     return (await updatePointEntry(ctx, winner, expected, 'live', meta)) ? 'updated' : 'unchanged';
   }
   return (await updatePointEntry(ctx, stored, expected, 'live', meta)) ? 'updated' : 'unchanged';
+}
+
+/**
+ * Re-evaluates the badges of the person the change is about (ADR-0014): the person the execution is
+ * credited to now and the one its ledger entry belonged to. An undo, a retract or a correction of work
+ * that earned no ledger entry (a task of 0 points) does not say who held it before, so then everybody is
+ * evaluated. A failure is logged and never fails the check-off that caused it; the nightly run repairs it.
+ */
+async function syncBadgesAfter(
+  ctx: AuditContext,
+  occurrence: OccurrenceDoc | null,
+  stored: PointEntryDoc | null,
+  reason: PointsSyncReason,
+): Promise<void> {
+  try {
+    const people = new Map<string, ObjectId>();
+    const credited = occurrence?.status === 'done' ? (occurrence.completedBy ?? occurrence.assigneeId) : null;
+    for (const id of [stored?.personId, credited]) if (id) people.set(id.toHexString(), id);
+    const everybody = !stored && reason !== 'complete' && reason !== 'recorded';
+    if (!everybody && people.size === 0) return;
+    await evaluateBadgeAwards(ctx, everybody ? null : [...people.values()], { mode: 'each', reason });
+  } catch (err) {
+    ctx.log.error({ err, occurrenceId: occurrence?._id.toHexString() }, 'badge evaluation failed');
+  }
 }
 
 function sameFields(a: PointEntryFields, b: PointEntryFields): boolean {
@@ -281,7 +316,7 @@ export function exclusively<T>(db: Db, run: () => Promise<T>): Promise<T> {
  * Makes the whole ledger match the occurrences (ADR-0011), idempotently. It migrates the fields
  * (tasks without points, done occurrences without a snapshot), computes the expected execution
  * entry of every done occurrence and applies the differences in bulk. A fourth step inserts and
- * deletes the week and cycle bonuses of every ended period (ADR-0012). A run that changes
+ * deletes the week and cycle bonuses of every ended period (ADR-0012). A fifth step makes the badge awards match (ADR-0014). A run that changes
  * something writes one summary audit entry (`points` / `recompute`) and nothing per entry; a run
  * that changes nothing writes and audits nothing. Entries of another kind than `execution` and the
  * four bonus kinds are never touched. Without settings there is nothing to reconcile.
@@ -427,6 +462,10 @@ async function reconcileNow(ctx: AuditContext, trigger: PointsRecomputeTrigger):
     await record(ctx, { entity: 'points', entityId: POINTS_LEDGER_ID, action: 'recompute', meta: { ...result } });
   }
   if (bonusFailure) throw bonusFailure.error;
+
+  // Step 5: the badge awards (ADR-0014), derived from the executions and the on-time week bonuses that are now final.
+  // They have their own summary entry, so the points summary and its result keep their shape.
+  await evaluateBadgeAwards(ctx, null, { mode: 'summary', trigger });
   return result;
 }
 

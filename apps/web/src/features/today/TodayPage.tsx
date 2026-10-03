@@ -14,6 +14,7 @@ import { format, t, type MessageKey } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
 import { getActiveProfileId } from '../../identity/profileStore.ts';
 import { usePersistedFilter } from '../../hooks/usePersistedFilter.ts';
+import { MyBadges } from '../badges/PersonBadges.tsx';
 import { PromoteBanner } from '../promote/PromoteBanner.tsx';
 import { CompletionChoiceDialog, useAssigneeChoice } from './CompletionChoiceDialog.tsx';
 import {
@@ -312,6 +313,8 @@ export function TodayPage({ now }: { now?: Date }) {
           }}
         />
       )}
+
+      <MyBadges personId={profile?._id ?? null} />
 
       <RecordWorkDialog
         open={recordOpen}

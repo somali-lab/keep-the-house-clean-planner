@@ -1,10 +1,12 @@
 import { MongoBulkWriteError, type Db, type Document } from 'mongodb';
 import { COLLECTIONS } from './db.ts';
+import { clearBadgeAwards } from './badges.ts';
 import { clearPointEntries, countRedemptions } from './points.ts';
 
 /**
  * Every collection in an export, in the order they are replaced on import. `pointEntries` holds only
  * the redemptions: they are booked, so they cannot be derived; every other ledger entry is rebuilt (ADR-0013).
+ * `badges` holds the badge definitions with their images; the awards are derived and rebuilt (ADR-0014).
  */
 export const TRANSFER_COLLECTIONS = [
   COLLECTIONS.settings,
@@ -15,6 +17,7 @@ export const TRANSFER_COLLECTIONS = [
   COLLECTIONS.cycles,
   COLLECTIONS.occurrences,
   COLLECTIONS.pointEntries,
+  COLLECTIONS.badges,
   COLLECTIONS.auditLog,
 ] as const;
 export type TransferCollection = (typeof TRANSFER_COLLECTIONS)[number];
@@ -40,6 +43,8 @@ export interface ReplaceResult {
   removedPointEntries: number;
   /** The redemptions among them: a file of version 4 or older has none to put back (ADR-0013). */
   removedRedemptions: number;
+  /** Badge awards that were dropped; the caller rebuilds them from the imported data (ADR-0014). */
+  removedBadgeAwards: number;
 }
 
 /**
@@ -67,6 +72,9 @@ export async function replaceAllCollections(db: Db, docs: TransferDocs): Promise
   if (redemptions.length > 0) await db.collection(COLLECTIONS.pointEntries).insertMany(redemptions, { ordered: true });
   replaced.pointEntries = redemptions.length;
 
+  // Awards are derived from the executions and the badge definitions of the file: drop them, the caller rebuilds them (ADR-0014).
+  const removedBadgeAwards = await clearBadgeAwards(db);
+
   const audit = docs[COLLECTIONS.auditLog];
   let duplicates = 0;
   if (audit.length > 0) {
@@ -79,5 +87,5 @@ export async function replaceAllCollections(db: Db, docs: TransferDocs): Promise
       duplicates = writeErrors.length;
     }
   }
-  return { replaced, auditAdded: audit.length - duplicates, removedPointEntries, removedRedemptions };
+  return { replaced, auditAdded: audit.length - duplicates, removedPointEntries, removedRedemptions, removedBadgeAwards };
 }

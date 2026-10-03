@@ -21,6 +21,7 @@ const names: NameLookup = {
     ['2wk', '1x per 2 weken'],
   ]),
   occurrences: new Map([['o1', 'Wastafel']]),
+  badges: new Map([['b1', 'Toiletjuffrouw']]),
   timezone: 'Europe/Amsterdam',
 };
 
@@ -273,5 +274,63 @@ describe('describeEntry for bonuses', () => {
       names,
     );
     expect(lines).toEqual(['Anna wijzigde bonusbedragen van de instellingen: — → vanaf 16-09-2026: week 5/3, cyclus 20/10']);
+  });
+});
+
+describe('badges (ADR-0014)', () => {
+  it('reads an award as a person earning, moving or losing a badge', () => {
+    const award = (overrides: Partial<AuditEntry>) => entry({ entity: 'badgeAward', entityId: 'w1', ...overrides });
+    expect(describeEntry(award({ action: 'create', after: { badgeId: 'b1', personId: BRAM }, meta: { reason: 'complete' } }), names)).toEqual([
+      'Bram heeft de badge Toiletjuffrouw behaald',
+    ]);
+    expect(describeEntry(award({ action: 'delete', before: { badgeId: 'b1', personId: BRAM }, meta: { reason: 'uncomplete' } }), names)).toEqual([
+      'Bram is de badge Toiletjuffrouw kwijt',
+    ]);
+    expect(
+      describeEntry(award({ action: 'update', before: { awardedAt: '2026-09-18T08:00:00.000Z' }, after: { awardedAt: '2026-09-17T08:00:00.000Z' }, meta: { reason: 'correction', badgeId: 'b1', personId: BRAM } }), names),
+    ).toEqual(['De behaaldatum van Bram voor de badge Toiletjuffrouw is aangepast naar 17-09-2026, 10:00']);
+    expect(entityName(award({ action: 'create', after: { badgeId: 'b1', personId: BRAM } }), names)).toBe('Toiletjuffrouw');
+  });
+
+  it('lists who earned or lost which badge in a reconciliation, and how many more there are', () => {
+    const lines = describeEntry(
+      entry({
+        entity: 'badgeAward',
+        entityId: '000000000000000000000003',
+        action: 'recompute',
+        actorId: SYSTEM_ACTOR_ID,
+        source: 'system',
+        meta: {
+          trigger: 'nightly',
+          created: 1,
+          updated: 0,
+          removed: 1,
+          changes: [
+            { key: 'badge:b1:' + BRAM, badgeId: 'b1', personId: BRAM, change: 'created' },
+            { key: 'badge:b1:' + ANNA, badgeId: 'b1', personId: ANNA, change: 'removed' },
+          ],
+          changesTotal: 5,
+          changesTruncated: true,
+        },
+      }),
+      names,
+    );
+    expect(lines).toEqual([
+      'Systeem liet de badges opnieuw berekenen: 1 toegekend, 0 aangepast, 1 ingetrokken',
+      'Bram heeft de badge Toiletjuffrouw behaald',
+      'Anna is de badge Toiletjuffrouw kwijt',
+      '… en nog 3 andere wijzigingen van badges',
+    ]);
+  });
+
+  it('names a badge definition and describes its rule change by field', () => {
+    const lines = describeEntry(
+      entry({ entity: 'badge', entityId: 'b1', before: { rule: { threshold: 10 } }, after: { rule: { threshold: 2 } } }),
+      names,
+    );
+    expect(lines).toEqual(['Anna wijzigde drempel van Toiletjuffrouw: 10 → 2']);
+    expect(describeEntry(entry({ entity: 'badge', entityId: 'b1', action: 'create', after: { name: 'Toiletjuffrouw' } }), names)).toEqual([
+      'Anna maakte badge Toiletjuffrouw aan',
+    ]);
   });
 });
