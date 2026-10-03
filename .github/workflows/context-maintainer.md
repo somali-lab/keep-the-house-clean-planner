@@ -18,13 +18,14 @@ permissions:
 
 engine:
   id: copilot
-  # Maintenance reading and small text edits do not need a frontier model.
-  model: claude-haiku-4.5
+  # Judging whether instructions and skills still cover the implementation needs more reasoning
+  # than Haiku showed on release 1.7.0 (it missed the new rewards domain); Sonnet is the cheapest step up.
+  model: claude-sonnet-5
 strict: true
 timeout-minutes: 20
 # 1 AI credit is $0.01.
-max-ai-credits: 100
-max-daily-ai-credits: 300
+max-ai-credits: 200
+max-daily-ai-credits: 400
 
 imports:
   - shared/context-maintainer.md
