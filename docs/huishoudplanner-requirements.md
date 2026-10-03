@@ -562,7 +562,7 @@ All endpoints live under `/api`. Identifiers are 24-character hexadecimal string
 The active profile travels in the header `x-profile-id` (the id of an active user). A request without it, or with an unknown or inactive id, has no actor: reads work, and a write that needs an actor answers `400 profile_required`. The header `x-client: web` marks a change as made in the interface (audit source `ui`); without it the source is `api`.
 
 ```
-GET    /api/health
+GET    /api/health   (v2: GET /api/v2/health answers { status, version, database } and reports a failed database ping as 503 with "error" in both status fields)
 
 GET    /api/users                           POST /api/users            PATCH /api/users/:id
 PUT    /api/users/:id/browser-notifications (own moments, or any person's for an admin)
