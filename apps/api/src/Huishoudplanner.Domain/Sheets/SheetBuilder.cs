@@ -123,6 +123,9 @@ public static class SheetBuilder
             Footer(text, generatedAt, zone, text.TaskOverview));
     }
 
+    /// <summary>What the task list prints for a task whose room no longer exists, in the sheet language.</summary>
+    public static string UnknownRoom(SheetLanguage language) => SheetText.For(language).UnknownRoom;
+
     /// <summary>
     /// <c>huishoudschema-2026-w38.pdf</c>, <c>huishoudschema-2026-w38-w39.pdf</c> and, across a year boundary,
     /// <c>huishoudschema-2026-w52-2027-w01.pdf</c>. The input is ISO week labels like <c>2026-W38</c>.

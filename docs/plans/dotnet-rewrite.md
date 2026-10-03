@@ -259,7 +259,7 @@ Each phase ends in something demonstrable. Slices are small enough for one pull 
 - [x] 6.1 AI port and providers (§3.9), prompt info, test, propose, rebalance, suggest tasks, explain, with the one re-prompt. Port `ai-assist.test.ts`, `ai-draft.test.ts`, `ai-proposals.test.ts`, `ai-providers.test.ts`, `ai-anthropic.test.ts`. (Done in two parts: 6.1a the port and the providers, 6.1b the use cases and endpoints. The activation of an AI draft in `ai-draft.test.ts` belongs to 2.4.)
 - [ ] 6.2 Notifications: ntfy and Home Assistant adapters, morning message. Port `notify.test.ts`.
 - [ ] 6.3 Scheduler and the manual job endpoints. Port the nightly and manual-run cases of `generation.test.ts`, `points-reconcile.test.ts`, `points-bonuses.test.ts` and `badges.test.ts` that were deferred in phases 3 and 4.
-- [ ] 6.4 PDF sheets with QuestPDF (§3.10). Port `pdf-export.test.ts`.
+- [x] 6.4 PDF sheets with QuestPDF (§3.10). Port `pdf-export.test.ts`.
 - [ ] 6.5 JSON export and import with the confirmation and acknowledgement rules. Port `transfer.test.ts`.
 
 ### Phase 7 — Web app to v2 (D4)
