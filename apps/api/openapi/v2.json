@@ -1043,6 +1043,269 @@
         }
       }
     },
+    "/api/v2/export/pdf/schedule": {
+      "get": {
+        "tags": [
+          "Export"
+        ],
+        "summary": "Downloads the week schedule of one, two or four weeks as a PDF.",
+        "description": "Needs no profile. Query: fromWeek (required, an ISO week such as 2026-W38), weeks (required: 1, 2 or 4), orientation (portrait, the default, or landscape; only a landscape sheet of exactly two weeks puts both weeks on one page), totals (true or false, the default: the minutes total per day) and language (nl, the default, or en). The sheet is a blank checklist built from the generated occurrences, so rescheduled and one-off tasks sit where they are and no status is printed. Only generated weeks can be exported: any other week answers 409 weeks_not_generated with the missing ISO weeks in the extension weeks. The file is named after the period, for example huishoudschema-2026-w38-w39.pdf.",
+        "operationId": "exportSchedulePdf",
+        "parameters": [
+          {
+            "name": "fromWeek",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "weeks",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "orientation",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "totals",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/export/pdf/day": {
+      "get": {
+        "tags": [
+          "Export"
+        ],
+        "summary": "Downloads the sheet of a single day as a PDF.",
+        "description": "Needs no profile. Query: date (required, YYYY-MM-DD) and language (nl, the default, or en). The sheet is the week of that day reduced to it and always carries the day total. A week that has not been generated answers 409 weeks_not_generated. The file is named huishoudschema-YYYY-MM-DD.pdf.",
+        "operationId": "exportDayPdf",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/export/pdf/due": {
+      "get": {
+        "tags": [
+          "Export"
+        ],
+        "summary": "Downloads the list of tasks that are due or overdue as a PDF.",
+        "description": "Needs no profile. Query: language (nl, the default, or en). Overdue tasks come first and the state is spelled out in words; an empty list prints a message instead of a table. The file is named achterstand-YYYY-MM-DD.pdf after today in the household timezone.",
+        "operationId": "exportDueListPdf",
+        "parameters": [
+          {
+            "name": "language",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/export/pdf/tasks": {
+      "get": {
+        "tags": [
+          "Export"
+        ],
+        "summary": "Downloads the list of all tasks, grouped by room, as a PDF.",
+        "description": "Needs no profile. Query: language (nl, the default, or en). Inactive tasks are listed and marked; a task whose room no longer exists is printed under an unknown-room label. One-off tasks are not tasks and are not listed. The file is named huishoudtaken.pdf.",
+        "operationId": "exportTaskListPdf",
+        "parameters": [
+          {
+            "name": "language",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/cycle-plans": {
       "get": {
         "tags": [
@@ -3635,6 +3898,410 @@
         }
       }
     },
+    "/api/v2/stats/workload": {
+      "get": {
+        "tags": [
+          "Statistics"
+        ],
+        "summary": "Planned and done minutes per person for every cycle and week of the period.",
+        "description": "The period is the last cycles cycles (1 to 26, default 4) or, with weeks, the last 1 to 3 calendar weeks including the current one. Minutes come from the snapshots on the occurrences: planned minutes belong to the assignee, done minutes to the person who completed the work. Cycles are listed oldest first.",
+        "operationId": "getWorkloadStatistics",
+        "parameters": [
+          {
+            "name": "cycles",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "weeks",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkloadReport"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/stats/completion": {
+      "get": {
+        "tags": [
+          "Statistics"
+        ],
+        "summary": "Done, skipped and missed work per task, room or person, worst completion rate first.",
+        "description": "groupBy is required: task, room or user. Missed is work still open on a day before today. All one-off tasks share one row without a key when grouped by task; per room they count under the room recorded on the occurrence. The period is as for the workload report.",
+        "operationId": "getCompletionStatistics",
+        "parameters": [
+          {
+            "name": "cycles",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "weeks",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "groupBy",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompletionReport"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/stats/intervals": {
+      "get": {
+        "tags": [
+          "Statistics"
+        ],
+        "summary": "The configured interval of each task against the days between its completions.",
+        "description": "Most deviating first. averageDays is null with fewer than two completions; one-off tasks have no interval and are left out. The period is as for the workload report.",
+        "operationId": "getIntervalStatistics",
+        "parameters": [
+          {
+            "name": "cycles",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "weeks",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntervalReport"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/stats/deviations": {
+      "get": {
+        "tags": [
+          "Statistics"
+        ],
+        "summary": "Plan changes separated from early or late completion, per task.",
+        "description": "The planning shift is the number of days between the original and the current planned day, the completion delay the days between the current planned day and the completion. One-off tasks and recorded extra work have no planned slot and are left out. The period is as for the workload report.",
+        "operationId": "getDeviationStatistics",
+        "parameters": [
+          {
+            "name": "cycles",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "weeks",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviationReport"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/stats": {
+      "delete": {
+        "tags": [
+          "Statistics"
+        ],
+        "summary": "Starts the statistics over, or purges the history before a day (administrators).",
+        "description": "Without before every occurrence resets to open and recorded extra work is deleted; with before (a day key, not after today) only occurrences, cycles, ledger entries and redemptions strictly older than that day are purged. People, rooms, tasks and cycle plans are never touched. One audit entry records the counts, which the response repeats. A before after today is 400 before_in_future.",
+        "operationId": "resetStatistics",
+        "parameters": [
+          {
+            "name": "before",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatisticsResetResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/jobs/generation": {
+      "post": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Generates the current and the next cycle now (planners).",
+        "description": "Does the generation part of the nightly job: the occurrences of the current and the next cycle are generated from the active plan, idempotently, and open generated occurrences that no longer match the active plan are replaced. The audit entries carry the requesting profile as actor (source ui) and the run id in meta.runId. It never touches the points ledger. Answers 500 settings_missing when the installation has no settings, and 409 when another change to the same data is running.",
+        "operationId": "runGeneration",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationRunResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/jobs/audit-retention": {
+      "post": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Applies the configured audit retention now (planners).",
+        "description": "Deletes the audit entries older than AUDIT_RETENTION_DAYS and answers the cutoff and the number deleted; without that setting it answers status disabled and deletes nothing. Writes no audit entry.",
+        "operationId": "runAuditRetention",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditRetentionResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/meta/limits": {
       "get": {
         "tags": [
@@ -4411,6 +5078,32 @@
           }
         }
       },
+      "AuditRetentionResponse": {
+        "required": [
+          "status"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "cutoff": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "deleted": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "BadgeLimits": {
         "type": "object",
         "properties": {
@@ -4839,6 +5532,79 @@
               "boolean"
             ],
             "description": "Only true is accepted: the actor performed the work and becomes the assignee."
+          }
+        }
+      },
+      "CompletionReport": {
+        "required": [
+          "groupBy",
+          "rows"
+        ],
+        "type": "object",
+        "properties": {
+          "groupBy": {
+            "type": "string"
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CompletionRow"
+            }
+          }
+        }
+      },
+      "CompletionRow": {
+        "required": [
+          "key",
+          "name",
+          "done",
+          "skipped",
+          "missed",
+          "rate"
+        ],
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "done": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "skipped": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "missed": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "rate": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
           }
         }
       },
@@ -5335,6 +6101,89 @@
           }
         }
       },
+      "DeviationReport": {
+        "required": [
+          "rows"
+        ],
+        "type": "object",
+        "properties": {
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeviationRow"
+            }
+          }
+        }
+      },
+      "DeviationRow": {
+        "required": [
+          "taskId",
+          "name",
+          "completions",
+          "averagePlanningShiftDays",
+          "averageCompletionDelayDays",
+          "early",
+          "onTime",
+          "late"
+        ],
+        "type": "object",
+        "properties": {
+          "taskId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "completions": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "averagePlanningShiftDays": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "averageCompletionDelayDays": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "early": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "onTime": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "late": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "DiffPositionResponse": {
         "required": [
           "weekIndex",
@@ -5738,6 +6587,33 @@
           }
         }
       },
+      "GenerationRunResponse": {
+        "required": [
+          "runId",
+          "removed",
+          "generated"
+        ],
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string"
+          },
+          "removed": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "generated": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GenerationResultResponse"
+            }
+          }
+        }
+      },
       "HealthResponse": {
         "required": [
           "status",
@@ -5907,6 +6783,77 @@
               "string"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "IntervalReport": {
+        "required": [
+          "rows"
+        ],
+        "type": "object",
+        "properties": {
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IntervalRow"
+            }
+          }
+        }
+      },
+      "IntervalRow": {
+        "required": [
+          "taskId",
+          "name",
+          "intervalKey",
+          "periodDays",
+          "completions",
+          "averageDays",
+          "deviation"
+        ],
+        "type": "object",
+        "properties": {
+          "taskId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "intervalKey": {
+            "type": "string"
+          },
+          "periodDays": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "completions": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "averageDays": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "deviation": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
           }
         }
       },
@@ -7597,6 +8544,76 @@
           }
         }
       },
+      "StatisticsResetResult": {
+        "required": [
+          "deletedOccurrences",
+          "deletedRecorded",
+          "resetOccurrences",
+          "resetTasks",
+          "deletedPastCycles",
+          "removedPointEntries",
+          "removedRedemptions"
+        ],
+        "type": "object",
+        "properties": {
+          "deletedOccurrences": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "deletedRecorded": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "resetOccurrences": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "resetTasks": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "deletedPastCycles": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "removedPointEntries": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "removedRedemptions": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "SuggestTasksRequest": {
         "required": [
           "roomId"
@@ -8355,6 +9372,35 @@
           }
         }
       },
+      "UserWorkload": {
+        "required": [
+          "userId",
+          "plannedMinutes",
+          "doneMinutes"
+        ],
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "plannedMinutes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "doneMinutes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "VacationRangeDto": {
         "required": [
           "from",
@@ -8403,6 +9449,106 @@
             "format": "int32"
           }
         }
+      },
+      "WorkloadCycle": {
+        "required": [
+          "index",
+          "startDate",
+          "endDate",
+          "users",
+          "unassignedPlannedMinutes",
+          "weeks"
+        ],
+        "type": "object",
+        "properties": {
+          "index": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "users": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserWorkload"
+            }
+          },
+          "unassignedPlannedMinutes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "weeks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkloadWeek"
+            }
+          }
+        }
+      },
+      "WorkloadReport": {
+        "required": [
+          "cycles"
+        ],
+        "type": "object",
+        "properties": {
+          "cycles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkloadCycle"
+            }
+          }
+        }
+      },
+      "WorkloadWeek": {
+        "required": [
+          "weekIndex",
+          "startDate",
+          "users",
+          "unassignedPlannedMinutes"
+        ],
+        "type": "object",
+        "properties": {
+          "weekIndex": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "users": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserWorkload"
+            }
+          },
+          "unassignedPlannedMinutes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
       }
     }
   },
@@ -8428,8 +9574,16 @@
       "description": "The rooms of the house: everyone reads them, administrators create, change and delete them."
     },
     {
+      "name": "Jobs",
+      "description": "Manual triggers of the scheduled jobs: planners start them."
+    },
+    {
       "name": "Audit",
       "description": "The history of changes: everyone reads it, administrators clear it."
+    },
+    {
+      "name": "Statistics",
+      "description": "Statistics over the execution history: workload, completion, intervals and deviations are open to everyone; administrators start the statistics over or purge old history."
     },
     {
       "name": "Tasks",
@@ -8438,6 +9592,10 @@
     {
       "name": "Due",
       "description": "The due engine: every active task ranked by how far it has drifted past its interval."
+    },
+    {
+      "name": "Export",
+      "description": "Printable PDF sheets: the week schedule, a single day, the due list and the task list. Everyone downloads them."
     },
     {
       "name": "Cycle plans",

@@ -42,6 +42,18 @@ All configuration comes from environment variables, listed in [requirements sect
 
 Two variables were renamed for .NET: `NODE_ENV` is now `ASPNETCORE_ENVIRONMENT` and `LOG_LEVEL` is now `Logging__LogLevel__Default`. The old names still work as aliases (the new name wins when both are set; for the environment the order is `ASPNETCORE_ENVIRONMENT`, `DOTNET_ENVIRONMENT`, `NODE_ENV`) until the switch from `apps/server`.
 
+## Scheduler and jobs
+
+`Adapters.Jobs` runs the scheduled jobs (plan section 3.8, requirements 4.10). The design is one `IJob` per job (`Name`, a five-field cron `Schedule`, `RunAsync(scope)`), a registry of the registered jobs, one `JobRunner` and **one** hosted service (`JobSchedulerService`) over the registry, instead of one hosted service per job: a new job is one class and one `services.AddJob<T>()`.
+
+- **Time:** `JobScheduler` holds when each job fires next, computed with Cronos (0.13.0) in the household timezone (`TZ_APP`, an explicit `TimeZoneInfo`). It has no timer; `JobSchedulerService` sleeps on `TimeProvider` (at most an hour at a time) and calls `StartDue`. Tests inject a `FakeTimeProvider` and call `StartDue`, so none waits for a cron time. Daylight saving follows *nix cron: 03:00 and 03:45 keep their local time on both change days; a fixed time inside the skipped spring hour runs right after the gap and a repeated autumn time runs once (`JobSchedulerTests`). A run missed while the process slept happens once.
+- **noOverlap:** the runner holds a `SemaphoreSlim` per job and a trigger that finds the previous run still going is not started (counted as `overlapped`), like `noOverlap` of the Node scheduler. Different jobs may run together.
+- **Actor and failures:** jobs call driving ports as `AuditActor.System`. A failing job is logged with its name and the exception type only (never the message) and never stops the host or the other jobs.
+- **Telemetry:** one span `job <name>` per run and the counter `huishoudplanner.jobs.runs` by `job` and `outcome` (`succeeded`, `skipped`, `failed`, `overlapped`, `cancelled`), source and meter `Huishoudplanner.Jobs`.
+- **Configuration:** `DISABLE_SCHEDULER=true` leaves the scheduler without any job; build-time OpenAPI generation registers no scheduler at all. The integration test host sets `DISABLE_SCHEDULER=true` by default; `WithSetting("DISABLE_SCHEDULER", "false")` turns it on.
+- **Jobs today:** `nightly-generation` at 03:00 (`IGenerationService.GenerateUpcomingAsync`; the reconciliation of points and badges joins it in 6.3b) and `audit-retention` at 03:45 (`IAuditRetentionService`; it ends as `skipped` without `AUDIT_RETENTION_DAYS`, where Node does not schedule it). Still to come in 6.3b: the points, bonus and badge steps of the nightly run and the 07:30 morning message.
+- **Manual triggers:** `POST /api/v2/jobs/generation` and `POST /api/v2/jobs/audit-retention` (planners, see requirements section 8), implemented in `Adapters.Http/Jobs`; they call the same ports as the jobs, with the requesting profile as actor.
+
 ## Observability
 
 Traces, metrics and logs go out over OTLP when `OTEL_EXPORTER_OTLP_ENDPOINT` is set; without it the application logs JSON to stdout only. The pipeline lives in `src/Huishoudplanner.Host/Telemetry`; variables, the Elastic example and the verification status are in [docs/OBSERVABILITY.md](../../docs/OBSERVABILITY.md).

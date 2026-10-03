@@ -13,7 +13,10 @@
     <PackageReference Include="MongoDB.Driver" />
     <PackageReference Include="Testcontainers.MongoDb" />
     <PackageReference Include="OpenTelemetry.Exporter.InMemory" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <!-- Test only: reads the text and the page count of a PDF the export endpoints answer. -->
+    <PackageReference Include="PdfPig" />
   </ItemGroup>
 
 </Project>

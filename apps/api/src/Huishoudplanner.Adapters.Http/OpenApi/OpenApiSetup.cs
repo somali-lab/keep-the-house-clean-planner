@@ -2,7 +2,9 @@ using Huishoudplanner.Adapters.Http.Ai;
 using Huishoudplanner.Adapters.Http.CyclePlans;
 using Huishoudplanner.Adapters.Http.Cycles;
 using Huishoudplanner.Adapters.Http.Due;
+using Huishoudplanner.Adapters.Http.Export;
 using Huishoudplanner.Adapters.Http.Health;
+using Huishoudplanner.Adapters.Http.Statistics;
 using Huishoudplanner.Adapters.Http.Occurrences;
 using Huishoudplanner.Adapters.Http.Points;
 using Huishoudplanner.Adapters.Http.Tasks;
@@ -30,6 +32,8 @@ public static class OpenApiSetup
 
     public const string AuditTag = "Audit";
 
+    public const string JobsTag = "Jobs";
+
     public static IServiceCollection AddOpenApiDocument(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -53,9 +57,12 @@ public static class OpenApiSetup
                 new() { Name = CalendarTag, Description = "Cycle, week and ISO week of calendar days." },
                 new() { Name = SettingsTag, Description = "Household settings: calendar, intervals, AI provider, bonuses, currency and reward goals." },
                 new() { Name = RoomsTag, Description = "The rooms of the house: everyone reads them, administrators create, change and delete them." },
+                new() { Name = JobsTag, Description = "Manual triggers of the scheduled jobs: planners start them." },
                 new() { Name = AuditTag, Description = "The history of changes: everyone reads it, administrators clear it." },
+                new() { Name = StatisticsEndpoints.StatisticsTag, Description = "Statistics over the execution history: workload, completion, intervals and deviations are open to everyone; administrators start the statistics over or purge old history." },
                 new() { Name = TaskEndpoints.TasksTag, Description = "The recurring household tasks: everyone reads them, planners create, change, deactivate and bulk-change them." },
                 new() { Name = DueEndpoints.DueTag, Description = "The due engine: every active task ranked by how far it has drifted past its interval." },
+                new() { Name = ExportEndpoints.ExportTag, Description = "Printable PDF sheets: the week schedule, a single day, the due list and the task list. Everyone downloads them." },
                 new() { Name = CyclePlanEndpoints.CyclePlansTag, Description = "The four-week cycle plans: everyone reads and compares them, planners create, change, delete, save slots and validate." },
                 new() { Name = CycleEndpoints.CyclesTag, Description = "The generated four-week cycles: a read-only list, created by generation only." },
                 new() { Name = OccurrenceEndpoints.OccurrencesTag, Description = "What actually happened on a day: everyone reads the occurrences; members complete, uncomplete, skip, reschedule, assign and claim them, administrators correct or delete a completion." },

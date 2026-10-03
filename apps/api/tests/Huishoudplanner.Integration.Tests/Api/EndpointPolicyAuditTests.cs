@@ -55,6 +55,9 @@ public sealed class EndpointPolicyAuditTests
         ["POST /api/v2/ai/rebalance"] = AuthorizationPolicies.PlannerPolicy,
         ["POST /api/v2/ai/suggest-tasks"] = AuthorizationPolicies.PlannerPolicy,
         ["POST /api/v2/ai/explain"] = AuthorizationPolicies.PlannerPolicy,
+        ["DELETE /api/v2/stats"] = AuthorizationPolicies.AdminPolicy,
+        ["POST /api/v2/jobs/generation"] = AuthorizationPolicies.PlannerPolicy,
+        ["POST /api/v2/jobs/audit-retention"] = AuthorizationPolicies.PlannerPolicy,
     };
 
     private static readonly string[] ReadMethods = [HttpMethods.Get, HttpMethods.Head, HttpMethods.Options];
@@ -135,6 +138,18 @@ public sealed class EndpointPolicyAuditTests
         var read = EndpointsOf(factory).Single(e => e.RoutePattern.RawText == route);
 
         read.Metadata.GetOrderedMetadata<IAuthorizeData>().Should().BeEmpty("routes/points.ts reads need no profile");
+    }
+
+    [Fact]
+    public void ThePdfExports_stayOpenLikeTheNodeRoutes()
+    {
+        using var factory = ApiFactory.WithoutDatabase();
+
+        var exports = EndpointsOf(factory).Where(e => e.RoutePattern.RawText?.StartsWith("/api/v2/export/pdf/", StringComparison.Ordinal) == true).ToList();
+
+        exports.Select(e => e.RoutePattern.RawText).Should().BeEquivalentTo(
+            "/api/v2/export/pdf/schedule", "/api/v2/export/pdf/day", "/api/v2/export/pdf/due", "/api/v2/export/pdf/tasks");
+        exports.SelectMany(e => e.Metadata.GetOrderedMetadata<IAuthorizeData>()).Should().BeEmpty("routes/export.ts has no guard");
     }
 
     [Fact]
