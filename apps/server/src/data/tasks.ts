@@ -1,3 +1,4 @@
+import { defaultPointsForDuration } from '@huishoudplanner/shared';
 import { ObjectId, type Db } from 'mongodb';
 import type { AuditContext } from '../audit/context.ts';
 import { diffFields, isEmptyDiff, type FieldDiff } from '../audit/diff.ts';
@@ -10,6 +11,8 @@ export interface TaskDoc {
   roomId: ObjectId;
   intervalKey: string;
   durationMinutes: number;
+  /** Points per execution (0..100). Missing on older data means the default for the duration (ADR-0011). */
+  points?: number;
   defaultAssigneeId: ObjectId | null;
   active: boolean;
   notes: string;
@@ -21,7 +24,7 @@ export interface TaskDoc {
 
 export type NewTask = Pick<
   TaskDoc,
-  'name' | 'roomId' | 'intervalKey' | 'durationMinutes' | 'defaultAssigneeId' | 'notes' | 'tags'
+  'name' | 'roomId' | 'intervalKey' | 'durationMinutes' | 'points' | 'defaultAssigneeId' | 'notes' | 'tags'
 >;
 
 export type TaskPatch = Partial<NewTask & Pick<TaskDoc, 'active'>>;
@@ -167,4 +170,25 @@ export async function bulkUpdateRoomTasks(
     await recordTaskChange(ctx, task._id, diff);
   }
   return changed.length;
+}
+
+const MISSING_POINTS = { $or: [{ points: { $exists: false } }, { points: null as unknown as number }] };
+
+/**
+ * Gives every task without points the default for its duration (ADR-0011). A schema migration,
+ * not an edit: `updatedAt` stays and nothing is audited here; the reconciliation summary counts it.
+ * The filter on the missing field makes a second run match nothing.
+ */
+export async function defaultMissingTaskPoints(db: Db): Promise<{ count: number; ids: ObjectId[] }> {
+  const missing = await tasksCollection(db).find(MISSING_POINTS, { projection: { durationMinutes: 1 } }).toArray();
+  if (missing.length === 0) return { count: 0, ids: [] };
+  const result = await tasksCollection(db).bulkWrite(
+    missing.map((task) => ({
+      updateOne: {
+        filter: { _id: task._id, ...MISSING_POINTS },
+        update: { $set: { points: defaultPointsForDuration(task.durationMinutes) } },
+      },
+    })),
+  );
+  return { count: result.modifiedCount, ids: missing.map((task) => task._id) };
 }

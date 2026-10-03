@@ -6,6 +6,7 @@ export * from './cyclePlans.ts';
 export * from './cycles.ts';
 export * from './intervals.ts';
 export * from './occurrences.ts';
+export * from './points.ts';
 export * from './promotions.ts';
 export * from './rooms.ts';
 export * from './settings.ts';

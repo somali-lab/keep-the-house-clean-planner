@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { isoDateTimeSchema, objectIdSchema, timestampsSchema } from './common.ts';
+import { taskPointsSchema } from './points.ts';
 
 export const taskSchema = z
   .object({
@@ -8,6 +9,8 @@ export const taskSchema = z
     roomId: objectIdSchema,
     intervalKey: z.string().min(1),
     durationMinutes: z.number().int().min(1),
+    /** Points per execution (0..100). Missing on older data means the default for the duration (ADR-0011). */
+    points: taskPointsSchema.optional(),
     defaultAssigneeId: objectIdSchema.nullable(),
     active: z.boolean(),
     notes: z.string(),
@@ -22,6 +25,8 @@ export const createTaskInputSchema = z.object({
   roomId: objectIdSchema,
   intervalKey: z.string().min(1),
   durationMinutes: z.number().int().min(1),
+  /** Omitted: the server defaults it from the duration (one point per ten minutes). */
+  points: taskPointsSchema.optional(),
   defaultAssigneeId: objectIdSchema.nullable().default(null),
   notes: z.string().default(''),
   tags: z.array(z.string().trim().min(1)).default([]),
@@ -34,6 +39,7 @@ export const updateTaskInputSchema = z
     roomId: objectIdSchema,
     intervalKey: z.string().min(1),
     durationMinutes: z.number().int().min(1),
+    points: taskPointsSchema,
     defaultAssigneeId: objectIdSchema.nullable(),
     active: z.boolean(),
     notes: z.string(),

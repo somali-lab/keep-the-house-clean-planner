@@ -139,6 +139,72 @@ describe('RecordWorkDialog', () => {
     expect(posts(fetchMock, '/api/occurrences')).toEqual([]);
   });
 
+  it('prefills the points of a one-off task with one per minute until they are edited by hand', async () => {
+    const { fetchMock, onRecorded } = setup({
+      'POST /api/occurrences/one-off': makeOccurrence({ _id: 'new2', taskId: null, origin: 'adhoc', recordedDone: true }),
+    });
+    await screen.findByLabelText('Taak');
+    expect(screen.queryByLabelText('Punten')).not.toBeInTheDocument();
+    choose(oneOffChoice);
+    await waitFor(() => expect(screen.getByLabelText('Gedaan door')).toHaveValue(ANNA._id));
+    const points = screen.getByLabelText('Punten');
+    expect(points).toHaveAccessibleDescription(/Standaard één punt per minuut/);
+    expect(points).toHaveValue(null);
+    fireEvent.change(screen.getByLabelText('Duur (minuten)'), { target: { value: '40' } });
+    expect(points).toHaveValue(40);
+    fireEvent.change(screen.getByLabelText('Duur (minuten)'), { target: { value: '25' } });
+    expect(points).toHaveValue(25);
+
+    // Once edited by hand the value stays, also when the duration changes.
+    fireEvent.change(points, { target: { value: '8' } });
+    fireEvent.change(screen.getByLabelText('Duur (minuten)'), { target: { value: '90' } });
+    expect(points).toHaveValue(8);
+    fireEvent.change(screen.getByLabelText('Naam van de klus'), { target: { value: 'Kast ophalen' } });
+    fireEvent.click(submit());
+
+    await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
+    expect(posts(fetchMock, '/api/occurrences/one-off')).toEqual([
+      expect.objectContaining({ name: 'Kast ophalen', durationMinutes: 90, points: 8, done: true }),
+    ]);
+  });
+
+  it('leaves the points out when they were not edited, so the server applies the default', async () => {
+    const { fetchMock, onRecorded } = setup({
+      'POST /api/occurrences/one-off': makeOccurrence({ _id: 'new2', taskId: null, origin: 'adhoc', recordedDone: true }),
+    });
+    await screen.findByLabelText('Taak');
+    choose(oneOffChoice);
+    await waitFor(() => expect(screen.getByLabelText('Gedaan door')).toHaveValue(ANNA._id));
+    fireEvent.change(screen.getByLabelText('Naam van de klus'), { target: { value: 'Kast ophalen' } });
+    fireEvent.change(screen.getByLabelText('Duur (minuten)'), { target: { value: '15' } });
+    fireEvent.click(submit());
+    await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
+    expect(posts(fetchMock, '/api/occurrences/one-off')[0]).not.toHaveProperty('points');
+  });
+
+  it('sends 0 points and rejects points above 1000 without a request', async () => {
+    const { fetchMock, onRecorded } = setup({
+      'POST /api/occurrences/one-off': makeOccurrence({ _id: 'new2', taskId: null, origin: 'adhoc', recordedDone: true }),
+    });
+    await screen.findByLabelText('Taak');
+    choose(oneOffChoice);
+    await waitFor(() => expect(screen.getByLabelText('Gedaan door')).toHaveValue(ANNA._id));
+    fireEvent.change(screen.getByLabelText('Naam van de klus'), { target: { value: 'Kast ophalen' } });
+    fireEvent.change(screen.getByLabelText('Duur (minuten)'), { target: { value: '15' } });
+    const points = screen.getByLabelText('Punten');
+
+    fireEvent.change(points, { target: { value: '1001' } });
+    fireEvent.click(submit());
+    expect(await screen.findByText('Vul de punten in als heel getal van 0 tot 1000.')).toBeInTheDocument();
+    expect(points).toHaveAttribute('aria-invalid', 'true');
+    expect(anyPost(fetchMock)).toEqual([]);
+
+    fireEvent.change(points, { target: { value: '0' } });
+    fireEvent.click(submit());
+    await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
+    expect(posts(fetchMock, '/api/occurrences/one-off')).toEqual([expect.objectContaining({ points: 0 })]);
+  });
+
   it('sends a one-off task without a room as roomId null', async () => {
     const { fetchMock, onRecorded } = setup({
       'POST /api/occurrences/one-off': makeOccurrence({ _id: 'new2', taskId: null, origin: 'adhoc', recordedDone: true }),
@@ -403,6 +469,27 @@ describe('RecordWorkDialog', () => {
         { name: 'Zolder opruimen', roomId: 'r1', durationMinutes: 90, date: '2026-09-20', assigneeId: null, requestId: expect.stringMatching(KEY) },
       ]);
       expect(posts(fetchMock, '/api/occurrences')).toEqual([]);
+    });
+
+    it('plans a one-off task with the chosen points', async () => {
+      const { fetchMock, onRecorded } = setup({
+        'POST /api/occurrences/one-off': makeOccurrence({ _id: 'new2', taskId: null, origin: 'adhoc', date: '2026-09-20', assigneeId: null }),
+      });
+      await screen.findByLabelText('Taak');
+      choose(oneOffChoice);
+      await waitFor(() => expect(within(screen.getByLabelText('Ruimte (optioneel)')).getAllByRole('option')).toHaveLength(2));
+      planMode();
+      fireEvent.change(screen.getByLabelText('Naam van de klus'), { target: { value: 'Zolder opruimen' } });
+      fireEvent.change(screen.getByLabelText('Duur (minuten)'), { target: { value: '90' } });
+      expect(screen.getByLabelText('Punten')).toHaveValue(90);
+      fireEvent.change(screen.getByLabelText('Punten'), { target: { value: '45' } });
+      fireEvent.change(dateField(), { target: { value: '2026-09-20' } });
+      fireEvent.click(planSubmit());
+
+      await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
+      expect(posts(fetchMock, '/api/occurrences/one-off')).toEqual([
+        expect.objectContaining({ name: 'Zolder opruimen', durationMinutes: 90, points: 45, date: '2026-09-20', assigneeId: null }),
+      ]);
     });
 
     it('refuses a day before today next to the date field, linked with aria-describedby', async () => {

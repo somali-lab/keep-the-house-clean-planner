@@ -20,6 +20,7 @@ import { exportRoutes } from './routes/export.ts';
 import { healthRoutes } from './routes/health.ts';
 import { jobRoutes } from './routes/jobs.ts';
 import { occurrenceRoutes } from './routes/occurrences.ts';
+import { pointsRoutes } from './routes/points.ts';
 import { promoteRoutes } from './routes/promote.ts';
 import { roomRoutes } from './routes/rooms.ts';
 import { settingsRoutes } from './routes/settings.ts';
@@ -118,6 +119,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   await app.register(cycleRoutes, { prefix: '/api' });
   await app.register(occurrenceRoutes, { prefix: '/api' });
   await app.register(dueRoutes, { prefix: '/api' });
+  await app.register(pointsRoutes, { prefix: '/api' });
   await app.register(promoteRoutes, { prefix: '/api' });
   await app.register(aiRoutes, { prefix: '/api' });
   await app.register(statsRoutes, { prefix: '/api' });

@@ -4,6 +4,7 @@ import { record } from '../audit/record.ts';
 import { SETTINGS_ID } from './settings.ts';
 import { COLLECTIONS } from './db.ts';
 import { occurrencesCollection } from './occurrences.ts';
+import { deleteExecutionPointEntries } from './points.ts';
 
 export interface ResetStatisticsResult {
   /** Occurrences before the boundary. */
@@ -13,6 +14,8 @@ export interface ResetStatisticsResult {
   resetOccurrences: number;
   resetTasks: number;
   deletedPastCycles: number;
+  /** Execution entries of the points ledger that went with the history (ADR-0011). */
+  removedPointEntries: number;
 }
 
 interface ResetStatisticsOptions {
@@ -41,6 +44,7 @@ export async function resetStatisticsData(
           { completedAt: { $ne: null } },
           { completedBy: { $ne: null } },
           { skipReason: { $ne: null } },
+          { pointsSnapshot: { $ne: null } },
         ],
       },
       {
@@ -50,6 +54,7 @@ export async function resetStatisticsData(
           completedAt: null,
           completedBy: null,
           skipReason: null,
+          pointsSnapshot: null,
           updatedAt: ctx.clock.now(),
         },
       },
@@ -58,6 +63,8 @@ export async function resetStatisticsData(
       .collection(COLLECTIONS.tasks)
       .updateMany({ lastCompletedAt: { $ne: null } }, { $set: { lastCompletedAt: null, updatedAt: ctx.clock.now() } });
   }
+  // The ledger follows the history it is derived from: starting over removes every execution entry, a purge those before the boundary.
+  const removedPointEntries = await deleteExecutionPointEntries(ctx.db, options.restartFromToday ? undefined : boundary);
   const deletedPastCycles = await ctx.db.collection(COLLECTIONS.cycles).deleteMany({ index: { $lt: boundaryCycle } });
 
   const result: ResetStatisticsResult = {
@@ -66,6 +73,7 @@ export async function resetStatisticsData(
     resetOccurrences: resetOccurrences.modifiedCount,
     resetTasks: resetTasks.modifiedCount,
     deletedPastCycles: deletedPastCycles.deletedCount,
+    removedPointEntries,
   };
   await record(ctx, {
     entity: 'settings',

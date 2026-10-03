@@ -6,8 +6,13 @@ import {
   createOneOffOccurrenceInputSchema,
   browserNotificationsSchema,
   createTaskInputSchema,
+  auditActionSchema,
+  auditEntitySchema,
   occurrenceSchema,
   patchOccurrenceInputSchema,
+  pointsBalancesQuerySchema,
+  pointsEntriesQuerySchema,
+  updateTaskInputSchema,
   updateSettingsInputSchema,
   userSchema,
   vacationRangeSchema,
@@ -78,6 +83,14 @@ describe('one-off task schemas', () => {
     ).toMatchObject({ roomId: null, assigneeId: ID, done: true, requestId: 'one-off-request-key-0001' });
   });
 
+  it('takes optional whole points from 0 to 1000 for a one-off task', () => {
+    expect(createOneOffOccurrenceInputSchema.parse(base).points).toBeUndefined();
+    for (const points of [0, 7, 1000]) expect(createOneOffOccurrenceInputSchema.parse({ ...base, points }).points).toBe(points);
+    for (const points of [-1, 1001, 2.5, '5', null]) {
+      expect(createOneOffOccurrenceInputSchema.safeParse({ ...base, points }).success, String(points)).toBe(false);
+    }
+  });
+
   it('enforces the name, duration, date and request key bounds', () => {
     const invalid = [
       { ...base, name: '   ' },
@@ -121,6 +134,77 @@ describe('one-off task schemas', () => {
     };
     expect(occurrenceSchema.safeParse(occurrence).success).toBe(true);
     expect(occurrenceSchema.safeParse({ ...occurrence, taskId: ID }).success).toBe(true);
+  });
+
+  it('rejects completing with both a named person and a take over', () => {
+    const result = patchOccurrenceInputSchema.safeParse({ action: 'complete', completedBy: ID, takeOver: true });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues).toEqual([
+      expect.objectContaining({ path: ['completedBy'], message: 'completion_choice_conflict' }),
+    ]);
+    expect(patchOccurrenceInputSchema.safeParse({ action: 'complete', completedBy: ID }).success).toBe(true);
+    expect(patchOccurrenceInputSchema.safeParse({ action: 'complete', takeOver: true }).success).toBe(true);
+    expect(patchOccurrenceInputSchema.safeParse({ action: 'complete' }).success).toBe(true);
+  });
+
+  it('keeps task points optional on create and within 0..1000', () => {
+    const base = { name: 'Stofzuigen', roomId: ID, intervalKey: '1w', durationMinutes: 20 };
+    expect(createTaskInputSchema.parse(base).points).toBeUndefined();
+    expect(createTaskInputSchema.parse({ ...base, points: 0 }).points).toBe(0);
+    expect(createTaskInputSchema.parse({ ...base, points: 1000 }).points).toBe(1000);
+    for (const points of [-1, 1001, 1.5, '3']) {
+      expect(createTaskInputSchema.safeParse({ ...base, points }).success).toBe(false);
+      expect(updateTaskInputSchema.safeParse({ points }).success).toBe(false);
+    }
+    expect(updateTaskInputSchema.safeParse({ points: 7 }).success).toBe(true);
+  });
+
+  it('knows the points audit entity and the recompute action', () => {
+    expect(auditEntitySchema.safeParse('points').success).toBe(true);
+    expect(auditActionSchema.safeParse('recompute').success).toBe(true);
+  });
+
+  it('caps the points snapshot of an occurrence at the largest task value', () => {
+    const base = {
+      _id: '0123456789abcdef01234567',
+      taskId: null,
+      cycleId: '0123456789abcdef01234568',
+      planId: null,
+      date: '2026-09-16',
+      plannedDate: '2026-09-16',
+      assigneeId: null,
+      status: 'done',
+      statusBeforeCompletion: null,
+      completedAt: '2026-09-16T08:00:00.000Z',
+      completedBy: null,
+      skipReason: null,
+      durationMinutesSnapshot: 10,
+      taskNameSnapshot: 'Taak',
+      origin: 'adhoc',
+      createdAt: '2026-09-16T08:00:00.000Z',
+      updatedAt: '2026-09-16T08:00:00.000Z',
+      isOverdue: false,
+      movedFrom: null,
+    };
+    expect(occurrenceSchema.safeParse({ ...base, pointsSnapshot: 1000 }).success).toBe(true);
+    expect(occurrenceSchema.safeParse({ ...base, pointsSnapshot: 1001 }).success).toBe(false);
+  });
+
+  it('validates the points balances query: optional days, never from after to', () => {
+    expect(pointsBalancesQuerySchema.safeParse({}).success).toBe(true);
+    expect(pointsBalancesQuerySchema.safeParse({ from: '2026-09-14', to: '2026-09-14' }).success).toBe(true);
+    const reversed = pointsBalancesQuerySchema.safeParse({ from: '2026-09-15', to: '2026-09-14' });
+    expect(reversed.success ? [] : reversed.error.issues.map((i) => [i.path.join('.'), i.message])).toEqual([['from', 'from_after_to']]);
+    expect(pointsBalancesQuerySchema.safeParse({ from: '2026-02-30' }).success).toBe(false);
+  });
+
+  it('validates the points entries query: person and both days, at most 371 days', () => {
+    const personId = '0123456789abcdef01234567';
+    expect(pointsEntriesQuerySchema.safeParse({ personId, from: '2026-01-01', to: '2027-01-06' }).success).toBe(true);
+    const tooLarge = pointsEntriesQuerySchema.safeParse({ personId, from: '2026-01-01', to: '2027-01-07' });
+    expect(tooLarge.success ? [] : tooLarge.error.issues.map((i) => [i.path.join('.'), i.message])).toEqual([['to', 'range_too_large']]);
+    expect(pointsEntriesQuerySchema.safeParse({ personId, from: '2026-09-14' }).success).toBe(false);
+    expect(pointsEntriesQuerySchema.safeParse({ from: '2026-09-14', to: '2026-09-20' }).success).toBe(false);
   });
 });
 

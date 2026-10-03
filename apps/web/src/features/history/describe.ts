@@ -22,9 +22,9 @@ const isRecord = (value: unknown): value is Json =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 const str = (value: unknown): string | undefined => (typeof value === 'string' && value ? value : undefined);
 
-const DATE_FIELDS = new Set(['date', 'plannedDate', 'cycleAnchorDate']);
+const DATE_FIELDS = new Set(['date', 'plannedDate', 'cycleAnchorDate', 'weekStart']);
 const DATETIME_FIELDS = new Set(['completedAt', 'lastCompletedAt', 'at']);
-const USER_FIELDS = new Set(['defaultAssigneeId', 'assigneeId', 'completedBy']);
+const USER_FIELDS = new Set(['defaultAssigneeId', 'assigneeId', 'completedBy', 'personId']);
 
 function isMinutesPath(path: string): boolean {
   return (
@@ -68,6 +68,9 @@ export function entityName(entry: AuditEntry, names: NameLookup): string {
       return format('history.cycleName', { index: typeof after.index === 'number' ? after.index + 1 : '?' });
     case 'import':
       return t('history.entity.import');
+    case 'points':
+      // An update only lists what changed, so the title also travels in the meta.
+      return str(after.titleSnapshot) ?? str(before.titleSnapshot) ?? str(entry.meta?.titleSnapshot) ?? unknown;
   }
 }
 
@@ -178,6 +181,30 @@ export function describeEntry(entry: AuditEntry, names: NameLookup): string[] {
   const { before, after } = entry;
   const meta = entry.meta ?? {};
 
+  // A ledger entry reads as what the person gained or lost, not as a database change (ADR-0011).
+  if (entry.entity === 'points' && (entry.action === 'create' || entry.action === 'delete')) {
+    const values = entry.action === 'create' ? after : before;
+    return [
+      format(entry.action === 'create' ? 'history.action.pointsCreate' : 'history.action.pointsDelete', {
+        person: formatValue('personId', values.personId, names),
+        amount: typeof values.amount === 'number' ? values.amount : '?',
+        entity,
+      }),
+    ];
+  }
+
+  // A correction that moves a ledger entry to someone else reads as the points moving.
+  if (entry.entity === 'points' && entry.action === 'update' && typeof meta.amount === 'number' && 'personId' in before && 'personId' in after) {
+    return [
+      format('history.action.pointsMoved', {
+        amount: meta.amount,
+        entity,
+        from: formatValue('personId', before.personId, names),
+        to: formatValue('personId', after.personId, names),
+      }),
+    ];
+  }
+
   switch (entry.action) {
     case 'create':
       return [format('history.action.create', { actor, type: t(`history.entity.${entry.entity}` as MessageKey), entity })];
@@ -230,6 +257,8 @@ export function describeEntry(entry: AuditEntry, names: NameLookup): string[] {
       return [format('history.action.aiApply', { actor, entity })];
     case 'reset':
       return [format('history.action.reset', { actor })];
+    case 'recompute':
+      return [format('history.action.recompute', { actor })];
   }
 }
 

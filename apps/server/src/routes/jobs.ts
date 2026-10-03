@@ -8,7 +8,8 @@ import { runNightly } from '../jobs/nightly.ts';
 export const jobRoutes: FastifyPluginAsync = async (app) => {
   /** Runs the nightly generation on demand; audit entries carry the triggering profile. */
   app.post('/jobs/nightly', { preHandler: requirePlanner }, async (request) => {
-    return toApi(await runNightly(auditContext(request)));
+    // The points reconciliation is administrator-only (POST /api/points/recompute); only the scheduled run does it.
+    return toApi(await runNightly(auditContext(request), { reconcilePoints: false }));
   });
 
   /** Sends the morning message now. Writes nothing; delivery failures are counted, not thrown. */

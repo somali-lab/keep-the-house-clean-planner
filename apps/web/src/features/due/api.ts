@@ -20,6 +20,9 @@ export interface DueItemView {
   nextOccurrence: { id: string; date: string; assigneeId: string | null } | null;
 }
 
+/** Who performed today's occurrence of someone else (ADR-0011): a named person, or the actor taking it over. */
+export type DoneNowChoice = { completedBy: string } | { takeOver: true };
+
 export const dueKeys = { all: ['due'] as const };
 
 export function useDue() {
@@ -46,12 +49,15 @@ export function useDueActions() {
   });
 
   const doneNow = useMutation({
-    mutationFn: async (input: { item: DueItemView; todayKey: string }) => {
+    mutationFn: async (input: { item: DueItemView; todayKey: string; choice?: DoneNowChoice }) => {
       // Today's planned occurrence is completed in place; otherwise the extra execution is recorded
       // as done in one request. The key makes a retry of the same click idempotent (ADR-0009).
       if (input.item.nextOccurrence?.date === input.todayKey) {
         return (
-          await api.patch<OccurrenceView>(`/api/occurrences/${input.item.nextOccurrence.id}`, { action: 'complete' })
+          await api.patch<OccurrenceView>(`/api/occurrences/${input.item.nextOccurrence.id}`, {
+            action: 'complete',
+            ...input.choice,
+          })
         ).data;
       }
       // One key per intent, kept across retries and page changes until the request succeeded.

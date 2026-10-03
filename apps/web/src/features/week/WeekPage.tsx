@@ -42,7 +42,7 @@ import { format, t } from '../../i18n/nl.ts';
 import { Avatar } from '../../identity/Avatar.tsx';
 import { useProfile } from '../../identity/index.ts';
 import { PromoteBanner } from '../promote/PromoteBanner.tsx';
-import { CompletionChoiceDialog } from '../today/CompletionChoiceDialog.tsx';
+import { CompletionChoiceDialog, useAssigneeChoice } from '../today/CompletionChoiceDialog.tsx';
 import { occurrenceKeys, useOccurrenceAction, useOccurrences } from '../today/api.ts';
 import { addDaysKey, dayKeyInZone } from '../today/todayModel.ts';
 import {
@@ -114,6 +114,7 @@ export function WeekPage({ now }: { now?: Date }) {
   const [warnings, setWarnings] = useState<ApiWarning[]>([]);
   const [failed, setFailed] = useState(false);
   const [completionChoice, setCompletionChoice] = useState<OccurrenceView | null>(null);
+  const choiceAssignee = useAssigneeChoice(completionChoice?.assigneeId ?? null);
   const roomByTask = useMemo(() => {
     const roomNames = new Map((rooms.data ?? []).map((room) => [room._id, room.name]));
     return new Map((tasks.data ?? []).map((task) => [task._id, roomNames.get(task.roomId) ?? t('tasks.unknownRoom')]));
@@ -355,10 +356,8 @@ export function WeekPage({ now }: { now?: Date }) {
       {completionChoice?.assigneeId && (
         <CompletionChoiceDialog
           task={completionChoice.taskNameSnapshot}
-          assignee={
-            activeUsers.find((user) => user._id === completionChoice.assigneeId)?.name
-              ?? t('tasks.unknownUser')
-          }
+          assignee={choiceAssignee.name}
+          assigneeActive={choiceAssignee.active}
           open
           onOpenChange={(open) => {
             if (!open) setCompletionChoice(null);

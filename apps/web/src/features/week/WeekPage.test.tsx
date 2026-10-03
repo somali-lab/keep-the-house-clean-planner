@@ -25,7 +25,7 @@ const NOW = new Date('2026-09-16T08:00:00Z'); // Wednesday; week 14–20 Sep
 let db: OccurrenceView[];
 let nextWarnings: ApiWarning[] = [];
 
-function setup(settings = makeSettings()) {
+function setup(settings = makeSettings(), users = [ANNA, BRAM]) {
   storeProfile(ANNA._id);
   db = [
     makeOccurrence({ _id: 'o1', taskNameSnapshot: 'Badkamer', date: '2026-09-15', assigneeId: ANNA._id }),
@@ -57,7 +57,7 @@ function setup(settings = makeSettings()) {
     return { ...updated, warnings: nextWarnings };
   };
   return mockApi({
-    '/api/users': [ANNA, BRAM],
+    '/api/users': users,
     '/api/settings': settings,
     '/api/rooms': [makeRoom({ _id: 'r1', name: 'Woonkamer' })],
     '/api/tasks': [makeTask({ _id: 't1', name: 'Huishoudtaak', roomId: 'r1' })],
@@ -291,6 +291,18 @@ describe('WeekPage', () => {
     expect(await screen.findByRole('button', { name: 'Afwas ongedaan maken' })).toBeInTheDocument();
     expect(screen.getByText('Ramen')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Ramen ongedaan maken' })).not.toBeInTheDocument();
+  });
+
+  it('only offers to take the task over when its assignee is no longer active', async () => {
+    const fetchMock = setup(makeSettings(), [ANNA, { ...BRAM, active: false }]);
+    renderWithProviders(<WeekPage now={NOW} />);
+    fireEvent.change(await screen.findByLabelText('Filter op persoon'), { target: { value: 'all' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Afvinken: Stofzuigen' }));
+
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('Bram de Vries, die niet meer actief is');
+    expect(screen.queryByRole('button', { name: 'Namens Bram de Vries afvinken' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Ik heb de taak overgenomen' }));
+    await waitFor(() => expect(patchBodies(fetchMock, 'o2')).toEqual([{ action: 'complete', takeOver: true }]));
   });
 
   it("asks how to complete another person's task and can take it over", async () => {

@@ -10,6 +10,7 @@ export const auditEntitySchema = z.enum([
   'cycle',
   'room',
   'import',
+  'points',
 ]);
 export type AuditEntity = z.infer<typeof auditEntitySchema>;
 
@@ -25,6 +26,7 @@ export const auditActionSchema = z.enum([
   'activate',
   'ai-apply',
   'reset',
+  'recompute',
 ]);
 export type AuditAction = z.infer<typeof auditActionSchema>;
 

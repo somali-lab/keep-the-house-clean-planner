@@ -1,6 +1,6 @@
 import type { AuditEntry } from '@huishoudplanner/shared';
 import { describe, expect, it } from 'vitest';
-import { describeEntry, formatValue, SYSTEM_ACTOR_ID, type NameLookup } from './describe.ts';
+import { describeEntry, entityName, formatValue, SYSTEM_ACTOR_ID, type NameLookup } from './describe.ts';
 
 const ANNA = 'a00000000000000000000001';
 const BRAM = 'b00000000000000000000002';
@@ -140,6 +140,53 @@ describe('describeEntry', () => {
         names,
       ),
     ).toEqual(['Anna verplaatste Wastafel op 09-09-2026 van 08-09-2026 naar 09-09-2026']);
+  });
+});
+
+describe('describeEntry for the points ledger', () => {
+  const points = (overrides: Partial<AuditEntry>) =>
+    entry({ entity: 'points', entityId: 'pe1', meta: { occurrenceId: 'o1', reason: 'complete' }, ...overrides });
+
+  it('reads a ledger entry as what the person gained or lost, not who pressed the button', () => {
+    expect(
+      describeEntry(points({ actorId: ANNA, action: 'create', after: { personId: BRAM, amount: 3, titleSnapshot: 'Stofzuigen' } }), names),
+    ).toEqual(['Bram kreeg 3 punten voor Stofzuigen']);
+    expect(
+      describeEntry(points({ action: 'delete', before: { personId: BRAM, amount: 3, titleSnapshot: 'Stofzuigen' } }), names),
+    ).toEqual(['Bram verloor 3 punten voor Stofzuigen']);
+  });
+
+  it('shows a correction as before and after, with the person and the week resolved', () => {
+    expect(
+      describeEntry(points({ action: 'update', before: { personId: ANNA, weekStart: '2026-09-14' }, after: { personId: BRAM, weekStart: '2026-09-21' } }), names),
+    ).toEqual([
+      'Anna wijzigde persoon van onbekend: Anna → Bram',
+      'Anna wijzigde week van onbekend: 14-09-2026 → 21-09-2026',
+    ]);
+  });
+
+  it('reads a correction that moves the entry as points moving, with the title and amount from the meta', () => {
+    const moved = points({
+      action: 'update',
+      before: { personId: ANNA, weekStart: '2026-09-14' },
+      after: { personId: BRAM, weekStart: '2026-09-21' },
+      meta: { occurrenceId: 'o1', reason: 'correction', titleSnapshot: 'Stofzuigen', amount: 3 },
+    });
+    expect(describeEntry(moved, names)).toEqual(['3 punten voor Stofzuigen gingen van Anna naar Bram']);
+    expect(entityName(moved, names)).toBe('Stofzuigen');
+    // A date-only correction keeps the generic lines but names the execution.
+    expect(
+      describeEntry(
+        points({ action: 'update', before: { date: '2026-09-14' }, after: { date: '2026-09-15' }, meta: { occurrenceId: 'o1', reason: 'correction', titleSnapshot: 'Stofzuigen', amount: 3 } }),
+        names,
+      )[0],
+    ).toContain('Stofzuigen');
+  });
+
+  it('describes a recomputation of the ledger', () => {
+    expect(describeEntry(entry({ entity: 'points', action: 'recompute', actorId: SYSTEM_ACTOR_ID }), names)).toEqual([
+      'Systeem berekende de punten opnieuw',
+    ]);
   });
 });
 

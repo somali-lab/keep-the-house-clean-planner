@@ -2,12 +2,14 @@ import type {
   CompletionResponse,
   DeviationsResponse,
   IntervalsResponse,
+  PointsBalancesResponse,
+  PointsEntriesResponse,
   WorkloadResponse,
 } from '@huishoudplanner/shared';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { ANNA, BRAM, mockApi, storeProfile } from '../../test/fixtures.ts';
-import { makeRoom, makeTask, renderWithProviders } from '../../test/render.tsx';
+import { ANNA, BRAM, makeUser, mockApi, storeProfile } from '../../test/fixtures.ts';
+import { makeRoom, makeSettings, makeTask, renderWithProviders } from '../../test/render.tsx';
 import { StatsPage } from './StatsPage.tsx';
 
 const week = (
@@ -157,10 +159,11 @@ const DEVIATIONS: DeviationsResponse = {
   ],
 };
 
-function setup(workload: WorkloadResponse = WORKLOAD) {
+function setup(workload: WorkloadResponse = WORKLOAD, extraRoutes: Record<string, unknown> = {}) {
   storeProfile(ANNA._id);
   return mockApi({
     '/api/users': [ANNA, BRAM],
+    '/api/settings': makeSettings(),
     '/api/rooms': [
       makeRoom({ _id: 'r1', name: 'Badkamer' }),
       makeRoom({ _id: 'r2', name: 'Keuken' }),
@@ -182,6 +185,7 @@ function setup(workload: WorkloadResponse = WORKLOAD) {
       resetTasks: 2,
       deletedPastCycles: 1,
     },
+    ...extraRoutes,
   });
 }
 
@@ -418,5 +422,118 @@ describe('StatsPage', () => {
       ([url, init]) => String(url).startsWith('/api/stats') && (init as RequestInit | undefined)?.method === 'DELETE',
     );
     expect(deleteCall?.[0]).toBe('/api/stats?before=2026-09-21');
+  });
+});
+
+describe('StatsPage: points', () => {
+  const NOW = new Date('2026-09-16T08:00:00.000Z');
+  const FORMER = makeUser({ _id: 'c00000000000000000000003', name: 'Carla', active: false });
+  const BALANCES: PointsBalancesResponse = {
+    from: '2026-09-14',
+    to: '2026-09-20',
+    balances: [
+      { personId: ANNA._id, points: 8, executions: 3 },
+      { personId: BRAM._id, points: 0, executions: 0 },
+      { personId: FORMER._id, points: 4, executions: 1 },
+    ],
+  };
+  const entry = (id: string, personId: string, date: string, amount: number, title: string) => ({
+    _id: id,
+    key: `execution:${id}`,
+    kind: 'execution' as const,
+    personId,
+    amount,
+    date,
+    weekStart: '2026-09-14',
+    occurrenceId: id,
+    taskId: null,
+    titleSnapshot: title,
+    source: 'live' as const,
+    createdAt: '2026-09-16T08:00:00.000Z',
+    updatedAt: '2026-09-16T08:00:00.000Z',
+  });
+  const ENTRIES: Record<string, PointsEntriesResponse> = {
+    [ANNA._id]: {
+      entries: [
+        entry('e00000000000000000000001', ANNA._id, '2026-09-16', 5, 'Ramen lappen'),
+        entry('e00000000000000000000002', ANNA._id, '2026-09-14', 3, 'Stofzuigen'),
+      ],
+    },
+    [BRAM._id]: { entries: [] },
+    [FORMER._id]: { entries: [entry('e00000000000000000000003', FORMER._id, '2026-09-15', 4, 'Afwassen')] },
+  };
+  const pointsRoutes = (balances: PointsBalancesResponse = BALANCES) => ({
+    '/api/users': [ANNA, BRAM, FORMER],
+    '/api/points/balances': balances,
+    '/api/points/entries': (_init: RequestInit | undefined, url: string) =>
+      ENTRIES[new URL(url, 'http://x').searchParams.get('personId') ?? ''] ?? { entries: [] },
+  });
+  const pointsUrls = (fetchMock: ReturnType<typeof mockApi>) =>
+    fetchMock.mock.calls.map(([u]) => String(u)).filter((u) => u.startsWith('/api/points/'));
+
+  it('shows the balance of every person and the entries of the active profile for the selected period', async () => {
+    const fetchMock = setup(WORKLOAD, pointsRoutes());
+    renderWithProviders(<StatsPage now={NOW} />);
+    await selectStatsTab('Punten');
+    const heading = await screen.findByRole('heading', { name: 'Punten' });
+    const section = heading.closest('section')!;
+    expect(section).toHaveTextContent('14 september 2026 tot 20 september 2026');
+
+    const balances = await within(section).findByRole('table', { name: 'Punten per persoon' });
+    expect(within(balances).getAllByRole('row').slice(1).map((row) => row.textContent)).toEqual([
+      'Anna83',
+      'Bram de Vries00',
+      'Carla (inactief)41',
+    ]);
+    const entries = await within(section).findByRole('table', { name: 'Posten van Anna' });
+    expect(within(entries).getAllByRole('row').slice(1).map((row) => row.textContent)).toEqual([
+      '16 september 2026Ramen lappen+5',
+      '14 september 2026Stofzuigen+3',
+    ]);
+    expect(pointsUrls(fetchMock)).toEqual([
+      '/api/points/balances?from=2026-09-14&to=2026-09-20',
+      '/api/points/entries?personId=a00000000000000000000001&from=2026-09-14&to=2026-09-20',
+    ]);
+  });
+
+  it('shows the entries of another person, also of someone who is inactive', async () => {
+    setup(WORKLOAD, pointsRoutes());
+    renderWithProviders(<StatsPage now={NOW} />);
+    await selectStatsTab('Punten');
+    const picker = await screen.findByLabelText('Toon posten van');
+    fireEvent.change(picker, { target: { value: FORMER._id } });
+    const table = await screen.findByRole('table', { name: 'Posten van Carla' });
+    expect(within(table).getAllByRole('row').slice(1).map((row) => row.textContent)).toEqual(['15 september 2026Afwassen+4']);
+
+    fireEvent.change(picker, { target: { value: BRAM._id } });
+    expect(await screen.findByText('Bram de Vries heeft in deze periode geen punten verdiend.')).toBeInTheDocument();
+  });
+
+  it('follows the period control: the weeks and cycles aligned with the other reports', async () => {
+    const fetchMock = setup(WORKLOAD, pointsRoutes());
+    renderWithProviders(<StatsPage now={NOW} />);
+    await selectStatsTab('Punten');
+    await screen.findByRole('table', { name: 'Punten per persoon' });
+
+    fireEvent.change(screen.getByLabelText('Periode'), { target: { value: 'weeks:3' } });
+    await waitFor(() => expect(pointsUrls(fetchMock)).toContain('/api/points/balances?from=2026-08-31&to=2026-09-20'));
+    fireEvent.change(screen.getByLabelText('Periode'), { target: { value: 'cycles:2' } });
+    await waitFor(() => expect(pointsUrls(fetchMock)).toContain('/api/points/balances?from=2026-09-14&to=2026-10-11'));
+    await waitFor(() =>
+      expect(pointsUrls(fetchMock)).toContain(
+        '/api/points/entries?personId=a00000000000000000000001&from=2026-09-14&to=2026-10-11',
+      ),
+    );
+  });
+
+  it('says so when nobody earned points in the period', async () => {
+    setup(
+      WORKLOAD,
+      pointsRoutes({ from: '2026-09-14', to: '2026-09-20', balances: [{ personId: ANNA._id, points: 0, executions: 0 }] }),
+    );
+    renderWithProviders(<StatsPage now={NOW} />);
+    await selectStatsTab('Punten');
+    expect(await screen.findByText('In deze periode zijn nog geen punten verdiend.')).toBeInTheDocument();
+    expect(screen.queryByRole('table', { name: 'Punten per persoon' })).not.toBeInTheDocument();
   });
 });

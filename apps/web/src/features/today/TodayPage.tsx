@@ -15,7 +15,7 @@ import { useProfile } from '../../identity/index.ts';
 import { getActiveProfileId } from '../../identity/profileStore.ts';
 import { usePersistedFilter } from '../../hooks/usePersistedFilter.ts';
 import { PromoteBanner } from '../promote/PromoteBanner.tsx';
-import { CompletionChoiceDialog } from './CompletionChoiceDialog.tsx';
+import { CompletionChoiceDialog, useAssigneeChoice } from './CompletionChoiceDialog.tsx';
 import {
   occurrenceKeys,
   useOccurrenceAction,
@@ -66,6 +66,7 @@ export function TodayPage({ now }: { now?: Date }) {
   const [recordOpen, setRecordOpen] = useState(false);
   const [failed, setFailed] = useState(false);
   const [completionChoice, setCompletionChoice] = useState<OccurrenceView | null>(null);
+  const choiceAssignee = useAssigneeChoice(completionChoice?.assigneeId ?? null);
 
   useEffect(() => {
     if (!snackbar) return;
@@ -288,10 +289,8 @@ export function TodayPage({ now }: { now?: Date }) {
       {completionChoice?.assigneeId && (
         <CompletionChoiceDialog
           task={completionChoice.taskNameSnapshot}
-          assignee={
-            activeUsers.find((user) => user._id === completionChoice.assigneeId)?.name
-              ?? t('tasks.unknownUser')
-          }
+          assignee={choiceAssignee.name}
+          assigneeActive={choiceAssignee.active}
           open
           onOpenChange={(open) => {
             if (!open) setCompletionChoice(null);

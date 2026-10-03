@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { dayKeySchema, isoDateTimeSchema, objectIdSchema, timestampsSchema } from './common.ts';
+import { MAX_TASK_POINTS, MIN_TASK_POINTS } from '../points.ts';
 
 export const occurrenceStatusSchema = z.enum(['open', 'done', 'skipped']);
 export type OccurrenceStatus = z.infer<typeof occurrenceStatusSchema>;
@@ -33,6 +34,10 @@ export const occurrenceSchema = z
     recordedDone: z.boolean().optional(),
     /** Idempotency key of the creating request. Missing on older data means null. */
     requestId: z.string().nullable().optional(),
+    /** Points of this execution, fixed when it became done (ADR-0011). Null or missing means not yet snapshotted. */
+    pointsSnapshot: z.number().int().min(0).max(MAX_TASK_POINTS).nullable().optional(),
+    /** Points a one-off task was recorded with; used when it becomes done. Null or missing means the duration rule. */
+    pointsOverride: z.number().int().min(0).max(MAX_TASK_POINTS).nullable().optional(),
   })
   .extend(timestampsSchema.shape);
 export type Occurrence = z.infer<typeof occurrenceSchema>;
@@ -69,16 +74,24 @@ export const createOneOffOccurrenceInputSchema = z.object({
   assigneeId: objectIdSchema.nullable().optional(),
   /** Record the work as already done; only allowed for today. */
   done: z.boolean().optional(),
+  /** Points of this one-off task, 0 to the maximum; omitted means the default for the duration (ADR-0011). */
+  points: z.number().int().min(MIN_TASK_POINTS).max(MAX_TASK_POINTS).optional(),
   requestId: requestKeySchema.optional(),
 });
 export type CreateOneOffOccurrenceInput = z.infer<typeof createOneOffOccurrenceInputSchema>;
 
 export const patchOccurrenceInputSchema = z.discriminatedUnion('action', [
-  z.object({
-    action: z.literal('complete'),
-    completedBy: objectIdSchema.optional(),
-    takeOver: z.literal(true).optional(),
-  }),
+  z
+    .object({
+      action: z.literal('complete'),
+      completedBy: objectIdSchema.optional(),
+      takeOver: z.literal(true).optional(),
+    })
+    // Two choices at once make no sense: either the named person or the actor performed the work (ADR-0011).
+    .refine((input) => !(input.completedBy !== undefined && input.takeOver === true), {
+      path: ['completedBy'],
+      message: 'completion_choice_conflict',
+    }),
   z.object({ action: z.literal('uncomplete') }),
   z.object({
     action: z.literal('edit_completion'),

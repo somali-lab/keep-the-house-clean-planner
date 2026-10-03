@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { findActivePlan } from '../src/data/cyclePlans.ts';
 import { defaultMockResponders } from '../src/domain/ai/mockResponders.ts';
 import { MockProvider } from '../src/domain/ai/providers/mock.ts';
+import { COLLECTIONS } from '../src/data/db.ts';
 import { findOccurrences } from '../src/data/occurrences.ts';
 import type { UserDoc } from '../src/data/users.ts';
 import { captureWrites, expectAudited, expectWritesAudited, type ExpectedAudit } from './helpers/audit.ts';
@@ -37,6 +38,8 @@ async function occurrenceId(filter: Record<string, unknown>): Promise<string> {
 interface Scenario {
   route: string;
   audit: ExpectedAudit;
+  /** Sets the data up outside the captured request, for routes that only write when there is something to repair. */
+  prepare?(): Promise<void>;
   run(): Promise<LightMyRequestResponse>;
 }
 
@@ -255,6 +258,31 @@ const SCENARIOS: Scenario[] = [
     run: () => call('DELETE', '/api/stats'),
   },
   {
+    // Repairs drift: an entry without an occurrence is removed and the removal is audited once, as a summary.
+    route: 'POST /api/points/recompute',
+    audit: { entity: 'points', action: 'recompute', count: 1 },
+    prepare: async () => {
+      const now = new Date('2026-09-16T08:00:00.000Z');
+      // eslint-disable-next-line no-restricted-syntax -- creates drift (an entry without an occurrence) that only a reconciliation repairs
+      await t.db.collection(COLLECTIONS.pointEntries).insertOne({
+        _id: new ObjectId(),
+        key: `execution:${new ObjectId().toHexString()}`,
+        kind: 'execution',
+        personId: p1._id,
+        amount: 2,
+        date: now,
+        weekStart: now,
+        occurrenceId: null,
+        taskId: null,
+        titleSnapshot: 'Verdwaald',
+        source: 'live',
+        createdAt: now,
+        updatedAt: now,
+      });
+    },
+    run: () => call('POST', '/api/points/recompute'),
+  },
+  {
     // Last: re-imports the current export, so ids stay the same for the checks after it.
     route: 'POST /api/import/json',
     audit: { entity: 'import', action: 'create', count: 1 },
@@ -345,6 +373,7 @@ describe('audit coverage of write routes', () => {
 
   for (const scenario of SCENARIOS) {
     it(`${scenario.route} writes an audit entry for every write`, async () => {
+      await scenario.prepare?.();
       const { result } = await expectAudited(t, () => expectWritesAudited(t, scenario.run), scenario.audit);
       expect(result.result.statusCode, result.result.body).toBeLessThan(300);
       expect(result.writes.length).toBeGreaterThan(0);

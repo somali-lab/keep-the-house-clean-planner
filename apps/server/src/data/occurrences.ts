@@ -32,6 +32,10 @@ export interface OccurrenceDoc {
   recordedDone?: boolean;
   /** Client idempotency key of an ad-hoc creation; missing on older data means null. */
   requestId?: string | null;
+  /** Points of this execution, fixed when it became done (ADR-0011); null or missing means not yet snapshotted. */
+  pointsSnapshot?: number | null;
+  /** Points a one-off task was recorded with (ADR-0011); wins over the duration rule when it becomes done. Missing means none. */
+  pointsOverride?: number | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -101,6 +105,26 @@ export async function backfillOccurrenceRoomSnapshots(db: Db): Promise<number> {
         },
       };
     }),
+  );
+  return result.modifiedCount;
+}
+
+/** Every done occurrence; the points ledger is reconciled against these (ADR-0011). */
+export function findDoneOccurrences(db: Db): Promise<OccurrenceDoc[]> {
+  return occurrencesCollection(db).find({ status: 'done' }).toArray();
+}
+
+/**
+ * Writes missing points snapshots as a bulk migration: `updatedAt` stays and nothing is audited
+ * per occurrence, because the reconciliation records one summary. The filter keeps a snapshot
+ * that was written in the meantime.
+ */
+export async function setMissingPointsSnapshots(db: Db, snapshots: { id: ObjectId; points: number }[]): Promise<number> {
+  if (snapshots.length === 0) return 0;
+  const result = await occurrencesCollection(db).bulkWrite(
+    snapshots.map(({ id, points }) => ({
+      updateOne: { filter: { _id: id, status: 'done' as const, pointsSnapshot: null }, update: { $set: { pointsSnapshot: points } } },
+    })),
   );
   return result.modifiedCount;
 }

@@ -8,11 +8,21 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { useUsers } from '../../api/queries.ts';
 import { format, t } from '../../i18n/nl.ts';
+
+/** Name and activity of the assignee, also when the profile is no longer active (the server refuses to credit them). */
+export function useAssigneeChoice(assigneeId: string | null): { name: string; active: boolean } {
+  const users = useUsers();
+  const user = assigneeId ? users.data?.find((candidate) => candidate._id === assigneeId) : undefined;
+  return { name: user?.name ?? t('tasks.unknownUser'), active: user?.active === true };
+}
 
 interface CompletionChoiceDialogProps {
   task: string;
   assignee: string;
+  /** False when the assignee is no longer active: checking off for them is not offered. */
+  assigneeActive?: boolean;
   open: boolean;
   onOpenChange(open: boolean): void;
   onCompleteForAssignee(): void;
@@ -23,6 +33,7 @@ interface CompletionChoiceDialogProps {
 export function CompletionChoiceDialog({
   task,
   assignee,
+  assigneeActive = true,
   open,
   onOpenChange,
   onCompleteForAssignee,
@@ -34,14 +45,16 @@ export function CompletionChoiceDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>{format('completionChoice.title', { task })}</AlertDialogTitle>
           <AlertDialogDescription>
-            {format('completionChoice.description', { assignee })}
+            {format(assigneeActive ? 'completionChoice.description' : 'completionChoice.descriptionInactive', { assignee })}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter className="sm:flex-col">
           <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-          <AlertDialogAction variant="outline" onClick={onCompleteForAssignee}>
-            {format('completionChoice.forAssignee', { assignee })}
-          </AlertDialogAction>
+          {assigneeActive && (
+            <AlertDialogAction variant="outline" onClick={onCompleteForAssignee}>
+              {format('completionChoice.forAssignee', { assignee })}
+            </AlertDialogAction>
+          )}
           <AlertDialogAction onClick={onTakeOver}>
             {t('completionChoice.takeOver')}
           </AlertDialogAction>

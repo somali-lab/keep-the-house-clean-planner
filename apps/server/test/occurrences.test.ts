@@ -99,14 +99,18 @@ describe('GET /api/occurrences', () => {
 });
 
 describe('PATCH /api/occurrences/:id', () => {
-  it('credits the assignee when another actor checks off and maintains task.lastCompletedAt', async () => {
+  it('credits the assignee when another actor checks off for them and maintains task.lastCompletedAt', async () => {
     const occ = await find(weekly, '2026-09-21');
-    const { result, entries } = await expectAudited(t, () => patch(occ._id, { action: 'complete' }, p2), {
-      entity: 'occurrence',
-      action: 'complete',
-      source: 'ui',
-      count: 1,
-    });
+    const { result, entries } = await expectAudited(
+      t,
+      () => patch(occ._id, { action: 'complete', completedBy: p1._id.toHexString() }, p2),
+      {
+        entity: 'occurrence',
+        action: 'complete',
+        source: 'ui',
+        count: 1,
+      },
+    );
     expect(result.statusCode, result.body).toBe(200);
     expect(result.json()).toMatchObject({
       status: 'done',
@@ -185,7 +189,7 @@ describe('PATCH /api/occurrences/:id', () => {
       action: 'skip',
       count: 1,
     });
-    const done = await patch(occ._id, { action: 'complete' });
+    const done = await patch(occ._id, { action: 'complete', takeOver: true });
     expect(done.json()).toMatchObject({ status: 'done', statusBeforeCompletion: 'skipped' });
 
     const { result } = await expectAudited(t, () => patch(occ._id, { action: 'uncomplete' }), {

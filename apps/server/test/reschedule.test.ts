@@ -136,7 +136,7 @@ describe('PATCH reschedule', () => {
     expect(outside.json()).toMatchObject({ code: 'cycle_not_generated' });
     expect((await patch(id, { action: 'reschedule', date: '1-12-2026' })).statusCode).toBe(400);
 
-    await patch(id, { action: 'complete' });
+    await patch(id, { action: 'complete', takeOver: true });
     const done = await patch(id, { action: 'reschedule', date: '2026-09-15' });
     expect(done.statusCode).toBe(409);
     expect(done.json()).toMatchObject({ code: 'invalid_transition' });

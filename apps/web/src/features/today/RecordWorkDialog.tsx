@@ -1,4 +1,5 @@
 import type { OccurrenceView } from '@huishoudplanner/shared';
+import { MAX_TASK_POINTS, MIN_TASK_POINTS } from '@huishoudplanner/shared/points';
 import { CalendarPlus, CircleCheck, CirclePlus, ClipboardCheck, Sparkles, TriangleAlert } from 'lucide-react';
 import { useId, useMemo, useRef, useState, type FormEvent } from 'react';
 import { NativeSelect } from '@/components/NativeSelect';
@@ -15,6 +16,7 @@ import { useCheckOffPlanned, useOccurrences, useRecordWork } from './api.ts';
 import { shortDate } from './OccurrenceItem.tsx';
 import {
   buildRecordWork,
+  pointsFieldValue,
   type RecordWorkField,
   type RecordWorkForm,
   type RecordWorkKind,
@@ -72,9 +74,9 @@ const MODES: {
   { mode: 'plan', label: 'recordWork.mode.plan', hint: 'recordWork.mode.planHint' },
 ];
 
-const FIELD_ORDER: RecordWorkField[] = ['taskId', 'name', 'duration', 'date', 'doneBy'];
+const FIELD_ORDER: RecordWorkField[] = ['taskId', 'name', 'duration', 'points', 'date', 'doneBy'];
 /** Id suffix of the control of each field. */
-const FIELD_CONTROL: Record<RecordWorkField, string> = { taskId: 'task', name: 'name', duration: 'duration', date: 'date', doneBy: 'done-by' };
+const FIELD_CONTROL: Record<RecordWorkField, string> = { taskId: 'task', name: 'name', duration: 'duration', points: 'points', date: 'date', doneBy: 'done-by' };
 
 const PLANNED_CHOICES: {
   value: 'checkOff' | 'extra';
@@ -111,6 +113,7 @@ function RecordWorkFormBody({
     name: '',
     roomId: '',
     duration: '',
+    points: null,
     doneBy: '',
     date: todayKey,
     planFor: '',
@@ -378,6 +381,26 @@ function RecordWorkFormBody({
               />
               {fieldError('duration')}
             </div>
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor={`${idPrefix}-points`}>{t('recordWork.points')}</Label>
+            <Input
+              id={`${idPrefix}-points`}
+              className="h-11"
+              type="number"
+              inputMode="numeric"
+              min={MIN_TASK_POINTS}
+              max={MAX_TASK_POINTS}
+              step={1}
+              value={pointsFieldValue(form)}
+              onChange={(event) => set('points', event.target.value)}
+              aria-describedby={[`${idPrefix}-points-hint`, errors.points ? `${idPrefix}-points-error` : null].filter(Boolean).join(' ')}
+              aria-invalid={errors.points ? true : undefined}
+            />
+            <p id={`${idPrefix}-points-hint`} className="text-sm text-muted-foreground">
+              {t('recordWork.pointsHint')}
+            </p>
+            {fieldError('points')}
           </div>
         </>
       )}

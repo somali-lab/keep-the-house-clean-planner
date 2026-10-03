@@ -1,5 +1,5 @@
 import type { IntervalRow, StatsGroupBy, UserWorkload, WorkloadCycle } from '@huishoudplanner/shared';
-import { CalendarClock, CalendarX, ChartColumnBig, CircleCheck, Clock, Hourglass, ListChecks, Scale, Trash2, TrendingUp } from 'lucide-react';
+import { Award, CalendarClock, CalendarX, ChartColumnBig, CircleCheck, Clock, Hourglass, ListChecks, Scale, Trash2, TrendingUp } from 'lucide-react';
 import { useId, useState, type ReactNode } from 'react';
 import { EmptyState } from '@/components/EmptyState';
 import { useFilterReset } from '@/components/FilterReset';
@@ -17,6 +17,7 @@ import { useProfile } from '../../identity/index.ts';
 import { usePersistedFilter } from '../../hooks/usePersistedFilter.ts';
 import { useCompletion, useDeviations, useIntervals, useResetStatistics, useWorkload, type StatsPeriod } from './api.ts';
 import { statsTableClass } from './ChartFrame.tsx';
+import { PointsSection } from './PointsSection.tsx';
 import { FairnessBars, type FairnessRow } from './FairnessBars.tsx';
 import { formatDays, formatFactor, formatMinutes, formatNumber, formatPercent, MAX_SERIES } from './scale.ts';
 import { TrendLines, type TrendSeries } from './TrendLines.tsx';
@@ -91,7 +92,7 @@ function KpiCard({ icon, label, value, tint }: { icon: ReactNode; label: string;
   );
 }
 
-export function StatsPage() {
+export function StatsPage({ now }: { now?: Date } = {}) {
   const idPrefix = useId();
   const { profile } = useProfile();
   const profileId = profile?._id ?? null;
@@ -332,6 +333,7 @@ export function StatsPage() {
           <TabsTrigger aria-label={t('stats.completion')} className={panelTabsTriggerClass} value="completion"><CircleCheck aria-hidden="true" />{t('stats.tab.completion')}</TabsTrigger>
           <TabsTrigger aria-label={t('stats.intervals')} className={panelTabsTriggerClass} value="intervals"><CalendarClock aria-hidden="true" />{t('stats.tab.intervals')}</TabsTrigger>
           <TabsTrigger aria-label={t('stats.deviations')} className={panelTabsTriggerClass} value="deviations"><Clock aria-hidden="true" />{t('stats.tab.deviations')}</TabsTrigger>
+          <TabsTrigger aria-label={t('stats.points')} className={panelTabsTriggerClass} value="points"><Award aria-hidden="true" />{t('stats.tab.points')}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">
@@ -582,6 +584,10 @@ export function StatsPage() {
             </p>
           )}
         </section>
+        </TabsContent>
+
+        <TabsContent value="points">
+          <PointsSection period={period} {...(now ? { now } : {})} />
         </TabsContent>
       </Tabs>
     </section>

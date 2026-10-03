@@ -1,4 +1,5 @@
 import type { Interval, Room, User } from '@huishoudplanner/shared';
+import { MAX_TASK_POINTS, MIN_TASK_POINTS } from '@huishoudplanner/shared/points';
 import { useId, useState, type FormEvent, type ReactNode } from 'react';
 import { NativeSelect } from '@/components/NativeSelect';
 import { Button } from '@/components/ui/button';
@@ -7,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { t } from '../../i18n/nl.ts';
-import { validateTaskForm, type TaskFormErrors, type TaskFormValues } from './taskForm.ts';
+import { defaultPointsText, validateTaskForm, type TaskFormErrors, type TaskFormValues } from './taskForm.ts';
 
 export interface TaskFormProps {
   title: string;
@@ -143,6 +144,27 @@ export function TaskForm({
             onChange={(e) => set('durationMinutes')(e.target.value)}
           />
           {errorFor('durationMinutes')}
+        </Field>
+
+        <Field>
+          <Label htmlFor={`${idPrefix}-points`}>{t('tasks.field.points')}</Label>
+          <Input
+            {...fieldProps('points')}
+            type="number"
+            inputMode="numeric"
+            min={MIN_TASK_POINTS}
+            max={MAX_TASK_POINTS}
+            step={1}
+            className="h-10 bg-card"
+            aria-describedby={[`${idPrefix}-points-hint`, shown.points ? `${idPrefix}-points-error` : null].filter(Boolean).join(' ')}
+            value={values.points}
+            placeholder={defaultPointsText(values.durationMinutes)}
+            onChange={(e) => set('points')(e.target.value)}
+          />
+          <p id={`${idPrefix}-points-hint`} className="text-sm text-muted-foreground">
+            {t('tasks.field.pointsHint')}
+          </p>
+          {errorFor('points')}
         </Field>
 
         <Field>

@@ -15,6 +15,7 @@ import { z } from 'zod';
 import type { AuditContext } from '../audit/context.ts';
 import { record } from '../audit/record.ts';
 import { SETTINGS_ID } from '../data/settings.ts';
+import { reconcilePoints, reconcilePointsSafely } from './points.ts';
 import {
   readAllCollections,
   replaceAllCollections,
@@ -28,10 +29,11 @@ import { toApi } from '../http/serialize.ts';
 
 /**
  * Written by every export. Version 2 adds `recordedDone`, `requestId` and a nullable occurrence
- * `taskId` (ADR-0009). An import also accepts version 1, which is valid unchanged because the new
- * fields are optional.
+ * `taskId` (ADR-0009). Version 3 adds `tasks.points`, `occurrences.pointsSnapshot` and `occurrences.pointsOverride`; the points
+ * ledger itself is not exported but rebuilt on import (ADR-0011). An import also accepts versions 1
+ * and 2, which are valid unchanged because the new fields are optional; the rebuild fills them in.
  */
-export const EXPORT_SCHEMA_VERSION = 2;
+export const EXPORT_SCHEMA_VERSION = 3;
 
 /**
  * Export file. `collections` is MongoDB relaxed Extended JSON (`{"$oid"}`,
@@ -46,7 +48,7 @@ export interface ExportFile {
 const rawDocs = z.array(z.record(z.string(), z.unknown()));
 
 const envelopeSchema = z.object({
-  schemaVersion: z.union([z.literal(1), z.literal(2)]),
+  schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   exportedAt: isoDateTimeSchema,
   collections: z.object({
     settings: rawDocs,
@@ -188,15 +190,25 @@ export function parseImport(body: unknown): ParsedImport {
 
 export type ImportResult = ReplaceResult;
 
-/** Replaces all data (audit log merged) and records a single `import` audit entry. */
-export async function importData(ctx: AuditContext, parsed: ParsedImport): Promise<ImportResult> {
+/**
+ * Replaces all data (audit log merged), records a single `import` audit entry and rebuilds the
+ * points ledger from the imported occurrences (ADR-0011), which also fills in the points of an
+ * older file. The rebuild writes its own summary entry when it changed anything.
+ */
+export async function importData(
+  ctx: AuditContext,
+  parsed: ParsedImport,
+  reconcile: typeof reconcilePoints = reconcilePoints,
+): Promise<ImportResult> {
   const result = await replaceAllCollections(ctx.db, parsed.docs);
   await record(ctx, {
     entity: 'import',
     entityId: new ObjectId(),
     action: 'create',
-    after: { ...result.replaced, auditAdded: result.auditAdded },
+    after: { ...result.replaced, auditAdded: result.auditAdded, removedPointEntries: result.removedPointEntries },
     meta: { mode: 'replace', schemaVersion: parsed.schemaVersion, exportedAt: parsed.exportedAt },
   });
+  // The data is already replaced and audited: a failing rebuild is logged, and the nightly run repeats it.
+  await reconcilePointsSafely(ctx, 'import', reconcile);
   return result;
 }

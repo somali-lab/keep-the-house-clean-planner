@@ -13,6 +13,7 @@ import { useSettings } from '../../api/queries.ts';
 import { format, t } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
 import { shortDate } from '../today/OccurrenceItem.tsx';
+import { CompletionChoiceDialog, useAssigneeChoice } from '../today/CompletionChoiceDialog.tsx';
 import { RecordWorkDialog } from '../today/RecordWorkDialog.tsx';
 import { dayKeyInZone } from '../today/todayModel.ts';
 import { useDue, useDueActions, type DueItemView } from './api.ts';
@@ -30,13 +31,16 @@ export function spokenDate(dayKey: string): string {
 export function DuePage({ now }: { now?: Date }) {
   const settings = useSettings();
   const due = useDue();
-  const { activeUsers } = useProfile();
+  const { activeUsers, profile } = useProfile();
   const { plan, doneNow } = useDueActions();
   const [planning, setPlanning] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   // The task an extra execution is being recorded for, and the confirmation of the one that was just recorded.
   const [extraFor, setExtraFor] = useState<string | null>(null);
   const [recorded, setRecorded] = useState<string | null>(null);
+  // Today's planned occurrence of someone else: "Done now" first asks who performed it (ADR-0011).
+  const [choiceFor, setChoiceFor] = useState<DueItemView | null>(null);
+  const assigneeChoice = useAssigneeChoice(choiceFor?.nextOccurrence?.assigneeId ?? null);
 
   if (settings.isPending || due.isPending)
     return (
@@ -54,6 +58,16 @@ export function DuePage({ now }: { now?: Date }) {
   const todayKey = dayKeyInZone(now ?? new Date(), settings.data.timezone);
   const items = due.data.filter((item) => item.state !== 'ok');
   const onError = () => setFailed(true);
+  const requestDoneNow = (item: DueItemView) => {
+    const planned = item.nextOccurrence;
+    if (planned?.date === todayKey && planned.assigneeId && planned.assigneeId !== profile?._id) {
+      setChoiceFor(item);
+      return;
+    }
+    setFailed(false);
+    doneNow.mutate({ item, todayKey }, { onError });
+  };
+  const choiceAssignee = choiceFor?.nextOccurrence?.assigneeId ?? null;
 
   return (
     <section className="flex flex-col gap-5">
@@ -101,13 +115,32 @@ export function DuePage({ now }: { now?: Date }) {
                   { onSuccess: () => setPlanning(null), onError },
                 );
               }}
-              onDoneNow={() => {
-                setFailed(false);
-                doneNow.mutate({ item, todayKey }, { onError });
-              }}
+              onDoneNow={() => requestDoneNow(item)}
             />
           ))}
         </ol>
+      )}
+
+      {choiceFor && choiceAssignee && (
+        <CompletionChoiceDialog
+          task={choiceFor.taskName}
+          assignee={assigneeChoice.name}
+          assigneeActive={assigneeChoice.active}
+          open
+          onOpenChange={(open) => {
+            if (!open) setChoiceFor(null);
+          }}
+          onCompleteForAssignee={() => {
+            setFailed(false);
+            doneNow.mutate({ item: choiceFor, todayKey, choice: { completedBy: choiceAssignee } }, { onError });
+            setChoiceFor(null);
+          }}
+          onTakeOver={() => {
+            setFailed(false);
+            doneNow.mutate({ item: choiceFor, todayKey, choice: { takeOver: true } }, { onError });
+            setChoiceFor(null);
+          }}
+        />
       )}
 
       <RecordWorkDialog
