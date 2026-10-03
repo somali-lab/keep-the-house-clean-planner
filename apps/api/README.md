@@ -7,6 +7,7 @@ cd apps/api
 dotnet restore
 dotnet build      # warnings are errors
 dotnet test       # xunit.v3 on Microsoft Testing Platform, all four test projects
+# Integration.Tests starts a mongo:8 container (Testcontainers): Docker must be running.
 ```
 
 The SDK is pinned in `global.json` (10.0.x). Package versions live only in `Directory.Packages.props`; the version number comes from the repository-root `version.txt`.
@@ -20,3 +21,9 @@ The SDK is pinned in `global.json` (10.0.x). Package versions live only in `Dire
 - **Build rules (what a project references):** a type of a package can live in a namespace that does not name it (`AddRouting()`), so each src project's csproj and restore result are checked against an allow-list: MongoDB packages only in `Adapters.Mongo`, QuestPDF only in `Adapters.Pdf`, ASP.NET Core packages, framework reference and the Web SDK only in `Adapters.Http` and `Host`, `Microsoft.Extensions.AI*` only in `Adapters.Ai`, Domain only `OneOf`.
 
 Every rule is proven three ways: it passes on the shipped assemblies, it passes with positive results on a conforming layout, and it fails on deliberately violating types (or csproj text). The violating and conforming types live in `fixtures/Huishoudplanner.Architecture.Tests.Fixtures` (never shipped, only referenced by the architecture tests). Adding a rule means adding a violating type there and an entry in `ArchitectureRuleTests`, `IlRules` or `BuildRules`.
+
+## Configuration
+
+All configuration comes from environment variables, listed in [requirements section 9](../../docs/huishoudplanner-requirements.md). They are bound to `AppOptions` (`src/Huishoudplanner.Host/Configuration`) through `IOptions<AppOptions>` and validated when the host starts: an invalid configuration refuses to start and the message names the offending variables without ever echoing their values. An empty variable counts as unset.
+
+Two variables were renamed for .NET: `NODE_ENV` is now `ASPNETCORE_ENVIRONMENT` and `LOG_LEVEL` is now `Logging__LogLevel__Default`. The old names still work as aliases (the new name wins when both are set; for the environment the order is `ASPNETCORE_ENVIRONMENT`, `DOTNET_ENVIRONMENT`, `NODE_ENV`) until the switch from `apps/server`.

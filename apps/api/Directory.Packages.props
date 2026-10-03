@@ -7,10 +7,10 @@
 
   <ItemGroup Label="Production">
     <PackageVersion Include="OneOf" Version="3.0.271" />
+    <PackageVersion Include="MongoDB.Driver" Version="3.12.0" />
   </ItemGroup>
 
   <ItemGroup Label="Architecture fixtures (deliberately violating types, never shipped)">
-    <PackageVersion Include="MongoDB.Driver" Version="3.12.0" />
     <PackageVersion Include="QuestPDF" Version="2026.9.1" />
     <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.10.1" />
   </ItemGroup>
