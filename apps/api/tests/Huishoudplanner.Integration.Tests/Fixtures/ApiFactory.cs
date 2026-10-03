@@ -1,4 +1,5 @@
 
+using Huishoudplanner.Adapters.Mongo;
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Ports.Driven;
 using Huishoudplanner.Host.Startup;
@@ -99,6 +100,14 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     public ApiFactory WithoutSeeding()
     {
         skipSeeds = true;
+        return this;
+    }
+
+    /// <summary>Watches every write command of the application's MongoDB client (see <see cref="WriteCapture"/>); the production client is untouched without it.</summary>
+    public ApiFactory WithWriteCapture(WriteCapture capture)
+    {
+        ArgumentNullException.ThrowIfNull(capture);
+        overrides.Add(services => services.AddSingleton<IMongoClientSettingsCustomizer>(new WriteCaptureCustomizer(capture)));
         return this;
     }
 
