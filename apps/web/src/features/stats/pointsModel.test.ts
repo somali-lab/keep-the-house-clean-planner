@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bonusLabel, bonusLabelOfKey, pointsRange } from './pointsModel.ts';
+import { bonusLabel, bonusLabelOfKey, buildRedemption, canUndoRedemption, parseWholePoints, pointsRange, redemptionCents } from './pointsModel.ts';
 
 const ANCHOR = '2026-09-14';
 
@@ -74,5 +74,85 @@ describe('bonusLabelOfKey', () => {
     expect(bonusLabelOfKey(`execution:${person}`)).toBeNull();
     expect(bonusLabelOfKey('bonus_week_done:x')).toBeNull();
     expect(bonusLabelOfKey(`bonus_week_done:${person}:soon`)).toBeNull();
+  });
+});
+
+describe('parseWholePoints', () => {
+  it.each([
+    ['4', 4],
+    [' 12 ', 12],
+    ['0', 0],
+    ['', null],
+    ['-1', null],
+    ['1.5', null],
+    ['1e3', null],
+    ['abc', null],
+    ['1234567890', null],
+  ])('%j gives %s', (text, expected) => {
+    expect(parseWholePoints(text)).toBe(expected);
+  });
+});
+
+describe('buildRedemption', () => {
+  it('accepts 1 up to the balance and trims the note', () => {
+    expect(buildRedemption({ points: '1', note: '' }, 10)).toEqual({ ok: true, points: 1, note: '' });
+    expect(buildRedemption({ points: '10', note: '  Pizza  ' }, 10)).toEqual({ ok: true, points: 10, note: 'Pizza' });
+  });
+
+  it('refuses nothing, zero, fractions and text as invalid points', () => {
+    for (const points of ['', '0', '1.5', '-2', 'x']) {
+      expect(buildRedemption({ points, note: '' }, 10)).toEqual({ ok: false, errors: { points: 'redeem.error.points' } });
+    }
+  });
+
+  it('refuses more than the balance, also with a balance of 0', () => {
+    expect(buildRedemption({ points: '11', note: '' }, 10)).toEqual({ ok: false, errors: { points: 'redeem.error.balance' } });
+    expect(buildRedemption({ points: '1', note: '' }, 0)).toEqual({ ok: false, errors: { points: 'redeem.error.balance' } });
+  });
+
+  it('allows a note of 200 characters and refuses one of 201, counted after trimming', () => {
+    expect(buildRedemption({ points: '1', note: 'x'.repeat(200) }, 5).ok).toBe(true);
+    expect(buildRedemption({ points: '1', note: ` ${'x'.repeat(200)} ` }, 5).ok).toBe(true);
+    expect(buildRedemption({ points: '1', note: 'x'.repeat(201) }, 5)).toEqual({ ok: false, errors: { note: 'redeem.error.note' } });
+  });
+
+  it('reports every problem at once', () => {
+    expect(buildRedemption({ points: '99', note: 'x'.repeat(201) }, 5)).toEqual({
+      ok: false,
+      errors: { points: 'redeem.error.balance', note: 'redeem.error.note' },
+    });
+  });
+});
+
+describe('redemptionCents', () => {
+  it('multiplies whole points with the cents per point', () => {
+    expect(redemptionCents('4', 25)).toBe(100);
+    expect(redemptionCents(' 7 ', 10_000)).toBe(70_000);
+  });
+
+  it('is null for an invalid amount and while a point is worth nothing', () => {
+    expect(redemptionCents('', 25)).toBeNull();
+    expect(redemptionCents('0', 25)).toBeNull();
+    expect(redemptionCents('1.5', 25)).toBeNull();
+    expect(redemptionCents('4', 0)).toBeNull();
+  });
+});
+
+describe('canUndoRedemption', () => {
+  const entry = { kind: 'redemption', personId: 'p1', date: '2026-09-16' };
+  it('lets the owner undo on the day it was booked only', () => {
+    expect(canUndoRedemption(entry, { _id: 'p1', role: 'member' }, '2026-09-16')).toBe(true);
+    expect(canUndoRedemption(entry, { _id: 'p1', role: 'member' }, '2026-09-17')).toBe(false);
+  });
+
+  it('refuses another member, and lets an administrator undo any time', () => {
+    expect(canUndoRedemption(entry, { _id: 'p2', role: 'member' }, '2026-09-16')).toBe(false);
+    expect(canUndoRedemption(entry, { _id: 'p2', role: 'planner' }, '2026-09-16')).toBe(false);
+    expect(canUndoRedemption(entry, { _id: 'p2', role: 'admin' }, '2027-01-01')).toBe(true);
+  });
+
+  it('is false without a profile and for entries that are no redemption', () => {
+    expect(canUndoRedemption(entry, null, '2026-09-16')).toBe(false);
+    expect(canUndoRedemption({ ...entry, kind: 'execution' }, { _id: 'p2', role: 'admin' }, '2026-09-16')).toBe(false);
   });
 });

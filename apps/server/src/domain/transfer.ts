@@ -1,10 +1,15 @@
 import {
   auditEntrySchema,
+  centsPerPointSchema,
+  currencyCodeSchema,
   cyclePlanSchema,
   cycleSchema,
   isoDateTimeSchema,
+  MAX_REDEMPTION_NOTE_LENGTH,
   objectIdSchema,
   occurrenceSchema,
+  pointEntrySourceSchema,
+  requestKeySchema,
   roomSchema,
   settingsSchema,
   taskSchema,
@@ -15,6 +20,7 @@ import { BSON, ObjectId, type Db, type Document } from 'mongodb';
 import { z } from 'zod';
 import type { AuditContext } from '../audit/context.ts';
 import { record } from '../audit/record.ts';
+import { countRedemptions } from '../data/points.ts';
 import { SETTINGS_ID } from '../data/settings.ts';
 import { reconcilePoints, reconcilePointsSafely } from './points.ts';
 import {
@@ -34,8 +40,11 @@ import { toApi } from '../http/serialize.ts';
  * ledger itself is not exported but rebuilt on import (ADR-0011). Version 4 adds the bonus schedule
  * to the settings (ADR-0012); a file without it rebuilds without bonuses. An import also accepts
  * versions 1 to 3, which are valid unchanged because the new fields are optional; the rebuild fills them in.
+ * Version 5 adds the redemptions, in `collections.pointEntries`: they are booked, so unlike the derived
+ * entries they cannot be rebuilt (ADR-0013). Settings gain `currencyCode` and `centsPerPoint`. Files of
+ * versions 1 to 4 have no redemptions and import without any.
  */
-export const EXPORT_SCHEMA_VERSION = 4;
+export const EXPORT_SCHEMA_VERSION = 5;
 
 /**
  * Export file. `collections` is MongoDB relaxed Extended JSON (`{"$oid"}`,
@@ -49,19 +58,51 @@ export interface ExportFile {
 
 const rawDocs = z.array(z.record(z.string(), z.unknown()));
 
-const envelopeSchema = z.object({
-  schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
-  exportedAt: isoDateTimeSchema,
-  collections: z.object({
-    settings: rawDocs,
-    users: rawDocs,
-    rooms: rawDocs,
-    tasks: rawDocs,
-    cyclePlans: rawDocs,
-    cycles: rawDocs,
-    occurrences: rawDocs,
-    auditLog: rawDocs,
-  }),
+const envelopeSchema = z
+  .object({
+    schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
+    exportedAt: isoDateTimeSchema,
+    collections: z.object({
+      settings: rawDocs,
+      users: rawDocs,
+      rooms: rawDocs,
+      tasks: rawDocs,
+      cyclePlans: rawDocs,
+      cycles: rawDocs,
+      occurrences: rawDocs,
+      // Only from version 5; an older file has no booked entries.
+      pointEntries: rawDocs.optional(),
+      auditLog: rawDocs,
+    }),
+  })
+  .superRefine((envelope, ctx) => {
+    // A version 5 file without its redemptions would silently drop them on import.
+    if (envelope.schemaVersion >= 5 && envelope.collections.pointEntries === undefined) {
+      ctx.addIssue({ code: 'custom', path: ['collections', 'pointEntries'], message: 'required' });
+    }
+  });
+
+/** A redemption in API form (ADR-0013): the only kind of ledger entry that travels in an export. */
+const redemptionDocSchema = z.object({
+  _id: objectIdSchema,
+  key: z.string().regex(/^redemption:[0-9a-f]{24}$/, 'invalid_redemption_key'),
+  kind: z.literal('redemption'),
+  personId: objectIdSchema,
+  amount: z.number().int().max(-1),
+  date: isoDateTimeSchema,
+  weekStart: isoDateTimeSchema,
+  periodStart: z.null().optional(),
+  occurrenceId: z.null(),
+  taskId: z.null(),
+  titleSnapshot: z.string(),
+  source: pointEntrySourceSchema,
+  note: z.string().max(MAX_REDEMPTION_NOTE_LENGTH).nullable(),
+  centsPerPointSnapshot: centsPerPointSchema,
+  // Missing in a file from before the currency was kept with a booking; the household currency then applies.
+  currencyCodeSnapshot: currencyCodeSchema.optional(),
+  requestId: requestKeySchema.nullable(),
+  createdAt: isoDateTimeSchema,
+  updatedAt: isoDateTimeSchema,
 });
 
 /** Shape checks on the API form of each stored document (ObjectId → hex, Date → ISO). */
@@ -74,6 +115,7 @@ const DOC_SCHEMAS: Record<TransferCollection, z.ZodType<Record<string, unknown>>
   cycles: cycleSchema,
   // Stored as Dates at local midnight; the API shows them as day keys.
   occurrences: occurrenceSchema.extend({ date: isoDateTimeSchema, plannedDate: isoDateTimeSchema }),
+  pointEntries: redemptionDocSchema,
   auditLog: auditEntrySchema,
 };
 
@@ -90,6 +132,7 @@ const TYPED_FIELDS: Record<TransferCollection, { ids: string[]; dates: string[] 
     ids: ['taskId', 'cycleId', 'planId', 'assigneeId', 'periodOwnerId', 'completedBy'],
     dates: ['date', 'plannedDate', 'completedAt', ...TIMESTAMPS],
   },
+  pointEntries: { ids: ['personId', 'occurrenceId', 'taskId'], dates: ['date', 'weekStart', ...TIMESTAMPS] },
   auditLog: { ids: ['actorId', 'entityId'], dates: ['at'] },
 };
 
@@ -135,6 +178,29 @@ function duplicateKeyIssues(occurrences: Document[]): FieldIssue[] {
       if (slots.has(key)) issues.push({ field: `${path}.plannedDate`, message: 'duplicate_slot' });
       slots.add(key);
     }
+    if (typeof doc.requestId === 'string') {
+      if (requestIds.has(doc.requestId)) issues.push({ field: `${path}.requestId`, message: 'duplicate_request_id' });
+      requestIds.add(doc.requestId);
+    }
+  });
+  return issues;
+}
+
+/**
+ * Redemptions that cannot be put back: one for a person who is not in the file, or one that would
+ * violate a unique index (ledger key, requestId). Replacing the data deletes first and inserts after,
+ * so such a file has to be refused before anything is written.
+ */
+function redemptionIssues(redemptions: Document[], users: Document[]): FieldIssue[] {
+  const issues: FieldIssue[] = [];
+  const people = new Set(users.map((user) => String(user._id)));
+  const keys = new Set<string>();
+  const requestIds = new Set<string>();
+  redemptions.forEach((doc, i) => {
+    const path = `collections.pointEntries.${i}`;
+    if (!people.has(String(doc.personId))) issues.push({ field: `${path}.personId`, message: 'unknown_user' });
+    if (keys.has(doc.key)) issues.push({ field: `${path}.key`, message: 'duplicate_key' });
+    keys.add(doc.key);
     if (typeof doc.requestId === 'string') {
       if (requestIds.has(doc.requestId)) issues.push({ field: `${path}.requestId`, message: 'duplicate_request_id' });
       requestIds.add(doc.requestId);
@@ -190,7 +256,10 @@ export function parseImport(body: unknown, now: Date = new Date()): ParsedImport
   const envelope = parseOrThrow(envelopeSchema, body);
   let deserialized: Record<TransferCollection, Document[]>;
   try {
-    deserialized = BSON.EJSON.deserialize(envelope.collections, { relaxed: true }) as Record<TransferCollection, Document[]>;
+    deserialized = BSON.EJSON.deserialize({ ...envelope.collections, pointEntries: envelope.collections.pointEntries ?? [] }, { relaxed: true }) as Record<
+      TransferCollection,
+      Document[]
+    >;
   } catch {
     throw new HttpError(400, 'validation_error', 'Invalid extended JSON', [{ field: 'collections', message: 'invalid_extended_json' }]);
   }
@@ -220,7 +289,7 @@ export function parseImport(body: unknown, now: Date = new Date()): ParsedImport
   }
   issues.push(...bonusScheduleIssues(docs.settings[0], now));
   // The keys are built from typed values, so check them only once every document has the right types.
-  if (issues.length === 0) issues.push(...duplicateKeyIssues(docs.occurrences));
+  if (issues.length === 0) issues.push(...duplicateKeyIssues(docs.occurrences), ...redemptionIssues(docs.pointEntries, docs.users));
   if (issues.length > 0) throw new HttpError(400, 'validation_error', 'Invalid import file', issues);
   return { schemaVersion: envelope.schemaVersion, exportedAt: envelope.exportedAt, docs };
 }
@@ -228,9 +297,18 @@ export function parseImport(body: unknown, now: Date = new Date()): ParsedImport
 export type ImportResult = ReplaceResult;
 
 /**
+ * The redemptions an import would remove without bringing any back: a file of version 4 or older has none
+ * (ADR-0013). Zero for a version 5 file, which carries its own redemptions and replaces them like any other collection.
+ */
+export async function redemptionsLostByImport(db: Db, parsed: ParsedImport): Promise<number> {
+  return parsed.schemaVersion < 5 ? countRedemptions(db) : 0;
+}
+
+/**
  * Replaces all data (audit log merged), records a single `import` audit entry and rebuilds the
- * points ledger from the imported occurrences (ADR-0011), which also fills in the points of an
- * older file. The rebuild writes its own summary entry when it changed anything.
+ * derived points ledger from the imported occurrences (ADR-0011), which also fills in the points of an
+ * older file; the imported redemptions are kept (ADR-0013). The rebuild writes its own summary entry
+ * when it changed anything.
  */
 export async function importData(
   ctx: AuditContext,
@@ -242,7 +320,12 @@ export async function importData(
     entity: 'import',
     entityId: new ObjectId(),
     action: 'create',
-    after: { ...result.replaced, auditAdded: result.auditAdded, removedPointEntries: result.removedPointEntries },
+    after: {
+      ...result.replaced,
+      auditAdded: result.auditAdded,
+      removedPointEntries: result.removedPointEntries,
+      removedRedemptions: result.removedRedemptions,
+    },
     meta: { mode: 'replace', schemaVersion: parsed.schemaVersion, exportedAt: parsed.exportedAt },
   });
   // The data is already replaced and audited: a failing rebuild is logged, and the nightly run repeats it.

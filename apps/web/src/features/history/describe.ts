@@ -215,6 +215,22 @@ export function describeEntry(entry: AuditEntry, names: NameLookup): string[] {
   const { before, after } = entry;
   const meta = entry.meta ?? {};
 
+  // A redemption reads as points that were exchanged, with the note and who booked it (ADR-0013).
+  if (entry.entity === 'points' && (entry.action === 'create' || entry.action === 'delete')) {
+    const values = entry.action === 'create' ? after : before;
+    if (values.kind === 'redemption') {
+      const amount = typeof values.amount === 'number' ? Math.abs(values.amount) : '?';
+      const person = formatValue('personId', values.personId, names);
+      const bookedForSelf = values.personId === entry.actorId;
+      if (entry.action === 'delete') return [format('history.action.redemptionUndo', { actor, amount, person })];
+      const line = bookedForSelf
+        ? format('history.action.redemptionCreateSelf', { person, amount })
+        : format('history.action.redemptionCreate', { actor, amount, person });
+      const note = str(values.note);
+      return [note ? format('history.action.redemptionNote', { line, note }) : line];
+    }
+  }
+
   // A ledger entry reads as what the person gained or lost, not as a database change (ADR-0011).
   if (entry.entity === 'points' && (entry.action === 'create' || entry.action === 'delete')) {
     const values = entry.action === 'create' ? after : before;

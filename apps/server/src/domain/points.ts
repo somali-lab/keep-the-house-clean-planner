@@ -1,9 +1,11 @@
 import {
   addDays,
+  DEFAULT_CURRENCY_CODE,
   defaultPointsForDuration,
   expectedBonusEntries,
   fromDayKey,
   mondayOf,
+  pointsToCents,
   toDayKey,
   MAX_POINTS_CORRECTIONS,
   type BonusOccurrence,
@@ -13,6 +15,7 @@ import {
   type PointsBalancesResponse,
   type PointsBonusChange,
   type PointsCorrection,
+  type PointEntryView,
   type PointsEntriesQuery,
   type PointsEntriesResponse,
   type PointsRecomputeResult,
@@ -97,12 +100,21 @@ export type SyncOutcome = 'created' | 'updated' | 'deleted' | 'unchanged';
  * creates, updates or deletes that one entry through the data layer, with one audit entry per
  * real change and nothing on a no-op. The occurrence may be gone (retract, delete), in which
  * case any entry is removed. Run it after every successful write that can change an execution.
+ *
+ * It runs in the same per-database queue as the reconciliation and the redemption bookings, so the
+ * read-compare-write of one sync never interleaves with a reconciliation or a booking (ADR-0013). It reads
+ * the occurrence inside the queue, so it always writes what is true at that moment. The reconciliation and
+ * the booking never call it from inside the queue, which would wait for itself; keep it that way.
  */
-export async function syncExecutionPoints(
+export function syncExecutionPoints(
   ctx: AuditContext,
   occurrenceId: ObjectId,
   reason: PointsSyncReason,
 ): Promise<SyncOutcome> {
+  return exclusively(ctx.db, () => syncNow(ctx, occurrenceId, reason));
+}
+
+async function syncNow(ctx: AuditContext, occurrenceId: ObjectId, reason: PointsSyncReason): Promise<SyncOutcome> {
   const settings = await getSettings(ctx.db);
   if (!settings) return 'unchanged';
   const occurrence = await findOccurrenceById(ctx.db, occurrenceId);
@@ -253,7 +265,8 @@ async function reconcileBonuses(
 /** Reconciliations never overlap in this process: a second run waits for the first one (ADR-0005: one process). */
 const reconcileQueues = new Map<string, Promise<unknown>>();
 
-function exclusively<T>(db: Db, run: () => Promise<T>): Promise<T> {
+/** Also serialises the redemption bookings, so the balance check and the insert of two bookings never interleave (ADR-0013). */
+export function exclusively<T>(db: Db, run: () => Promise<T>): Promise<T> {
   const queue = reconcileQueues.get(db.databaseName) ?? Promise.resolve();
   const next = queue.then(run, run);
   const tail = next.catch(() => undefined);
@@ -421,6 +434,7 @@ async function reconcileNow(ctx: AuditContext, trigger: PointsRecomputeTrigger):
 export async function pointsBalances(db: Db, query: PointsBalancesQuery): Promise<PointsBalancesResponse> {
   const settings = await getSettings(db);
   if (!settings) throw new HttpError(500, 'settings_missing');
+  const centsPerPoint = settings.centsPerPoint ?? 0;
   const totals = new Map(
     (
       await sumPointEntries(db, {
@@ -434,14 +448,48 @@ export async function pointsBalances(db: Db, query: PointsBalancesQuery): Promis
     .filter((user) => user.active || totals.has(user._id.toHexString()))
     .map((user) => {
       const total = totals.get(user._id.toHexString());
+      const points = total?.points ?? 0;
+      const redeemed = total?.redeemed ?? 0;
+      const earned = points + redeemed;
       return {
         personId: user._id.toHexString(),
-        points: total?.points ?? 0,
+        points,
+        earned,
+        redeemed,
+        // Money at the factor in force now, so earned minus redeemed is always the balance in money (ADR-0013).
+        money:
+          centsPerPoint > 0
+            ? {
+                earned: pointsToCents(earned, centsPerPoint),
+                redeemed: pointsToCents(redeemed, centsPerPoint),
+                balance: pointsToCents(points, centsPerPoint),
+              }
+            : null,
         executions: total?.executions ?? 0,
         bonusPoints: total?.bonusPoints ?? 0,
       };
     });
-  return { from: query.from ?? null, to: query.to ?? null, balances };
+  return {
+    from: query.from ?? null,
+    to: query.to ?? null,
+    currencyCode: settings.currencyCode ?? DEFAULT_CURRENCY_CODE,
+    centsPerPoint,
+    balances,
+  };
+}
+
+/** The API view of a ledger entry: day keys instead of instants, and no request key (ADR-0002, ADR-0013). */
+export function toPointEntryView(doc: PointEntryDoc, timezone: string): PointEntryView {
+  const { requestId: _requestId, ...rest } = doc;
+  return toApi({
+    ...rest,
+    date: toDayKey(doc.date, timezone),
+    weekStart: toDayKey(doc.weekStart, timezone),
+    periodStart: doc.periodStart ? toDayKey(doc.periodStart, timezone) : null,
+    note: doc.note ?? null,
+    centsPerPointSnapshot: doc.centsPerPointSnapshot ?? null,
+    currencyCodeSnapshot: doc.currencyCodeSnapshot ?? null,
+  }) as PointEntryView;
 }
 
 /** One person's ledger entries in `[from, to]`, newest date first, then by id. */
@@ -454,14 +502,5 @@ export async function pointEntriesOfPerson(db: Db, query: PointsEntriesQuery): P
     fromDayKey(query.from, settings.timezone),
     fromDayKey(addDays(query.to, 1), settings.timezone),
   );
-  return {
-    entries: docs.map((doc) =>
-      toApi({
-        ...doc,
-        date: toDayKey(doc.date, settings.timezone),
-        weekStart: toDayKey(doc.weekStart, settings.timezone),
-        periodStart: doc.periodStart ? toDayKey(doc.periodStart, settings.timezone) : null,
-      }),
-    ) as PointsEntriesResponse['entries'],
-  };
+  return { entries: docs.map((doc) => toPointEntryView(doc, settings.timezone)) };
 }

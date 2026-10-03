@@ -295,12 +295,13 @@ describe('statistics reset removes the matching points', () => {
 });
 
 describe('import rebuilds the ledger', () => {
-  it('exports schema version 4 without the ledger', async () => {
+  it('exports schema version 5 without the derived ledger', async () => {
     const { t, occurrence, call } = await fixture();
     expect((await call('PATCH', `/api/occurrences/${await occurrence('2026-09-14')}`, { action: 'complete' })).statusCode).toBe(200);
     const file = (await t.app.inject({ method: 'GET', url: '/api/export/json' })).json<ExportFile>();
-    expect(file.schemaVersion).toBe(4);
-    expect(Object.keys(file.collections)).not.toContain('pointEntries');
+    expect(file.schemaVersion).toBe(5);
+    // Only booked redemptions travel in the file; the executions and bonuses are rebuilt on import (ADR-0013).
+    expect(file.collections.pointEntries).toEqual([]);
     expect(file.collections.tasks[0]).toHaveProperty('points');
     expect(file.collections.occurrences.some((o) => o.pointsSnapshot === 30)).toBe(true);
   });

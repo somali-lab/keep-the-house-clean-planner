@@ -20,6 +20,17 @@ const ids: ObjectId[] = [];
 
 const get = (url: string) => t.app.inject({ method: 'GET', url });
 
+/** A balance without redemptions or money: everything earned, nothing redeemed, no factor set (ADR-0013). */
+const balance = (personId: string, points: number, executions: number) => ({
+  personId,
+  points,
+  earned: points,
+  redeemed: 0,
+  money: null,
+  executions,
+  bonusPoints: 0,
+});
+
 async function addEntry(personId: ObjectId | string, date: string, amount: number, title = 'Taak'): Promise<ObjectId> {
   const occurrenceId = new ObjectId();
   const result = await insertPointEntry(
@@ -85,10 +96,10 @@ describe('GET /api/points/balances', () => {
     expect(body.to).toBeNull();
     // Persoon 1, Persoon 2, Logé (active, 0), Oud-bewoner (inactive, with entries); Vertrokken has none.
     expect(body.balances).toEqual([
-      { personId: p1._id.toHexString(), points: 11, executions: 4, bonusPoints: 0 },
-      { personId: p2._id.toHexString(), points: 10, executions: 1, bonusPoints: 0 },
-      { personId: guest, points: 0, executions: 0, bonusPoints: 0 },
-      { personId: former, points: 4, executions: 1, bonusPoints: 0 },
+      balance(p1._id.toHexString(), 11, 4),
+      balance(p2._id.toHexString(), 10, 1),
+      balance(guest, 0, 0),
+      balance(former, 4, 1),
     ]);
     expect(body.balances.map((b) => b.personId)).not.toContain(gone);
   });
@@ -99,11 +110,9 @@ describe('GET /api/points/balances', () => {
     expect(res.json<PointsBalancesResponse>()).toEqual({
       from: '2026-09-14',
       to: '2026-09-20',
-      balances: [
-        { personId: p1._id.toHexString(), points: 8, executions: 3, bonusPoints: 0 },
-        { personId: p2._id.toHexString(), points: 10, executions: 1, bonusPoints: 0 },
-        { personId: guest, points: 0, executions: 0, bonusPoints: 0 },
-      ],
+      currencyCode: 'EUR',
+      centsPerPoint: 0,
+      balances: [balance(p1._id.toHexString(), 8, 3), balance(p2._id.toHexString(), 10, 1), balance(guest, 0, 0)],
     });
   });
 
@@ -162,6 +171,9 @@ describe('GET /api/points/entries', () => {
       occurrenceId: expect.stringMatching(/^[0-9a-f]{24}$/),
       taskId: null,
       titleSnapshot: 'Taak',
+      note: null,
+      centsPerPointSnapshot: null,
+      currencyCodeSnapshot: null,
       source: 'live',
       createdAt: expect.stringMatching(/Z$/),
       updatedAt: expect.stringMatching(/Z$/),

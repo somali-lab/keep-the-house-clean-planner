@@ -21,6 +21,7 @@ import { queryKeys, useSettings } from '../../api/queries.ts';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
 import { BonusSection } from './BonusSection.tsx';
 import { CalendarSection } from './CalendarSection.tsx';
+import { ConversionSection } from './ConversionSection.tsx';
 import { AiPromptsPage } from '../ai-prompts/AiPromptsPage.tsx';
 import { DataSection } from './DataSection.tsx';
 import { JobsSection } from './JobsSection.tsx';
@@ -63,6 +64,7 @@ export function SettingsPage({ initialTab = 'calendar' }: { initialTab?: 'calend
           <div className="flex flex-col gap-6">
             <CalendarSection settings={settings.data} />
             <BonusSection settings={settings.data} />
+            <ConversionSection settings={settings.data} />
           </div>
         </TabsContent>
         <TabsContent value="people"><UsersSection /></TabsContent>

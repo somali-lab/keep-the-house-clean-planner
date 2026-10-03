@@ -43,7 +43,7 @@ describe('DataSection', () => {
 
   it('imports only after confirmation, and can be cancelled', async () => {
     storeProfile(ANNA._id);
-    const fetchMock = mockApi({ [`POST /api/import/json`]: { replaced: { users: 2 }, auditAdded: 0 } });
+    const fetchMock = mockApi({ [`POST /api/import/json`]: { replaced: { users: 2 }, auditAdded: 0 }, '/api/points/redemptions/count': { count: 0 } });
     renderWithProviders(<DataSection />);
 
     choose(JSON.stringify(FILE));
@@ -60,6 +60,68 @@ describe('DataSection', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
+  describe('redemptions and an older file', () => {
+    const COUNT = '/api/points/redemptions/count';
+    const countCalls = (fetchMock: ReturnType<typeof vi.fn>) => fetchMock.mock.calls.filter(([u]) => u === COUNT);
+    const importUrls = (fetchMock: ReturnType<typeof vi.fn>) =>
+      fetchMock.mock.calls.filter(([u]) => String(u).startsWith('/api/import/json')).map(([u]) => String(u));
+
+    it('warns with the count when the file is older than version 5, and only imports after it is acknowledged', async () => {
+      storeProfile(ANNA._id);
+      const fetchMock = mockApi({ [COUNT]: { count: 3 }, 'POST /api/import/json': { replaced: {}, auditAdded: 0 } });
+      renderWithProviders(<DataSection />);
+      choose(JSON.stringify({ ...FILE, schemaVersion: 4 }));
+      const dialog = await screen.findByRole('dialog', { name: 'Alle gegevens vervangen?' });
+      expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+        'Dit bestand is van een oudere versie (versie 4) en bevat geen inwisselingen. De 3 inwisselingen die er nu zijn, worden door deze import verwijderd.',
+      );
+      const confirm = within(dialog).getByRole('button', { name: 'Alles vervangen' });
+      expect(confirm).toBeDisabled();
+      fireEvent.click(confirm);
+      expect(importUrls(fetchMock)).toEqual([]);
+
+      fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Ik begrijp dat 3 inwisselingen verloren gaan' }));
+      expect(confirm).toBeEnabled();
+      fireEvent.click(confirm);
+      await waitFor(() => expect(importUrls(fetchMock)).toEqual([IMPORT_URL + '&acknowledgeRedemptions=true']));
+    });
+
+    it('asks for the acknowledgement again for the next file', async () => {
+      storeProfile(ANNA._id);
+      mockApi({ [COUNT]: { count: 1 } });
+      renderWithProviders(<DataSection />);
+      choose(JSON.stringify({ ...FILE, schemaVersion: 2 }));
+      fireEvent.click(await screen.findByRole('checkbox'));
+      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Annuleren' }));
+      choose(JSON.stringify({ ...FILE, schemaVersion: 2 }));
+      expect(await screen.findByRole('checkbox')).not.toBeChecked();
+    });
+
+    it('shows no warning and no acknowledgement for an older file when there are no redemptions', async () => {
+      storeProfile(ANNA._id);
+      const fetchMock = mockApi({ [COUNT]: { count: 0 }, 'POST /api/import/json': { replaced: {}, auditAdded: 0 } });
+      renderWithProviders(<DataSection />);
+      choose(JSON.stringify({ ...FILE, schemaVersion: 4 }));
+      const dialog = await screen.findByRole('dialog');
+      await waitFor(() => expect(countCalls(fetchMock)).toHaveLength(1));
+      expect(within(dialog).queryByRole('checkbox')).not.toBeInTheDocument();
+      await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Alles vervangen' })).toBeEnabled());
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Alles vervangen' }));
+      await waitFor(() => expect(importUrls(fetchMock)).toEqual([IMPORT_URL]));
+    });
+
+    it('does not ask for a version 5 file, which brings its own redemptions', async () => {
+      storeProfile(ANNA._id);
+      const fetchMock = mockApi({ [COUNT]: { count: 3 } });
+      renderWithProviders(<DataSection />);
+      choose(JSON.stringify({ ...FILE, schemaVersion: 5 }));
+      const dialog = await screen.findByRole('dialog');
+      expect(within(dialog).getByRole('button', { name: 'Alles vervangen' })).toBeEnabled();
+      expect(within(dialog).queryByRole('checkbox')).not.toBeInTheDocument();
+      expect(countCalls(fetchMock)).toEqual([]);
+    });
+  });
+
   it('rejects a file that is not an export without asking', async () => {
     const fetchMock = mockApi({});
     renderWithProviders(<DataSection />);
@@ -74,13 +136,16 @@ describe('DataSection', () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) =>
       String(input) === IMPORT_URL
         ? new Response(JSON.stringify({ code: 'validation_error', details: [] }), { status: 400 })
-        : new Response('[]', { status: 200 }),
+        : new Response(String(input).endsWith('/redemptions/count') ? '{"count":0}' : '[]', { status: 200 }),
     );
     vi.stubGlobal('fetch', fetchMock);
     renderWithProviders(<DataSection />);
 
     choose(JSON.stringify(FILE));
-    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Alles vervangen' }));
+    const confirm = within(await screen.findByRole('dialog')).getByRole('button', { name: 'Alles vervangen' });
+    // The confirmation waits for the number of redemptions an older file would remove.
+    await waitFor(() => expect(confirm).toBeEnabled());
+    fireEvent.click(confirm);
     expect(await screen.findByRole('alert')).toHaveTextContent('Dit bestand kan niet worden geïmporteerd.');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });

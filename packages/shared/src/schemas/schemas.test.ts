@@ -8,6 +8,12 @@ import {
   createTaskInputSchema,
   auditActionSchema,
   auditEntitySchema,
+  centsPerPointSchema,
+  createRedemptionInputSchema,
+  currencyCodeSchema,
+  pointEntryKindSchema,
+  pointEntryViewSchema,
+  settingsSchema,
   occurrenceSchema,
   patchOccurrenceInputSchema,
   pointsBalancesQuerySchema,
@@ -205,6 +211,60 @@ describe('one-off task schemas', () => {
     expect(tooLarge.success ? [] : tooLarge.error.issues.map((i) => [i.path.join('.'), i.message])).toEqual([['to', 'range_too_large']]);
     expect(pointsEntriesQuerySchema.safeParse({ personId, from: '2026-09-14' }).success).toBe(false);
     expect(pointsEntriesQuerySchema.safeParse({ from: '2026-09-14', to: '2026-09-20' }).success).toBe(false);
+  });
+
+  it('accepts ISO 4217 currency codes the runtime knows and nothing else (ADR-0013)', () => {
+    for (const code of ['EUR', 'USD', 'GBP', 'SEK', 'CHF']) expect(currencyCodeSchema.safeParse(code).success).toBe(true);
+    for (const code of ['eur', 'EURO', 'EU', '', 'E1R', 'ZZZ', ' EUR']) expect(currencyCodeSchema.safeParse(code).success).toBe(false);
+    // Money is whole cents, so only currencies with exactly two fraction digits qualify.
+    for (const code of ['JPY', 'KWD', 'BHD']) {
+      const result = currencyCodeSchema.safeParse(code);
+      expect(result.success ? [] : result.error.issues.map((i) => i.message)).toEqual(['currency_not_two_decimals']);
+    }
+    const bad = currencyCodeSchema.safeParse('eur');
+    expect(bad.success ? [] : bad.error.issues.map((i) => i.message)).toContain('invalid_currency_code');
+  });
+
+  it('keeps the cents per point an integer from 0 to 10000', () => {
+    for (const cents of [0, 1, 10, 10000]) expect(centsPerPointSchema.safeParse(cents).success).toBe(true);
+    for (const cents of [-1, 10001, 0.5, '10', Number.NaN, null]) expect(centsPerPointSchema.safeParse(cents).success).toBe(false);
+  });
+
+  it('takes the conversion in the settings update, both optional, and leaves it optional in the stored settings', () => {
+    expect(updateSettingsInputSchema.safeParse({ currencyCode: 'USD', centsPerPoint: 25 }).success).toBe(true);
+    expect(updateSettingsInputSchema.safeParse({ centsPerPoint: 25 }).success).toBe(true);
+    expect(updateSettingsInputSchema.safeParse({ currencyCode: 'usd' }).success).toBe(false);
+    expect(updateSettingsInputSchema.safeParse({ centsPerPoint: 10001 }).success).toBe(false);
+    const stored = { cycleAnchorDate: '2026-09-14', weekStartsOn: 1, timezone: 'Europe/Amsterdam', vacationRanges: [], intervals: DEFAULT_INTERVALS, aiProvider: { type: 'none' }, promoteThreshold: 2, dismissedPromotions: [], createdAt: '2026-09-14T08:00:00.000Z', updatedAt: '2026-09-14T08:00:00.000Z' };
+    expect(settingsSchema.safeParse(stored).success).toBe(true);
+    expect(settingsSchema.safeParse({ ...stored, currencyCode: 'EUR', centsPerPoint: 10 }).success).toBe(true);
+    expect(settingsSchema.safeParse({ ...stored, centsPerPoint: -1 }).success).toBe(false);
+  });
+
+  it('validates a redemption request: points from 1, a trimmed note up to 200 characters, an optional person and key', () => {
+    expect(createRedemptionInputSchema.parse({ points: 3 })).toEqual({ points: 3 });
+    expect(createRedemptionInputSchema.parse({ points: 3, note: '  pizza  ', personId: ID, requestId: 'a'.repeat(16) })).toEqual({
+      points: 3,
+      note: 'pizza',
+      personId: ID,
+      requestId: 'a'.repeat(16),
+    });
+    expect(createRedemptionInputSchema.safeParse({ points: 1, note: 'x'.repeat(200) }).success).toBe(true);
+    for (const bad of [{}, { points: 0 }, { points: -1 }, { points: 1.5 }, { points: '1' }, { points: 1, note: 'x'.repeat(201) }, { points: 1, personId: 'nope' }, { points: 1, requestId: 'kort' }]) {
+      expect(createRedemptionInputSchema.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+    }
+  });
+
+  it('knows the redemption kind and carries the booking fields in the entry view', () => {
+    expect(pointEntryKindSchema.safeParse('redemption').success).toBe(true);
+    const view = {
+      _id: ID, key: 'redemption:' + ID, kind: 'redemption', personId: ID, amount: -4, date: '2026-09-16', weekStart: '2026-09-14', periodStart: null,
+      occurrenceId: null, taskId: null, titleSnapshot: '', note: 'Pizza', centsPerPointSnapshot: 25, currencyCodeSnapshot: 'EUR', source: 'live',
+      createdAt: '2026-09-16T08:00:00.000Z', updatedAt: '2026-09-16T08:00:00.000Z',
+    };
+    expect(pointEntryViewSchema.safeParse(view).success).toBe(true);
+    expect(pointEntryViewSchema.safeParse({ ...view, centsPerPointSnapshot: 10001 }).success).toBe(false);
+    expect(pointEntryViewSchema.safeParse({ ...view, note: undefined }).success).toBe(false);
   });
 });
 

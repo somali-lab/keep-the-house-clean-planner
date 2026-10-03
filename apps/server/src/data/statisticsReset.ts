@@ -4,7 +4,7 @@ import { record } from '../audit/record.ts';
 import { getSettings, SETTINGS_ID } from './settings.ts';
 import { COLLECTIONS } from './db.ts';
 import { occurrencesCollection } from './occurrences.ts';
-import { deleteDerivedPointEntries } from './points.ts';
+import { deleteDerivedPointEntries, deleteRedemptions } from './points.ts';
 
 export interface ResetStatisticsResult {
   /** Occurrences before the boundary. */
@@ -14,8 +14,10 @@ export interface ResetStatisticsResult {
   resetOccurrences: number;
   resetTasks: number;
   deletedPastCycles: number;
-  /** Execution and bonus entries of the points ledger that went with the history (ADR-0011, ADR-0012). */
+  /** Entries of the points ledger that went with the history: executions, bonuses (ADR-0011, ADR-0012) and redemptions (ADR-0013). */
   removedPointEntries: number;
+  /** The redemptions among `removedPointEntries`. */
+  removedRedemptions: number;
 }
 
 interface ResetStatisticsOptions {
@@ -66,7 +68,11 @@ export async function resetStatisticsData(
       .updateMany({ lastCompletedAt: { $ne: null } }, { $set: { lastCompletedAt: null, updatedAt: ctx.clock.now() } });
   }
   // The ledger follows the history it is derived from: starting over removes every derived entry (executions and bonuses), a purge those dated before the boundary.
-  const removedPointEntries = await deleteDerivedPointEntries(ctx.db, options.restartFromToday ? undefined : boundary);
+  // Redemptions are booked, not derived, but they go with the history too: starting over removes all of them, a purge those dated before the boundary (ADR-0013).
+  const ledgerBoundary = options.restartFromToday ? undefined : boundary;
+  const removedDerived = await deleteDerivedPointEntries(ctx.db, ledgerBoundary);
+  const removedRedemptions = await deleteRedemptions(ctx.db, ledgerBoundary);
+  const removedPointEntries = removedDerived + removedRedemptions;
   const deletedPastCycles = await ctx.db.collection(COLLECTIONS.cycles).deleteMany({ index: { $lt: boundaryCycle } });
   // Periods that start before the boundary lost (part of) their history, so they never earn a bonus from what remains.
   // The floor only moves forward: a later purge before an earlier day does not give old periods their bonuses back.
@@ -83,6 +89,7 @@ export async function resetStatisticsData(
     resetTasks: resetTasks.modifiedCount,
     deletedPastCycles: deletedPastCycles.deletedCount,
     removedPointEntries,
+    removedRedemptions,
   };
   await record(ctx, {
     entity: 'settings',

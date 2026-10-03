@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Database, Download, Trash2, TriangleAlert, Upload } from 'lucide-react';
 import { useId, useState, type ChangeEvent } from 'react';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -15,6 +15,8 @@ type Message = { kind: 'status' | 'alert'; text: string } | null;
 
 interface PendingImport {
   fileName: string;
+  /** The `schemaVersion` of the file, null when it has none (the server validates fully). */
+  version: number | null;
   body: Record<string, unknown>;
   counts: { users: number; tasks: number; occurrences: number };
 }
@@ -37,7 +39,8 @@ export function readExport(fileName: string, text: string): PendingImport | null
     const docs = collections[name];
     return Array.isArray(docs) ? docs.length : 0;
   };
-  return { fileName, body, counts: { users: count('users'), tasks: count('tasks'), occurrences: count('occurrences') } };
+  const version = typeof body.schemaVersion === 'number' ? body.schemaVersion : null;
+  return { fileName, version, body, counts: { users: count('users'), tasks: count('tasks'), occurrences: count('occurrences') } };
 }
 
 /** JSON export download and a confirmed full import. */
@@ -48,9 +51,23 @@ export function DataSection() {
   const [confirmReset, setConfirmReset] = useState(false);
   const [message, setMessage] = useState<Message>(null);
   const resetExecution = useResetStatistics();
+  const [acknowledged, setAcknowledged] = useState(false);
+
+  // A file older than version 5 has no redemptions, so importing it removes the ones that exist (ADR-0013).
+  const olderFile = pending !== null && pending.version !== null && pending.version < 5;
+  const redemptions = useQuery({
+    queryKey: ['points', 'redemptions', 'count'],
+    queryFn: async () => (await api.get<{ count: number }>('/api/points/redemptions/count')).data.count,
+    enabled: olderFile,
+    retry: false,
+    gcTime: 0,
+  });
+  const lostRedemptions = olderFile ? (redemptions.data ?? 0) : 0;
+  const waitingForCount = olderFile && redemptions.isPending;
 
   const runImport = useMutation({
-    mutationFn: (body: Record<string, unknown>) => api.post('/api/import/json?mode=replace&confirm=true', body),
+    mutationFn: ({ body, acknowledgeRedemptions }: { body: Record<string, unknown>; acknowledgeRedemptions: boolean }) =>
+      api.post(`/api/import/json?mode=replace&confirm=true${acknowledgeRedemptions ? '&acknowledgeRedemptions=true' : ''}`, body),
     onSuccess: async () => {
       setPending(null);
       setMessage({ kind: 'status', text: t('settings.data.imported') });
@@ -77,6 +94,7 @@ export function DataSection() {
       setMessage({ kind: 'alert', text: t('settings.data.invalidFile') });
       return;
     }
+    setAcknowledged(false);
     setPending(parsed);
   };
 
@@ -181,6 +199,23 @@ export function DataSection() {
           </div>
           <p>{format('settings.data.confirmBody', { file: pending.fileName, ...pending.counts })}</p>
           <p className="text-sm text-muted-foreground">{t('settings.data.confirmHint')}</p>
+          {lostRedemptions > 0 && (
+            <div className="flex flex-col gap-2 rounded-lg border border-destructive/40 bg-background/60 p-3">
+              <p role="alert" className="flex items-start gap-2 font-semibold text-destructive">
+                <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                {format('settings.data.redemptionsWarning', { version: pending.version ?? '?', count: lostRedemptions })}
+              </p>
+              <label className="flex items-center gap-2 text-sm font-semibold">
+                <input
+                  type="checkbox"
+                  className="size-4 shrink-0 accent-primary"
+                  checked={acknowledged}
+                  onChange={(event) => setAcknowledged(event.target.checked)}
+                />
+                {format('settings.data.redemptionsAck', { count: lostRedemptions })}
+              </label>
+            </div>
+          )}
           {runImport.isPending && (
             <p role="status" className="text-sm font-semibold text-muted-foreground">
               {t('settings.data.importing')}
@@ -190,7 +225,12 @@ export function DataSection() {
             <Button type="button" variant="ghost" disabled={runImport.isPending} onClick={() => setPending(null)}>
               {t('common.cancel')}
             </Button>
-            <Button type="button" variant="destructive" disabled={runImport.isPending} onClick={() => runImport.mutate(pending.body)}>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={runImport.isPending || waitingForCount || (lostRedemptions > 0 && !acknowledged)}
+              onClick={() => runImport.mutate({ body: pending.body, acknowledgeRedemptions: lostRedemptions > 0 && acknowledged })}
+            >
               {t('settings.data.confirm')}
             </Button>
           </FormActions>

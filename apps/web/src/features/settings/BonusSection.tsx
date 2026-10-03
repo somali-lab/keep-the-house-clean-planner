@@ -1,5 +1,7 @@
 import type { BonusAmounts, Settings } from '@huishoudplanner/shared';
+import { cycleIndexFor, cycleStart } from '@huishoudplanner/shared/cycle';
 import { bonusAmountsOn, MAX_BONUS_POINTS, MIN_BONUS_POINTS } from '@huishoudplanner/shared/bonuses';
+import { mondayOf } from '@huishoudplanner/shared/time';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Clock, Gift, Save } from 'lucide-react';
 import { useId, useState, type FormEvent } from 'react';
@@ -27,9 +29,17 @@ export function parseBonusAmount(text: string): number | null {
 const dmy = (key: string) => key.split('-').reverse().join('-');
 
 /**
+ * What a schedule row covers (ADR-0012): every week and cycle whose last day is on or after the row's
+ * date, so the week and the cycle that contain that date count in full. Both start days, as d-m-y.
+ */
+function coverage(from: string, anchor: string) {
+  return { weekStart: dmy(mondayOf(from)), cycleStart: dmy(cycleStart(cycleIndexFor(from, anchor), anchor)) };
+}
+
+/**
  * The amounts of the week and cycle bonuses (ADR-0012), for administrators. Saving writes a schedule
  * row that applies from today: periods that have ended keep the amounts they had, and an amount of 0
- * turns a bonus off. The schedule rows are listed so it is visible since when the amounts apply.
+ * turns a bonus off. The schedule rows are listed with the first week and cycle they cover.
  */
 export function BonusSection({ settings, now }: { settings: Settings; now?: Date }) {
   const idPrefix = useId();
@@ -103,7 +113,7 @@ export function BonusSection({ settings, now }: { settings: Settings; now?: Date
       </div>
       <p className="text-sm text-muted-foreground">{t('settings.bonuses.hint')}</p>
       {current ? (
-        <p className="text-sm font-semibold">{format('settings.bonuses.since', { from: dmy(current.from) })}</p>
+        <p className="text-sm font-semibold">{format('settings.bonuses.since', coverage(current.from, settings.cycleAnchorDate))}</p>
       ) : (
         <p className="rounded-xl border border-dashed px-4 py-3 text-sm text-muted-foreground">{t('settings.bonuses.off')}</p>
       )}
@@ -114,7 +124,7 @@ export function BonusSection({ settings, now }: { settings: Settings; now?: Date
             {[...schedule].reverse().map((row) => (
               <li key={row.from} className={`${listRowClass} text-sm tabular-nums`}>
                 {format('settings.bonuses.row', {
-                  from: dmy(row.from),
+                  ...coverage(row.from, settings.cycleAnchorDate),
                   weekDone: row.weekDone,
                   weekOnTime: row.weekOnTime,
                   cycleDone: row.cycleDone,

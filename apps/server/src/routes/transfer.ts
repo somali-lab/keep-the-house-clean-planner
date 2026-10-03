@@ -2,7 +2,7 @@ import { today } from '@huishoudplanner/shared';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { getSettings } from '../data/settings.ts';
-import { buildExport, importData, parseImport } from '../domain/transfer.ts';
+import { buildExport, importData, parseImport, redemptionsLostByImport } from '../domain/transfer.ts';
 import { HttpError, parseOrThrow } from '../http/errors.ts';
 import { auditContext, requireAdmin } from '../identity/index.ts';
 
@@ -12,6 +12,8 @@ const IMPORT_BODY_LIMIT = 200 * 1024 * 1024;
 const importQuerySchema = z.object({
   mode: z.literal('replace'),
   confirm: z.string().optional(),
+  /** Needed to import a file of version 4 or older while redemptions exist: they are removed (ADR-0013). */
+  acknowledgeRedemptions: z.string().optional(),
 });
 
 export const transferRoutes: FastifyPluginAsync = async (app) => {
@@ -34,6 +36,16 @@ export const transferRoutes: FastifyPluginAsync = async (app) => {
       throw new HttpError(400, 'confirmation_required', 'Importing replaces all data; add confirm=true');
     }
     const parsed = parseImport(request.body, app.deps.clock.now());
+    const lost = await redemptionsLostByImport(app.deps.db, parsed);
+    if (lost > 0 && query.acknowledgeRedemptions !== 'true') {
+      throw new HttpError(
+        409,
+        'redemptions_would_be_removed',
+        'This file is older than version 5 and has no redemptions; importing it removes the existing ones. Add acknowledgeRedemptions=true',
+        undefined,
+        { count: lost },
+      );
+    }
     return importData(auditContext(request), parsed);
   });
 };

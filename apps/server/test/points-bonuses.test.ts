@@ -454,7 +454,7 @@ describe('reading', () => {
       (await f.t.app.inject({ method: 'GET', url: `/api/points/balances${query}` })).json<PointsBalancesResponse>().balances;
     const p1 = f.p1._id.toHexString();
 
-    expect((await balances('')).find((b) => b.personId === p1)).toEqual({ personId: p1, points: 30 + 8, executions: 1, bonusPoints: 8 });
+    expect((await balances('')).find((b) => b.personId === p1)).toEqual({ personId: p1, points: 30 + 8, earned: 30 + 8, redeemed: 0, money: null, executions: 1, bonusPoints: 8 });
     // The bonus is dated on the last day of the week: a range that stops before it does not include it.
     expect((await balances('?from=2026-09-14&to=2026-09-19')).find((b) => b.personId === p1)).toMatchObject({ points: 30, executions: 1, bonusPoints: 0 });
     expect((await balances('?from=2026-09-14&to=2026-09-20')).find((b) => b.personId === p1)).toMatchObject({ points: 38, bonusPoints: 8 });
@@ -516,7 +516,7 @@ describe('transfer', () => {
     expect(before).toEqual(WEEK_BONUSES);
 
     const file = (await f.t.app.inject({ method: 'GET', url: '/api/export/json' })).json<ExportFile>();
-    expect(file.schemaVersion).toBe(4);
+    expect(file.schemaVersion).toBe(5);
     expect(file.collections.settings[0]!.bonusSchedule).toEqual([{ from: '2026-09-14', ...AMOUNTS }]);
     const res = await f.call('POST', '/api/import/json?mode=replace&confirm=true', file as unknown as Record<string, unknown>);
     expect(res.statusCode, res.body).toBe(200);

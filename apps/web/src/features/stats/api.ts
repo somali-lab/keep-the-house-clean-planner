@@ -2,6 +2,7 @@ import type {
   CompletionResponse,
   DeviationsResponse,
   IntervalsResponse,
+  PointEntryView,
   PointsBalancesResponse,
   PointsEntriesResponse,
   StatsGroupBy,
@@ -9,6 +10,7 @@ import type {
 } from '@huishoudplanner/shared';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/index.ts';
+import { releaseRequestKey, requestKeyFor } from '../../api/requestKey.ts';
 
 // keepPreviousData: a refetch holds the previous render instead of flashing a loader.
 
@@ -62,6 +64,15 @@ export function usePointsBalances(range: { from: string; to: string } | null) {
   });
 }
 
+/** Balances over the whole ledger, without a range: what a person can redeem right now (ADR-0013). */
+export function useAllTimeBalances(enabled = true) {
+  return useQuery({
+    queryKey: ['points', 'balances', 'all'],
+    queryFn: async () => (await api.get<PointsBalancesResponse>('/api/points/balances')).data,
+    enabled,
+  });
+}
+
 export function usePointsEntries(personId: string | null, range: { from: string; to: string } | null) {
   return useQuery({
     queryKey: ['points', 'entries', personId, range?.from, range?.to],
@@ -88,5 +99,49 @@ export function useResetStatistics() {
         queryClient.invalidateQueries({ queryKey: ['due'] }),
         queryClient.invalidateQueries({ queryKey: ['tasks'] }),
       ]),
+  });
+}
+
+export interface RedeemInput {
+  personId: string;
+  points: number;
+  note: string;
+}
+
+/**
+ * Books a redemption (ADR-0013). The request key belongs to the intent (person, points and note): a repeated
+ * click, a retry after a failure, or a closed and reopened dialog with the same values reuses it, so the
+ * server books it once; it is dropped once the request succeeded. Not queued offline: the server decides
+ * whether the balance is enough.
+ */
+export function useRedeemPoints() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    networkMode: 'always',
+    mutationFn: async (input: RedeemInput): Promise<{ entry: PointEntryView; replayed: boolean }> => {
+      const intent = `redeem:${JSON.stringify(input)}`;
+      const requestId = requestKeyFor(intent);
+      const { data, status } = await api.post<PointEntryView>('/api/points/redemptions', {
+        personId: input.personId,
+        points: input.points,
+        ...(input.note ? { note: input.note } : {}),
+        requestId,
+      });
+      releaseRequestKey(intent);
+      // 201 is a new booking; 200 means the server already had this request and replayed it.
+      return { entry: data, replayed: status === 200 };
+    },
+    // The balance may also have changed under us (insufficient_balance), so refetch whatever the outcome.
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['points'] }),
+  });
+}
+
+/** Takes a redemption back: the owner on the day it was booked, an administrator at any time. */
+export function useUndoRedemption() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    networkMode: 'always',
+    mutationFn: async (id: string) => api.delete(`/api/points/redemptions/${id}`),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['points'] }),
   });
 }
