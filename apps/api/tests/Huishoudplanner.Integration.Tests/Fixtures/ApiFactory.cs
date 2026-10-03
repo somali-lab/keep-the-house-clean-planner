@@ -1,12 +1,14 @@
 
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Ports.Driven;
+using Huishoudplanner.Host;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using OneOf;
@@ -22,10 +24,12 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 {
     private readonly string mongoUrl;
     private readonly List<Action<IServiceCollection>> overrides = [];
+    private readonly Dictionary<string, string> settings = [];
 
     private readonly List<ILoggerProvider> logProviders = [];
     private string environment = "Test";
     private string? webDistDir;
+    private bool seedsAtStartup;
 
     private ApiFactory(string mongoUrl) => this.mongoUrl = mongoUrl;
 
@@ -33,7 +37,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     public static ApiFactory ForMongo(MongoContainerFixture mongo, string? databaseName = null)
     {
         ArgumentNullException.ThrowIfNull(mongo);
-        return new ApiFactory(WithDatabase(mongo.ConnectionString, databaseName ?? MongoContainerFixture.NewDatabaseName()));
+        // A factory with a real database runs the startup seed like the application does; one without would wait for a database that is not there.
+        return new ApiFactory(WithDatabase(mongo.ConnectionString, databaseName ?? MongoContainerFixture.NewDatabaseName())) { seedsAtStartup = true };
     }
 
     /// <summary>For tests that replace every port they touch: no database is contacted unless a real adapter is used.</summary>
@@ -77,6 +82,22 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         return this;
     }
 
+    /// <summary>The same factory with the startup seed switched off, for a test that needs an empty database.</summary>
+    public ApiFactory WithoutStartupSeed()
+    {
+        seedsAtStartup = false;
+        return this;
+    }
+
+    /// <summary>Sets a configuration value (an environment variable of requirements section 9) for this host only.</summary>
+    public ApiFactory WithSetting(string key, string value)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        ArgumentNullException.ThrowIfNull(value);
+        settings[key] = value;
+        return this;
+    }
+
     /// <summary>Replaces the registration of a driven port with a fake.</summary>
     public ApiFactory WithPort<TPort>(TPort fake)
         where TPort : class
@@ -96,9 +117,22 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             builder.UseSetting("WEB_DIST_DIR", webDistDir);
         }
 
+        foreach (var (key, value) in settings)
+        {
+            builder.UseSetting(key, value);
+        }
+
         builder.ConfigureLogging(logging => logProviders.ForEach(p => logging.AddProvider(p)));
         builder.ConfigureTestServices(services =>
         {
+            if (!seedsAtStartup)
+            {
+                foreach (var seed in services.Where(d => d.ServiceType == typeof(IHostedService) && d.ImplementationType == typeof(SettingsSeedingStartup)).ToList())
+                {
+                    services.Remove(seed);
+                }
+            }
+
             foreach (var apply in overrides)
             {
                 apply(services);
