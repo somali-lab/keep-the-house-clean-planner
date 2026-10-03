@@ -36,8 +36,6 @@ import {
   MIN_BONUS_POINTS,
   sameBonusAmounts,
   scheduleWithAmounts,
-  type BonusAmounts,
-  type BonusScheduleRow,
 } from '../packages/shared/src/bonuses.ts';
 import { computeDue, dueState, type DueTaskInput } from '../packages/shared/src/due.ts';
 import {
@@ -835,6 +833,15 @@ const dueModule: ModuleSpec = {
 // ---------------------------------------------------------------------------------------
 // bonuses (slice 1.3 ports the schedule rules; the period and set rules follow with slice 4.2)
 // ---------------------------------------------------------------------------------------
+
+/** Type aliases (not the interfaces of bonuses.ts): an alias has the implicit index signature that makes a case input assignable to Json. */
+type BonusAmounts = {
+  weekDone: number;
+  weekOnTime: number;
+  cycleDone: number;
+  cycleOnTime: number;
+};
+type BonusScheduleRow = BonusAmounts & { from: string };
 
 const amounts = (
   weekDone: number,
