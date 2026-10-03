@@ -16,9 +16,9 @@ check because Release Please updates `version.txt` and
 release pull request do not start that check. See
 [Agentic workflow checks](AGENTIC-WORKFLOWS.md) for the complete process.
 
-Normal pull requests run linting, type checking, tests, and a container build before they are merged. The release workflow does not repeat those checks; it only manages the release and builds the image that is actually published.
+Normal pull requests run linting, type checking, tests, the Playwright end-to-end suite, and a container build before they are merged. The release workflow does not repeat those checks; it only manages the release and builds the image that is actually published.
 
-The end-to-end suite (`npm run test:e2e`) and the container smoke test (`node scripts/smoke.mjs`) deliberately stay out of CI, because both need a browser or a real container runtime. Run them locally when a change touches those paths.
+The end-to-end suite (`npm run test:e2e`) runs in its own CI job in parallel with the other jobs, with four workers and one retry. On failure the job uploads the Playwright report and traces as an artifact. The container smoke test (`node scripts/smoke.mjs`) deliberately stays out of CI because it needs a real container runtime; run it locally when a change touches the container or runtime.
 
 Both **CI** and **Release** also accept a manual `workflow_dispatch` run from the Actions tab, which is how a release pull request is re-created after an interrupted run without pushing an empty commit.
 
