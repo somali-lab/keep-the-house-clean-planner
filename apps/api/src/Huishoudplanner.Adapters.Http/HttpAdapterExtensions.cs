@@ -37,7 +37,7 @@ public static class HttpAdapterExtensions
 
     /// <summary>
     /// Identity (ADR-0018): the profile-header authentication scheme, the actor resolver and the three policies.
-    /// Needs a <see cref="ForFindingUsers"/> registration from the composition root.
+    /// Needs a <see cref="ForFindingUsers"/> registration from the composition root; <see cref="UseHttpAdapter"/> checks it at startup.
     /// </summary>
     private static void AddIdentity(this IServiceCollection services)
     {
@@ -53,10 +53,27 @@ public static class HttpAdapterExtensions
     public static IApplicationBuilder UseHttpAdapter(this IApplicationBuilder app)
     {
         ArgumentNullException.ThrowIfNull(app);
+        RequireUserPort(app.ApplicationServices);
         app.UseExceptionHandler();
         app.UseStatusCodePages();
-        app.UseAuthentication();
+        // The authentication handler resolves the actor only for endpoints that declare authorization (see ProfileHeaderAuthenticationHandler),
+        // so endpoints without a policy (health, static files) never depend on the user lookup.
         app.UseAuthorization();
         return app;
+    }
+
+    /// <summary>Fails at startup, not on the first request, when the composition root forgot the user port that identity needs.</summary>
+    private static void RequireUserPort(IServiceProvider services)
+    {
+        using var scope = services.CreateScope();
+        try
+        {
+            _ = scope.ServiceProvider.GetRequiredService<ForResolvingActors>();
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new InvalidOperationException(
+                "AddHttpAdapter needs a registration of ForFindingUsers (or another ForResolvingActors) from the composition root.", ex);
+        }
     }
 }

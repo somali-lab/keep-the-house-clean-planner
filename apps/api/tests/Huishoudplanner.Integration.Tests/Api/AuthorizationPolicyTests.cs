@@ -1,13 +1,16 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Huishoudplanner.Adapters.Http;
 using Huishoudplanner.Adapters.Http.Identity;
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Identity;
 using Huishoudplanner.Domain.Ports.Driven;
 using Huishoudplanner.Integration.Tests.Fixtures;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.AspNetCore.Routing;
 
 namespace Huishoudplanner.Integration.Tests.Api;
@@ -36,10 +39,13 @@ public sealed class AuthorizationPolicyTests : IDisposable
 
     private static void MapTestEndpoints(IEndpointRouteBuilder routes)
     {
-        routes.MapGet("/test/whoami", (HttpContext http) => Results.Json(Describe(http.GetActor())));
-        routes.MapPost("/test/write", (HttpContext http) => Results.Json(Describe(http.GetActor()))).RequireActor();
-        routes.MapPost("/test/plan", (HttpContext http) => Results.Json(Describe(http.GetActor()))).RequirePlanner();
-        routes.MapPost("/test/admin", (HttpContext http) => Results.Json(Describe(http.GetActor()))).RequireAdmin();
+        routes.MapGet("/test/whoami", async Task<IResult> (HttpContext http) => Results.Json(Describe(await http.GetActorAsync())));
+        routes.MapPost("/test/write", async Task<IResult> (HttpContext http) => Results.Json(Describe(await http.GetActorAsync()))).RequireActor();
+        routes.MapPost("/test/plan", async Task<IResult> (HttpContext http) => Results.Json(Describe(await http.GetActorAsync()))).RequirePlanner();
+        routes.MapPost("/test/admin", async Task<IResult> (HttpContext http) => Results.Json(Describe(await http.GetActorAsync()))).RequireAdmin();
+        routes.MapPost("/test/both", () => "x").RequirePlanner().RequireAdmin();
+        routes.MapGet("/test/challenge", async (HttpContext http) => { await http.ChallengeAsync(); });
+        routes.MapGet("/test/forbid", async (HttpContext http) => { await http.ForbidAsync(); });
     }
 
     private static object Describe(Actor? actor) => new
@@ -222,5 +228,47 @@ public sealed class AuthorizationPolicyTests : IDisposable
         await Send(HttpMethod.Post, "/test/admin", admin.Id);
 
         users.Lookups.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task Forbidden_withSeveralPolicies_namesTheHighestRequiredRole()
+    {
+        var member = users.Add(Role.Member);
+
+        var response = await Send(HttpMethod.Post, "/test/both", member.Id);
+
+        var body = await AssertProblem(response, HttpStatusCode.Forbidden, "permission_denied");
+        body.GetProperty("detail").GetString().Should().Be("The admin role is required.");
+    }
+
+    [Fact]
+    public async Task DirectChallenge_answersProfileRequiredProblemDetails()
+    {
+        var response = await Send(HttpMethod.Get, "/test/challenge");
+
+        await AssertProblem(response, HttpStatusCode.BadRequest, "profile_required");
+    }
+
+    [Fact]
+    public async Task DirectForbid_answersPermissionDeniedProblemDetails()
+    {
+        var member = users.Add(Role.Member);
+
+        var response = await Send(HttpMethod.Get, "/test/forbid", member.Id);
+
+        await AssertProblem(response, HttpStatusCode.Forbidden, "permission_denied");
+    }
+
+    [Fact]
+    public void AddHttpAdapter_withoutAUserPort_failsAtStartupWithAClearMessage()
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddHttpAdapter();
+        using var app = builder.Build();
+
+        var act = () => app.UseHttpAdapter();
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*ForFindingUsers*");
     }
 }

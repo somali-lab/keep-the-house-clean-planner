@@ -1,6 +1,5 @@
 using System.Text.Encodings.Web;
-using Huishoudplanner.Domain.Identity;
-using Huishoudplanner.Domain.Ports.Driven;
+using Huishoudplanner.Adapters.Http.Problems;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -8,37 +7,28 @@ using Microsoft.Extensions.Options;
 namespace Huishoudplanner.Adapters.Http.Identity;
 
 /// <summary>
-/// Resolves the actor once per request (ASP.NET Core caches the result per scheme) and exposes it as the principal and
-/// through <see cref="ActorContext.GetActor"/>. No profile is not a failure: the request stays anonymous and the
-/// policies decide whether that is acceptable. The header values are never logged.
+/// The authentication scheme the policies run under. It never authenticates by itself: the profile header is a claim,
+/// not a login, and ASP.NET Core runs the default scheme in a middleware that sits before the exception handler, where a
+/// failing user lookup could not become a Problem Details 500 and where every endpoint (health, static files) would pay for
+/// a lookup. The actor is therefore resolved lazily, once per request, by the authorization requirement of an endpoint
+/// that has a policy or by <see cref="ActorContext.GetActorAsync"/>. What remains here is the response of a direct
+/// ChallengeAsync or ForbidAsync call, so no path answers with an empty 401 or 403.
 /// </summary>
 internal sealed class ProfileHeaderAuthenticationHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
     ILoggerFactory logger,
-    UrlEncoder encoder,
-    ForResolvingActors resolver)
+    UrlEncoder encoder)
     : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
     public const string SchemeName = "ProfileHeader";
-    public const string ProfileHeader = "X-Profile-Id";
-    public const string ClientHeader = "X-Client";
+    public const string ProfileRequiredDetail = "An active profile is required (X-Profile-Id).";
+    public const string RoleTooLowDetail = "The role is too low.";
 
-    protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
-    {
-        var request = new ActorRequest(HeaderValue(ProfileHeader), HeaderValue(ClientHeader));
-        var result = await resolver.ResolveAsync(request, Context.RequestAborted).ConfigureAwait(false);
-        return result.Match(
-            actor =>
-            {
-                Context.Items[ActorContext.ActorItemKey] = actor;
-                var principal = ActorContext.ToPrincipal(actor, Scheme.Name);
-                return AuthenticateResult.Success(new AuthenticationTicket(principal, Scheme.Name));
-            },
-            _ => AuthenticateResult.NoResult(),
-            // The port error text is for logs only: the exception handler logs it and answers a bare 500.
-            error => throw new InvalidOperationException($"The actor could not be resolved: {error.Message}"));
-    }
+    protected override Task<AuthenticateResult> HandleAuthenticateAsync() => Task.FromResult(AuthenticateResult.NoResult());
 
-    private string? HeaderValue(string name) =>
-        Request.Headers.TryGetValue(name, out var values) && values.Count > 0 ? values.ToString() : null;
+    protected override Task HandleChallengeAsync(AuthenticationProperties properties) =>
+        ProblemResults.Problem(StatusCodes.Status400BadRequest, ProblemTypes.ProfileRequired, ProfileRequiredDetail).ExecuteAsync(Context);
+
+    protected override Task HandleForbiddenAsync(AuthenticationProperties properties) =>
+        ProblemResults.Problem(StatusCodes.Status403Forbidden, ProblemTypes.PermissionDenied, RoleTooLowDetail).ExecuteAsync(Context);
 }

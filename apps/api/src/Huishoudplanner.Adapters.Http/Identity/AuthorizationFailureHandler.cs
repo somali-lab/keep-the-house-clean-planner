@@ -1,4 +1,5 @@
 using Huishoudplanner.Adapters.Http.Problems;
+using Huishoudplanner.Domain.Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Policy;
 
@@ -6,7 +7,9 @@ namespace Huishoudplanner.Adapters.Http.Identity;
 
 /// <summary>
 /// Answers a failed policy with the codes of requirements section 8: no actor is <c>400 profile_required</c> (a profile
-/// is attribution, not a login, so never 401), an actor with too low a role is <c>403 permission_denied</c>.
+/// is attribution, not a login, so never 401), an actor with too low a role is <c>403 permission_denied</c>. The decision
+/// is made from the resolved actor, not from the challenge/forbid flag, because the scheme never authenticates (see
+/// <see cref="ProfileHeaderAuthenticationHandler"/>).
 /// </summary>
 internal sealed class AuthorizationFailureHandler : IAuthorizationMiddlewareResultHandler
 {
@@ -19,25 +22,26 @@ internal sealed class AuthorizationFailureHandler : IAuthorizationMiddlewareResu
         ArgumentNullException.ThrowIfNull(policy);
         ArgumentNullException.ThrowIfNull(authorizeResult);
 
-        if (authorizeResult.Challenged)
+        if (authorizeResult.Succeeded)
+        {
+            await fallback.HandleAsync(next, context, policy, authorizeResult);
+            return;
+        }
+
+        if (await context.GetActorAsync() is null)
         {
             await ProblemResults.Problem(
                 StatusCodes.Status400BadRequest,
                 ProblemTypes.ProfileRequired,
-                "An active profile is required (X-Profile-Id).").ExecuteAsync(context);
+                ProfileHeaderAuthenticationHandler.ProfileRequiredDetail).ExecuteAsync(context);
             return;
         }
 
-        if (authorizeResult.Forbidden)
-        {
-            var minimum = policy.Requirements.OfType<MinimumRoleRequirement>().Select(r => r.Minimum.ToString().ToLowerInvariant()).FirstOrDefault();
-            await ProblemResults.Problem(
-                StatusCodes.Status403Forbidden,
-                ProblemTypes.PermissionDenied,
-                minimum is null ? "The role is too low." : $"The {minimum} role is required.").ExecuteAsync(context);
-            return;
-        }
-
-        await fallback.HandleAsync(next, context, policy, authorizeResult);
+        // The highest role the endpoint asks for, when it carries several policies.
+        var minimum = policy.Requirements.OfType<MinimumRoleRequirement>().Select(r => (Role?)r.Minimum).Max()?.ToString().ToLowerInvariant();
+        await ProblemResults.Problem(
+            StatusCodes.Status403Forbidden,
+            ProblemTypes.PermissionDenied,
+            minimum is null ? ProfileHeaderAuthenticationHandler.RoleTooLowDetail : $"The {minimum} role is required.").ExecuteAsync(context);
     }
 }

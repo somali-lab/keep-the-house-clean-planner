@@ -37,15 +37,24 @@ public static class AuthorizationPolicies
 /// <summary>Satisfied by an authenticated actor whose role is at least <paramref name="Minimum"/>.</summary>
 internal sealed record MinimumRoleRequirement(Role Minimum) : IAuthorizationRequirement;
 
+/// <summary>
+/// Resolves the actor of the request (lazily, once; see <see cref="ActorContext"/>) and succeeds when its role is at least
+/// the minimum. A failing user lookup throws here, inside the authorization middleware, so the exception handler answers 500.
+/// </summary>
 internal sealed class MinimumRoleHandler : AuthorizationHandler<MinimumRoleRequirement>
 {
-    protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, MinimumRoleRequirement requirement)
+    protected override async Task HandleRequirementAsync(AuthorizationHandlerContext context, MinimumRoleRequirement requirement)
     {
-        if (context.User.Identity?.IsAuthenticated == true && ActorContext.RoleOf(context.User) is { } role && role >= requirement.Minimum)
+        if (context.Resource is not HttpContext http)
+        {
+            return;
+        }
+
+        var result = await ActorContext.ResolveAsync(http).ConfigureAwait(false);
+        var succeeded = result.Match(actor => actor.Role >= requirement.Minimum, _ => false, error => throw ActorContext.FailedLookup(error));
+        if (succeeded)
         {
             context.Succeed(requirement);
         }
-
-        return Task.CompletedTask;
     }
 }
