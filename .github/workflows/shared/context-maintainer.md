@@ -21,6 +21,8 @@ safe-outputs:
     # Instruction files are protected by default; they are the only ones this workflow may touch.
     protected-files: allowed
     allowed-files:
+      # The root file is listed on its own: "**/AGENTS.md" does not match a top-level AGENTS.md here.
+      - AGENTS.md
       - "**/AGENTS.md"
       - CLAUDE.md
       - README.md
