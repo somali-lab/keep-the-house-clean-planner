@@ -4,4 +4,9 @@
     <ProjectReference Include="..\..\src\Huishoudplanner.Domain\Huishoudplanner.Domain.csproj" />
   </ItemGroup>
 
+  <!-- The language-neutral golden vectors are copied next to the test assembly and read from there. -->
+  <ItemGroup>
+    <None Update="Vectors\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

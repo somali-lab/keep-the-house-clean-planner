@@ -1,4 +1,5 @@
 using Huishoudplanner.Adapters.Mongo;
+using Huishoudplanner.Adapters.Mongo.Migrations;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using MongoDB.Driver.Core.Servers;
@@ -8,10 +9,10 @@ using MongoDB.Driver.Core.Clusters;
 namespace Huishoudplanner.Integration.Tests;
 
 /// <summary>
-/// Error handling of the index ensurer, with a fake store (the seam) instead of a server; needs no container.
+/// Error handling of the legacy slot index drop migration, with a fake store (the seam) instead of a server; needs no container.
 /// Ports the "dropping the legacy slot index while another startup does the same" cases of health.test.ts.
 /// </summary>
-public sealed class IndexEnsurerErrorHandlingTests
+public sealed class DropLegacySlotIndexMigrationTests
 {
     private static MongoCommandException ServerError(int code, string message) =>
         new(
@@ -25,10 +26,10 @@ public sealed class IndexEnsurerErrorHandlingTests
     {
         var store = new FakeStore(dropError: ServerError(27, "index not found"));
 
-        await new IndexEnsurer(store).EnsureAsync(TestContext.Current.CancellationToken);
+        await new DropLegacyGeneratedSlotIndexMigration(store).ApplyAsync(TestContext.Current.CancellationToken);
 
         store.DropAttempts.Should().Be(1);
-        store.CreatedIndexCollections.Should().Contain(MongoCollections.Occurrences);
+        store.CreatedIndexCollections.Should().BeEmpty();
     }
 
     [Fact]
@@ -36,7 +37,7 @@ public sealed class IndexEnsurerErrorHandlingTests
     {
         var store = new FakeStore(dropError: ServerError(13, "not authorized"));
 
-        var ensure = async () => await new IndexEnsurer(store).EnsureAsync(TestContext.Current.CancellationToken);
+        var ensure = async () => await new DropLegacyGeneratedSlotIndexMigration(store).ApplyAsync(TestContext.Current.CancellationToken);
 
         (await ensure.Should().ThrowAsync<MongoCommandException>()).WithMessage("*not authorized*");
     }
@@ -46,7 +47,7 @@ public sealed class IndexEnsurerErrorHandlingTests
     {
         var store = new FakeStore(dropError: null, legacyIndexPresent: false);
 
-        await new IndexEnsurer(store).EnsureAsync(TestContext.Current.CancellationToken);
+        await new DropLegacyGeneratedSlotIndexMigration(store).ApplyAsync(TestContext.Current.CancellationToken);
 
         store.DropAttempts.Should().Be(0);
     }
@@ -56,11 +57,11 @@ public sealed class IndexEnsurerErrorHandlingTests
     {
         var store = new FakeStore(dropError: null, occurrencesExist: false);
 
-        await new IndexEnsurer(store).EnsureAsync(TestContext.Current.CancellationToken);
+        await new DropLegacyGeneratedSlotIndexMigration(store).ApplyAsync(TestContext.Current.CancellationToken);
 
         store.DropAttempts.Should().Be(0);
         store.ListedIndexCollections.Should().BeEmpty();
-        store.CreatedCollections.Should().Contain(MongoCollections.Occurrences);
+        store.CreatedCollections.Should().BeEmpty();
     }
 
     [Fact]
@@ -68,7 +69,7 @@ public sealed class IndexEnsurerErrorHandlingTests
     {
         var store = new FakeStore(dropError: null, legacyIndexName: IndexCatalog.GeneratedSlotIndex);
 
-        await new IndexEnsurer(store).EnsureAsync(TestContext.Current.CancellationToken);
+        await new DropLegacyGeneratedSlotIndexMigration(store).ApplyAsync(TestContext.Current.CancellationToken);
 
         store.DropAttempts.Should().Be(0);
     }
