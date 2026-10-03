@@ -78,8 +78,9 @@ The shared checker verifies that:
    missing from the context layer.
 4. Rules are not duplicated across instruction files.
 5. Skills still match their triggers and the code they describe.
-6. A distinct stack or recurring task does not require a new instruction file
-   or skill.
+6. A distinct stack, recurring task, or new business domain with its own
+   invariants (for example a derived ledger) does not require a new instruction
+   file or skill.
 
 Its editable scope is restricted to the agent-context files listed in the
 shared workflow, including `AGENTS.md`, the Copilot and Cursor instruction files,
