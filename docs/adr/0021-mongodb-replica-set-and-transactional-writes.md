@@ -8,7 +8,7 @@ ADR-0004 requires an audit entry for every state change, and ADR-0008 accepts th
 
 ## Decision
 
-MongoDB runs as a single-node replica set, which is enough for multi-document transactions. Every write that changes state runs in one transaction together with its audit entry, through a driven port that wraps the client session. Plan activation runs in one transaction after the preview token is rechecked inside it, so it is serialisable. A write that changes nothing still writes nothing.
+MongoDB runs as a single-node replica set, which is enough for multi-document transactions. Every write that changes state runs in one transaction together with its audit entry, through a driven port that wraps the client session. Plan activation runs in one transaction after the preview token is rechecked inside it. Transactions use snapshot isolation, which does not by itself prevent write skew (two transactions that read the same state and write different documents both commit). Activation therefore also writes one shared guard document, for example a version field on the plan or settings document, so two concurrent activations write the same document, one hits a write conflict and is retried or reported as a conflict; with that guard activation is serialisable. A write that changes nothing still writes nothing.
 
 Existing installations convert the standalone instance with a documented, backed-up `rs.initiate()` step. The Node application is verified on the replica set before the .NET application touches production data.
 

@@ -12,6 +12,20 @@ dotnet test       # xunit.v3 on Microsoft Testing Platform, all four test projec
 
 The SDK is pinned in `global.json` (10.0.x). Package versions live only in `Directory.Packages.props`; the version number comes from the repository-root `version.txt`.
 
+## Container image
+
+`docker/Dockerfile.dotnet` builds the web app in a Node stage, publishes the Host (`dotnet publish -c Release`, central package management) and runs it on `mcr.microsoft.com/dotnet/aspnet:10.0-noble` as the non-root `app` user (`USER $APP_UID`). The image installs `fontconfig` and `fonts-dejavu-core` for QuestPDF, has ICU and tzdata, and contains no browser. It takes the same `APP_OFFICIAL_BUILD` and `APP_RELEASE_DATE` build arguments as `docker/Dockerfile` (they reach the web build; the API version comes from `version.txt`). At the switch (slice 8.3) it replaces `docker/Dockerfile`.
+
+```bash
+docker build -f docker/Dockerfile.dotnet -t huishoudplanner-app:dotnet .
+docker run --rm -p 3000:3000 -e MONGO_URL='mongodb://host:27017/huishoudplanner?replicaSet=rs0' huishoudplanner-app:dotnet
+node scripts/smoke-dotnet.mjs   # or: npm run smoke:dotnet
+```
+
+- The listening port is set by `ASPNETCORE_HTTP_PORTS=3000`. `PORT` is validated by `AppOptions` but not applied to Kestrel yet, so setting `PORT` alone does not move the listener; change `ASPNETCORE_HTTP_PORTS` (and the published port) instead.
+- The image has neither `curl` nor `wget`, so the `HEALTHCHECK` is a plain `bash` TCP request to `/api/v2/health` on `ASPNETCORE_HTTP_PORTS`.
+- The application needs a single-node replica set (ADR-0021). The compose Mongo is still a standalone instance, so the smoke test adds `docker/docker-compose.dotnet-smoke.yml`, which starts Mongo with `--replSet rs0`, initiates it from the healthcheck and points `MONGO_URL` at it. `scripts/smoke-dotnet.mjs` uses its own compose project, port (3200, `SMOKE_PORT`), image tag and volumes, checks health, `/`, a SPA deep link and the Problem Details 404, and always removes everything again. CI runs it as the `dotnet-container-smoke` job.
+
 ## Architecture rules
 
 `tests/Huishoudplanner.Architecture.Tests` guards what project references cannot. Three mechanisms, because no single one sees everything:
@@ -37,3 +51,12 @@ Traces, metrics and logs go out over OTLP when `OTEL_EXPORTER_OTLP_ENDPOINT` is 
 Errors leave the API as RFC 9457 Problem Details (`application/problem+json`): `type` is `urn:huishoudplanner:problem:<code>`, plus `status`, `detail` and an always present `traceId`; validation problems add an `errors` object. Port error values (`NotFound`, `ConflictError`, `ValidationErrors`, `PortError` in `Domain/Errors`) are mapped by `ProblemResults` in `Adapters.Http`; unhandled exceptions and empty 4xx/5xx responses go through `UseExceptionHandler` and `UseStatusCodePages` and never leak a message.
 
 `GET /api/v2/health` answers `{ "status": "ok", "version": "1.7.0", "database": "ok" }`, or `503` with `"error"` in both status fields when the database ping fails. Integration tests build the host with `ApiFactory` (`tests/Huishoudplanner.Integration.Tests/Fixtures`): swap a driven port with `WithPort`, or use `ForMongo` for the Docker-backed variant.
+
+## OpenAPI document
+
+The API is described by an OpenAPI 3.1 document (`AddOpenApi("v2")` in `Adapters.Http`, document name `v2`, title and tags in `OpenApi/OpenApiSetup.cs`, endpoints describe themselves with `WithName`, `WithSummary`, `Produces<T>` and `ProducesProblem`). It is generated at build time by `Microsoft.Extensions.ApiDescription.Server` and checked in at `apps/api/openapi/v2.json`: the reviewed source of the generated TypeScript client in the web app.
+
+- **Regenerate:** `dotnet build apps/api/src/Huishoudplanner.Host` (every build of the Host rewrites `openapi/v2.json`; review and commit the diff). It needs no MongoDB and no configuration: under the generation tool `BuildTimeGeneration.IsRunning` is true (entry assembly `GetDocument.Insider`) and `Program.cs` skips the `ValidateOnStart` of `AppOptions`.
+- **Drift is caught twice:** `OpenApiDocumentTests` compares the live document (served at `/openapi/v2.json`) with the checked-in file, and the CI job `openapi-drift` builds the Host and runs `git diff --exit-code -- openapi/v2.json`.
+- **Development only:** `MapOpenApi` (`/openapi/v2.json`) and the Scalar UI (`/scalar/v2`) are mapped when `ASPNETCORE_ENVIRONMENT=Development`.
+- The only server entry is `/`: paths already carry the `/api/v2` prefix.

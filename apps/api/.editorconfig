@@ -5,3 +5,7 @@ indent_size = 2
 [*.cs]
 file_scoped_namespaces = true:warning
 csharp_style_namespace_declarations = file_scoped:warning
+
+# Driven ports are verb-based "ForXxx" interfaces (docs/plans/dotnet-rewrite.md section 3.2), not "IXxx".
+[src/Huishoudplanner.Domain/Ports/Driven/*.cs]
+dotnet_diagnostic.CA1715.severity = none

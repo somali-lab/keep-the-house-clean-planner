@@ -12,3 +12,5 @@
 !.env.example
 backups
 docs
+**/bin
+**/obj

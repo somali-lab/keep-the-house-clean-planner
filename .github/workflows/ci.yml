@@ -95,6 +95,23 @@ jobs:
       - name: Build container image
         run: docker build --file docker/Dockerfile --tag keep-the-house-clean-planner:ci .
 
+  dotnet-container-smoke:
+    name: .NET container smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+
+      # Builds docker/Dockerfile.dotnet, starts it against a throwaway Mongo replica set and always tears it down.
+      - name: Run the .NET container smoke test
+        run: node scripts/smoke-dotnet.mjs
+
   # Runs in parallel with every other job; nothing depends on it and it depends on nothing.
   e2e:
     name: End-to-end tests
@@ -178,3 +195,30 @@ jobs:
 
       - name: Test
         run: dotnet test --no-build
+
+  # Runs in parallel with every other job. Building the Host regenerates apps/api/openapi/v2.json; any difference with
+  # the committed file means the reviewed document is stale (regenerate locally with `dotnet build` and commit it).
+  openapi-drift:
+    name: OpenAPI document is up to date
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: apps/api/global.json
+
+      - name: Restore
+        run: dotnet restore src/Huishoudplanner.Host
+
+      - name: Regenerate the OpenAPI document
+        run: dotnet build src/Huishoudplanner.Host --no-restore -warnaserror
+
+      - name: Fail when the document changed
+        run: git diff --exit-code -- openapi/v2.json

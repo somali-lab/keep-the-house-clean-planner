@@ -19,6 +19,7 @@
     "test:e2e": "npm run test:e2e --workspace apps/web --if-present",
     "screenshots": "npm run screenshots --workspace apps/web",
     "smoke": "node scripts/smoke.mjs",
+    "smoke:dotnet": "node scripts/smoke-dotnet.mjs",
     "export:vectors": "node scripts/export-vectors.mjs",
     "format": "prettier --write .",
     "verify": "npm run lint && npm run typecheck && npm run test"

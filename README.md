@@ -103,7 +103,7 @@ On its first start, the application creates the base settings, household profile
 The Docker stack contains:
 
 - `app`: the Node.js application, including the headless Chromium shell for PDF generation.
-- `mongo`: MongoDB 8, with persistent data in the `mongo-data` volume.
+- `mongo`: MongoDB 8 as a single-node replica set (`rs0`, ADR-0021), with persistent data in the `mongo-data` volume.
 - `backup`: a separate MongoDB-tools container that creates and retains database archives.
 - `./backups`: the host directory used for database backups.
 
@@ -184,6 +184,24 @@ docker compose restart app
 
 > [!WARNING]
 > `--drop` replaces the current database. Create a fresh backup before restoring an archive.
+
+### MongoDB as a single-node replica set
+
+The Compose `mongo` service runs as a single-node replica set, which the .NET rewrite needs for multi-document transactions (ADR-0021). Its healthcheck runs `rs.initiate()` when the set is not initiated yet and reports healthy only once the node is primary, so a fresh installation needs no extra step. The Node application and the `backup` container keep the same `MONGO_URL` (`mongodb://mongo:27017/huishoudplanner`); no connection option changes, `mongodump` and `mongorestore` work unchanged.
+
+An existing installation, whose `mongo-data` volume was created by a standalone MongoDB, converts with the same healthcheck; the data stays in place:
+
+1. Back up: `docker compose run --rm backup once`, and keep a copy of the archive outside the host directory.
+2. Pull the new `docker-compose.yml` and run `docker compose up -d`. This recreates `mongo` with `--replSet rs0`; the healthcheck initiates the set within about 15 seconds.
+3. Verify: `docker compose exec mongo mongosh --quiet --eval "rs.status().myState"` prints `1`, and the application health check is green.
+
+If the automatic initiation does not run, initiate by hand:
+
+```sh
+docker compose exec mongo mongosh --quiet --eval "rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'mongo:27017' }] })"
+```
+
+To go back to a standalone MongoDB, restore the pre-conversion backup into a fresh volume instead of editing the replica set configuration.
 
 A full JSON export and import are also available under **Settings → Data**. Imports are validated before replacing the current data. The export includes the badge definitions with their pictures and the redemptions; the points and badge awards are rebuilt from the imported work. Importing an older file that would remove existing redemptions or badges first asks you to confirm that.
 
