@@ -85,6 +85,29 @@ internal sealed class MongoTaskStore : ForStoringTasks
         }
     }
 
+    public async Task<OneOf<IReadOnlyList<HouseholdTask>, PortError>> FindManyAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+        var objectIds = ids.Where(id => ObjectIdConverter.TryParse(id, out _)).Select(ObjectIdConverter.Parse).ToList();
+        if (objectIds.Count == 0)
+        {
+            return OneOf<IReadOnlyList<HouseholdTask>, PortError>.FromT0([]);
+        }
+
+        try
+        {
+            var documents = await FindFluent(new BsonDocument("_id", new BsonDocument("$in", new BsonArray(objectIds))))
+                .Sort(ListOrder)
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+            return OneOf<IReadOnlyList<HouseholdTask>, PortError>.FromT0(documents.ConvertAll(ToTask));
+        }
+        catch (Exception e) when (IsFailure(e))
+        {
+            return Failed("find several", e);
+        }
+    }
+
     public async Task<OneOf<IReadOnlyList<HouseholdTask>, PortError>> ListActiveInRoomAsync(string roomId, CancellationToken cancellationToken)
     {
         if (!ObjectIdConverter.TryParse(roomId, out var room))

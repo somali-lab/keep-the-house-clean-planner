@@ -1,5 +1,6 @@
 using Huishoudplanner.Domain.CyclePlans;
 using Huishoudplanner.Domain.Errors;
+using Huishoudplanner.Domain.Generation;
 using Huishoudplanner.Domain.Identity;
 using Huishoudplanner.Domain.Planning;
 using OneOf;
@@ -34,7 +35,7 @@ public interface ICyclePlanService
     /// Replaces all slots after the plan validation: a hard error is an <see cref="InvalidPlan"/> and nothing is written; otherwise the
     /// saved plan comes back with the warnings and the summary. Saving what is already stored writes and audits nothing.
     /// </summary>
-    Task<OneOf<PlanSlotsSaved, NotFound, ValidationErrors, InvalidPlan, ConflictError, PortError>> ReplaceSlotsAsync(Actor actor, string id, IReadOnlyList<CyclePlanSlot> slots, CancellationToken cancellationToken);
+    Task<OneOf<PlanSlotsSaved, NotFound, ValidationErrors, InvalidPlan, ConflictError, PortError, SettingsMissing>> ReplaceSlotsAsync(Actor actor, string id, IReadOnlyList<CyclePlanSlot> slots, CancellationToken cancellationToken);
 
     /// <summary>The slot differences between the plan and the active plan, and the minutes per person per week before and after.</summary>
     Task<OneOf<PlanComparison, NotFound, ValidationErrors, PortError>> CompareWithActiveAsync(string id, CancellationToken cancellationToken);
@@ -46,8 +47,11 @@ public interface ICyclePlanService
     Task<OneOf<PlanValidation, ValidationErrors, PortError>> ValidateDraftAsync(IReadOnlyList<CyclePlanSlot> slots, CancellationToken cancellationToken);
 }
 
-/// <summary>A saved slot list: the plan as stored, the non-blocking warnings and the workload summary.</summary>
-public sealed record PlanSlotsSaved(CyclePlan Plan, IReadOnlyList<PlanIssue> Warnings, PlanSummary Summary);
+/// <summary>
+/// A saved slot list: the plan as stored, the non-blocking warnings and the workload summary. <see cref="Synchronized"/> is the replacement of the
+/// upcoming occurrences that saving the slots of the active plan always carries (requirements 4.3); <see langword="null"/> for any other plan.
+/// </summary>
+public sealed record PlanSlotsSaved(CyclePlan Plan, IReadOnlyList<PlanIssue> Warnings, PlanSummary Summary, ReplacementResult? Synchronized = null);
 
 /// <summary>
 /// A plan against the active one: <see cref="AgainstPlanId"/> is <see langword="null"/> when no plan is active (the base is then empty).

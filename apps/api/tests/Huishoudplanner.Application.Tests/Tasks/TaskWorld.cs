@@ -69,6 +69,17 @@ internal sealed class FakeTaskStore : ForStoringTasks
         return Task.FromResult<OneOf<HouseholdTask, NotFound, PortError>>(task is null ? new NotFound() : task);
     }
 
+    public Task<OneOf<IReadOnlyList<HouseholdTask>, PortError>> FindManyAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken)
+    {
+        if (Failure is { } failure)
+        {
+            return Task.FromResult<OneOf<IReadOnlyList<HouseholdTask>, PortError>>(failure);
+        }
+
+        IReadOnlyList<HouseholdTask> found = [.. Items.Where(t => ids.Contains(t.Id)).OrderBy(t => t.Name, StringComparer.Ordinal).ThenBy(t => t.Id, StringComparer.Ordinal)];
+        return Task.FromResult<OneOf<IReadOnlyList<HouseholdTask>, PortError>>(OneOf<IReadOnlyList<HouseholdTask>, PortError>.FromT0(found));
+    }
+
     public Task<OneOf<IReadOnlyList<HouseholdTask>, PortError>> ListActiveInRoomAsync(string roomId, CancellationToken cancellationToken)
     {
         if (Failure is { } failure)
@@ -141,7 +152,7 @@ internal sealed class FakeTaskStore : ForStoringTasks
 }
 
 /// <summary>Runs the work once; an aborted run restores the tasks and the audit entries, like a rolled back transaction.</summary>
-internal sealed class TaskTransactions(FakeTaskStore tasks, Rooms.FakeAudit audit) : ForRunningTransactions
+internal sealed class TaskTransactions(FakeTaskStore tasks, Rooms.FakeAudit audit, Generation.FakeOccurrenceStore occurrences) : ForRunningTransactions
 {
     public int Aborts { get; private set; }
 
@@ -158,12 +169,14 @@ internal sealed class TaskTransactions(FakeTaskStore tasks, Rooms.FakeAudit audi
 
         var tasksBefore = tasks.Items.ToList();
         var auditBefore = audit.Entries.ToList();
+        var occurrencesBefore = occurrences.Items.ToList();
         var outcome = await work(cancellationToken);
         if (!outcome.ShouldCommit)
         {
             Aborts++;
             tasks.Items = tasksBefore;
             audit.Entries = auditBefore;
+            occurrences.Items = occurrencesBefore;
         }
 
         return outcome.Value;
@@ -187,6 +200,8 @@ internal sealed class TaskWorld
 
     public Rooms.FakeAudit Audit { get; } = new();
 
+    public Generation.FakeOccurrenceStore Occurrences { get; } = new();
+
     public TaskTransactions Transactions { get; }
 
     public Rooms.FixedClock Clock { get; } = new(Now);
@@ -195,8 +210,8 @@ internal sealed class TaskWorld
 
     public TaskWorld()
     {
-        Transactions = new TaskTransactions(TaskStore, Audit);
-        Service = new TaskService(TaskStore, RoomStore, new FakeUserStore(People), SettingsStore, Transactions, Audit, Clock);
+        Transactions = new TaskTransactions(TaskStore, Audit, Occurrences);
+        Service = new TaskService(TaskStore, RoomStore, new FakeUserStore(People), SettingsStore, Occurrences, Transactions, Audit, Clock);
     }
 
     public Room Room(string name, bool active = true)

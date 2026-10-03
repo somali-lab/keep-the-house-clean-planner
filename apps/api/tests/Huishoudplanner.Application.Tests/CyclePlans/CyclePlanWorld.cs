@@ -1,4 +1,6 @@
 using Huishoudplanner.Application.CyclePlans;
+using Huishoudplanner.Application.Generation;
+using Huishoudplanner.Application.Tests.Generation;
 using FakeAudit = Huishoudplanner.Application.Tests.Rooms.FakeAudit;
 using FakeRooms = Huishoudplanner.Application.Tests.Rooms.FakeRooms;
 using FixedClock = Huishoudplanner.Application.Tests.Rooms.FixedClock;
@@ -100,7 +102,7 @@ internal sealed class FakeCyclePlanStore : ForStoringCyclePlans
 }
 
 /// <summary>Runs the work once; an aborted run restores the plans and the audit entries, like a rolled back transaction.</summary>
-internal sealed class PlanTransactions(FakeCyclePlanStore plans, FakeAudit audit) : ForRunningTransactions
+internal sealed class PlanTransactions(FakeCyclePlanStore plans, FakeAudit audit, FakeCycleStore cycles, FakeOccurrenceStore occurrences) : ForRunningTransactions
 {
     public int Aborts { get; private set; }
 
@@ -117,12 +119,16 @@ internal sealed class PlanTransactions(FakeCyclePlanStore plans, FakeAudit audit
 
         var plansBefore = plans.Items.ToList();
         var auditBefore = audit.Entries.ToList();
+        var cyclesBefore = cycles.Items.ToList();
+        var occurrencesBefore = occurrences.Items.ToList();
         var outcome = await work(cancellationToken);
         if (!outcome.ShouldCommit)
         {
             Aborts++;
             plans.Items = plansBefore;
             audit.Entries = auditBefore;
+            cycles.Items = cyclesBefore;
+            occurrences.Items = occurrencesBefore;
         }
 
         return outcome.Value;
@@ -148,9 +154,15 @@ internal sealed class CyclePlanWorld
 
     public FakeAudit Audit { get; } = new();
 
+    public FakeCycleStore Cycles { get; } = new();
+
+    public FakeOccurrenceStore Occurrences { get; } = new();
+
     public PlanTransactions Transactions { get; }
 
     public FixedClock Clock { get; } = new(Now);
+
+    public GenerationService Generation { get; }
 
     public CyclePlanService Service { get; }
 
@@ -158,8 +170,9 @@ internal sealed class CyclePlanWorld
 
     public CyclePlanWorld()
     {
-        Transactions = new PlanTransactions(Plans, Audit);
-        Service = new CyclePlanService(Plans, Tasks, new FakeUserStore(People), RoomStore, Settings, Transactions, Audit, Clock);
+        Transactions = new PlanTransactions(Plans, Audit, Cycles, Occurrences);
+        Generation = new GenerationService(Plans, Tasks, RoomStore, Settings, Cycles, Occurrences, Transactions, Audit, Clock);
+        Service = new CyclePlanService(Plans, Tasks, new FakeUserStore(People), RoomStore, Settings, Generation, Transactions, Audit, Clock);
         Seed = new CyclePlanSeedService(Plans, Audit, Transactions, Clock);
     }
 

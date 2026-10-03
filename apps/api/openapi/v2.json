@@ -1472,7 +1472,7 @@
           "Cycle plans"
         ],
         "summary": "Replaces all slots of a plan (planners).",
-        "description": "The plan is validated first: a plan that breaks a hard rule (unknown or inactive task or person, unavailable assignee, the same task twice on one day) is refused with 422 invalid_plan, carrying errors, issues, warnings and summary, and nothing is written. Otherwise the plan is saved and returned with the warnings and the summary. The audit entry holds only the added, removed and changed slots; saving what is stored writes and audits nothing.",
+        "description": "The plan is validated first: a plan that breaks a hard rule (unknown or inactive task or person, unavailable assignee, the same task twice on one day) is refused with 422 invalid_plan, carrying errors, issues, warnings and summary, and nothing is written. Otherwise the plan is saved and returned with the warnings and the summary. The audit entry holds only the added, removed and changed slots; saving what is stored writes and audits nothing. Saving the slots of the ACTIVE plan always synchronises the upcoming occurrences in the same transaction (the open generated occurrences from today to the end of the next cycle are replaced; done, skipped, moved and ad-hoc ones stay): the replacement is reported in synchronized and audited with the system as source and the saving profile as actor. Saving a draft plan changes no occurrences and answers synchronized null. Answers 500 settings_missing when the installation has no settings.",
         "operationId": "replaceCyclePlanSlots",
         "parameters": [
           {
@@ -1685,6 +1685,64 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/cycles": {
+      "get": {
+        "tags": [
+          "Cycles"
+        ],
+        "summary": "Lists the generated cycles in index order.",
+        "description": "Needs no profile. A cycle is 28 days from a Monday; index 0 starts on the anchor date and indexes before it are negative. Days in a cycle that is not listed are not generated yet. The list is paged: pass the nextCursor of a page as cursor for the next one (limit 1 to 200, default 50).",
+        "operationId": "listCycles",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CycleListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
                 }
               }
             }
@@ -2855,6 +2913,27 @@
           }
         }
       },
+      "CycleListResponse": {
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CycleResponse"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "CyclePlanDeletedResponse": {
         "required": [
           "deleted"
@@ -2956,6 +3035,54 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "CycleResponse": {
+        "required": [
+          "id",
+          "index",
+          "startDate",
+          "endDate",
+          "planId",
+          "generatedAt",
+          "generationRunId"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "index": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "0 is the cycle that starts on the anchor date; negative before it.",
+            "format": "int32"
+          },
+          "startDate": {
+            "type": "string",
+            "description": "First day (a Monday), YYYY-MM-DD."
+          },
+          "endDate": {
+            "type": "string",
+            "description": "Last day (a Sunday), YYYY-MM-DD."
+          },
+          "planId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The plan the cycle was generated from; null when no plan was active."
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "generationRunId": {
+            "type": "string"
           }
         }
       },
@@ -3212,6 +3339,51 @@
           },
           "lastEvidenceId": {
             "type": "string"
+          }
+        }
+      },
+      "GenerationResultResponse": {
+        "required": [
+          "cycleIndex",
+          "cycleId",
+          "planId",
+          "inserted",
+          "skipped"
+        ],
+        "type": "object",
+        "properties": {
+          "cycleIndex": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "cycleId": {
+            "type": "string"
+          },
+          "planId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "inserted": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "skipped": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },
@@ -3738,7 +3910,8 @@
         "required": [
           "plan",
           "warnings",
-          "summary"
+          "summary",
+          "synchronized"
         ],
         "type": "object",
         "properties": {
@@ -3753,6 +3926,16 @@
           },
           "summary": {
             "$ref": "#/components/schemas/PlanSummaryResponse"
+          },
+          "synchronized": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SynchronizedResponse"
+              }
+            ]
           }
         }
       },
@@ -4192,6 +4375,29 @@
               "string"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "SynchronizedResponse": {
+        "required": [
+          "removed",
+          "generated"
+        ],
+        "type": "object",
+        "properties": {
+          "removed": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "generated": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GenerationResultResponse"
+            }
           }
         }
       },
@@ -4952,6 +5158,10 @@
     {
       "name": "Cycle plans",
       "description": "The four-week cycle plans: everyone reads and compares them, planners create, change, delete, save slots and validate."
+    },
+    {
+      "name": "Cycles",
+      "description": "The generated four-week cycles: a read-only list, created by generation only."
     },
     {
       "name": "Users",

@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using Huishoudplanner.Domain.CyclePlans;
+using Huishoudplanner.Domain.Generation;
 using Huishoudplanner.Domain.Planning;
 using Huishoudplanner.Domain.Ports.Driving;
 
@@ -151,11 +152,29 @@ public sealed record PlanValidationResponse(
         PlanSummaryResponse.From(validation.Summary));
 }
 
-/// <summary>A saved slot list: the plan, the non-blocking warnings and the summary.</summary>
-public sealed record PlanSlotsSavedResponse(CyclePlanResponse Plan, IReadOnlyList<PlanIssueResponse> Warnings, PlanSummaryResponse Summary)
+/// <summary>What generating one cycle did: occurrences inserted, and already there (<c>skipped</c>, idempotency). <c>planId</c> is null when no plan is active.</summary>
+public sealed record GenerationResultResponse(int CycleIndex, string CycleId, string? PlanId, int Inserted, int Skipped)
 {
-    internal static PlanSlotsSavedResponse From(PlanSlotsSaved saved) =>
-        new(CyclePlanResponse.From(saved.Plan), [.. saved.Warnings.Select(PlanIssueResponse.From)], PlanSummaryResponse.From(saved.Summary));
+    internal static GenerationResultResponse From(GenerationResult result) => new(result.CycleIndex, result.CycleId, result.PlanId, result.Inserted, result.Skipped);
+}
+
+/// <summary>
+/// The replacement of the upcoming occurrences that saving the slots of the active plan carries: how many open generated occurrences were
+/// removed (the replaced and created ones are audited with the system as source and the saving profile as actor) and what was generated again.
+/// </summary>
+public sealed record SynchronizedResponse(int Removed, IReadOnlyList<GenerationResultResponse> Generated)
+{
+    internal static SynchronizedResponse From(ReplacementResult result) => new(result.Removed, [.. result.Generated.Select(GenerationResultResponse.From)]);
+}
+
+/// <summary>A saved slot list: the plan, the non-blocking warnings, the summary, and <c>synchronized</c> (null unless the plan is the active one).</summary>
+public sealed record PlanSlotsSavedResponse(CyclePlanResponse Plan, IReadOnlyList<PlanIssueResponse> Warnings, PlanSummaryResponse Summary, SynchronizedResponse? Synchronized)
+{
+    internal static PlanSlotsSavedResponse From(PlanSlotsSaved saved) => new(
+        CyclePlanResponse.From(saved.Plan),
+        [.. saved.Warnings.Select(PlanIssueResponse.From)],
+        PlanSummaryResponse.From(saved.Summary),
+        saved.Synchronized is { } synchronized ? SynchronizedResponse.From(synchronized) : null);
 }
 
 public sealed record DiffPositionResponse(int WeekIndex, int Weekday, string? AssigneeId)

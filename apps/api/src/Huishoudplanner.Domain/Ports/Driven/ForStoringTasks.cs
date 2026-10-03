@@ -21,6 +21,9 @@ public interface ForStoringTasks
     /// <summary><see cref="NotFound"/> also for an id that is not a valid id.</summary>
     Task<OneOf<HouseholdTask, NotFound, PortError>> FindAsync(string id, CancellationToken cancellationToken);
 
+    /// <summary>The tasks that exist among these ids (a malformed or unknown id is simply absent), ordered by name and id; bounded by the ids asked for.</summary>
+    Task<OneOf<IReadOnlyList<HouseholdTask>, PortError>> FindManyAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken);
+
     /// <summary>Every active task of the room, ordered by name and id.</summary>
     Task<OneOf<IReadOnlyList<HouseholdTask>, PortError>> ListActiveInRoomAsync(string roomId, CancellationToken cancellationToken);
 
