@@ -14,4 +14,5 @@ public static class MongoCollections
     public const string PointEntries = "pointEntries";
     public const string Badges = "badges";
     public const string BadgeAwards = "badgeAwards";
+    public const string Migrations = "migrations";
 }
