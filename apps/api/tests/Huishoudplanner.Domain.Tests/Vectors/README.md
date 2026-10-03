@@ -11,8 +11,8 @@ file differs from what the TypeScript functions return today.
 
 ## Files
 
-One file per TypeScript module: `time.json`, `cycle.json`, `due.json`. `limits.json` is the odd one out: it pins every limit and default of `GET /api/v2/meta/limits` (the function `limits`, keys `group.name`) and `defaultPointsForDuration`. Later slices add
-`bonuses.json`, `points.json`, `badges.json`, `rewards.json` and `validation.json` in the same format.
+One file per TypeScript module: `time.json`, `cycle.json`, `due.json`, `validation.json` (`isWeekendDay`, `budgetFor`, `validatePlan` of `validation/plan.ts`). `limits.json` is the odd one out: it pins every limit and default of `GET /api/v2/meta/limits` (the function `limits`, keys `group.name`) and `defaultPointsForDuration`. Later slices add
+`bonuses.json`, `points.json`, `badges.json` and `rewards.json` in the same format.
 
 ## Format
 
@@ -56,3 +56,4 @@ One file per TypeScript module: `time.json`, `cycle.json`, `due.json`. `limits.j
   `{ taskId, daysSince, periodDays, ratio, state }`. Compare `ratio` as a double. The order of the list is part
   of the expectation.
 - `dueState` takes a `ratio` and returns `ok`, `due` or `overdue`.
+- `validatePlan` takes `slots`, `tasks`, `users` and `intervals` and returns `{ errors, warnings, summary }`. The order of `errors`, `warnings` and every list in `summary` is part of the expectation. An issue carries only the fields of its code (absent fields are not null); `required: null` in a task summary is a real value. A fractional `weekIndex` is not a vector: the C# `PlanSlot` holds an `int`, so request binding refuses it before validation.
