@@ -16,6 +16,13 @@ public static class OccurrenceRules
 
     public const string AssigneeUnavailable = "assignee_unavailable";
 
+    /// <summary>Days the calendar arithmetic (a day to an instant, one day further) can handle in any timezone: not the first and not the last year of <see cref="DateOnly"/>.</summary>
+    public static bool IsSupportedDay(DateOnly day) => day.Year is > 1 and < 9999;
+
+    /// <summary>The instant cut to whole milliseconds, the precision Mongo stores.</summary>
+    public static DateTimeOffset WholeMilliseconds(DateTimeOffset instant) =>
+        new(instant.Ticks - (instant.Ticks % TimeSpan.TicksPerMillisecond), instant.Offset);
+
     /// <summary>The API id format: 24 hexadecimal characters.</summary>
     public static bool IsId(string? id) =>
         id is { Length: 24 } && id.All(c => c is (>= '0' and <= '9') or (>= 'a' and <= 'f') or (>= 'A' and <= 'F'));

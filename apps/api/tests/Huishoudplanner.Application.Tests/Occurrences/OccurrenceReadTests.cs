@@ -90,6 +90,17 @@ public sealed class OccurrenceReadTests
         result.AsT1.Errors.Should().ContainKey(field);
     }
 
+    [Fact]
+    public async Task List_aRangeAtTheEdgeOfTheCalendarIsAValidationErrorAndNeverOverflows()
+    {
+        var w = Arranged();
+
+        var result = await w.Service.ListAsync(new OccurrenceListRequest(DateOnly.MinValue, DateOnly.MaxValue), Ct);
+
+        result.AsT1.Errors["from"].Should().Equal("out_of_range");
+        result.AsT1.Errors["to"].Should().Equal("out_of_range");
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(501)]

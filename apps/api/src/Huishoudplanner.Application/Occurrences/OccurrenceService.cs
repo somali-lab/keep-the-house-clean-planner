@@ -59,6 +59,16 @@ public sealed class OccurrenceService(
             errors["from"] = ["from_after_to"];
         }
 
+        if (!OccurrenceRules.IsSupportedDay(request.From))
+        {
+            errors["from"] = ["out_of_range"];
+        }
+
+        if (!OccurrenceRules.IsSupportedDay(request.To))
+        {
+            errors["to"] = ["out_of_range"];
+        }
+
         var take = request.Limit ?? OccurrenceListQuery.DefaultLimit;
         if (take is < 1 or > OccurrenceListQuery.MaxLimit)
         {
@@ -282,7 +292,14 @@ public sealed class OccurrenceService(
             return ValidationErrors.For("completedBy", "invalid_object_id");
         }
 
-        return await RunViewAsync(ct => EditCompletionCoreAsync(AuditActor.From(actor), id.ToLowerInvariant(), command with { CompletedBy = command.CompletedBy.ToLowerInvariant() }, ct), cancellationToken).ConfigureAwait(false);
+        if (!OccurrenceRules.IsSupportedDay(command.Date))
+        {
+            return ValidationErrors.For("date", "out_of_range");
+        }
+
+        // Mongo stores whole milliseconds, like a JavaScript Date: a sub-millisecond difference is no change.
+        var normalised = command with { CompletedBy = command.CompletedBy.ToLowerInvariant(), CompletedAt = OccurrenceRules.WholeMilliseconds(command.CompletedAt) };
+        return await RunViewAsync(ct => EditCompletionCoreAsync(AuditActor.From(actor), id.ToLowerInvariant(), normalised, ct), cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<Step<(Context, Occurrence)>> EditCompletionCoreAsync(AuditActor actor, string id, EditCompletionCommand command, CancellationToken ct)
@@ -445,6 +462,11 @@ public sealed class OccurrenceService(
         if (Precondition(id) is { } bad)
         {
             return bad;
+        }
+
+        if (!OccurrenceRules.IsSupportedDay(day))
+        {
+            return ValidationErrors.For("date", "out_of_range");
         }
 
         return await RunAsync(ct => RescheduleCoreAsync(AuditActor.From(actor), id.ToLowerInvariant(), day, ct), change => change, cancellationToken).ConfigureAwait(false);

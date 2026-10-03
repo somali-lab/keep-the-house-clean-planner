@@ -183,7 +183,7 @@ internal static partial class OccurrenceRequestParser
         if (IsoInstant().IsMatch(text) &&
             DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsed))
         {
-            return parsed;
+            return OccurrenceRules.WholeMilliseconds(parsed);
         }
 
         errors[field] = ["must be an ISO 8601 date and time with a time zone, for example 2026-09-18T08:00:00.000Z"];

@@ -57,6 +57,8 @@ public sealed class OccurrenceReadEndpointTests(OccurrenceHarness h) : IClassFix
     [InlineData("from=2026-09-20&to=2026-09-14", "from")]
     [InlineData("from=2026-9-1&to=2026-09-14", "from")]
     [InlineData("from=2026-09-14", "to")]
+    [InlineData("from=0001-01-01&to=2026-09-14", "from")]
+    [InlineData("from=2026-09-14&to=9999-12-31", "to")]
     [InlineData("from=2026-09-14&to=2026-09-20&status=weird", "status")]
     [InlineData("from=2026-09-14&to=2026-09-20&assigneeId=nope", "assigneeId")]
     [InlineData("from=2026-09-14&to=2026-09-20&limit=abc", "limit")]

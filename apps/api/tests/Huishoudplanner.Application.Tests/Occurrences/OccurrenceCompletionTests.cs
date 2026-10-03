@@ -478,6 +478,33 @@ public sealed class OccurrenceCompletionTests
         w.Writes.Should().Be(writes);
     }
 
+    [Fact]
+    public async Task EditCompletion_aSubMillisecondDifferenceIsNoChange()
+    {
+        var w = new OccurrenceWorld();
+        var occurrence = w.Seed(w.Weekly, "2026-09-17", w.P1);
+        (await w.Service.CompleteAsync(OccurrenceWorld.Actor(w.P1), occurrence.Id, new CompleteCommand(), Ct)).IsT0.Should().BeTrue();
+        var writes = w.Writes;
+
+        var view = (await w.Service.EditCompletionAsync(OccurrenceWorld.Actor(w.Admin), occurrence.Id, new EditCompletionCommand(new DateOnly(2026, 9, 17), OccurrenceWorld.Now.AddTicks(1234), w.P1.Id), Ct)).AsT0;
+
+        view.Occurrence.CompletedAt.Should().Be(OccurrenceWorld.Now);
+        w.Writes.Should().Be(writes);
+    }
+
+    [Fact]
+    public async Task EditCompletionAndReschedule_aDayAtTheEdgeOfTheCalendarIsAValidationError()
+    {
+        var w = new OccurrenceWorld();
+        var occurrence = w.Seed(w.Weekly, "2026-09-17", w.P1, OccurrenceStatus.Done, o => o with { CompletedAt = OccurrenceWorld.Now, CompletedBy = w.P1.Id });
+
+        var edit = await w.Service.EditCompletionAsync(OccurrenceWorld.Actor(w.Admin), occurrence.Id, new EditCompletionCommand(DateOnly.MinValue, OccurrenceWorld.Now, w.P1.Id), Ct);
+        var move = await w.Service.RescheduleAsync(OccurrenceWorld.Actor(w.P1), occurrence.Id, DateOnly.MaxValue, Ct);
+
+        edit.AsT2.Errors["date"].Should().Equal("out_of_range");
+        move.AsT2.Errors["date"].Should().Equal("out_of_range");
+    }
+
     // ---- delete (admin correction)
 
     [Fact]

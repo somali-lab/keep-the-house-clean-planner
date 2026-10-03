@@ -28,6 +28,8 @@ public sealed class OccurrenceCompleteEndpointTests(OccurrenceHarness h) : IClas
     [Fact]
     public async Task Complete_creditsTheAssigneeWhenAnotherActorChecksOffForThemAndMaintainsLastCompletedAt()
     {
+        // A moment later than any other test of this class uses, so the task's lastCompletedAt really changes whatever the test order is.
+        h.Clock.Set("2026-09-16T09:00:00.000Z");
         var id = await h.IdOfAsync(h.Weekly, "2026-09-21");
 
         var response = await CompleteAs(h.P2, id, new { completedBy = h.P1.Id });
@@ -35,7 +37,7 @@ public sealed class OccurrenceCompleteEndpointTests(OccurrenceHarness h) : IClas
         response.Status.Should().Be(HttpStatusCode.OK, response.Body.ToString());
         var o = response.Body;
         (o.GetProperty("status").GetString(), o.GetProperty("statusBeforeCompletion").GetString(), o.GetProperty("completedBy").GetString()).Should().Be(("done", "open", h.P1.Id));
-        o.GetProperty("completedAt").GetDateTimeOffset().Should().Be(new DateTimeOffset(2026, 9, 16, 8, 0, 0, TimeSpan.Zero));
+        o.GetProperty("completedAt").GetDateTimeOffset().Should().Be(new DateTimeOffset(2026, 9, 16, 9, 0, 0, TimeSpan.Zero));
         o.GetProperty("pointsSnapshot").GetInt32().Should().Be(30);
         var entry = (await h.AuditOfAsync("occurrence", id, "complete")).Should().ContainSingle().Subject;
         entry["source"].AsString.Should().Be("ui");
@@ -46,8 +48,9 @@ public sealed class OccurrenceCompleteEndpointTests(OccurrenceHarness h) : IClas
         meta["occurrence"]["taskNameSnapshot"].AsString.Should().Be("Badkamer schoonmaken");
         meta["occurrence"]["roomNameSnapshot"].AsString.Should().Be("Badkamer");
         meta["occurrence"]["date"].IsValidDateTime.Should().BeTrue();
-        (await h.LastCompletedAtAsync(h.Weekly)).ToUniversalTime().Should().Be(new DateTime(2026, 9, 16, 8, 0, 0, DateTimeKind.Utc));
-        (await h.AuditOfAsync("task", h.Weekly, "update")).Should().Contain(e => e["meta"]["occurrenceId"] == Oid(id));
+        (await h.LastCompletedAtAsync(h.Weekly)).ToUniversalTime().Should().Be(new DateTime(2026, 9, 16, 9, 0, 0, DateTimeKind.Utc));
+        (await h.AuditOfAsync("task", h.Weekly, "update")).Should().Contain(e => e.Contains("meta") && e["meta"]["occurrenceId"] == Oid(id));
+        h.Clock.Set(OccurrenceHarness.Wednesday);
     }
 
     [Fact]
