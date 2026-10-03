@@ -1,6 +1,7 @@
 
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Ports.Driven;
+using Huishoudplanner.Host.Startup;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Routing;
@@ -24,23 +25,29 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     private readonly List<Action<IServiceCollection>> overrides = [];
 
     private readonly List<ILoggerProvider> logProviders = [];
+    private readonly Dictionary<string, string> settings = [];
+    private readonly bool runStartup;
     private string environment = "Test";
     private string? webDistDir;
 
-    private ApiFactory(string mongoUrl) => this.mongoUrl = mongoUrl;
+    private ApiFactory(string mongoUrl, bool runStartup)
+    {
+        this.mongoUrl = mongoUrl;
+        this.runStartup = runStartup;
+    }
 
     /// <summary>Backed by a real MongoDB (use the shared <see cref="MongoContainerFixture"/>), in its own database.</summary>
     public static ApiFactory ForMongo(MongoContainerFixture mongo, string? databaseName = null)
     {
         ArgumentNullException.ThrowIfNull(mongo);
-        return new ApiFactory(WithDatabase(mongo.ConnectionString, databaseName ?? MongoContainerFixture.NewDatabaseName()));
+        return new ApiFactory(WithDatabase(mongo.ConnectionString, databaseName ?? MongoContainerFixture.NewDatabaseName()), runStartup: true);
     }
 
     /// <summary>For tests that replace every port they touch: no database is contacted unless a real adapter is used.</summary>
-    public static ApiFactory WithoutDatabase() => new("mongodb://127.0.0.1:1/unused");
+    public static ApiFactory WithoutDatabase() => new("mongodb://127.0.0.1:1/unused", runStartup: false);
 
     /// <summary>A MongoDB address nothing listens on, for the "database is down" case with the real adapter.</summary>
-    public static ApiFactory ForUnreachableMongo() => new("mongodb://127.0.0.1:1/unreachable");
+    public static ApiFactory ForUnreachableMongo() => new("mongodb://127.0.0.1:1/unreachable", runStartup: false);
 
     /// <summary>Runs the host in another environment than <c>Test</c> (for example <c>Development</c>, where the OpenAPI document is served).</summary>
     public ApiFactory InEnvironment(string environmentName)
@@ -66,6 +73,15 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     {
         ArgumentNullException.ThrowIfNull(map);
         overrides.Add(services => services.AddSingleton<IStartupFilter>(new TestEndpointsStartupFilter(map)));
+        return this;
+    }
+
+    /// <summary>Sets a configuration value (an environment-variable style key such as <c>SEED_USERS</c>) for this host only.</summary>
+    public ApiFactory WithSetting(string key, string value)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        ArgumentNullException.ThrowIfNull(value);
+        settings[key] = value;
         return this;
     }
 
@@ -96,9 +112,23 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             builder.UseSetting("WEB_DIST_DIR", webDistDir);
         }
 
+        foreach (var (key, value) in settings)
+        {
+            builder.UseSetting(key, value);
+        }
+
         builder.ConfigureLogging(logging => logProviders.ForEach(p => logging.AddProvider(p)));
         builder.ConfigureTestServices(services =>
         {
+            if (!runStartup)
+            {
+                // No real database behind this host: nothing to migrate, index or seed.
+                foreach (var startup in services.Where(d => d.ImplementationType == typeof(StartupService)).ToList())
+                {
+                    services.Remove(startup);
+                }
+            }
+
             foreach (var apply in overrides)
             {
                 apply(services);

@@ -1,4 +1,5 @@
 using Huishoudplanner.Adapters.Http.Health;
+using Huishoudplanner.Adapters.Http.Users;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OpenApi;
@@ -32,6 +33,7 @@ public static class OpenApiSetup
             document.Tags = new HashSet<OpenApiTag>
             {
                 new() { Name = HealthTag, Description = "Liveness and database reachability, for load balancers and the container healthcheck." },
+                new() { Name = UserEndpoints.UsersTag, Description = "The people of the household: list, create, change, and their browser notification moments." },
             };
             return Task.CompletedTask;
         }));

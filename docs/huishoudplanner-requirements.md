@@ -566,6 +566,7 @@ GET    /api/health   (v2: GET /api/v2/health answers { status, version, database
 
 GET    /api/users                           POST /api/users            PATCH /api/users/:id
 PUT    /api/users/:id/browser-notifications (own moments, or any person's for an admin)
+       (v2: /api/v2/users with the same verbs. GET answers { items, nextCursor } and takes the optional filters active=true|false, limit (1 to 500, default 100) and cursor; a person carries id instead of _id; the PUT answers 403 permission_denied for another person unless the actor is an administrator; a field error is a validation_error problem whose errors object is keyed by the dotted field path, for example unavailableWeekdays.0)
 GET    /api/rooms                           POST /api/rooms            PATCH /api/rooms/:id
 DELETE /api/rooms/:id
 GET    /api/tasks                           POST /api/tasks            PATCH /api/tasks/:id

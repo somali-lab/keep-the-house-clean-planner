@@ -1,3 +1,4 @@
+using Huishoudplanner.Adapters.Mongo.Users;
 using Huishoudplanner.Domain.Ports.Driven;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -34,8 +35,11 @@ public static class MongoAdapterRegistration
         services.TryAddSingleton<IMongoClient>(sp => MongoClientFactory.CreateClient(sp.GetRequiredService<MongoOptions>()));
         services.AddSingleton<ForCheckingHealth>(sp =>
             new MongoHealthCheck(sp.GetRequiredService<IMongoClient>(), sp.GetRequiredService<MongoOptions>()));
-        services.AddSingleton<ForFindingUsers>(sp =>
-            new MongoUserLookup(sp.GetRequiredService<IMongoClient>(), sp.GetRequiredService<MongoOptions>()));
+        services.AddSingleton<ForPreparingStorage>(sp => new MongoStoragePreparer(
+            sp.GetRequiredService<IMongoClient>(), sp.GetRequiredService<MongoOptions>(), sp.GetRequiredService<TimeProvider>()));
+        services.TryAddSingleton<ForRunningTransactions>(sp =>
+            new MongoTransactionRunner(sp.GetRequiredService<IMongoClient>(), sp.GetRequiredService<TimeProvider>()));
+        services.AddMongoUsers();
         return services.AddMongoAuditRecorder();
     }
 }
