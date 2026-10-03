@@ -2,6 +2,7 @@ using Huishoudplanner.Adapters.Http.Ai;
 using Huishoudplanner.Adapters.Http.CyclePlans;
 using Huishoudplanner.Adapters.Http.Cycles;
 using Huishoudplanner.Adapters.Http.Health;
+using Huishoudplanner.Adapters.Http.Statistics;
 using Huishoudplanner.Adapters.Http.Tasks;
 using Huishoudplanner.Adapters.Http.Users;
 using Microsoft.AspNetCore.OpenApi;
@@ -51,6 +52,7 @@ public static class OpenApiSetup
                 new() { Name = SettingsTag, Description = "Household settings: calendar, intervals, AI provider, bonuses, currency and reward goals." },
                 new() { Name = RoomsTag, Description = "The rooms of the house: everyone reads them, administrators create, change and delete them." },
                 new() { Name = AuditTag, Description = "The history of changes: everyone reads it, administrators clear it." },
+                new() { Name = StatisticsEndpoints.StatisticsTag, Description = "Statistics over the execution history: workload, completion, intervals and deviations are open to everyone; administrators start the statistics over or purge old history." },
                 new() { Name = TaskEndpoints.TasksTag, Description = "The recurring household tasks: everyone reads them, planners create, change, deactivate and bulk-change them." },
                 new() { Name = CyclePlanEndpoints.CyclePlansTag, Description = "The four-week cycle plans: everyone reads and compares them, planners create, change, delete, save slots and validate." },
                 new() { Name = CycleEndpoints.CyclesTag, Description = "The generated four-week cycles: a read-only list, created by generation only." },
