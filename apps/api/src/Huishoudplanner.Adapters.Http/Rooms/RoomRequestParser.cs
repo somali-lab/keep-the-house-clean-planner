@@ -15,12 +15,12 @@ internal static class RoomRequestParser
 {
     private const int MaxBodyBytes = 16 * 1024;
 
-    public static async Task<OneOf<JsonElement, ValidationErrors>> ReadObjectAsync(HttpRequest request, CancellationToken cancellationToken)
+    public static async Task<OneOf<JsonElement, ValidationErrors>> ReadObjectAsync(HttpRequest request, CancellationToken cancellationToken, int maxBodyBytes = MaxBodyBytes)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var buffer = new byte[MaxBodyBytes + 1];
+        var buffer = new byte[maxBodyBytes + 1];
         var read = await request.Body.ReadAtLeastAsync(buffer, buffer.Length, throwOnEndOfStream: false, cancellationToken).ConfigureAwait(false);
-        if (read > MaxBodyBytes)
+        if (read > maxBodyBytes)
         {
             return ValidationErrors.For("body", "is too large");
         }
