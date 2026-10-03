@@ -16,4 +16,8 @@
     <PackageReference Include="TngTech.ArchUnitNET.xUnitV3" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\fixtures\Huishoudplanner.Architecture.Tests.Fixtures\Huishoudplanner.Architecture.Tests.Fixtures.csproj" />
+  </ItemGroup>
+
 </Project>
