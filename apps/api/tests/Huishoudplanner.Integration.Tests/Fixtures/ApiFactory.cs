@@ -1,6 +1,9 @@
+using Huishoudplanner.Adapters.Http;
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Ports.Driven;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -45,6 +48,17 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         return this;
     }
 
+    /// <summary>
+    /// Maps extra endpoints behind the real adapter pipeline (routing, <see cref="HttpAdapterExtensions.UseHttpAdapter"/>,
+    /// authentication and authorization), so policies can be exercised without production endpoints.
+    /// </summary>
+    public ApiFactory WithEndpoints(Action<IEndpointRouteBuilder> map)
+    {
+        ArgumentNullException.ThrowIfNull(map);
+        overrides.Add(services => services.AddSingleton<IStartupFilter>(new TestEndpointsStartupFilter(map)));
+        return this;
+    }
+
     /// <summary>Replaces the registration of a driven port with a fake.</summary>
     public ApiFactory WithPort<TPort>(TPort fake)
         where TPort : class
@@ -83,4 +97,15 @@ public sealed class FakeHealthPort(bool reachable) : ForCheckingHealth
 {
     public Task<OneOf<Success, PortError>> CheckDatabaseAsync(CancellationToken cancellationToken) =>
         Task.FromResult<OneOf<Success, PortError>>(reachable ? new Success() : new PortError("fake database down"));
+}
+
+internal sealed class TestEndpointsStartupFilter(Action<IEndpointRouteBuilder> map) : IStartupFilter
+{
+    public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
+    {
+        app.UseRouting();
+        app.UseHttpAdapter();
+        app.UseEndpoints(endpoints => map(endpoints));
+        next(app);
+    };
 }

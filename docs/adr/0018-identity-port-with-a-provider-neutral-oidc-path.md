@@ -8,7 +8,7 @@ ADR-0003 keeps profile selection as attribution instead of authentication, and t
 
 ## Decision
 
-Identity is a driven port, `ForResolvingActors`, that turns a request into an actor with an id, a role and a source. The first adapter reads the profile header exactly as the Node server does. Authorisation is expressed as three ASP.NET Core policies, `RequireActor`, `RequirePlanner` and `RequireAdmin`, evaluated against the resolved actor, so endpoint code never reads a header.
+Identity is a driven port, `ForResolvingActors`, that turns the identity-relevant values of a request into an actor with an id, a role and a source. Its input is a driver-free `ActorRequest` (the raw profile and client header values), not an `HttpContext`, because the domain may not reference ASP.NET Core; the HTTP adapter reads the headers and passes them in. The first adapter reads the profile header exactly as the Node server does. Authorisation is expressed as three ASP.NET Core policies, `RequireActor`, `RequirePlanner` and `RequireAdmin`, evaluated against the resolved actor, so endpoint code never reads a header.
 
 The next adapter is designed here and not built. It is provider-neutral: the web application signs in with Authorization Code and PKCE; the server validates the JWT bearer token against the issuer's discovery document; the token's `sub` maps to a user through a new `users.externalId`. A request carrying a valid token uses the mapped user and ignores the profile header; a request without a token keeps working through the header adapter until the household turns that off.
 
