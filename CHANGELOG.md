@@ -1,5 +1,79 @@
 # Changelog
 
+## [1.7.0](https://github.com/somali-lab/keep-the-house-clean-planner/compare/v1.6.2...v1.7.0) (2026-10-03)
+
+
+### Features
+
+* **ai:** prefer a recognizable weekly rhythm in plan proposals ([5084943](https://github.com/somali-lab/keep-the-house-clean-planner/commit/508494323193a1620815de0ff2dfe611beb9728d))
+* **badges:** let admins define badges awarded from executions ([f261b40](https://github.com/somali-lab/keep-the-house-clean-planner/commit/f261b40c98a80eddbb290fc7e897ab3151240db8))
+* **occurrences:** record extra executions of a task, also several times a day ([02d00b1](https://github.com/somali-lab/keep-the-house-clean-planner/commit/02d00b168b03c19b0a350b17f3eb3c2c28554b72))
+* **occurrences:** record one-off tasks without a task record ([02d00b1](https://github.com/somali-lab/keep-the-house-clean-planner/commit/02d00b168b03c19b0a350b17f3eb3c2c28554b72))
+* **planner:** open AI drafts in plan management after creation ([5084943](https://github.com/somali-lab/keep-the-house-clean-planner/commit/508494323193a1620815de0ff2dfe611beb9728d))
+* **planner:** preview plan activation effects ([#52](https://github.com/somali-lab/keep-the-house-clean-planner/issues/52)) ([715c7a1](https://github.com/somali-lab/keep-the-house-clean-planner/commit/715c7a12aa66fc9a646ae41455a74f1fb7a1ddfb))
+* **planner:** search tasks and show four-week workload totals ([d98a6fb](https://github.com/somali-lab/keep-the-house-clean-planner/commit/d98a6fb517765f046d040fc8c73c78dbe5056d9f))
+* **points:** award points for past executions and show balances per person ([384405b](https://github.com/somali-lab/keep-the-house-clean-planner/commit/384405b05de0772f715471a1f06f045fab143bfe))
+* **points:** award week and cycle bonuses ([d8f1d98](https://github.com/somali-lab/keep-the-house-clean-planner/commit/d8f1d980ec70cd4d0afddd6eb1989a5e64ab7d40))
+* **points:** convert points to money and book redemptions ([340a324](https://github.com/somali-lab/keep-the-house-clean-planner/commit/340a324721572a6ea3d8b8b85261f7a725b5755c))
+* **points:** default to one point per minute and let one-off tasks carry points ([384405b](https://github.com/somali-lab/keep-the-house-clean-planner/commit/384405b05de0772f715471a1f06f045fab143bfe))
+* **points:** record points per execution in a ledger ([384405b](https://github.com/somali-lab/keep-the-house-clean-planner/commit/384405b05de0772f715471a1f06f045fab143bfe))
+* **reward:** add a reward meter with a chicken and eggs ([4b8ec30](https://github.com/somali-lab/keep-the-house-clean-planner/commit/4b8ec30aa887f0dad076cfe80c6f4825e2764366))
+* **tasks:** group My tasks into dated sliding weeks ([d98a6fb](https://github.com/somali-lab/keep-the-house-clean-planner/commit/d98a6fb517765f046d040fc8c73c78dbe5056d9f))
+* **today:** add a dialog to record extra work and one-off tasks ([02d00b1](https://github.com/somali-lab/keep-the-house-clean-planner/commit/02d00b168b03c19b0a350b17f3eb3c2c28554b72))
+* **today:** plan extra tasks and rename the dialog to Extra task ([#71](https://github.com/somali-lab/keep-the-house-clean-planner/issues/71)) ([96d9cef](https://github.com/somali-lab/keep-the-house-clean-planner/commit/96d9ceff21de6853794de27bcb0dedd4503c63a3))
+* **today:** show everyone's tasks in two columns on wide screens ([2f1192f](https://github.com/somali-lab/keep-the-house-clean-planner/commit/2f1192f7673311ed1944b62649c48265d5dac1df))
+* **transfer:** export schema version 2 and reject duplicate keys before importing ([02d00b1](https://github.com/somali-lab/keep-the-house-clean-planner/commit/02d00b168b03c19b0a350b17f3eb3c2c28554b72))
+* **web:** add a Home button that returns from management to the week overview ([2f1192f](https://github.com/somali-lab/keep-the-house-clean-planner/commit/2f1192f7673311ed1944b62649c48265d5dac1df))
+* **web:** add an About page with release information ([#59](https://github.com/somali-lab/keep-the-house-clean-planner/issues/59)) ([ad1450d](https://github.com/somali-lab/keep-the-house-clean-planner/commit/ad1450db9c55f0e2aa20aff4c0cac8ce8c2d34ce))
+* **web:** add per-person browser notifications while the planner is open ([#62](https://github.com/somali-lab/keep-the-house-clean-planner/issues/62)) ([3f7bdf3](https://github.com/somali-lab/keep-the-house-clean-planner/commit/3f7bdf35d89e5c437939c190b79b8db4238a17dc))
+* **web:** persist filters per profile across views ([d98a6fb](https://github.com/somali-lab/keep-the-house-clean-planner/commit/d98a6fb517765f046d040fc8c73c78dbe5056d9f))
+* **week:** search tasks and toggle cycle-week labels ([d98a6fb](https://github.com/somali-lab/keep-the-house-clean-planner/commit/d98a6fb517765f046d040fc8c73c78dbe5056d9f))
+
+
+### Bug fixes
+
+* **badges:** keep badge rules valid when tasks are deleted ([f261b40](https://github.com/somali-lab/keep-the-house-clean-planner/commit/f261b40c98a80eddbb290fc7e897ab3151240db8))
+* **context-maintainer:** allow direct instruction files ([#43](https://github.com/somali-lab/keep-the-house-clean-planner/issues/43)) ([019e194](https://github.com/somali-lab/keep-the-house-clean-planner/commit/019e194087c85df59c040c60fe6638528731be24))
+* **context-maintainer:** run only after releases ([69b39c7](https://github.com/somali-lab/keep-the-house-clean-planner/commit/69b39c79d98a296d3111e742a61fe7cea8374126))
+* **occurrences:** require an explicit choice when completing someone else's task ([384405b](https://github.com/somali-lab/keep-the-house-clean-planner/commit/384405b05de0772f715471a1f06f045fab143bfe))
+* **planner:** clarify draft visibility in task overviews ([#51](https://github.com/somali-lab/keep-the-house-clean-planner/issues/51)) ([66bc0cd](https://github.com/somali-lab/keep-the-house-clean-planner/commit/66bc0cdf26e4b33a9a3cf40cee102d209369d216))
+* **planner:** clear the draft flag when a draft plan is activated ([5084943](https://github.com/somali-lab/keep-the-house-clean-planner/commit/508494323193a1620815de0ff2dfe611beb9728d))
+* **points:** keep bonuses fair when others finish overdue work ([d8f1d98](https://github.com/somali-lab/keep-the-house-clean-planner/commit/d8f1d980ec70cd4d0afddd6eb1989a5e64ab7d40))
+* **points:** keep redemptions safe across currency changes and old imports ([340a324](https://github.com/somali-lab/keep-the-house-clean-planner/commit/340a324721572a6ea3d8b8b85261f7a725b5755c))
+* **reward:** play the celebration once and keep the meter current ([4b8ec30](https://github.com/somali-lab/keep-the-house-clean-planner/commit/4b8ec30aa887f0dad076cfe80c6f4825e2764366))
+* **server:** migrate the occurrence slot index to generated occurrences only ([02d00b1](https://github.com/somali-lab/keep-the-house-clean-planner/commit/02d00b168b03c19b0a350b17f3eb3c2c28554b72))
+* **server:** remove AI draft activation that skipped the preview ([0ec9e2e](https://github.com/somali-lab/keep-the-house-clean-planner/commit/0ec9e2eb72ea89a2fb126cc4d0a04f4f6f3967b2))
+* **settings:** explain which weeks and cycles a bonus schedule covers ([340a324](https://github.com/somali-lab/keep-the-house-clean-planner/commit/340a324721572a6ea3d8b8b85261f7a725b5755c))
+* **web:** keep the planner toolbar on one line and reset history from the header ([#70](https://github.com/somali-lab/keep-the-house-clean-planner/issues/70)) ([5c3ab50](https://github.com/somali-lab/keep-the-house-clean-planner/commit/5c3ab5090ae35b7a4801c28b2c8bb0f49b7eab73))
+* **web:** move filter reset to one header icon per screen ([#69](https://github.com/somali-lab/keep-the-house-clean-planner/issues/69)) ([5bb8623](https://github.com/somali-lab/keep-the-house-clean-planner/commit/5bb8623ef1fb629c12b5065e8557feff1e7ff49a))
+
+
+### Build system and dependencies
+
+* **deps-dev:** bump the npm-development group with 2 updates ([#56](https://github.com/somali-lab/keep-the-house-clean-planner/issues/56)) ([6ae0d2a](https://github.com/somali-lab/keep-the-house-clean-planner/commit/6ae0d2a2d8fe916abf954f653cf0f153dd1d40ff))
+* **deps-dev:** update compatible development tools ([e727ed9](https://github.com/somali-lab/keep-the-house-clean-planner/commit/e727ed9549d6e14276206177dbdf5d033329867f))
+* **deps:** bump the github-actions group with 2 updates ([#47](https://github.com/somali-lab/keep-the-house-clean-planner/issues/47)) ([cc11b92](https://github.com/somali-lab/keep-the-house-clean-planner/commit/cc11b920143a9ea2c9abaf1f385d82c00f8143b9))
+* **deps:** bump the npm-production group with 8 updates ([#49](https://github.com/somali-lab/keep-the-house-clean-planner/issues/49)) ([639ac2e](https://github.com/somali-lab/keep-the-house-clean-planner/commit/639ac2ef59dee8225b8b670821c795bb7b08595b))
+* isolate incompatible development updates ([e727ed9](https://github.com/somali-lab/keep-the-house-clean-planner/commit/e727ed9549d6e14276206177dbdf5d033329867f))
+
+
+### Continuous integration
+
+* add a docs maintainer that keeps requirements and README current ([#73](https://github.com/somali-lab/keep-the-house-clean-planner/issues/73)) ([0de45e4](https://github.com/somali-lab/keep-the-house-clean-planner/commit/0de45e4ddb3bb1d253e69cc529eebe64b6a0ffe9))
+* cache test browser and MongoDB binary in the server job ([#57](https://github.com/somali-lab/keep-the-house-clean-planner/issues/57)) ([fb9bc99](https://github.com/somali-lab/keep-the-house-clean-planner/commit/fb9bc9966ebfe71654df41eb0aa03317b4310dac))
+
+
+### Documentation
+
+* add agent model allocation and unattended loop to the wishlist plan ([#68](https://github.com/somali-lab/keep-the-house-clean-planner/issues/68)) ([7f61fad](https://github.com/somali-lab/keep-the-house-clean-planner/commit/7f61fadf78f0b16bedd049285301d6a276f89d47))
+* add agent-executable wishlist implementation plan ([cd694f6](https://github.com/somali-lab/keep-the-house-clean-planner/commit/cd694f602207f64d457db61ccdb89b3f74f5b844))
+* **adr:** keep only architecture choices in ADR-0009 to ADR-0015 ([#72](https://github.com/somali-lab/keep-the-house-clean-planner/issues/72)) ([30aefa6](https://github.com/somali-lab/keep-the-house-clean-planner/commit/30aefa6e93e4f84c65ac3412f89e4953442d6ca9))
+* **agentics:** document context checks ([69b39c7](https://github.com/somali-lab/keep-the-house-clean-planner/commit/69b39c79d98a296d3111e742a61fe7cea8374126))
+* **agents:** require documentation review before pull requests ([cd694f6](https://github.com/somali-lab/keep-the-house-clean-planner/commit/cd694f602207f64d457db61ccdb89b3f74f5b844))
+* align requirements and README with the current behaviour ([#74](https://github.com/somali-lab/keep-the-house-clean-planner/issues/74)) ([9b5a23e](https://github.com/somali-lab/keep-the-house-clean-planner/commit/9b5a23ebeb74bd76ab7be38076628758894a41b9))
+* index scoped instructions in AGENTS.md ([#46](https://github.com/somali-lab/keep-the-house-clean-planner/issues/46)) ([71d560c](https://github.com/somali-lab/keep-the-house-clean-planner/commit/71d560cb6d837b496ed09cb4d794c1a79a3964bb))
+* **shared:** correct stale points and budget comments ([0ec9e2e](https://github.com/somali-lab/keep-the-house-clean-planner/commit/0ec9e2eb72ea89a2fb126cc4d0a04f4f6f3967b2))
+
 ## [1.6.2](https://github.com/somali-lab/keep-the-house-clean-planner/compare/v1.6.1...v1.6.2) (2026-09-28)
 
 
