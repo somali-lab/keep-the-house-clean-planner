@@ -46,3 +46,7 @@ Differences: the timezone has no default (pass `DayKeys.FindZone(DayKeys.AppTime
 `StringComparer.Ordinal` where TypeScript used `localeCompare`; an interval with `PeriodDays == 0` is skipped like an unknown
 key (TypeScript skipped it through `!periodDays`). `ComputeDue` throws nothing itself; an invalid day key or timezone
 fails earlier, in `DayKeys.Parse` / `FindZone`.
+
+## Rooms (`Huishoudplanner.Domain.Rooms`)
+
+Port of `routes/rooms.ts` and `data/rooms.ts`. Driving port `IRoomService` (list, create, update, delete; the HTTP adapter decides who may write), driven ports `ForStoringRooms` and `ForCheckingRoomUsage` (a read port on the `tasks` collection until the task domain exists). Create, update and delete are one transaction with their audit entry (`room`/`create`, `update`, `delete`; create records the four fields `name, sortOrder, active, virtual`, update the changed ones, delete the fields it removed). An update that changes nothing writes and audits nothing. A delete is refused with `RoomInUse(TaskCount)` while any task, active or inactive, uses the room. The list is ordered by sort order, name and id and paged with an opaque `RoomCursor`.

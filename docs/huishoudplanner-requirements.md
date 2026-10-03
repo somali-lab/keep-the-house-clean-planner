@@ -570,6 +570,7 @@ GET    /api/users                           POST /api/users            PATCH /ap
 PUT    /api/users/:id/browser-notifications (own moments, or any person's for an admin)
 GET    /api/rooms                           POST /api/rooms            PATCH /api/rooms/:id
 DELETE /api/rooms/:id
+                                            (v2: /api/v2/rooms; GET is paged like the audit log, `?active&limit&cursor`, and answers `{ items, nextCursor }`; a room has `id` instead of `_id`; DELETE answers `200 { deleted: true }`)
 GET    /api/tasks                           POST /api/tasks            PATCH /api/tasks/:id
 DELETE /api/tasks/:id                       POST /api/rooms/:id/tasks/bulk
 
@@ -636,6 +637,8 @@ GET    /api/export/json                     POST /api/import/json
 `GET /api/due` returns the ranked list of every active task with its state `ok`, `due` or `overdue`, so a task that is fine is in it as well; leaving out the `ok` items is up to the client (see 4.5).
 
 `GET /api/cycle-plans/:id/activation-preview` (planner) answers `{ planId, previewToken, asOfDate, removed, added, preserved: { done, skipped, moved, adhoc } }`: each of the lists holds items `{ occurrenceId, cycleIndex, taskId, taskName, date, assigneeId }` (`occurrenceId` is `null` for an occurrence that does not exist yet and `taskId` is `null` for a one-off task), and `previewToken` is an opaque fingerprint of the state that was previewed. `POST /api/cycle-plans/:id/activate` takes `{ previewToken }` and answers `409 stale_activation_preview` when the preview recomputed at that moment has another token (see 4.3).
+
+In v2, `room_in_use` carries the number of tasks as the `taskCount` extension of the problem (v1: `details.taskCount`), and a malformed `limit`, `cursor` or `id` is `400 validation_error` on that field.
 
 `GET /api/audit` takes the optional filters `entity`, `entityId`, `actorId`, `source` (`ui`, `api`, `ai` or `system`; it is `source`, not `origin`), `from` and `to` (ISO instants), a `cursor` and a `limit` (a whole number from 1 to 200, default 50). It answers `{ items, nextCursor }`, newest first; `nextCursor` is `null` on the last page and the opaque value to pass as `cursor` for the next one, and a malformed cursor is `400 validation_error` with `invalid_cursor` on `cursor`. An entry of the legacy action `ai-apply` can still be returned. `DELETE /api/audit` (administrators only) answers `{ deleted }`.
 

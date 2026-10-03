@@ -8,7 +8,9 @@ using Huishoudplanner.Adapters.Mongo;
 using Huishoudplanner.Application;
 using Huishoudplanner.Domain.Ports.Driven;
 using Huishoudplanner.Domain.Ports.Driving;
+using Huishoudplanner.Adapters.Http.Rooms;
 using Huishoudplanner.Host.Configuration;
+using Huishoudplanner.Host.Rooms;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Scalar.AspNetCore;
@@ -30,6 +32,7 @@ public static class CompositionExtensions
         services.AddScoped<ICalendarService, CalendarService>();
         services.TryAddSingleton<ForReadingCycleAnchor, PendingCycleAnchor>();
         services.AddMongoAdapter(sp => sp.GetRequiredService<IOptions<AppOptions>>().Value.MongoUrl);
+        services.AddRooms();
         return services;
     }
 
@@ -38,6 +41,7 @@ public static class CompositionExtensions
         ArgumentNullException.ThrowIfNull(app);
         app.UseHttpAdapter();
         app.MapHealthEndpoints();
+        app.MapRoomEndpoints();
         app.MapMetaEndpoints();
         app.MapCalendarEndpoints();
         if (app.Environment.IsDevelopment())
