@@ -100,7 +100,7 @@ internal sealed class MongoTransactionRunner(
                 if (scope.RollbackOnly)
                 {
                     await AbortAsync(session);
-                    return new PortError("transaction.rollback_only", "A joined transaction asked for a rollback.");
+                    return new PortError("transaction.rollback_only: a joined transaction asked for a rollback.");
                 }
 
                 await CommitAsync(session, cancellationToken);
@@ -175,6 +175,6 @@ internal sealed class MongoTransactionRunner(
     /// <summary>Messages are value-free: the exception type only, never its text, which can echo a connection string.</summary>
     private static OneOf<T, ConflictError, PortError> Failure<T>(Exception e) =>
         IsTransient(e) && IsWriteConflict(e)
-            ? new ConflictError("A concurrent change won the write; retry the request.")
-            : new PortError(IsTransient(e) ? "mongo.transient" : "mongo.unavailable", $"The database failed ({e.GetType().Name}).");
+            ? new ConflictError("write_conflict", "A concurrent change won the write; retry the request.")
+            : new PortError($"{(IsTransient(e) ? "mongo.transient" : "mongo.unavailable")}: the database failed ({e.GetType().Name}).");
 }

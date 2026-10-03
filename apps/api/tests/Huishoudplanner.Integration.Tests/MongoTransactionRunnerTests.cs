@@ -134,7 +134,7 @@ public sealed class MongoTransactionRunnerTests(MongoContainerFixture mongo) : I
             return TransactionOutcome.Commit(1);
         }, Ct);
 
-        result.AsT2.Code.Should().Be("mongo.unavailable");
+        result.AsT2.Message.Should().StartWith("mongo.unavailable");
         (await Counts()).Should().Be((1, 0), "the audit entry written before the failing entity write is gone");
     }
 
@@ -339,7 +339,7 @@ public sealed class MongoTransactionRunnerTests(MongoContainerFixture mongo) : I
             return TransactionOutcome.Commit("outer ok");
         }, Ct);
 
-        result.AsT2.Code.Should().Be("transaction.rollback_only");
+        result.AsT2.Message.Should().StartWith("transaction.rollback_only");
         (await Counts()).Should().Be((0, 0));
     }
 
@@ -359,8 +359,8 @@ public sealed class MongoTransactionRunnerTests(MongoContainerFixture mongo) : I
         }, Ct);
 
         var error = result.AsT2;
-        error.Code.Should().Be("mongo.unavailable");
-        (error.Message + error.Code).Should().NotContainAny("leaky-secret", "leaky-user", "127.0.0.1");
+        error.Message.Should().StartWith("mongo.unavailable");
+        error.Message.Should().NotContainAny("leaky-secret", "leaky-user", "127.0.0.1");
     }
 
     [Fact]

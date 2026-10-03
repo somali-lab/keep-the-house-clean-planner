@@ -10,6 +10,8 @@
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!-- Driven ports are named For* by design (plan section 3.2), so CA1715 (interface names start with I) does not apply. -->
+    <NoWarn>$(NoWarn);CA1715</NoWarn>
     <RootNamespace>$(MSBuildProjectName)</RootNamespace>
     <AssemblyName>$(MSBuildProjectName)</AssemblyName>
   </PropertyGroup>
