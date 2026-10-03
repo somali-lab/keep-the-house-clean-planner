@@ -16,6 +16,11 @@ namespace Huishoudplanner.Domain.Ports.Driven;
 /// for an infrastructure failure. An exception thrown by <c>work</c> that is not an infrastructure failure rolls back
 /// and propagates unchanged (a programming error is never turned into a value). Cancellation rolls back and throws
 /// <see cref="OperationCanceledException"/>.</para>
+/// <para>A <see cref="PortError"/> whose message starts with <c>mongo.commit_unknown</c> means the commit was sent but its
+/// result could not be confirmed: the change may be stored. Callers must not blindly retry such a request (a retry
+/// can apply it twice); the cancellation token no longer applies once the commit is sent.</para>
+/// <para>Operations inside one run must not execute in parallel (the adapter's session is not thread safe), and a task
+/// that outlives the run does not see the transaction.</para>
 /// <para>A call made while another run is active on the same logical flow joins that transaction instead of starting
 /// a second one; the outermost run decides commit or rollback.</para>
 /// </remarks>

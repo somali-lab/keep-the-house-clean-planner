@@ -75,8 +75,8 @@ public sealed class MongoTransactionRunnerTests(MongoContainerFixture mongo) : I
     [Fact]
     public async Task RunAsync_WritesInsideTheTransaction_AreInvisibleOutsideUntilCommit()
     {
-        var gate = new TaskCompletionSource();
-        var inserted = new TaskCompletionSource();
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var inserted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var seenInside = 0L;
         var run = Runner().RunAsync(async ct =>
         {
@@ -134,7 +134,7 @@ public sealed class MongoTransactionRunnerTests(MongoContainerFixture mongo) : I
             return TransactionOutcome.Commit(1);
         }, Ct);
 
-        result.AsT2.Message.Should().StartWith("mongo.unavailable");
+        result.AsT2.Message.Should().StartWith("mongo.failed");
         (await Counts()).Should().Be((1, 0), "the audit entry written before the failing entity write is gone");
     }
 
@@ -142,8 +142,8 @@ public sealed class MongoTransactionRunnerTests(MongoContainerFixture mongo) : I
     public async Task RunAsync_ConcurrentWriteOnTheSameDocument_RetriesTheLoserUntilItSucceeds()
     {
         await entities.InsertOneAsync(new BsonDocument { { "_id", "counter" }, { "n", 0 } }, cancellationToken: Ct);
-        var winnerWrote = new TaskCompletionSource();
-        var releaseWinner = new TaskCompletionSource();
+        var winnerWrote = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseWinner = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var loserAttempts = 0;
 
         var winner = Runner().RunAsync(async ct =>
@@ -183,8 +183,8 @@ public sealed class MongoTransactionRunnerTests(MongoContainerFixture mongo) : I
     public async Task RunAsync_ConflictPersistsPastTheAttemptLimit_ReturnsConflictErrorAndWritesNothing()
     {
         await entities.InsertOneAsync(new BsonDocument { { "_id", "counter" }, { "n", 0 } }, cancellationToken: Ct);
-        var winnerWrote = new TaskCompletionSource();
-        var releaseWinner = new TaskCompletionSource();
+        var winnerWrote = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseWinner = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var loserAttempts = 0;
 
         var winner = Runner().RunAsync(async ct =>
@@ -225,7 +225,7 @@ public sealed class MongoTransactionRunnerTests(MongoContainerFixture mongo) : I
     public async Task RunAsync_CancelledWhileWorking_RollsBackAndThrowsOperationCanceled()
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(Ct);
-        var written = new TaskCompletionSource();
+        var written = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         var run = Runner().RunAsync<int>(async ct =>
         {
@@ -369,8 +369,8 @@ public sealed class MongoTransactionRunnerTests(MongoContainerFixture mongo) : I
         // A retry waits on the injected TimeProvider, so a frozen clock stalls the retry until
         // the caller cancels: proof that no wall-clock sleep is hidden in the runner.
         await entities.InsertOneAsync(new BsonDocument { { "_id", "counter" }, { "n", 0 } }, cancellationToken: Ct);
-        var winnerWrote = new TaskCompletionSource();
-        var releaseWinner = new TaskCompletionSource();
+        var winnerWrote = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseWinner = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var winner = Runner().RunAsync(async ct =>
         {
             await entities.UpdateOneAsync(MongoTransactionContext.Session!, new BsonDocument("_id", "counter"), Builders<BsonDocument>.Update.Inc("n", 1), cancellationToken: ct);
@@ -381,18 +381,136 @@ public sealed class MongoTransactionRunnerTests(MongoContainerFixture mongo) : I
         await winnerWrote.Task;
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(Ct);
+        var loserAttempts = 0;
         var loser = new MongoTransactionRunner(client, new FrozenTimeProvider()).RunAsync(async ct =>
         {
+            Interlocked.Increment(ref loserAttempts);
             await entities.UpdateOneAsync(MongoTransactionContext.Session!, new BsonDocument("_id", "counter"), Builders<BsonDocument>.Update.Inc("n", 1), cancellationToken: ct);
             return TransactionOutcome.Commit(1);
         }, cts.Token);
 
         await Task.Delay(500, Ct);
         loser.IsCompleted.Should().BeFalse("the retry is waiting on a clock that does not move");
+        loserAttempts.Should().Be(1, "the first attempt conflicted and the backoff never elapsed, so no second attempt ran");
         await cts.CancelAsync();
         await FluentActions.Awaiting(() => loser).Should().ThrowAsync<OperationCanceledException>();
         releaseWinner.SetResult();
         await winner;
+    }
+
+    [Fact]
+    public async Task Session_ATaskThatOutlivesTheRun_NeverSeesTheSessionAndStartsItsOwnTransaction()
+    {
+        var runner = Runner();
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Task<(bool SawSession, bool Committed)>? leaked = null;
+
+        await runner.RunAsync(async ct =>
+        {
+            leaked = Task.Run(async () =>
+            {
+                await release.Task;
+                var sawSession = MongoTransactionContext.Session is not null;
+                var late = await runner.RunAsync(async inner =>
+                {
+                    await InsertEntityAndAudit("late", inner);
+                    return TransactionOutcome.Commit(1);
+                }, CancellationToken.None);
+                return (sawSession, late.IsT0);
+            }, ct);
+            await InsertEntityAndAudit("a", ct);
+            return TransactionOutcome.Commit(1);
+        }, Ct);
+        release.SetResult();
+
+        var (sawSession, committed) = await leaked!;
+        sawSession.Should().BeFalse("the scope is closed when the attempt ends");
+        committed.Should().BeTrue("a run from the leaked task is a new transaction, not a join of a dead one");
+        (await Counts()).Should().Be((2, 2));
+    }
+
+    [Fact]
+    public async Task RunAsync_JoiningAScopeOfAnotherClient_Throws()
+    {
+        using var other = MongoClientFactory.CreateClient(options);
+        var otherRunner = new MongoTransactionRunner(other, TimeProvider.System);
+
+        var act = async () => await Runner().RunAsync(
+            async ct => TransactionOutcome.Commit(await otherRunner.RunAsync(_ => Task.FromResult(TransactionOutcome.Commit(1)), ct)),
+            Ct);
+
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*same MongoDB client*");
+    }
+
+    private async Task<IMongoClient> ClientWithFailpoint(string appName, int times)
+    {
+        var settings = MongoClientSettings.FromConnectionString(options.ConnectionString);
+        settings.ApplicationName = appName;
+        var tagged = new MongoClient(settings);
+        await client.GetDatabase("admin").RunCommandAsync<BsonDocument>(new BsonDocument
+        {
+            { "configureFailPoint", "failCommand" },
+            { "mode", new BsonDocument("times", times) },
+            {
+                "data", new BsonDocument
+                {
+                    { "failCommands", new BsonArray { "commitTransaction" } },
+                    { "errorCode", 6 },
+                    { "errorLabels", new BsonArray { "UnknownTransactionCommitResult" } },
+                    { "appName", appName },
+                }
+            },
+        }, cancellationToken: Ct);
+        return tagged;
+    }
+
+    [Fact]
+    public async Task RunAsync_CommitResultUnknownThenConfirmed_RetriesTheCommitAndSucceeds()
+    {
+        using var tagged = await ClientWithFailpoint($"commit-retry-{Guid.NewGuid():N}", times: 2);
+        var attempts = 0;
+
+        var result = await new MongoTransactionRunner(tagged, TimeProvider.System, maxAttempts: 5).RunAsync(async ct =>
+        {
+            Interlocked.Increment(ref attempts);
+            await InsertEntityAndAudit("a", ct);
+            return TransactionOutcome.Commit("ok");
+        }, Ct);
+
+        result.AsT0.Should().Be("ok");
+        attempts.Should().Be(1, "only the commit is retried, never the work");
+        (await Counts()).Should().Be((1, 1));
+    }
+
+    [Fact]
+    public async Task RunAsync_CommitResultStaysUnknown_ReturnsADistinctPortErrorAfterTheConfiguredLimit()
+    {
+        using var tagged = await ClientWithFailpoint($"commit-unknown-{Guid.NewGuid():N}", times: 50);
+
+        var result = await new MongoTransactionRunner(tagged, TimeProvider.System, maxAttempts: 2).RunAsync(async ct =>
+        {
+            await InsertEntityAndAudit("a", ct);
+            return TransactionOutcome.Commit("ok");
+        }, Ct);
+
+        result.AsT2.Message.Should().StartWith("mongo.commit_unknown");
+    }
+
+    [Fact]
+    public async Task RunAsync_CancelledBeforeTheCommitIsSent_RollsBackInsteadOfCommitting()
+    {
+        // The token is honoured up to the moment the commit is sent; after that the commit ignores it.
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(Ct);
+
+        var act = async () => await Runner().RunAsync(async ct =>
+        {
+            await InsertEntityAndAudit("a", ct);
+            await cts.CancelAsync();
+            return TransactionOutcome.Commit(1);
+        }, cts.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        (await Counts()).Should().Be((0, 0));
     }
 
     /// <summary>A clock whose timers never fire.</summary>

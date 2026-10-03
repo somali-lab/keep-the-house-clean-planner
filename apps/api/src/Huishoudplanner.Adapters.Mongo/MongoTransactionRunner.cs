@@ -16,6 +16,8 @@ namespace Huishoudplanner.Adapters.Mongo;
 /// only the commit on <c>UnknownTransactionCommitResult</c>) runs here with an attempt limit and a short linear
 /// backoff. When the attempts run out on a write conflict the result is <see cref="ConflictError"/>; any other
 /// exhausted transient error is a <see cref="PortError"/>.
+/// A commit whose result stays unknown after the attempt limit is the distinct <c>mongo.commit_unknown</c>
+/// <see cref="PortError"/>. The commit itself ignores the caller's cancellation token.
 /// Infrastructure failures are exactly <see cref="MongoException"/> and <see cref="TimeoutException"/>; anything else
 /// rolls back and propagates.
 /// </remarks>
@@ -29,6 +31,7 @@ internal sealed class MongoTransactionRunner(
     private const int WriteConflictCode = 112;
     private const string TransientLabel = "TransientTransactionError";
     private const string UnknownCommitLabel = "UnknownTransactionCommitResult";
+    private static readonly TimeSpan CommitTimeout = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan BackoffStep = TimeSpan.FromMilliseconds(25);
 
     private static readonly TransactionOptions Options = new(
@@ -49,11 +52,21 @@ internal sealed class MongoTransactionRunner(
     }
 
     /// <summary>A nested run takes part in the outer transaction; only the outermost run commits or rolls back.</summary>
-    private static async Task<OneOf<T, ConflictError, PortError>> JoinAsync<T>(
+    private async Task<OneOf<T, ConflictError, PortError>> JoinAsync<T>(
         MongoTransactionScope outer,
         Func<CancellationToken, Task<TransactionOutcome<T>>> work,
         CancellationToken cancellationToken)
     {
+        if (!ReferenceEquals(outer.Client, client))
+        {
+            throw new InvalidOperationException("A nested transaction run can only join a transaction of the same MongoDB client.");
+        }
+
+        if (outer.Session is not { IsInTransaction: true })
+        {
+            throw new InvalidOperationException("The transaction this run would join is no longer active.");
+        }
+
         var outcome = await work(cancellationToken);
         if (!outcome.ShouldCommit)
         {
@@ -103,8 +116,9 @@ internal sealed class MongoTransactionRunner(
                     return new PortError("transaction.rollback_only: a joined transaction asked for a rollback.");
                 }
 
-                await CommitAsync(session, cancellationToken);
-                return outcome.Value;
+                // Cancellation is honoured up to here; once the commit is sent it must not be able to mask it.
+                cancellationToken.ThrowIfCancellationRequested();
+                return await CommitAsync(session) ? outcome.Value : CommitUnknown();
             }
             catch (Exception e) when (IsTransient(e) && attempt < maxAttempts && !cancellationToken.IsCancellationRequested)
             {
@@ -125,22 +139,36 @@ internal sealed class MongoTransactionRunner(
         }
     }
 
-    private static async Task CommitAsync(IClientSessionHandle session, CancellationToken cancellationToken)
+    /// <summary>
+    /// Commits with its own bounded timeout, never the caller's token: a cancel that arrives after the commit was sent
+    /// would otherwise report "nothing happened" for a commit that may be durable. Returns <see langword="false"/> when
+    /// the outcome is still unknown after the attempt limit.
+    /// </summary>
+    private async Task<bool> CommitAsync(IClientSessionHandle session)
     {
-        // The commit may have reached the server although the answer was lost: committing again is safe.
         for (var commitAttempt = 1; ; commitAttempt++)
         {
+            using var timeout = new CancellationTokenSource(CommitTimeout, timeProvider);
             try
             {
-                await session.CommitTransactionAsync(cancellationToken);
-                return;
+                await session.CommitTransactionAsync(timeout.Token);
+                return true;
             }
-            catch (MongoException e) when (e.HasErrorLabel(UnknownCommitLabel) && !IsTransient(e) && commitAttempt < DefaultMaxAttempts)
+            catch (MongoException e) when (e.HasErrorLabel(UnknownCommitLabel) && !IsTransient(e))
             {
-                // retry the commit only
+                if (commitAttempt >= maxAttempts)
+                {
+                    return false;
+                }
+
+                // The commit may have reached the server although the answer was lost: committing again is safe.
+                await Task.Delay(BackoffStep * commitAttempt, timeProvider, CancellationToken.None);
             }
         }
     }
+
+    private static PortError CommitUnknown() =>
+        new("mongo.commit_unknown: the commit result could not be confirmed; the change may or may not be stored.");
 
     /// <summary>Best effort: the server also discards the transaction when the session ends.</summary>
     private static async Task AbortAsync(IClientSessionHandle session)
@@ -164,6 +192,8 @@ internal sealed class MongoTransactionRunner(
 
     private static bool IsInfrastructureFailure(Exception e) => e is MongoException or TimeoutException;
 
+    private static bool IsUnavailable(Exception e) => e is TimeoutException or MongoConnectionException;
+
     private static bool IsWriteConflict(Exception e) => e switch
     {
         MongoCommandException c => c.Code == WriteConflictCode,
@@ -176,5 +206,5 @@ internal sealed class MongoTransactionRunner(
     private static OneOf<T, ConflictError, PortError> Failure<T>(Exception e) =>
         IsTransient(e) && IsWriteConflict(e)
             ? new ConflictError("write_conflict", "A concurrent change won the write; retry the request.")
-            : new PortError($"{(IsTransient(e) ? "mongo.transient" : "mongo.unavailable")}: the database failed ({e.GetType().Name}).");
+            : new PortError($"{(IsTransient(e) ? "mongo.transient" : IsUnavailable(e) ? "mongo.unavailable" : "mongo.failed")}: the database failed ({e.GetType().Name}).");
 }
