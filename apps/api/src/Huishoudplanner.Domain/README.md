@@ -59,6 +59,14 @@ id, so a page continues correctly even when the task it points at has dropped ou
 `DueCalculator.InitialDueDateOf(firstPlanned, createdAt, periodDays, tz)` (first planned day, else one interval after creation).
 The data gathering lives in `Application.Due.DueService` behind `IDueService` and the read-only port `ForReadingDueOccurrences`.
 
+## Promote suggestions (`Huishoudplanner.Domain.Promotion`)
+
+`PromoteSuggestionCalculator.Compute(PromoteInput)` is the pure part of `computePromoteSuggestions` (`apps/server/src/domain/promote.ts`, slice 5.3): the
+slots, cycles, generated occurrences (reduced to `PromoteOccurrence` with day keys), task names, anchor, today, threshold and dismissals go in, the
+`PromoteSuggestion` list comes out (evidence newest first, `ToAssigneeId` only when every move went to the same other person). A threshold below one
+suggests nothing (Node would have crashed). The data gathering lives in `Application.Promotion.PromoteService` behind `IPromoteService` and the
+read-only port `ForReadingPromotionEvidence`. No golden vectors: the Node rule is not unit tested on plain data, only through the API.
+
 ## Settings (`Huishoudplanner.Domain.Settings`)
 
 The singleton settings document (id `000000000000000000000001`). `HouseholdSettings` mirrors `apps/server/src/data/settings.ts`: optional values stay `null` when they are not stored and mean their default for the API (`SettingsDefaults`: EUR, 0 cents per point, automatic goals, no bonuses). There is no API key in it: `AI_API_KEY` is configuration only.
@@ -125,7 +133,23 @@ Port of `routes/occurrences.ts`, `domain/occurrences.ts` and the update helpers 
 - `OccurrenceAudit.ForChange` diffs before and after and adds `meta.occurrence` (task name, room name, day as they were); it is `null` for a no-op, which writes and audits nothing. A cleared points snapshot reads as an explicit `null` in the entry, like Node. `TaskAudit.ForLastCompletedAt` is the second entry of a completion, uncompletion, correction and delete: the denormalised `lastCompletedAt` of the task follows the newest remaining completion (`ForStoringTasks.SetLastCompletedAtAsync`, `ForStoringOccurrences.FindLatestCompletionAsync`).
 - `ForStoringOccurrences.UpdateAsync(before, after, guard, updatedAt)` writes one `$set` per changed field and filters on the state the use case read (`OccurrenceGuard`: the status, and for a claim that nobody has the occurrence). A document that exists but no longer matches is `OccurrenceStateChanged` (the use case answers `invalid_transition` with status `changed`, or for a claim says what the winner made of it); in a transaction the loser of a race is normally retried by the runner and then sees the new state.
 - `OccurrenceView` is the API shape: day keys in the household timezone, `IsOverdue`, `MovedFrom`, and `CycleIndex` and `WeekIndex` from `Cycles`. The list is paged with `OccurrenceCursor` (day instant, task name, id).
-- Not here yet: the points ledger that follows a completion, a correction and a delete (`syncExecutionPoints`, phase 4), the extra and one-off executions with their request keys and the retract (slice 3.3), the due engine (3.4). The `pointsSnapshot` itself is written.
+- Not here yet: the points ledger that follows a completion, a correction and a delete (`syncExecutionPoints`, phase 4), the due engine (3.4). The `pointsSnapshot` itself is written.
+
+### Extra executions, one-off tasks and retract (slice 3.3)
+
+Port of `createAdhocOccurrence`, `createOneOffOccurrence` and `retractOccurrence` of `domain/occurrences.ts` and the ad-hoc parts of `data/occurrences.ts` (ADR-0009). Driving port `IAdhocOccurrenceService` (a sibling of `IOccurrenceService`), implemented by `Application.Occurrences.AdhocOccurrenceService`; `ForStoringOccurrences` gains `FindByRequestIdAsync`, `CountOpenOfTaskOnAsync`, `InsertAdhocAsync` and `DeleteRecordedAsync`.
+
+| Node route                           | `IAdhocOccurrenceService`            | v2 endpoint                                |
+| ------------------------------------ | ------------------------------------ | ------------------------------------------ |
+| `POST /occurrences` (extra)          | `CreateExtraAsync(actor, command)`   | `POST /occurrences` (201, or 200 on a replay) |
+| `POST /occurrences/one-off`          | `CreateOneOffAsync(actor, command)`  | `POST /occurrences/one-off` (201 / 200)    |
+| `POST /occurrences/:id/retract`      | `RetractAsync(actor, id)`            | `POST /occurrences/{id}/retraction`        |
+
+- `ExtraExecutionCommand` and `OneOffCommand` carry the request; the assignee is an `AssigneeChoice?` (not given, an explicit "anyone" or a person). `AdhocRules` is the pure half: the shape (request key `^[A-Za-z0-9_-]{16,64}z`, name 1 to 120 trimmed, duration at least 1, points 0 to 1000, ids), recorded work (`done_requires_today`, `done_requires_person`), the default assignee (said, else the actor when done, else the task's default), `IsReplay` (the same task or one-off name, the same day, the same `done`) and `IsRetractable` (ad hoc, recorded done, done).
+- `NewAdhocOccurrence` is the draft the store inserts (no plan, planned day equal to its day, open or recorded done); the store assigns the id. `OccurrenceAudit.ForAdhocCreated` writes the one `create` entry Node writes (every final field, `recordedDone` and `requestId` as `false` and `null` when unset, `meta` `{ origin: 'adhoc', kind: 'extra' | 'one_off', recordedDone, requestId }`), `ForRetracted` the `delete` with `meta.reason: 'retract'`.
+- Idempotency: the key is looked up first (replay or `idempotency_key_conflict`, nothing written). Two requests with one key both find nothing and both insert; the unique index `occurrences_request_id_unique` lets one commit. A duplicate key inside a MongoDB transaction ends the transaction, so `InsertAdhocAsync` answers `RequestKeyTaken`, the use case rolls the attempt back and runs it again (at most three attempts, like a transient transaction error), and the second lookup finds the winner. A write conflict with the winner's uncommitted insert is a transient transaction error that the transaction runner retries.
+- Retract is an undo of recorded work of today: `DeleteRecordedAsync` is a guarded delete (ad hoc, recorded done, done), so of two retracts at once one deletes and the other answers `404`, like a second retract. A planned ad-hoc occurrence completed later is not retractable (`not_retractable`); uncomplete of recorded work is `retract_required` (slice 3.2). `lastCompletedAt` is refreshed by `LastCompletedAtRefresh`, shared with the occurrence actions.
+- Not here yet: the points ledger entry that follows recorded work and its retract (`syncExecutionPoints`, phase 4). The `pointsSnapshot` and `pointsOverride` are written.
 
 ## Plan activation (`Huishoudplanner.Domain.Activation`)
 

@@ -236,7 +236,7 @@ Each phase ends in something demonstrable. Slices are small enough for one pull 
 
 - [x] 3.1 Cycles and generation (current and next cycle, `removed`/`generated`, idempotent). Port `generation.test.ts`, `cycles-api.test.ts`.
 - [x] 3.2 Occurrences: list, complete/uncomplete/edit completion/skip/reschedule/assign/claim as intent endpoints, `invalid_transition`, `already_claimed`, `completion_choice_*`, warnings. Port `occurrences.test.ts`, `completion-choice.test.ts`, `reschedule.test.ts`. (Deferred: the points ledger that follows a completion goes to phase 4 and the ad-hoc scenarios of `occurrences.test.ts` to 3.3; `DELETE /occurrences/{id}`, the administrator correction of `occurrences.test.ts`, is included here.)
-- [ ] 3.3 Extra executions and one-off tasks with idempotency keys and retract (ADR-0009). Port `adhoc-occurrences.test.ts`, `one-off-occurrences.test.ts`.
+- [x] 3.3 Extra executions and one-off tasks with idempotency keys and retract (ADR-0009). Port `adhoc-occurrences.test.ts`, `one-off-occurrences.test.ts`. (Deferred: the points ledger effects of recorded work and its retract go to phase 4; the AI-input assertion of the one-off test is structural, the proposal reads the task store only.)
 - [x] 3.4 Due engine. Port `due-api.test.ts`.
 
 ### Phase 4 — Points, bonuses, badges
@@ -251,7 +251,7 @@ Each phase ends in something demonstrable. Slices are small enough for one pull 
 
 - [x] 5.1 Statistics endpoints and the statistics reset. Port `stats.test.ts`, `stats-reset.test.ts`. (Done in the statistics slice: the reports as pure domain calculations, the reset in one transaction with its audit entry and the ledger entries it removes; deferred: the badge-awards rebuild after a reset, which belongs to the badges slice.)
 - [x] 5.2 Audit log read with cursor paging, clear, retention job. Port `audit-api.test.ts`, `audit-retention.test.ts`.
-- [ ] 5.3 Promote suggestions. Port `promote.test.ts`.
+- [ ] 5.3 Promote suggestions. Port `promote.test.ts`. (Done for the read: `GET /api/v2/promote-suggestions`; the apply and dismiss routes and their scenarios are not ported yet.)
 - [x] 5.4 Audit coverage and write-route coverage tests over every v2 write endpoint (ADR-0004). Port `audit-coverage.test.ts`, `write-routes-coverage.test.ts`.
 
 ### Phase 6 — Assistance, notifications, jobs, exports

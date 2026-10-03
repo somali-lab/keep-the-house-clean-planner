@@ -47,6 +47,9 @@ public sealed class EndpointPolicyAuditTests
         ["POST /api/v2/occurrences/{id}/assignment"] = AuthorizationPolicies.ActorPolicy,
         ["POST /api/v2/occurrences/{id}/claim"] = AuthorizationPolicies.ActorPolicy,
         ["DELETE /api/v2/occurrences/{id}"] = AuthorizationPolicies.AdminPolicy,
+        ["POST /api/v2/occurrences"] = AuthorizationPolicies.ActorPolicy,
+        ["POST /api/v2/occurrences/one-off"] = AuthorizationPolicies.ActorPolicy,
+        ["POST /api/v2/occurrences/{id}/retraction"] = AuthorizationPolicies.ActorPolicy,
 
         ["POST /api/v2/cycle-plans/{id}/activation"] = AuthorizationPolicies.PlannerPolicy,
         ["POST /api/v2/ai/test"] = AuthorizationPolicies.PlannerPolicy,
@@ -125,6 +128,16 @@ public sealed class EndpointPolicyAuditTests
         var due = EndpointsOf(factory).Single(e => e.RoutePattern.RawText == "/api/v2/due");
 
         due.Metadata.GetOrderedMetadata<IAuthorizeData>().Should().BeEmpty("routes/due.ts has no guard");
+    }
+
+    [Fact]
+    public void ThePromoteSuggestions_stayOpenLikeTheNodeRoute()
+    {
+        using var factory = ApiFactory.WithoutDatabase();
+
+        var promote = EndpointsOf(factory).Single(e => e.RoutePattern.RawText == "/api/v2/promote-suggestions");
+
+        promote.Metadata.GetOrderedMetadata<IAuthorizeData>().Should().BeEmpty("the GET of routes/promote.ts has no guard");
     }
 
     [Fact]
