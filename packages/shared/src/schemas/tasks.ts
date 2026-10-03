@@ -9,7 +9,7 @@ export const taskSchema = z
     roomId: objectIdSchema,
     intervalKey: z.string().min(1),
     durationMinutes: z.number().int().min(1),
-    /** Points per execution (0..100). Missing on older data means the default for the duration (ADR-0011). */
+    /** Points per execution (0..1000). Missing on older data means the default for the duration (ADR-0011). */
     points: taskPointsSchema.optional(),
     defaultAssigneeId: objectIdSchema.nullable(),
     active: z.boolean(),
@@ -25,7 +25,7 @@ export const createTaskInputSchema = z.object({
   roomId: objectIdSchema,
   intervalKey: z.string().min(1),
   durationMinutes: z.number().int().min(1),
-  /** Omitted: the server defaults it from the duration (one point per ten minutes). */
+  /** Omitted: the server defaults it from the duration (one point per minute). */
   points: taskPointsSchema.optional(),
   defaultAssigneeId: objectIdSchema.nullable().default(null),
   notes: z.string().default(''),

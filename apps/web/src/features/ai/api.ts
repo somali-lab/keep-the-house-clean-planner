@@ -1,40 +1,7 @@
-import type { AiProposalResponse, TaskSuggestion, WeekSummary } from '@huishoudplanner/shared';
-import { useMutation, useMutationState, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { AiProposalResponse, TaskSuggestion } from '@huishoudplanner/shared';
+import { useMutation, useMutationState, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/index.ts';
 import { planKeys } from '../planner/api.ts';
-
-export interface DiffPosition {
-  weekIndex: number;
-  weekday: number;
-  assigneeId: string | null;
-}
-
-export interface DiffSlot extends DiffPosition {
-  taskId: string;
-  taskName: string;
-  roomName: string | null;
-  durationMinutes: number;
-}
-
-export interface MovedSlot {
-  taskId: string;
-  taskName: string;
-  roomName: string | null;
-  durationMinutes: number;
-  from: DiffPosition;
-  to: DiffPosition;
-}
-
-export interface PlanDiffResponse {
-  planId: string;
-  againstPlanId: string | null;
-  added: DiffSlot[];
-  removed: DiffSlot[];
-  moved: MovedSlot[];
-  unchanged: number;
-  summary: { before: WeekSummary[]; after: WeekSummary[] };
-  warnings: { code: string; taskId?: string; placed?: number; required?: number }[];
-}
 
 const aiGenerationKey = ['ai', 'generation'] as const;
 
@@ -45,14 +12,6 @@ export function useAiGenerationStartedAt(): number | null {
     select: (mutation) => mutation.state.submittedAt,
   });
   return pending.length > 0 ? Math.min(...pending) : null;
-}
-
-export function usePlanDiff(planId: string | null) {
-  return useQuery({
-    queryKey: ['plan-diff', planId],
-    queryFn: async () => (await api.get<PlanDiffResponse>(`/api/cycle-plans/${planId}/diff?against=active`)).data,
-    enabled: planId !== null,
-  });
 }
 
 export function useAiActions() {
@@ -85,20 +44,5 @@ export function useAiActions() {
       (await api.post<{ rationale: string[] }>('/api/ai/explain', { planId })).data.rationale,
   });
 
-  const apply = useMutation({
-    mutationFn: async (planId: string) => api.post(`/api/cycle-plans/${planId}/apply-proposal`),
-    onSuccess: () =>
-      Promise.all([
-        refreshPlans(),
-        queryClient.invalidateQueries({ queryKey: ['occurrences'] }),
-        queryClient.invalidateQueries({ queryKey: ['due'] }),
-      ]),
-  });
-
-  const discard = useMutation({
-    mutationFn: async (planId: string) => api.post(`/api/cycle-plans/${planId}/discard`),
-    onSuccess: refreshPlans,
-  });
-
-  return { propose, rebalance, suggestTasks, explain, apply, discard };
+  return { propose, rebalance, suggestTasks, explain };
 }

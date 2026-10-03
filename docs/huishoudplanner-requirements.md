@@ -208,7 +208,7 @@ _id, at, actorId,
 entity: 'task' | 'cyclePlan' | 'occurrence' | 'user' | 'room' | 'settings' | 'cycle' | 'import' | 'points' | 'badge' | 'badgeAward',
 entityId,
 action: 'create' | 'update' | 'delete' | 'complete' | 'uncomplete' | 'skip'
-      | 'reschedule' | 'assign' | 'activate' | 'ai-apply' | 'reset' | 'recompute',
+      | 'reschedule' | 'assign' | 'activate' | 'ai-apply' | 'reset' | 'recompute',  // 'ai-apply' only exists in old history
 before, after,                  // changed fields only
 source: 'ui' | 'api' | 'ai' | 'system',
 meta                            // optional, per action (see 4.9)
@@ -564,7 +564,6 @@ POST   /api/cycle-plans                     PATCH /api/cycle-plans/:id
 DELETE /api/cycle-plans/:id                 PUT  /api/cycle-plans/:id/slots
 GET    /api/cycle-plans/:id/activation-preview
 POST   /api/cycle-plans/:id/activate        (body: { previewToken })
-POST   /api/cycle-plans/:id/apply-proposal  POST /api/cycle-plans/:id/discard
 
 GET    /api/occurrences                     POST /api/occurrences
 PATCH  /api/occurrences/:id                 POST /api/occurrences/:id/claim

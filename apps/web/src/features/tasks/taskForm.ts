@@ -8,7 +8,7 @@ export interface TaskFormValues {
   roomId: string;
   intervalKey: string;
   durationMinutes: string;
-  /** Whole number 0..100; '' lets the server default it from the duration. */
+  /** Whole number 0..1000; '' lets the server default it from the duration. */
   points: string;
   /** '' = "wie dan ook" */
   defaultAssigneeId: string;
