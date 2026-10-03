@@ -100,4 +100,5 @@ Empty these documents as part of finishing the work, and report anything left in
 - `change-server-api`: change shared contracts, Fastify routes, domain logic, persistence, and audit safely.
 - `change-web-feature`: change React features, translations, responsive layouts, offline behavior, and UI tests.
 - `change-scheduling-domain`: change cycles, slots, occurrences, due calculations, activation, or plan validation.
+- `change-rewards-domain`: change the points ledger, redemptions, week/cycle bonuses, the reward meter, or badge awards.
 - `release-household-planner`: change release automation, versions, changelog behavior, or container publishing.
