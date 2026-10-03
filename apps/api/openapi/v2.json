@@ -985,6 +985,64 @@
         }
       }
     },
+    "/api/v2/due": {
+      "get": {
+        "tags": [
+          "Due"
+        ],
+        "summary": "Lists every active task with its due state, ranked.",
+        "description": "Needs no profile. Highest ratio first, then most days since, then task id. A task that is fine is in the list as well (state ok); a client that wants only due and overdue work leaves the ok items out. The list is paged: pass the nextCursor of a page as cursor for the next one (limit 1 to 200, default 50). The summary counts the whole list. A task whose interval no longer exists is left out.",
+        "operationId": "listDue",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DueListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/cycle-plans": {
       "get": {
         "tags": [
@@ -1681,6 +1739,170 @@
           },
           "403": {
             "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/cycle-plans/{id}/activation-preview": {
+      "get": {
+        "tags": [
+          "Cycle plans"
+        ],
+        "summary": "Previews what activating a plan would change (planners).",
+        "description": "Read-only: nothing is written or audited. For the current and the next cycle it lists the open generated occurrences that activation removes, the occurrences it adds, and what stays (done, skipped, moved by hand, ad hoc). previewToken fingerprints the plan, the tasks and settings it uses and the occurrences of the window; send it to the activation. Answers 404 not_found for an unknown plan and 500 settings_missing when the installation has no settings.",
+        "operationId": "previewCyclePlanActivation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivationPreviewResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/cycle-plans/{id}/activation": {
+      "post": {
+        "tags": [
+          "Cycle plans"
+        ],
+        "summary": "Activates a plan after its preview (planners).",
+        "description": "One transaction: the preview is recomputed and its token compared first; a different token answers 409 stale_activation_preview and nothing is written, so the client fetches a new preview. Otherwise every other active plan is deactivated (audited as update), the plan is activated (audited as activate; an AI draft stops being a draft) and the open generated occurrences of the current and the next cycle are replaced by those of the plan (audited with the system as source and the same runId). Activating the active plan again regenerates its upcoming occurrences. Two concurrent activations are serialised: one wins, the other answers 409 stale_activation_preview. Answers 404 not_found for an unknown plan.",
+        "operationId": "activateCyclePlan",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActivatePlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanActivatedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2721,6 +2943,106 @@
   },
   "components": {
     "schemas": {
+      "ActivatePlanRequest": {
+        "required": [
+          "previewToken"
+        ],
+        "type": "object",
+        "properties": {
+          "previewToken": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The previewToken of GET /api/v2/cycle-plans/{id}/activation-preview: 64 lowercase hexadecimal characters."
+          }
+        }
+      },
+      "ActivationPreviewItemResponse": {
+        "required": [
+          "occurrenceId",
+          "cycleIndex",
+          "taskId",
+          "taskName",
+          "date",
+          "assigneeId"
+        ],
+        "type": "object",
+        "properties": {
+          "occurrenceId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "cycleIndex": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "taskId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "taskName": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "description": "YYYY-MM-DD."
+          },
+          "assigneeId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "ActivationPreviewResponse": {
+        "required": [
+          "planId",
+          "previewToken",
+          "asOfDate",
+          "removed",
+          "added",
+          "preserved"
+        ],
+        "type": "object",
+        "properties": {
+          "planId": {
+            "type": "string"
+          },
+          "previewToken": {
+            "type": "string",
+            "description": "An opaque fingerprint of the previewed state; send it back to activate."
+          },
+          "asOfDate": {
+            "type": "string",
+            "description": "Today in the household timezone, YYYY-MM-DD."
+          },
+          "removed": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivationPreviewItemResponse"
+            }
+          },
+          "added": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivationPreviewItemResponse"
+            }
+          },
+          "preserved": {
+            "$ref": "#/components/schemas/PreservedOccurrencesResponse"
+          }
+        }
+      },
       "AiExplanationResponse": {
         "required": [
           "rationale"
@@ -4210,6 +4532,177 @@
           }
         }
       },
+      "DueItemResponse": {
+        "required": [
+          "taskId",
+          "taskName",
+          "roomId",
+          "roomName",
+          "intervalKey",
+          "intervalLabel",
+          "periodDays",
+          "daysSince",
+          "ratio",
+          "state",
+          "lastCompletedAt",
+          "initialDueDate",
+          "nextOccurrence"
+        ],
+        "type": "object",
+        "properties": {
+          "taskId": {
+            "type": "string"
+          },
+          "taskName": {
+            "type": "string"
+          },
+          "roomId": {
+            "type": "string"
+          },
+          "roomName": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Null when the room no longer exists."
+          },
+          "intervalKey": {
+            "type": "string"
+          },
+          "intervalLabel": {
+            "type": "string"
+          },
+          "periodDays": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "daysSince": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "Local calendar days since the last completion; for a task never completed zero before its initial due date, then one interval plus the days since that date.",
+            "format": "int32"
+          },
+          "ratio": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "daysSince divided by periodDays: 1 or more is due, 1.5 or more overdue.",
+            "format": "double"
+          },
+          "state": {
+            "type": "string"
+          },
+          "lastCompletedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "initialDueDate": {
+            "type": "string",
+            "description": "The day a never-completed task first counts as due.",
+            "format": "date"
+          },
+          "nextOccurrence": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DueNextOccurrenceResponse"
+              }
+            ]
+          }
+        }
+      },
+      "DueListResponse": {
+        "required": [
+          "today",
+          "items",
+          "nextCursor",
+          "summary"
+        ],
+        "type": "object",
+        "properties": {
+          "today": {
+            "type": "string",
+            "format": "date"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DueItemResponse"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "summary": {
+            "$ref": "#/components/schemas/DueSummaryResponse"
+          }
+        }
+      },
+      "DueNextOccurrenceResponse": {
+        "required": [
+          "id",
+          "date",
+          "assigneeId"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "assigneeId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "DueSummaryResponse": {
+        "required": [
+          "due",
+          "overdue"
+        ],
+        "type": "object",
+        "properties": {
+          "due": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "overdue": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "ExplainPlanRequest": {
         "required": [
           "planId"
@@ -4518,6 +5011,38 @@
               "string"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "PlanActivatedResponse": {
+        "required": [
+          "plan",
+          "runId",
+          "removed",
+          "generated"
+        ],
+        "type": "object",
+        "properties": {
+          "plan": {
+            "$ref": "#/components/schemas/CyclePlanResponse"
+          },
+          "runId": {
+            "type": "string"
+          },
+          "removed": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "How many open generated occurrences of the current and the next cycle were removed.",
+            "format": "int32"
+          },
+          "generated": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GenerationResultResponse"
+            }
           }
         }
       },
@@ -4958,6 +5483,41 @@
               "string"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "PreservedOccurrencesResponse": {
+        "required": [
+          "done",
+          "skipped",
+          "moved",
+          "adhoc"
+        ],
+        "type": "object",
+        "properties": {
+          "done": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivationPreviewItemResponse"
+            }
+          },
+          "skipped": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivationPreviewItemResponse"
+            }
+          },
+          "moved": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivationPreviewItemResponse"
+            }
+          },
+          "adhoc": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivationPreviewItemResponse"
+            }
           }
         }
       },
@@ -6178,6 +6738,10 @@
     {
       "name": "Tasks",
       "description": "The recurring household tasks: everyone reads them, planners create, change, deactivate and bulk-change them."
+    },
+    {
+      "name": "Due",
+      "description": "The due engine: every active task ranked by how far it has drifted past its interval."
     },
     {
       "name": "Cycle plans",

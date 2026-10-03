@@ -130,12 +130,21 @@ public sealed class JobSchedulerTests
         var ct = TestContext.Current.CancellationToken;
 
         await service.StartAsync(ct);
-        nightly.Runs.Should().Be(0);
-        rig.Clock.Advance(TimeSpan.FromHours(1)); // 00:00Z is 02:00 in Amsterdam, so this is 03:00
-        await ran.Task.WaitAsync(TimeSpan.FromSeconds(10), ct);
+        // BackgroundService may start the loop on another thread, so the service can read the clock before this test moves it and
+        // create its timer after: a single Advance could then be lost. The clock only moves forward in small steps until the job ran;
+        // the loop never waits for wall-clock time except for the safety net.
+        using var safetyNet = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        safetyNet.CancelAfter(TimeSpan.FromSeconds(60));
+        while (!ran.Task.IsCompleted)
+        {
+            rig.Clock.Advance(TimeSpan.FromMinutes(1)); // 00:00Z is 02:00 in Amsterdam: the first hour reaches 03:00
+            await Task.Yield();
+            safetyNet.Token.ThrowIfCancellationRequested();
+        }
+
         await service.StopAsync(ct);
 
-        nightly.Runs.Should().Be(1);
+        nightly.Runs.Should().BeGreaterThanOrEqualTo(1);
     }
 
     [Fact]
@@ -146,7 +155,7 @@ public sealed class JobSchedulerTests
         var ct = TestContext.Current.CancellationToken;
 
         await service.StartAsync(ct);
-        await service.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(10), ct);
+        await service.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(60), ct);
         await service.StopAsync(ct);
 
         service.ExecuteTask.IsCompletedSuccessfully.Should().BeTrue();

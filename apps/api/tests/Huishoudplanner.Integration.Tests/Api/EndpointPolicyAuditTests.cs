@@ -39,6 +39,7 @@ public sealed class EndpointPolicyAuditTests
         ["PUT /api/v2/cycle-plans/{id}/slots"] = AuthorizationPolicies.PlannerPolicy,
         ["POST /api/v2/cycle-plans/{id}/validation"] = AuthorizationPolicies.PlannerPolicy,
         ["POST /api/v2/cycle-plans/validation"] = AuthorizationPolicies.PlannerPolicy,
+        ["POST /api/v2/cycle-plans/{id}/activation"] = AuthorizationPolicies.PlannerPolicy,
         ["POST /api/v2/ai/test"] = AuthorizationPolicies.PlannerPolicy,
         ["POST /api/v2/ai/propose-plan"] = AuthorizationPolicies.PlannerPolicy,
         ["POST /api/v2/ai/rebalance"] = AuthorizationPolicies.PlannerPolicy,
@@ -104,6 +105,16 @@ public sealed class EndpointPolicyAuditTests
 
         endpoints.Should().NotBeEmpty();
         Violations(endpoints).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void TheDueList_staysOpenLikeTheNodeRoute()
+    {
+        using var factory = ApiFactory.WithoutDatabase();
+
+        var due = EndpointsOf(factory).Single(e => e.RoutePattern.RawText == "/api/v2/due");
+
+        due.Metadata.GetOrderedMetadata<IAuthorizeData>().Should().BeEmpty("routes/due.ts has no guard");
     }
 
     [Fact]

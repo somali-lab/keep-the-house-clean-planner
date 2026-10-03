@@ -24,3 +24,7 @@ Existing installations convert the standalone instance with a documented, backed
 - Integration tests run against a replica set so they behave like production.
 - The compose file and the deployment guide gain a one-time conversion step.
 - A transaction can abort under write conflict; the port reports that as a conflict rather than an exception.
+
+## Amendment 2026-10-03 — the guard document
+
+The guard document is the counter `activationVersion` on the singleton `settings` document, incremented as the first write of every activation. A version field on the plan documents was rejected because two activations of different plans write different plan documents and would not conflict; a new collection was rejected because `settings` is already the one singleton that both the activation and the settings use cases read, so nothing is added to the schema and a concurrent settings change conflicts with an activation as well, which is wanted since the settings are part of the preview token. The Node server ignores the extra field. A loser of the write conflict is run again by the transaction runner against the committed state and finds its preview token stale (`409 stale_activation_preview`); when the retries run out the answer is `409 write_conflict`.
