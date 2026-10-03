@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Huishoudplanner.Domain\Huishoudplanner.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Huishoudplanner.Application\Huishoudplanner.Application.csproj" />
+    <ProjectReference Include="..\..\src\Huishoudplanner.Adapters.Mongo\Huishoudplanner.Adapters.Mongo.csproj" />
+    <ProjectReference Include="..\..\src\Huishoudplanner.Adapters.Http\Huishoudplanner.Adapters.Http.csproj" />
+    <ProjectReference Include="..\..\src\Huishoudplanner.Adapters.Ai\Huishoudplanner.Adapters.Ai.csproj" />
+    <ProjectReference Include="..\..\src\Huishoudplanner.Adapters.Notify\Huishoudplanner.Adapters.Notify.csproj" />
+    <ProjectReference Include="..\..\src\Huishoudplanner.Adapters.Pdf\Huishoudplanner.Adapters.Pdf.csproj" />
+    <ProjectReference Include="..\..\src\Huishoudplanner.Adapters.Jobs\Huishoudplanner.Adapters.Jobs.csproj" />
+  </ItemGroup>
+
+</Project>
