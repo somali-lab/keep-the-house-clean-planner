@@ -22,13 +22,14 @@ public static partial class DayKeys
     /// <summary>The household timezone (IANA id).</summary>
     public const string AppTimezone = "Europe/Amsterdam";
 
-    [GeneratedRegex("^[0-9]{4}-[0-9]{2}-[0-9]{2}z")]
+    // \z, not $: in .NET `$` also matches before a trailing newline.
+    [GeneratedRegex(@"^[0-9]{4}-[0-9]{2}-[0-9]{2}\z")]
     private static partial Regex DayKeyPattern();
 
-    [GeneratedRegex("^([01][0-9]|2[0-3]):[0-5][0-9]z")]
+    [GeneratedRegex(@"^([01][0-9]|2[0-3]):[0-5][0-9]\z")]
     private static partial Regex TimeOfDayPattern();
 
-    [GeneratedRegex("^([0-9]{4})-W([0-9]{2})z")]
+    [GeneratedRegex(@"^([0-9]{4})-W([0-9]{2})\z")]
     private static partial Regex IsoWeekPattern();
 
     /// <summary>Resolves an IANA timezone id; an unknown id throws <see cref="ArgumentOutOfRangeException"/>.</summary>
