@@ -1,0 +1,18 @@
+---
+description: .NET API hexagonal layering, ports, persistence, audit, and error rules
+applyTo: 'apps/api/**/*.cs'
+---
+
+# .NET API rules
+
+- Follow `.agents/skills/hexagonal-arch-dotnet`, `mongodb-persistence` and `xunit-tdd-workflow`; `docs/plans/dotnet-rewrite.md` §3 and §5 define the layout and cross-cutting rules.
+- One project per ring under `apps/api/src`: Domain references nothing of ours (only `OneOf` as package), Application references Domain, adapters reference Domain, Host composes. Do not add a reference that points inward-out.
+- Driving ports are `IXxxService` (Domain, implemented in Application); driven ports are verb-based `ForXxx` (Domain, one adapter each). No MediatR.
+- Errors are values: return `OneOf<..., NotFound, ConflictError, ValidationErrors, PortError>`. Never throw across a port, never an unfiltered `catch (Exception)`; the HTTP adapter maps variants to RFC 9457 Problem Details with `urn:huishoudplanner:problem:<code>`.
+- Raw database writes exist only in `Huishoudplanner.Adapters.Mongo`; `MongoDB.Driver`, `QuestPDF`, `Microsoft.Extensions.AI` and `Microsoft.AspNetCore.*` stay inside their adapter (and Host for ASP.NET Core).
+- Every real state change writes its audit entry in the same transaction (`ForRunningTransactions`); a no-op writes and audits nothing.
+- Ids are `ObjectId` in storage and 24-character hex strings in the API; calendar dates are `DateOnly` day keys (`YYYY-MM-DD`). Never `Guid` or ULID.
+- Time comes from `TimeProvider`; no `DateTime.Now` or `DateTime.UtcNow` outside the clock adapter. Calendar and cycle reasoning uses the domain day-key helpers and `TimeZoneInfo` with IANA ids.
+- Business rules live in the domain; endpoints parse, authorize (`RequireActor`, `RequirePlanner`, `RequireAdmin` policies) and map results, nothing more. A profile header is attribution, not authentication.
+- Keep configuration and secrets out of errors, spans and logs. Bind options with `ValidateOnStart` and value-free messages.
+- Test first: a new test is red before the change. Cover every `OneOf` variant, and keep the audit coverage test complete for every v2 write endpoint.

@@ -209,7 +209,7 @@ Each phase ends in something demonstrable. Slices are small enough for one pull 
 ### Phase 0 — Foundation (nothing visible to the household yet)
 
 - [x] 0.1 ADRs 0016–0021 written and indexed; ADR-0001 and ADR-0006 marked superseded; ADR-0004 and ADR-0008 amended for transactions. `docs/DECISIONS.md` lists the pointers.
-- [ ] 0.2 Skills copied and adapted into `.agents/skills/` (D13), AGENTS.md gains the .NET rules and the repository map entry for `apps/api`; `.github/instructions/api.instructions.md` and its Cursor mirror exist.
+- [x] 0.2 Skills copied and adapted into `.agents/skills/` (D13), AGENTS.md gains the .NET rules and the repository map entry for `apps/api`; `.github/instructions/api.instructions.md` and its Cursor mirror exist.
 - [ ] 0.3 Solution skeleton: all projects of §3.1, `Directory.Build.props`, central package versions, `OneOf`, nullable and analyzers on; `Architecture.Tests` green with the dependency rules (the .NET counterpart of `lint-rule.test.ts`: writes only in the Mongo adapter); `dotnet build` and `dotnet test` in CI.
 - [ ] 0.4 Host: configuration binding with startup validation (§3.7), Problem Details, OpenAPI generation and drift test, health endpoint `GET /api/v2/health` reporting database reachability, static files and SPA fallback. `WebApplicationFactory` fixture. Port `config.test.ts`, `static.test.ts`, `health.test.ts` (health cases), `health-down.test.ts`.
 - [ ] 0.5 OpenTelemetry pipeline with OTLP export, stdout JSON logs, redaction processor, `docs/OBSERVABILITY.md` with the Elastic example; verified against the maintainer's Elastic stack.

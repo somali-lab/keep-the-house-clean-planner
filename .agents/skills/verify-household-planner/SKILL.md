@@ -33,6 +33,10 @@ npm run typecheck --workspace apps/server
 
 Include `apps/server/test/audit-coverage.test.ts` and `apps/server/test/write-routes-coverage.test.ts` when a write route or persistence operation changes.
 
+### .NET API (once `apps/api` exists)
+
+Run `dotnet build apps/api` and `dotnet test apps/api` (Docker must be running for the Testcontainers integration tests); narrow with `dotnet test --project apps/api/tests/<project>` while iterating. See `.agents/skills/xunit-tdd-workflow`. This section is a pointer; the proportional selection is extended in a later slice.
+
 ### Web UI/model
 
 ```powershell
