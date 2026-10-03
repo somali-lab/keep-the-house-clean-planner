@@ -1,6 +1,6 @@
 # ADR-0011 — Points ledger as a projection of executions
 
-Status: Proposed
+Status: Accepted
 
 ## Context
 
@@ -10,7 +10,7 @@ Every execution earns points for the person who did the work, and the points are
 
 **The ledger is a recomputable projection, keyed per execution.** An entry of a derived kind is a pure function of one occurrence and carries a unique key such as `execution:<occurrenceId>`. It is inserted, updated in place or deleted to match that occurrence, and never compensated by a second entry, so there is at most one entry per execution however often it is computed, and a balance is always the sum of what is true now.
 
-**One reconcile is the single recomputation path.** A single function makes the whole ledger match the occurrences: it inserts what is missing, updates what differs and deletes what is orphaned. It runs at startup, in the nightly job and after an import, under one per-database lock, so reconciliations never overlap and the same code serves backfill, repair and rebuild. Live writes sync only the entry of the execution they changed, in the same lock.
+**One reconcile is the single recomputation path.** A single function makes the whole ledger match the occurrences: it inserts what is missing, updates what differs and deletes what is orphaned. It runs at startup, in the nightly job, after an import and on an administrator's request, under one per-database lock, so reconciliations never overlap and the same code serves backfill, repair and rebuild. Live writes sync only the entry of the execution they changed, in the same lock.
 
 **Booked entries live in the same ledger.** An entry that is a fact in its own right, such as a redemption, is stored in the same collection as a non-derived kind. The reconcile only loads, compares and deletes derived kinds, so a booked kind is never touched by a recomputation. A signed amount lets one balance be computed over every kind.
 

@@ -1,6 +1,6 @@
 # ADR-0010 — Browser notifications while the planner is open
 
-Status: Proposed
+Status: Accepted
 
 ## Context
 
