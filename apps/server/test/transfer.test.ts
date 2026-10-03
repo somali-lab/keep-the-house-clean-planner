@@ -81,7 +81,7 @@ beforeAll(async () => {
     payload: { slots: [{ taskId: task.json<{ _id: string }>()._id, weekIndex: 0, weekday: 3, assigneeId: p1._id.toHexString() }] },
   });
   expect(slots.statusCode, slots.body).toBe(200);
-  expect((await source.app.inject({ method: 'POST', url: '/api/jobs/nightly', headers })).statusCode).toBe(200);
+  expect((await source.app.inject({ method: 'POST', url: '/api/jobs/generation', headers })).statusCode).toBe(200);
   const occurrence = await source.app.inject({
     method: 'POST',
     url: '/api/occurrences',

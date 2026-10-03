@@ -604,7 +604,10 @@ export async function createOneOffOccurrence(ctx: AuditContext, input: OneOffOcc
   return result;
 }
 
-/** Sets the actor as assignee only while unassigned (atomic); otherwise 409. */
+/**
+ * Sets the actor as assignee only while the occurrence is open and unassigned (atomic). A completed
+ * or skipped occurrence is `409 invalid_transition`, an occurrence that has an assignee `409 already_claimed`.
+ */
 export async function claimOccurrence(ctx: AuditContext, id: ObjectId): Promise<OccurrenceDoc> {
   const settings = await getSettings(ctx.db);
   if (!settings) throw new HttpError(500, 'settings_missing');
@@ -614,9 +617,10 @@ export async function claimOccurrence(ctx: AuditContext, id: ObjectId): Promise<
     id,
     { assigneeId: ctx.actorId, ...periodOwnerFreeze(current, settings.timezone, ctx.clock.now()) },
     { action: 'assign', meta: { claim: true } },
-    { assigneeId: null },
+    { assigneeId: null, status: 'open' },
   );
   if (result) return result.after;
-  await requireOccurrence(ctx, id);
+  const latest = await requireOccurrence(ctx, id);
+  if (latest.status !== 'open') throw invalidTransition(latest.status, 'claim');
   throw new HttpError(409, 'already_claimed', 'Occurrence already has an assignee');
 }

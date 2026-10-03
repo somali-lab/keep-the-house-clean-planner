@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { BellRing, CalendarSync, History, Play } from 'lucide-react';
+import { BellRing, CalendarSync, History, Play, Scale } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -7,10 +7,20 @@ import { api } from '../../api/index.ts';
 import { format, t } from '../../i18n/nl.ts';
 import { FormMessage, SettingsCardHeader, listRowClass, settingsCardClass } from './SettingsCard.tsx';
 
-interface NightlyResult {
+interface GenerationResult {
   removed: number;
   generated: { inserted: number }[];
   due: { due: number; overdue: number };
+}
+
+interface RecomputeResult {
+  tasksDefaulted: number;
+  snapshotsSet: number;
+  created: number;
+  updated: number;
+  removed: number;
+  bonusesCreated: number;
+  bonusesRemoved: number;
 }
 
 interface MorningResult {
@@ -77,13 +87,23 @@ function JobRow({
 
 export function JobsSection() {
   const queryClient = useQueryClient();
-  const nightly = useMutation({
-    mutationFn: async () => (await api.post<NightlyResult>('/api/jobs/nightly')).data,
+  const generation = useMutation({
+    mutationFn: async () => (await api.post<GenerationResult>('/api/jobs/generation')).data,
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['occurrences'] }),
         queryClient.invalidateQueries({ queryKey: ['due'] }),
         queryClient.invalidateQueries({ queryKey: ['cycles'] }),
+      ]);
+    },
+  });
+  const recompute = useMutation({
+    mutationFn: async () => (await api.post<RecomputeResult>('/api/points/recompute')).data,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['points'] }),
+        queryClient.invalidateQueries({ queryKey: ['badges'] }),
+        queryClient.invalidateQueries({ queryKey: ['stats'] }),
       ]);
     },
   });
@@ -94,14 +114,26 @@ export function JobsSection() {
     mutationFn: async () => (await api.post<AuditRetentionResult>('/api/jobs/audit-retention')).data,
   });
 
-  const generated = nightly.data?.generated.reduce((sum, cycle) => sum + cycle.inserted, 0) ?? 0;
-  const nightlyResult = nightly.data
-    ? format('settings.jobs.nightly.result', {
-        removed: nightly.data.removed,
+  const generated = generation.data?.generated.reduce((sum, cycle) => sum + cycle.inserted, 0) ?? 0;
+  const generationResult = generation.data
+    ? format('settings.jobs.generation.result', {
+        removed: generation.data.removed,
         generated,
-        due: nightly.data.due.due,
-        overdue: nightly.data.due.overdue,
+        due: generation.data.due.due,
+        overdue: generation.data.due.overdue,
       })
+    : undefined;
+  const recomputed = recompute.data;
+  const recomputeResult = recomputed
+    ? recomputed.created + recomputed.updated + recomputed.removed + recomputed.bonusesCreated + recomputed.bonusesRemoved +
+        recomputed.snapshotsSet + recomputed.tasksDefaulted ===
+      0
+      ? t('settings.jobs.recompute.unchanged')
+      : format('settings.jobs.recompute.result', {
+          created: recomputed.created + recomputed.bonusesCreated,
+          updated: recomputed.updated + recomputed.snapshotsSet + recomputed.tasksDefaulted,
+          removed: recomputed.removed + recomputed.bonusesRemoved,
+        })
     : undefined;
   const morningResult = morning.data
     ? morning.data.status === 'disabled'
@@ -131,13 +163,23 @@ export function JobsSection() {
       <div className="grid min-w-0 max-w-full gap-3">
         <JobRow
           icon={<CalendarSync aria-hidden="true" />}
-          title={t('settings.jobs.nightly.title')}
-          schedule={t('settings.jobs.nightly.schedule')}
-          description={t('settings.jobs.nightly.help')}
-          pending={nightly.isPending}
-          result={nightlyResult}
-          failed={nightly.isError}
-          onRun={() => nightly.mutate()}
+          title={t('settings.jobs.generation.title')}
+          schedule={t('settings.jobs.generation.schedule')}
+          description={t('settings.jobs.generation.help')}
+          pending={generation.isPending}
+          result={generationResult}
+          failed={generation.isError}
+          onRun={() => generation.mutate()}
+        />
+        <JobRow
+          icon={<Scale aria-hidden="true" />}
+          title={t('settings.jobs.recompute.title')}
+          schedule={t('settings.jobs.recompute.schedule')}
+          description={t('settings.jobs.recompute.help')}
+          pending={recompute.isPending}
+          result={recomputeResult}
+          failed={recompute.isError}
+          onRun={() => recompute.mutate()}
         />
         <JobRow
           icon={<History aria-hidden="true" />}

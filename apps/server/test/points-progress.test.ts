@@ -63,7 +63,7 @@ async function fixture(): Promise<Fixture> {
     { taskId: tasks.dweilen, weekIndex: 1, weekday: 1, assigneeId: p1._id.toHexString() },
   ];
   expect((await call('PUT', `/api/cycle-plans/${plan._id.toHexString()}/slots`, { slots })).statusCode).toBe(200);
-  expect((await call('POST', '/api/jobs/nightly')).statusCode).toBe(200);
+  expect((await call('POST', '/api/jobs/generation')).statusCode).toBe(200);
   t.clock.set('2026-09-16T08:00:00.000Z');
 
   const occurrence: Fixture['occurrence'] = async (date, task = 'stofzuigen') => {

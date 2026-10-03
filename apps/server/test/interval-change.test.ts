@@ -56,7 +56,7 @@ beforeAll(async () => {
     payload: { slots: [0, 1, 2, 3].map((w) => ({ taskId, weekIndex: w, weekday: 1, assigneeId: p1._id.toHexString() })) },
   });
   expect(put.statusCode, put.body).toBe(200);
-  expect((await t.app.inject({ method: 'POST', url: '/api/jobs/nightly', headers: asProfile(p1) })).statusCode).toBe(200);
+  expect((await t.app.inject({ method: 'POST', url: '/api/jobs/generation', headers: asProfile(p1) })).statusCode).toBe(200);
 });
 
 afterAll(async () => {
@@ -86,7 +86,7 @@ describe('changing interval and duration', () => {
 
   it('does not touch existing occurrences when generation runs again for the same cycles', async () => {
     const before = snapshot(await findOccurrences(t.db, { taskId: new ObjectId(taskId) }));
-    const res = await t.app.inject({ method: 'POST', url: '/api/jobs/nightly', headers: asProfile(p1) });
+    const res = await t.app.inject({ method: 'POST', url: '/api/jobs/generation', headers: asProfile(p1) });
     expect(res.json<{ generated: { inserted: number }[] }>().generated.map((g) => g.inserted)).toEqual([0, 0]);
     expect(snapshot(await findOccurrences(t.db, { taskId: new ObjectId(taskId) }))).toEqual(before);
   });
@@ -98,7 +98,7 @@ describe('changing interval and duration', () => {
 
   it('snapshots the new duration and name in the next generation', async () => {
     t.clock.set('2026-11-09T06:00:00.000Z'); // start of cycle 2
-    const res = await t.app.inject({ method: 'POST', url: '/api/jobs/nightly', headers: asProfile(p1) });
+    const res = await t.app.inject({ method: 'POST', url: '/api/jobs/generation', headers: asProfile(p1) });
     expect(res.statusCode, res.body).toBe(200);
 
     const cycle2 = await findOccurrences(t.db, inCycle(2));

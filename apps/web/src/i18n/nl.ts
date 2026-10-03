@@ -759,12 +759,18 @@ export const nl = {
   'settings.jobs.run': 'Nu starten',
   'settings.jobs.running': 'Bezig…',
   'settings.jobs.error': 'De job kon niet worden uitgevoerd.',
-  'settings.jobs.nightly.title': 'Planning genereren',
-  'settings.jobs.nightly.schedule': 'Dagelijks om 03:00',
-  'settings.jobs.nightly.help':
-    'Controleert en genereert taken voor de huidige en volgende cyclus en werkt de achterstand bij.',
-  'settings.jobs.nightly.result':
+  'settings.jobs.generation.title': 'Planning genereren',
+  'settings.jobs.generation.schedule': 'Dagelijks om 03:00',
+  'settings.jobs.generation.help':
+    'Controleert en genereert taken voor de huidige en volgende cyclus en werkt de achterstand bij. De nachtelijke run berekent ook de punten en badges opnieuw.',
+  'settings.jobs.generation.result':
     'Klaar: {removed} oude taken verwijderd, {generated} taken gegenereerd, {due} aan de beurt en {overdue} flink achter.',
+  'settings.jobs.recompute.title': 'Punten en badges opnieuw berekenen',
+  'settings.jobs.recompute.schedule': 'Dagelijks om 03:00, samen met de planning',
+  'settings.jobs.recompute.help':
+    'Laat het puntenboek, de week- en cyclusbonussen en de badgetoekenningen weer kloppen met de afgeronde taken. Herstelt afwijkingen en is veilig om te herhalen.',
+  'settings.jobs.recompute.result': 'Klaar: {created} aangemaakt, {updated} bijgewerkt en {removed} verwijderd.',
+  'settings.jobs.recompute.unchanged': 'Klaar: er is niets veranderd.',
   'settings.jobs.retention.title': 'Auditgeschiedenis opschonen',
   'settings.jobs.retention.schedule': 'Dagelijks om 03:45',
   'settings.jobs.retention.help':

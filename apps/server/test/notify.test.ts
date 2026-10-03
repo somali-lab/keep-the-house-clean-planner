@@ -121,7 +121,7 @@ describe('morning notification job', () => {
     };
     const aanrecht = await createTask('Aanrecht');
     const oven = await createTask('Oven');
-    expect((await app.app.inject({ method: 'POST', url: '/api/jobs/nightly', headers })).statusCode).toBe(200);
+    expect((await app.app.inject({ method: 'POST', url: '/api/jobs/generation', headers })).statusCode).toBe(200);
     for (const [taskId, date, assigneeId] of [
       [aanrecht, '2026-09-16', p1._id.toHexString()],
       [oven, '2026-09-16', null],

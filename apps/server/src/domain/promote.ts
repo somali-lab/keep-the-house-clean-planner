@@ -9,6 +9,7 @@ import {
   type PlanValidationResult,
   type PromoteSuggestion,
 } from '@huishoudplanner/shared';
+import { randomUUID } from 'node:crypto';
 import { ObjectId, type Db } from 'mongodb';
 import type { AuditContext } from '../audit/context.ts';
 import { findActivePlan, replaceSlots, type CyclePlanDoc } from '../data/cyclePlans.ts';
@@ -17,6 +18,7 @@ import { findOccurrences, type OccurrenceDoc } from '../data/occurrences.ts';
 import { getSettings } from '../data/settings.ts';
 import { listTasks } from '../data/tasks.ts';
 import { HttpError } from '../http/errors.ts';
+import { replaceUpcomingOccurrences, type ReplacementResult } from './generation.ts';
 import { validateSlotsAgainstDb } from './plans.ts';
 
 interface Move {
@@ -118,11 +120,14 @@ export async function computePromoteSuggestions(db: Db, now: Date): Promise<Prom
   return suggestions;
 }
 
-/** Moves the slot in the active plan, validated with the same rules as the editor (errors → 422). */
+/**
+ * Moves the slot in the active plan, validated with the same rules as the editor (errors → 422).
+ * Like a slot save it synchronizes the future occurrences immediately, with a system origin.
+ */
 export async function applyPromotion(
   ctx: AuditContext,
   input: ApplyPromotionInput,
-): Promise<{ plan: CyclePlanDoc; validation: PlanValidationResult }> {
+): Promise<{ plan: CyclePlanDoc; validation: PlanValidationResult; synchronized: ReplacementResult }> {
   const plan = await findActivePlan(ctx.db);
   if (!plan || plan._id.toHexString() !== input.planId) {
     throw new HttpError(409, 'plan_not_active', 'Suggestions can only change the active plan');
@@ -150,5 +155,6 @@ export async function applyPromotion(
     ...(input.toAssigneeId ? { toAssigneeId: input.toAssigneeId } : {}),
   });
   if (!updated) throw new HttpError(404, 'not_found', 'cycle plan not found');
-  return { plan: updated, validation };
+  const synchronized = await replaceUpcomingOccurrences({ ...ctx, source: 'system' }, updated, randomUUID(), 'plan_update');
+  return { plan: updated, validation, synchronized };
 }

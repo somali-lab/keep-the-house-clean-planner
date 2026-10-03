@@ -2,7 +2,8 @@ import { toDayKey } from '@huishoudplanner/shared';
 import { ObjectId } from 'mongodb';
 import cron from 'node-cron';
 import { afterEach, describe, expect, it } from 'vitest';
-import { findActivePlan } from '../src/data/cyclePlans.ts';
+import { findActivePlan, replaceSlots } from '../src/data/cyclePlans.ts';
+import { slotsToDocs } from '../src/domain/plans.ts';
 import { generateCycle } from '../src/domain/generation.ts';
 import { listCycles } from '../src/data/cycles.ts';
 import { COLLECTIONS } from '../src/data/db.ts';
@@ -36,10 +37,15 @@ interface Ctx {
   p2: UserDoc;
   planId: string;
   task(name: string, intervalKey: string, durationMinutes?: number): Promise<string>;
+  /** Saves slots through the API, which synchronizes the future occurrences of an active plan immediately. */
   putSlots(
     planId: string,
     slots: { taskId: string; weekIndex: number; weekday: number; assigneeId?: string | null }[],
-    sync?: boolean,
+  ): Promise<void>;
+  /** Stores slots without synchronizing, so the generation and the nightly repair have work to do. */
+  storeSlots(
+    planId: string,
+    slots: { taskId: string; weekIndex: number; weekday: number; assigneeId?: string | null }[],
   ): Promise<void>;
   nightly(): Promise<{
     runId: string;
@@ -70,17 +76,25 @@ async function setup(now = MONDAY_MORNING): Promise<Ctx> {
       expect(res.statusCode).toBe(201);
       return res.json<{ _id: string }>()._id;
     },
-    async putSlots(id, slots, sync = false) {
+    async storeSlots(id, slots) {
+      const stored = await replaceSlots(
+        app.systemCtx(),
+        new ObjectId(id),
+        slotsToDocs(slots.map((s) => ({ assigneeId: null, sortOrder: 0, ...s }))),
+      );
+      expect(stored).not.toBeNull();
+    },
+    async putSlots(id, slots) {
       const res = await app.app.inject({
         method: 'PUT',
-        url: `/api/cycle-plans/${id}/slots${sync ? '?sync=true' : ''}`,
+        url: `/api/cycle-plans/${id}/slots`,
         headers,
         payload: { slots: slots.map((s) => ({ assigneeId: null, ...s })) },
       });
       expect(res.statusCode, res.body).toBe(200);
     },
     async nightly() {
-      const res = await app.app.inject({ method: 'POST', url: '/api/jobs/nightly', headers });
+      const res = await app.app.inject({ method: 'POST', url: '/api/jobs/generation', headers });
       expect(res.statusCode, res.body).toBe(200);
       return res.json();
     },
@@ -93,7 +107,7 @@ describe('generateCycle via nightly job', () => {
   it('(a) is idempotent: a second run inserts and audits nothing', async () => {
     const c = await setup();
     const weekly = await c.task('Badkamer', '1w');
-    await c.putSlots(
+    await c.storeSlots(
       c.planId,
       [0, 1, 2, 3].map((w) => ({ taskId: weekly, weekIndex: w, weekday: 3 })),
     );
@@ -181,7 +195,7 @@ describe('generateCycle via nightly job', () => {
   it('audits each generated occurrence with the run id', async () => {
     const c = await setup();
     const weekly = await c.task('Badkamer', '1w');
-    await c.putSlots(c.planId, [{ taskId: weekly, weekIndex: 1, weekday: 1 }]);
+    await c.storeSlots(c.planId, [{ taskId: weekly, weekIndex: 1, weekday: 1 }]);
     const { result, entries } = await expectAudited(c.t, () => c.nightly(), {
       entity: 'occurrence',
       action: 'create',
@@ -304,7 +318,7 @@ describe('generateCycle via nightly job', () => {
   it('(e) a 2w task with 8 slots yields 8 occurrences per cycle', async () => {
     const c = await setup();
     const twice = await c.task('Wastafel', '2w');
-    await c.putSlots(
+    await c.storeSlots(
       c.planId,
       [0, 1, 2, 3].flatMap((w) => [
         { taskId: twice, weekIndex: w, weekday: 2 },
@@ -320,7 +334,7 @@ describe('editing the active plan', () => {
   it('repairs future occurrences generated before the cycle anchor changed', async () => {
     const c = await setup('2026-09-20T08:00:00.000Z');
     const water = await c.task('Waterbak', '1w', 3);
-    await c.putSlots(
+    await c.storeSlots(
       c.planId,
       [0, 1, 2, 3].map((weekIndex) => ({
         taskId: water,
@@ -338,7 +352,7 @@ describe('editing the active plan', () => {
       payload: { cycleAnchorDate: '2026-09-21' },
     });
     expect(settings.statusCode, settings.body).toBe(200);
-    await c.putSlots(
+    await c.storeSlots(
       c.planId,
       [0, 1, 2, 3].flatMap((weekIndex) => [1, 3, 5].map((weekday) => ({
         taskId: water,
@@ -383,7 +397,7 @@ describe('editing the active plan', () => {
   it('repairs stale upcoming occurrences during the nightly run', async () => {
     const c = await setup();
     const weekly = await c.task('Badkamer', '1w', 30);
-    await c.putSlots(
+    await c.storeSlots(
       c.planId,
       [0, 1, 2, 3].map((weekIndex) => ({
         taskId: weekly,
@@ -394,7 +408,7 @@ describe('editing the active plan', () => {
     );
     await c.nightly();
 
-    await c.putSlots(
+    await c.storeSlots(
       c.planId,
       [0, 1, 2, 3].map((weekIndex) => ({
         taskId: weekly,
@@ -424,7 +438,7 @@ describe('editing the active plan', () => {
     expect(deletions).toHaveLength(8);
   });
 
-  it('synchronizes upcoming occurrences when requested by the planner', async () => {
+  it('synchronizes upcoming occurrences immediately when the planner saves the slots of the active plan', async () => {
     const c = await setup();
     const weekly = await c.task('Badkamer', '1w', 30);
     await c.putSlots(
@@ -446,7 +460,6 @@ describe('editing the active plan', () => {
         weekday: 4,
         assigneeId: c.p2._id.toHexString(),
       })),
-      true,
     );
 
     const occurrences = await findOccurrences(c.t.db, { taskId: new ObjectId(weekly) });
@@ -478,7 +491,7 @@ describe('editing the active plan', () => {
       weekIndex: 0,
       weekday: 4,
       assigneeId: c.p1._id.toHexString(),
-    }], true);
+    }]);
 
     const response = await c.t.app.inject({
       method: 'GET',
@@ -499,7 +512,7 @@ describe('editing the active plan', () => {
     expect(dayKeys(persisted)).toContain('2026-09-17');
   });
 
-  it('does not publish slots from a draft plan even when synchronization is requested', async () => {
+  it('does not publish slots from a draft plan although every slot save synchronizes', async () => {
     const c = await setup();
     const taskId = await c.task('Ramen zemen', '4wk', 20);
     await c.nightly();
@@ -518,7 +531,7 @@ describe('editing the active plan', () => {
       weekIndex: 0,
       weekday: 4,
       assigneeId: c.p1._id.toHexString(),
-    }], true);
+    }]);
 
     const response = await c.t.app.inject({
       method: 'GET',

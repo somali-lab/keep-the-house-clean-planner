@@ -57,7 +57,7 @@ beforeAll(async () => {
     },
   });
   expect(put.statusCode, put.body).toBe(200);
-  expect((await t.app.inject({ method: 'POST', url: '/api/jobs/nightly', headers: asProfile(p1) })).statusCode).toBe(200);
+  expect((await t.app.inject({ method: 'POST', url: '/api/jobs/generation', headers: asProfile(p1) })).statusCode).toBe(200);
   occurrences.implicit = await occurrenceOn('2026-09-16');
   occurrences.takeOver = await occurrenceOn('2026-09-17');
   occurrences.onBehalf = await occurrenceOn('2026-09-18');

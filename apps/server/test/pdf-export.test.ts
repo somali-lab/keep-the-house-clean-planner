@@ -76,7 +76,7 @@ beforeAll(async () => {
     headers,
     payload: { weekThemes: ['', 'Keuken', '', ''] },
   });
-  expect((await t.app.inject({ method: 'POST', url: '/api/jobs/nightly', headers })).statusCode).toBe(200);
+  expect((await t.app.inject({ method: 'POST', url: '/api/jobs/generation', headers })).statusCode).toBe(200);
 
   // Drag "Ramen lappen" from Friday 25 Sep to Saturday 26 Sep.
   const [ramen] = await findOccurrences(t.db, { taskId: new ObjectId(monthly) });

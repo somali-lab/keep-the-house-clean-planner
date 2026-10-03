@@ -144,9 +144,14 @@ const SCENARIOS: Scenario[] = [
       }),
   },
   {
-    route: 'POST /api/jobs/nightly',
+    route: 'POST /api/jobs/generation',
     audit: { entity: 'occurrence', action: 'create' },
-    run: () => call('POST', '/api/jobs/nightly'),
+    // The slot save above already synchronized the future occurrences, so remove them to give the run work to repair.
+    prepare: async () => {
+      // eslint-disable-next-line no-restricted-syntax -- sets up lost generated occurrences, which no repository does
+      await t.db.collection(COLLECTIONS.occurrences).deleteMany({ origin: 'generated' });
+    },
+    run: () => call('POST', '/api/jobs/generation'),
   },
   {
     route: 'PATCH /api/occurrences/:id',
