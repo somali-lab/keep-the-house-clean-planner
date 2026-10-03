@@ -1,6 +1,7 @@
 using System.Reflection;
 using Huishoudplanner.Adapters.Http;
 using Huishoudplanner.Adapters.Http.Health;
+using Huishoudplanner.Adapters.Http.WebApp;
 using Huishoudplanner.Adapters.Mongo;
 using Huishoudplanner.Application;
 using Huishoudplanner.Domain.Ports.Driving;
@@ -27,6 +28,7 @@ public static class CompositionExtensions
         ArgumentNullException.ThrowIfNull(app);
         app.UseHttpAdapter();
         app.MapHealthEndpoints();
+        app.UseWebApp(app.Services.GetRequiredService<IOptions<AppOptions>>().Value.WebDistDir);
         return app;
     }
 
