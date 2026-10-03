@@ -36,7 +36,8 @@ internal sealed record SheetText(
     string FarBehind,
     string Due,
     string DaySchedule,
-    string Anyone)
+    string Anyone,
+    string UnknownRoom)
 {
     private static readonly SheetText NlText = new(
         ["zondag", "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag"],
@@ -68,7 +69,8 @@ internal sealed record SheetText(
         FarBehind: "Flink achter",
         Due: "Aan de beurt",
         DaySchedule: "Dagschema",
-        Anyone: "Wie dan ook");
+        Anyone: "Wie dan ook",
+        UnknownRoom: "Onbekende ruimte");
 
     private static readonly SheetText EnText = new(
         ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
@@ -100,7 +102,8 @@ internal sealed record SheetText(
         FarBehind: "Significantly overdue",
         Due: "Due",
         DaySchedule: "Daily schedule",
-        Anyone: "Anyone");
+        Anyone: "Anyone",
+        UnknownRoom: "Unknown room");
 
     public static SheetText For(SheetLanguage language) => language == SheetLanguage.En ? EnText : NlText;
 

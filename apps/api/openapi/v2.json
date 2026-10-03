@@ -1043,6 +1043,269 @@
         }
       }
     },
+    "/api/v2/export/pdf/schedule": {
+      "get": {
+        "tags": [
+          "Export"
+        ],
+        "summary": "Downloads the week schedule of one, two or four weeks as a PDF.",
+        "description": "Needs no profile. Query: fromWeek (required, an ISO week such as 2026-W38), weeks (required: 1, 2 or 4), orientation (portrait, the default, or landscape; only a landscape sheet of exactly two weeks puts both weeks on one page), totals (true or false, the default: the minutes total per day) and language (nl, the default, or en). The sheet is a blank checklist built from the generated occurrences, so rescheduled and one-off tasks sit where they are and no status is printed. Only generated weeks can be exported: any other week answers 409 weeks_not_generated with the missing ISO weeks in the extension weeks. The file is named after the period, for example huishoudschema-2026-w38-w39.pdf.",
+        "operationId": "exportSchedulePdf",
+        "parameters": [
+          {
+            "name": "fromWeek",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "weeks",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "orientation",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "totals",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/export/pdf/day": {
+      "get": {
+        "tags": [
+          "Export"
+        ],
+        "summary": "Downloads the sheet of a single day as a PDF.",
+        "description": "Needs no profile. Query: date (required, YYYY-MM-DD) and language (nl, the default, or en). The sheet is the week of that day reduced to it and always carries the day total. A week that has not been generated answers 409 weeks_not_generated. The file is named huishoudschema-YYYY-MM-DD.pdf.",
+        "operationId": "exportDayPdf",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/export/pdf/due": {
+      "get": {
+        "tags": [
+          "Export"
+        ],
+        "summary": "Downloads the list of tasks that are due or overdue as a PDF.",
+        "description": "Needs no profile. Query: language (nl, the default, or en). Overdue tasks come first and the state is spelled out in words; an empty list prints a message instead of a table. The file is named achterstand-YYYY-MM-DD.pdf after today in the household timezone.",
+        "operationId": "exportDueListPdf",
+        "parameters": [
+          {
+            "name": "language",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/export/pdf/tasks": {
+      "get": {
+        "tags": [
+          "Export"
+        ],
+        "summary": "Downloads the list of all tasks, grouped by room, as a PDF.",
+        "description": "Needs no profile. Query: language (nl, the default, or en). Inactive tasks are listed and marked; a task whose room no longer exists is printed under an unknown-room label. One-off tasks are not tasks and are not listed. The file is named huishoudtaken.pdf.",
+        "operationId": "exportTaskListPdf",
+        "parameters": [
+          {
+            "name": "language",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/cycle-plans": {
       "get": {
         "tags": [
@@ -8636,6 +8899,10 @@
     {
       "name": "Due",
       "description": "The due engine: every active task ranked by how far it has drifted past its interval."
+    },
+    {
+      "name": "Export",
+      "description": "Printable PDF sheets: the week schedule, a single day, the due list and the task list. Everyone downloads them."
     },
     {
       "name": "Cycle plans",
