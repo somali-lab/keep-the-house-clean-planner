@@ -1,6 +1,7 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { resetRequestKeys } from '../../api/requestKey.ts';
+import { applyLanguage } from '../../i18n/runtime.ts';
 import { ANNA, BRAM, mockApi, storeProfile } from '../../test/fixtures.ts';
 import { makeRoom, makeSettings, makeTask, renderWithProviders } from '../../test/render.tsx';
 import type { DueItemView } from './api.ts';
@@ -8,7 +9,10 @@ import { DuePage, spokenDate } from './DuePage.tsx';
 
 const NOW = new Date('2026-09-16T08:00:00Z'); // Wednesday
 
-afterEach(() => resetRequestKeys());
+afterEach(() => {
+  resetRequestKeys();
+  applyLanguage('nl');
+});
 
 const item = (overrides: Partial<DueItemView> & Pick<DueItemView, 'taskId' | 'taskName' | 'state'>): DueItemView => ({
   roomId: 'r1',
@@ -171,6 +175,112 @@ describe('DuePage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Afwas nu gedaan' }));
     await waitFor(() => expect(callsTo(fetchMock, 'PATCH', '/api/occurrences/o-today')).toEqual([{ action: 'complete' }]));
     expect(callsTo(fetchMock, 'POST', '/api/occurrences')).toEqual([]);
+  });
+
+  describe('"Nu gedaan" for work that is planned today for someone else', () => {
+    const SOMEONE_ELSES: DueItemView[] = [
+      item({
+        taskId: 't5',
+        taskName: 'Vaatwasser leegmaken',
+        state: 'due',
+        nextOccurrence: { id: 'o-bram', date: '2026-09-16', assigneeId: BRAM._id },
+      }),
+      item({
+        taskId: 't6',
+        taskName: 'Planten water geven',
+        state: 'due',
+        nextOccurrence: { id: 'o-anna', date: '2026-09-16', assigneeId: ANNA._id },
+      }),
+      item({
+        taskId: 't7',
+        taskName: 'Kattenbak verschonen',
+        state: 'due',
+        nextOccurrence: { id: 'o-bram-later', date: '2026-09-19', assigneeId: BRAM._id },
+      }),
+    ];
+    const setupOthers = () => {
+      storeProfile(ANNA._id);
+      return mockApi({
+        '/api/users': [ANNA, BRAM],
+        '/api/settings': makeSettings(),
+        '/api/due': SOMEONE_ELSES,
+        'POST /api/occurrences': { _id: 'new1', taskNameSnapshot: 'Kattenbak verschonen' },
+        'PATCH /api/occurrences/o-bram': { _id: 'o-bram', status: 'done' },
+        'PATCH /api/occurrences/o-anna': { _id: 'o-anna', status: 'done' },
+      });
+    };
+
+    it('asks who performed it and says who receives the points, without sending anything yet', async () => {
+      const fetchMock = setupOthers();
+      renderWithProviders(<DuePage now={NOW} />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Vaatwasser leegmaken nu gedaan' }));
+
+      const dialog = await screen.findByRole('alertdialog');
+      expect(dialog).toHaveTextContent('Wie heeft “Vaatwasser leegmaken” gedaan?');
+      expect(dialog).toHaveTextContent('Deze taak staat op naam van Bram de Vries');
+      expect(dialog).toHaveTextContent('namens Bram de Vries afvinken geeft Bram de Vries de punten');
+      expect(dialog).toHaveTextContent('zelf overnemen geeft jou de punten');
+      expect(callsTo(fetchMock, 'PATCH', '/api/occurrences/o-bram')).toEqual([]);
+      expect(callsTo(fetchMock, 'POST', '/api/occurrences')).toEqual([]);
+    });
+
+    it('checks it off on behalf of the assignee, who then receives the points', async () => {
+      const fetchMock = setupOthers();
+      renderWithProviders(<DuePage now={NOW} />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Vaatwasser leegmaken nu gedaan' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Namens Bram de Vries afvinken' }));
+      await waitFor(() =>
+        expect(callsTo(fetchMock, 'PATCH', '/api/occurrences/o-bram')).toEqual([
+          { action: 'complete', completedBy: BRAM._id },
+        ]),
+      );
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    });
+
+    it('takes the task over, so the actor receives the points', async () => {
+      const fetchMock = setupOthers();
+      renderWithProviders(<DuePage now={NOW} />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Vaatwasser leegmaken nu gedaan' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Ik heb de taak overgenomen' }));
+      await waitFor(() =>
+        expect(callsTo(fetchMock, 'PATCH', '/api/occurrences/o-bram')).toEqual([{ action: 'complete', takeOver: true }]),
+      );
+    });
+
+    it('sends nothing when the dialog is cancelled', async () => {
+      const fetchMock = setupOthers();
+      renderWithProviders(<DuePage now={NOW} />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Vaatwasser leegmaken nu gedaan' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Annuleren' }));
+      await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+      expect(callsTo(fetchMock, 'PATCH', '/api/occurrences/o-bram')).toEqual([]);
+      expect(callsTo(fetchMock, 'POST', '/api/occurrences')).toEqual([]);
+    });
+
+    it('does not ask for work of the actor, or when the occurrence of someone else is on another day', async () => {
+      const fetchMock = setupOthers();
+      renderWithProviders(<DuePage now={NOW} />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Planten water geven nu gedaan' }));
+      await waitFor(() =>
+        expect(callsTo(fetchMock, 'PATCH', '/api/occurrences/o-anna')).toEqual([{ action: 'complete' }]),
+      );
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Kattenbak verschonen nu gedaan' }));
+      await waitFor(() => expect(callsTo(fetchMock, 'POST', '/api/occurrences')).toHaveLength(1));
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    });
+
+    it('is worded in English too', async () => {
+      applyLanguage('en');
+      setupOthers();
+      renderWithProviders(<DuePage now={NOW} />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Vaatwasser leegmaken done now' }));
+      const dialog = await screen.findByRole('alertdialog');
+      expect(dialog).toHaveTextContent('Who completed “Vaatwasser leegmaken”?');
+      expect(dialog).toHaveTextContent('checking it off for Bram de Vries gives Bram de Vries the points');
+      expect(dialog).toHaveTextContent('taking it over gives you the points');
+    });
   });
 
   it('says when nothing is due', async () => {

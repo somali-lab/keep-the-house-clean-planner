@@ -32,6 +32,8 @@ export interface OccurrenceDoc {
   recordedDone?: boolean;
   /** Client idempotency key of an ad-hoc creation; missing on older data means null. */
   requestId?: string | null;
+  /** Points of this execution, fixed when it became done (ADR-0011); null or missing means not yet snapshotted. */
+  pointsSnapshot?: number | null;
   createdAt: Date;
   updatedAt: Date;
 }

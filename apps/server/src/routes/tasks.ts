@@ -1,5 +1,6 @@
 import {
   bulkRoomTasksInputSchema,
+  defaultPointsForDuration,
   createTaskInputSchema,
   objectIdSchema,
   updateTaskInputSchema,
@@ -13,10 +14,9 @@ import { findRoomById } from '../data/rooms.ts';
 import { getSettings } from '../data/settings.ts';
 import { updateUpcomingOccurrenceRoomSnapshots } from '../data/occurrences.ts';
 import { bulkUpdateRoomTasks, createTask, deleteTask, findTaskById, listTasks, updateTask } from '../data/tasks.ts';
-import { assertTaskReferences } from '../domain/tasks.ts';
+import { assertTaskReferences, toTaskView } from '../domain/tasks.ts';
 import { notFound, parseOrThrow } from '../http/errors.ts';
 import { booleanQuery, parseIdParam, toObjectId } from '../http/params.ts';
-import { toApi } from '../http/serialize.ts';
 import { auditContext, requirePlanner } from '../identity/index.ts';
 
 const listQuerySchema = z.object({
@@ -31,7 +31,7 @@ export const taskRoutes: FastifyPluginAsync = async (app) => {
       ...(query.roomId ? { roomId: toObjectId(query.roomId) } : {}),
       ...(query.active === undefined ? {} : { active: query.active }),
     });
-    return toApi(tasks);
+    return tasks.map(toTaskView);
   });
 
   app.post('/tasks', { preHandler: requirePlanner }, async (request, reply) => {
@@ -44,11 +44,13 @@ export const taskRoutes: FastifyPluginAsync = async (app) => {
       roomId,
       intervalKey: input.intervalKey,
       durationMinutes: input.durationMinutes,
+      // Omitted points default from the duration: one point for every ten minutes (ADR-0011).
+      points: input.points ?? defaultPointsForDuration(input.durationMinutes),
       defaultAssigneeId,
       notes: input.notes,
       tags: input.tags,
     });
-    return reply.status(201).send(toApi(task));
+    return reply.status(201).send(toTaskView(task));
   });
 
   app.patch('/tasks/:id', { preHandler: requirePlanner }, async (request) => {
@@ -79,7 +81,7 @@ export const taskRoutes: FastifyPluginAsync = async (app) => {
         );
       }
     }
-    return toApi(task);
+    return toTaskView(task);
   });
 
   app.delete('/tasks/:id', { preHandler: requirePlanner }, async (request) => {

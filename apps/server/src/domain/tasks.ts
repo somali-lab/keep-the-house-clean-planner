@@ -3,7 +3,15 @@ import { findRoomById } from '../data/rooms.ts';
 import { getSettings } from '../data/settings.ts';
 import { findUserById } from '../data/users.ts';
 import { HttpError, type FieldIssue } from '../http/errors.ts';
+import { toApi } from '../http/serialize.ts';
+import type { TaskDoc } from '../data/tasks.ts';
 import { findInterval } from './intervals.ts';
+import { taskPoints } from './points.ts';
+
+/** API view of a task; a task from before points existed shows the default for its duration (ADR-0011). */
+export function toTaskView(task: TaskDoc) {
+  return toApi({ ...task, points: taskPoints(task) });
+}
 
 export interface TaskReferences {
   roomId?: ObjectId;

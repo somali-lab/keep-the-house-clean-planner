@@ -1,5 +1,6 @@
 import {
   cycleIndexFor,
+  defaultPointsForDuration,
   fromDayKey,
   today,
   toDayKey,
@@ -26,6 +27,7 @@ import { findRoomById } from '../data/rooms.ts';
 import { findUserById } from '../data/users.ts';
 import { HttpError, notFound } from '../http/errors.ts';
 import { toApi } from '../http/serialize.ts';
+import { pointsSnapshotFor, syncExecutionPoints, taskPoints } from './points.ts';
 
 /** API view: calendar dates as day keys, plus derived overdue and drag info. */
 export function toOccurrenceView(doc: OccurrenceDoc, todayKey: string, timezone: string): OccurrenceView {
@@ -37,6 +39,7 @@ export function toOccurrenceView(doc: OccurrenceDoc, todayKey: string, timezone:
     plannedDate,
     recordedDone: doc.recordedDone ?? false,
     requestId: doc.requestId ?? null,
+    pointsSnapshot: doc.pointsSnapshot ?? null,
     isOverdue: doc.status === 'open' && date < todayKey,
     movedFrom: date === plannedDate ? null : plannedDate,
   };
@@ -71,10 +74,16 @@ export async function completeOccurrence(
   const current = await requireOccurrence(ctx, id);
   if (current.status === 'done') throw invalidTransition('done', 'complete');
 
-  // A normal check-off belongs to the person the task was planned for, even
-  // when another profile presses the button. Unassigned work belongs to the
-  // actor; the explicit completedBy option can still override either case.
-  const completedBy = takeOver ? ctx.actorId : (completedByInput ?? current.assigneeId ?? ctx.actorId);
+  // completedBy is the person credited (ADR-0011). Work of someone else never defaults to the
+  // assignee: the request must say who performed it, either a named person or a take over.
+  // Unassigned work and work of the actor itself default to the actor.
+  const assignedToSomeoneElse = current.assigneeId !== null && !current.assigneeId.equals(ctx.actorId);
+  if (assignedToSomeoneElse && !takeOver && !completedByInput) {
+    throw new HttpError(400, 'validation_error', 'Choose who performed this task', [
+      { field: 'completedBy', message: 'completion_choice_required' },
+    ]);
+  }
+  const completedBy = takeOver ? ctx.actorId : (completedByInput ?? ctx.actorId);
   if (completedByInput) {
     const user = await findUserById(ctx.db, completedByInput);
     if (!user?.active) {
@@ -95,6 +104,7 @@ export async function completeOccurrence(
       statusBeforeCompletion: current.status,
       completedAt: ctx.clock.now(),
       completedBy,
+      pointsSnapshot: await pointsSnapshotFor(ctx, current),
       // Completing unassigned work claims it; taking over assigned work transfers it to the actor.
       ...(claimed || takeOver ? { assigneeId: completedBy } : {}),
     },
@@ -111,6 +121,7 @@ export async function completeOccurrence(
   );
   if (!result) throw invalidTransition('changed', 'complete');
   await refreshLastCompletedAt(ctx, current.taskId, id);
+  await syncExecutionPoints(ctx, id, 'complete');
   return result.after;
 }
 
@@ -129,12 +140,15 @@ export async function uncompleteOccurrence(ctx: AuditContext, id: ObjectId): Pro
       statusBeforeCompletion: null,
       completedAt: null,
       completedBy: null,
+      // The snapshot belongs to one completion; a later check-off takes the value of that moment.
+      pointsSnapshot: null,
     },
     { action: 'uncomplete' },
     { status: 'done' },
   );
   if (!result) throw invalidTransition('changed', 'uncomplete');
   await refreshLastCompletedAt(ctx, current.taskId, id);
+  await syncExecutionPoints(ctx, id, 'uncomplete');
   return result.after;
 }
 
@@ -177,6 +191,7 @@ export async function editCompletion(
   );
   if (!result) throw invalidTransition('changed', 'edit completion of');
   await refreshLastCompletedAt(ctx, current.taskId, id);
+  await syncExecutionPoints(ctx, id, 'correction');
   return result.after;
 }
 
@@ -185,6 +200,7 @@ export async function deleteCompletedOccurrence(ctx: AuditContext, id: ObjectId)
   if (current.status !== 'done') throw invalidTransition(current.status, 'delete');
   await deleteOccurrences(ctx, [current], { correction: 'completion' });
   await refreshLastCompletedAt(ctx, current.taskId, id);
+  await syncExecutionPoints(ctx, id, 'correction');
 }
 
 /**
@@ -206,6 +222,7 @@ export async function retractOccurrence(ctx: AuditContext, id: ObjectId): Promis
   const deleted = await retractRecordedOccurrence(ctx, id);
   if (!deleted) throw notFound('occurrence');
   await refreshLastCompletedAt(ctx, current.taskId, id);
+  await syncExecutionPoints(ctx, id, 'retract');
 }
 
 export async function skipOccurrence(ctx: AuditContext, id: ObjectId, reason?: string): Promise<OccurrenceDoc> {
@@ -419,6 +436,15 @@ async function insertAdhoc(
 }
 
 /**
+ * Keeps the ledger in line with a created or replayed ad-hoc record (ADR-0011). A replay normally
+ * finds the entry in place and writes nothing; it only repairs one that a lost write left behind.
+ */
+async function syncAdhocPoints(ctx: AuditContext, result: AdhocResult): Promise<AdhocResult> {
+  if (result.doc.status === 'done') await syncExecutionPoints(ctx, result.doc._id, 'recorded');
+  return result;
+}
+
+/**
  * An extra execution of an existing task (ADR-0009): planned on a day outside the template
  * or, with `done`, recorded as already done today. Only within cycles that are already
  * generated, so exports and generation never see a half-filled cycle. Several executions of
@@ -431,7 +457,7 @@ export async function createAdhocOccurrence(ctx: AuditContext, input: AdhocOccur
 
   if (input.requestId) {
     const existing = await findOccurrenceByRequestId(ctx.db, input.requestId);
-    if (existing) return replayOrConflict(existing, identity, settings.timezone);
+    if (existing) return syncAdhocPoints(ctx, replayOrConflict(existing, identity, settings.timezone));
   }
 
   const task = await findTaskById(ctx.db, input.taskId);
@@ -480,11 +506,13 @@ export async function createAdhocOccurrence(ctx: AuditContext, input: AdhocOccur
     origin: 'adhoc',
     recordedDone: done,
     requestId: input.requestId ?? null,
+    ...(done ? { pointsSnapshot: taskPoints(task) } : {}),
     createdAt: now,
     updatedAt: now,
   };
   const result = await insertAdhoc(ctx, settings, doc, 'extra', identity, warnings);
   if (result.created && done) await refreshLastCompletedAt(ctx, task._id, doc._id);
+  await syncAdhocPoints(ctx, result);
   return result;
 }
 
@@ -501,7 +529,7 @@ export async function createOneOffOccurrence(ctx: AuditContext, input: OneOffOcc
 
   if (input.requestId) {
     const existing = await findOccurrenceByRequestId(ctx.db, input.requestId);
-    if (existing) return replayOrConflict(existing, identity, settings.timezone);
+    if (existing) return syncAdhocPoints(ctx, replayOrConflict(existing, identity, settings.timezone));
   }
 
   const room = input.roomId ? await findRoomById(ctx.db, input.roomId) : null;
@@ -537,10 +565,14 @@ export async function createOneOffOccurrence(ctx: AuditContext, input: OneOffOcc
     origin: 'adhoc',
     recordedDone: done,
     requestId: input.requestId ?? null,
+    // A one-off task has no task value: the duration rule applies (ADR-0011).
+    ...(done ? { pointsSnapshot: defaultPointsForDuration(input.durationMinutes) } : {}),
     createdAt: now,
     updatedAt: now,
   };
-  return insertAdhoc(ctx, settings, doc, 'one_off', identity, []);
+  const result = await insertAdhoc(ctx, settings, doc, 'one_off', identity, []);
+  await syncAdhocPoints(ctx, result);
+  return result;
 }
 
 /** Sets the actor as assignee only while unassigned (atomic); otherwise 409. */

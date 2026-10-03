@@ -27,7 +27,7 @@ import { usePlans } from '../planner/api.ts';
 import { useAuditFeed, useClearAudit, type AuditFilters } from './api.ts';
 import { collectOccurrenceNames, describeEntry, entityName, SYSTEM_ACTOR_ID, type NameLookup } from './describe.ts';
 
-const ENTITY_TYPES: AuditEntity[] = ['task', 'cyclePlan', 'occurrence', 'user', 'room', 'settings', 'cycle', 'import'];
+const ENTITY_TYPES: AuditEntity[] = ['task', 'cyclePlan', 'occurrence', 'user', 'room', 'settings', 'cycle', 'points', 'import'];
 
 /** Browser-local day boundaries for the date filter. */
 function dayStartIso(day: string): string {

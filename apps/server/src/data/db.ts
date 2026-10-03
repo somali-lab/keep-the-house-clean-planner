@@ -9,6 +9,7 @@ export const COLLECTIONS = {
   occurrences: 'occurrences',
   auditLog: 'auditLog',
   settings: 'settings',
+  pointEntries: 'pointEntries',
 } as const;
 
 export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS];
@@ -44,6 +45,12 @@ export const INDEXES: Record<CollectionName, IndexDescription[]> = {
     },
   ],
   auditLog: [{ key: { entity: 1, entityId: 1, at: -1 } }, { key: { at: -1 } }],
+  // ADR-0011: the key makes the ledger idempotent, one entry per execution.
+  pointEntries: [
+    { key: { key: 1 }, name: 'pointEntries_key_unique', unique: true },
+    { key: { personId: 1, date: -1 } },
+    { key: { date: 1 } },
+  ],
 };
 
 export async function connectMongo(url: string): Promise<{ client: MongoClient; db: Db }> {

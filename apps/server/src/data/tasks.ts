@@ -10,6 +10,8 @@ export interface TaskDoc {
   roomId: ObjectId;
   intervalKey: string;
   durationMinutes: number;
+  /** Points per execution (0..100). Missing on older data means the default for the duration (ADR-0011). */
+  points?: number;
   defaultAssigneeId: ObjectId | null;
   active: boolean;
   notes: string;
@@ -21,7 +23,7 @@ export interface TaskDoc {
 
 export type NewTask = Pick<
   TaskDoc,
-  'name' | 'roomId' | 'intervalKey' | 'durationMinutes' | 'defaultAssigneeId' | 'notes' | 'tags'
+  'name' | 'roomId' | 'intervalKey' | 'durationMinutes' | 'points' | 'defaultAssigneeId' | 'notes' | 'tags'
 >;
 
 export type TaskPatch = Partial<NewTask & Pick<TaskDoc, 'active'>>;

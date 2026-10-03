@@ -143,6 +143,35 @@ describe('describeEntry', () => {
   });
 });
 
+describe('describeEntry for the points ledger', () => {
+  const points = (overrides: Partial<AuditEntry>) =>
+    entry({ entity: 'points', entityId: 'pe1', meta: { occurrenceId: 'o1', reason: 'complete' }, ...overrides });
+
+  it('reads a ledger entry as what the person gained or lost, not who pressed the button', () => {
+    expect(
+      describeEntry(points({ actorId: ANNA, action: 'create', after: { personId: BRAM, amount: 3, titleSnapshot: 'Stofzuigen' } }), names),
+    ).toEqual(['Bram kreeg 3 punten voor Stofzuigen']);
+    expect(
+      describeEntry(points({ action: 'delete', before: { personId: BRAM, amount: 3, titleSnapshot: 'Stofzuigen' } }), names),
+    ).toEqual(['Bram verloor 3 punten voor Stofzuigen']);
+  });
+
+  it('shows a correction as before and after, with the person and the week resolved', () => {
+    expect(
+      describeEntry(points({ action: 'update', before: { personId: ANNA, weekStart: '2026-09-14' }, after: { personId: BRAM, weekStart: '2026-09-21' } }), names),
+    ).toEqual([
+      'Anna wijzigde persoon van onbekend: Anna → Bram',
+      'Anna wijzigde week van onbekend: 14-09-2026 → 21-09-2026',
+    ]);
+  });
+
+  it('describes a recomputation of the ledger', () => {
+    expect(describeEntry(entry({ entity: 'points', action: 'recompute', actorId: SYSTEM_ACTOR_ID }), names)).toEqual([
+      'Systeem berekende de punten opnieuw',
+    ]);
+  });
+});
+
 describe('formatValue', () => {
   it('formats booleans, empty values, weekdays and "wie dan ook"', () => {
     expect(formatValue('active', false, names)).toBe('nee');

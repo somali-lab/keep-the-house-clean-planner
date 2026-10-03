@@ -38,7 +38,7 @@ Requirements:
 
 - The selected profile persists in the browser across sessions and is switchable from the header in one action, because one device is often shared.
 - Every write carries the active profile, and that profile is the actor in the audit entry.
-- A completion may be attributed to someone other than the active profile. The audit entry then records both the actor who pressed and the person credited.
+- A completion records the person credited, `completedBy` ("performed by"), who may be someone other than the active profile. The audit entry records both the actor who pressed and the person credited. The credited person is never implied for work of someone else: the request must name them or take the work over (see 4.4). Points follow the credited person (see 4.12).
 - Role checks are enforced on the server. Hiding a control in the interface is a convenience, not the control.
 - The identity layer is a single replaceable module so that adding real authentication later does not touch every endpoint.
 
@@ -72,12 +72,14 @@ The definition, not the doing.
 
 ```
 _id, name, roomId, intervalKey, durationMinutes,
+points: integer 0..100,                  // missing on older data = default for the duration
 defaultAssigneeId | null,                // null = either person
 active, notes, tags: [string],
 lastCompletedAt | null                   // denormalised, maintained on completion
 ```
 
 - A duration estimate is mandatory. Workload balancing, budget validation and the AI all depend on it.
+- `points` is what one execution of the task earns (see 4.12). `0` means the task earns no points.
 - Tasks are deactivated, never deleted, so their history stays intact. Deletion is refused while the task is referenced by a plan or an occurrence.
 
 ### Intervals
@@ -116,7 +118,8 @@ completedAt | null, completedBy | null, skipReason | null,
 durationMinutesSnapshot, taskNameSnapshot, roomIdSnapshot, roomNameSnapshot,
 origin: 'generated' | 'adhoc',
 recordedDone: boolean,           // missing on older data = false
-requestId: string | null         // missing on older data = null
+requestId: string | null,        // missing on older data = null
+pointsSnapshot: number | null    // points of this execution, fixed when it became done; missing = not yet snapshotted
 ```
 
 - `plannedDate` keeps the original slot date when an occurrence is dragged, so drift is measurable.
@@ -125,15 +128,34 @@ requestId: string | null         // missing on older data = null
 - `recordedDone` marks an occurrence that was created directly in the done state (an extra execution that already happened). It has no planned state to return to, so undoing it deletes it instead of reopening it.
 - `requestId` is the client's idempotency key of an ad-hoc creation; a repeated request with the same key does not create a second occurrence.
 - `taskId` is `null` for a one-off task (see 4.4): it has no task record, and its name, duration and room live only in the snapshot fields, which are always written (`null` for a missing room).
+- `pointsSnapshot` is written when the occurrence becomes done and set back to `null` when it is uncompleted (see 4.12). It is part of the occurrence's audit diff.
+
+### `pointEntries`
+
+The points ledger: one entry per execution that earned points (see 4.12).
+
+```
+_id,
+key: string,                     // unique; 'execution:<occurrenceId>'
+kind: 'execution',
+personId,                        // the person credited
+amount: integer,                 // signed; an execution is >= 1
+date, weekStart,                 // local midnight of the occurrence's date and of that week's Monday
+occurrenceId | null, taskId | null,   // taskId null = one-off task
+titleSnapshot: string,           // the occurrence's task name, so the entry stays readable
+source: 'live' | 'backfill' | 'recompute'
+```
+
+- An entry of kind `execution` is a pure function of one occurrence; it is changed in place or removed, never compensated by a second entry.
 
 ### `auditLog`
 
 ```
 _id, at, actorId,
-entity: 'task' | 'cyclePlan' | 'occurrence' | 'user' | 'room' | 'settings',
+entity: 'task' | 'cyclePlan' | 'occurrence' | 'user' | 'room' | 'settings' | 'cycle' | 'import' | 'points',
 entityId,
 action: 'create' | 'update' | 'delete' | 'complete' | 'uncomplete' | 'skip'
-      | 'reschedule' | 'assign' | 'activate' | 'ai-apply' | ...,
+      | 'reschedule' | 'assign' | 'activate' | 'ai-apply' | 'reset' | 'recompute',
 before, after,                  // changed fields only
 source: 'ui' | 'api' | 'ai' | 'system'
 ```
@@ -157,6 +179,7 @@ dismissedPromotions: [ ... ]
 
 - `occurrences`: `{ date, assigneeId }`, `{ status, date }`, `{ taskId, completedAt }`; unique `{ cycleId, taskId, plannedDate }` for generated occurrences only; unique `{ requestId }` where `requestId` is a string
 - `tasks`: `{ roomId, active }`
+- `pointEntries`: unique `{ key }`, `{ personId, date }` (date descending), `{ date }`
 - `auditLog`: `{ entity, entityId, at }` and `{ at }`
 
 ## 4. Functional requirements
@@ -165,6 +188,7 @@ dismissedPromotions: [ ... ]
 
 - Create, update and deactivate rooms; ordering is explicit, not alphabetical.
 - Create, update and deactivate tasks, grouped by room.
+- A task has a points value, an integer from 0 to 100. When it is omitted on create, the server sets it to the default for the duration: one point for every ten minutes, or part of ten minutes, between 1 and 100 (`clamp(ceil(minutes / 10), 1, 100)`). A task from before points existed shows the same default. Points are changed through the existing task update and audited as a task update; a value outside 0 to 100 or a fraction is rejected with a `validation_error` on `points`.
 - Bulk operations per room: deactivate all, reassign all.
 - A room that still holds tasks cannot be deleted.
 
@@ -200,7 +224,8 @@ dismissedPromotions: [ ... ]
 - No backlog is shown from before the cycle anchor date; there is nothing to be behind on yet.
 - Complete and undo. Undo restores the previous status.
 - Skip with an optional reason. A skipped occurrence does not roll over, but counts as not done for the due engine.
-- When the active profile is not the assignee, completing offers an explicit choice between taking the task over and recording it on behalf of the assignee. The two produce different history.
+- When the active profile is not the assignee, completing needs an explicit choice, and the server enforces it: the request carries either `completedBy` (on behalf of the assignee, or of any named active person) or `takeOver` (the actor does it and becomes the assignee). Without either, the server rejects it with `400 validation_error` on `completedBy` (`completion_choice_required`); both together are rejected with `completion_choice_conflict`. Unassigned work and work of the actor itself default to the actor. The choices produce different history, and the person credited receives the points. Today, the week overview and the Due page's "Done now" for work planned today for someone else all ask this choice with the same dialog, which names who receives the points for each option.
+  - *Deliberate change:* earlier versions credited the assignee when a request carried neither choice (ADR-0011).
 - An unassigned occurrence can be claimed.
 - Reschedule by dragging to another day. `plannedDate` is preserved. Dragging to a day the assignee is unavailable on is allowed but warned about, because reality outranks the plan.
 - A week overview is the default landing view at every screen width, shows the whole week with drag-to-reschedule, and can collapse past days.
@@ -210,7 +235,7 @@ dismissedPromotions: [ ... ]
 - An extra execution of an existing task is an ad-hoc occurrence, planned or already done, and only within a cycle that has been generated. Several executions of one task on one day coexist, next to the generated occurrence of that day. Planning or recording a task on a day where it already has an open occurrence is allowed and returns the non-blocking warning `task_already_planned`, also when it is recorded as done; the Extra Task dialog then offers to check off the planned occurrence first.
   - *Deliberate change:* earlier versions allowed at most one ad-hoc occurrence per task per day, and an ad-hoc occurrence on a slot day suppressed that slot's generated occurrence. Both rules are gone (ADR-0009).
 - A one-off task is work that is done once and has no place in the central task list. It is an ad-hoc occurrence with `taskId: null`, created by `POST /api/occurrences/one-off` with a name (trimmed, 1 to 120 characters), an optional active room, a duration in whole minutes (at least 1), a date, an optional assignee (unassigned when omitted, the actor when it is recorded as done), `done` and `requestId`. No task record is created, so a one-off task never appears in the task list, the due list, the planner or the AI input, and it does not take part in the due engine. The same rules as for an extra execution apply to `done`, the idempotency key and retract. An inactive or unknown room is rejected (`inactive_room`, `unknown_room`).
-- "Done just now" is one request that records an extra execution already done: `done: true` is only allowed for today, completes it for the given person (the actor when omitted; "anyone" is rejected), and refreshes the task's `lastCompletedAt`. If the task is already planned today, the Due page completes that occurrence instead.
+- "Done just now" is one request that records an extra execution already done: `done: true` is only allowed for today, completes it for the given person (the actor when omitted; "anyone" is rejected), and refreshes the task's `lastCompletedAt`. If the task is already planned today, the Due page completes that occurrence instead, asking the choice above when it is planned for someone else.
 - Creating an ad-hoc occurrence takes an optional idempotency key (`requestId`). A repeat of the same request with the same key returns `200` with the stored record and writes and audits nothing; the same key for a different request is rejected with `409 idempotency_key_conflict`. The web client creates one key per user action with `crypto.getRandomValues`, keeps it across retries of that action, and does not queue these requests offline.
 - Undoing recorded work is a separate action, `retract`, because there is no planned state to return to. It is an undo of today's work: it is only allowed while the record's date is today in the household timezone (`409 retract_not_today` otherwise), and the clients show the undo of recorded work only on that day. Deleting an older completion stays an administrator's correction. The occurrence is deleted, audited with the reason `retract`, and `lastCompletedAt` falls back to the newest remaining completion. A second retract answers `404`, which clients treat as already undone. Uncomplete on recorded work is rejected with `409 retract_required`; an ad-hoc occurrence that was planned and completed later still uses uncomplete. Today and the week overview mark recorded extra executions with an "Extra" badge (icon and text).
 - Entry points. Today and the Tasks overview ("My Tasks") have an "Extra Task" action that opens one dialog with two clearly separated choices: an extra execution of an existing task (task) and a one-off task that does not appear on the task list (name, optional room, duration). A second choice, "Already Done (Today)" (default) or "Plan", says when: already done is recorded as done today by the chosen person ("Done By"), who defaults to the active profile; plan creates an open ad-hoc occurrence (`done` omitted) on a chosen day, today or later, for a chosen active person or "Anyone" (unassigned). A day outside the generated cycles is refused by the server (`409 cycle_not_generated`), and the dialog shows that, and any other 4xx refusal, as a message under the date field. The hint that the task is still planned today and can be checked off applies to already done only. The dialog creates one request key per intent, ignores a repeated click while the request is pending, shows validation per field, is keyboard accessible, and is usable on mobile and desktop; both choices are shown with an icon, a radio button and text, not by colour alone. After recording, Today shows the record under finished and offers undo, which retracts; after planning, a confirmation "planned for {date}" is shown without undo, because a planned occurrence is ordinary open work, and the occurrence lists (Today, week overview, Tasks) refresh at once. The Due page offers the same dialog per task, opened on "extra" with that task chosen, next to "Schedule" and "Done now".
@@ -258,6 +283,7 @@ Every state change is recorded with who, when, which entity, which action, the c
 - Task, room, user, plan and settings changes record old and new values per changed field.
 - Applying an AI proposal is recorded with an AI origin, so a machine-made plan is always distinguishable from a hand-made one.
 - Generation is recorded with a system origin, so an unexpected occurrence can be traced to the run that created it.
+- A change to a ledger entry (see 4.12) is its own entry, entity `points` with `create`, `update` or `delete`, the entry's fields before and after, and `meta: { occurrenceId, reason }` where the reason is `complete`, `recorded`, `uncomplete`, `retract` or `correction`. A check-off therefore writes at most three entries: the occurrence, the task's `lastCompletedAt` and the points entry. The history feed renders a points entry as what the person gained or lost.
 - A change that changes nothing writes nothing and records nothing.
 - The log is append-only. No interface path edits an entry. An optional retention job removes entries older than a configured age and is the only exception.
 - History is viewable per entity and as a global chronological feed, filterable by actor, entity type, action and date range, with a panel showing the referenced entity.
@@ -285,6 +311,18 @@ Browser notifications (ADR-0010) are a second, personal channel:
 - Before anything is deleted, import checks the file for duplicates on the unique indexes: two generated occurrences with the same `(cycleId, taskId, plannedDate)` and two occurrences with the same `requestId`. Such a file is rejected as a whole with `validation_error` (`duplicate_slot`, `duplicate_request_id`) and nothing is written, because the replacement would otherwise fail halfway, after the collections were emptied.
 - Import validates the entire file against both the API shape and the storage shape before writing anything, reports what it will replace, and requires explicit confirmation.
 - A nightly database dump is written to a mounted backup path by a separate container.
+
+### 4.12 Points
+
+Every execution of a task earns the points of that task for the person who did the work. The points are kept in a ledger with one entry per execution (ADR-0011).
+
+- **Who is credited.** The person who performed the work: `completedBy`, or the assignee for older data without it. An occurrence that is not done, whose points are 0, or whose person cannot be attributed earns no entry.
+- **Snapshot.** When an occurrence becomes done (complete, or recorded as done) it snapshots `pointsSnapshot`: the task's points, or for a one-off task, and for a task that no longer exists, the default for the occurrence's duration (a one-off task of 30 minutes earns 3 points). Uncompleting clears the snapshot, so a later check-off takes the value that applies at that moment. A correction of the completion keeps it. Changing a task's points never rewrites points that were already earned.
+- **One entry per execution.** The entry `execution:<occurrenceId>` holds the person, the amount, the date and the week of the execution. Completing twice, replaying a request key or repeating a correction never produces a second entry.
+- **Corrections follow the history.** Check-off and recording create the entry; uncomplete, retract and an administrator's deletion remove it; an administrator's correction of the person or the date updates it in place. A task points change does nothing to past entries.
+- **Audit.** Every real change of the ledger is audited (see 4.9); syncing an entry that already matches writes and audits nothing.
+
+The retroactive award of points to earlier history, the balances and the rules for bonuses and redemptions are specified in ADR-0011 and its follow-ups.
 
 ## 5. AI assistance
 
@@ -425,7 +463,9 @@ GET    /api/export/json                     POST /api/import/json
 
 `POST /api/occurrences/one-off` takes `{ name, roomId?, durationMinutes, date, assigneeId?, done?, requestId? }` and answers like `POST /api/occurrences`: `201` with the occurrence (`taskId: null`) and `warnings`, or `200` on a replay. Errors: `400 validation_error` (`unknown_room`, `inactive_room`, `unknown_user`, `inactive_user`, `done_requires_today`, `done_requires_person`), `409 cycle_not_generated`, `409 idempotency_key_conflict`. A repeated key matches when the stored one-off task has the same name, date and `recordedDone`.
 
-`PATCH /api/occurrences/:id` is a single endpoint carrying an explicit action: complete, uncomplete, edit a completion, skip, reschedule or assign. The action is part of the request, so history records intent rather than an inferred difference.
+`PATCH /api/occurrences/:id` is a single endpoint carrying an explicit action: complete, uncomplete, edit a completion, skip, reschedule or assign. The action is part of the request, so history records intent rather than an inferred difference. A `complete` action takes `completedBy` or `takeOver: true`, never both (`completion_choice_conflict`), and work of someone else without either is rejected with `400 completion_choice_required` (see 4.4). Occurrence views carry `pointsSnapshot`.
+
+`POST /api/tasks` and `PATCH /api/tasks/:id` take an optional integer `points` from 0 to 100; task views always carry `points`.
 
 Every error response uses one envelope with a stable machine-readable code and optional field-level details. Validation failures, permission failures and conflicts are distinguishable by status and code, and configuration values never appear in an error message.
 

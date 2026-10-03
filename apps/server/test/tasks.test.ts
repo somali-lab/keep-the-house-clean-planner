@@ -86,6 +86,7 @@ describe('POST /api/tasks', () => {
       roomId: badkamer._id,
       intervalKey: '1w',
       durationMinutes: 30,
+      points: 3,
       defaultAssigneeId: null,
       notes: '',
       tags: ['nat'],

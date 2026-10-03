@@ -6,8 +6,11 @@ import {
   createOneOffOccurrenceInputSchema,
   browserNotificationsSchema,
   createTaskInputSchema,
+  auditActionSchema,
+  auditEntitySchema,
   occurrenceSchema,
   patchOccurrenceInputSchema,
+  updateTaskInputSchema,
   updateSettingsInputSchema,
   userSchema,
   vacationRangeSchema,
@@ -121,6 +124,34 @@ describe('one-off task schemas', () => {
     };
     expect(occurrenceSchema.safeParse(occurrence).success).toBe(true);
     expect(occurrenceSchema.safeParse({ ...occurrence, taskId: ID }).success).toBe(true);
+  });
+
+  it('rejects completing with both a named person and a take over', () => {
+    const result = patchOccurrenceInputSchema.safeParse({ action: 'complete', completedBy: ID, takeOver: true });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues).toEqual([
+      expect.objectContaining({ path: ['completedBy'], message: 'completion_choice_conflict' }),
+    ]);
+    expect(patchOccurrenceInputSchema.safeParse({ action: 'complete', completedBy: ID }).success).toBe(true);
+    expect(patchOccurrenceInputSchema.safeParse({ action: 'complete', takeOver: true }).success).toBe(true);
+    expect(patchOccurrenceInputSchema.safeParse({ action: 'complete' }).success).toBe(true);
+  });
+
+  it('keeps task points optional on create and within 0..100', () => {
+    const base = { name: 'Stofzuigen', roomId: ID, intervalKey: '1w', durationMinutes: 20 };
+    expect(createTaskInputSchema.parse(base).points).toBeUndefined();
+    expect(createTaskInputSchema.parse({ ...base, points: 0 }).points).toBe(0);
+    expect(createTaskInputSchema.parse({ ...base, points: 100 }).points).toBe(100);
+    for (const points of [-1, 101, 1.5, '3']) {
+      expect(createTaskInputSchema.safeParse({ ...base, points }).success).toBe(false);
+      expect(updateTaskInputSchema.safeParse({ points }).success).toBe(false);
+    }
+    expect(updateTaskInputSchema.safeParse({ points: 7 }).success).toBe(true);
+  });
+
+  it('knows the points audit entity and the recompute action', () => {
+    expect(auditEntitySchema.safeParse('points').success).toBe(true);
+    expect(auditActionSchema.safeParse('recompute').success).toBe(true);
   });
 });
 

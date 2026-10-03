@@ -45,9 +45,8 @@ export function applyOptimistic(
 ): OccurrenceView {
   switch (action.kind) {
     case 'complete': {
-      const completedBy = action.takeOver
-        ? context.profileId
-        : (action.completedBy ?? occ.assigneeId ?? context.profileId);
+      // The server credits the actor unless a named person is chosen; work of someone else always carries a choice.
+      const completedBy = action.takeOver ? context.profileId : (action.completedBy ?? context.profileId);
       return {
         ...occ,
         status: 'done',

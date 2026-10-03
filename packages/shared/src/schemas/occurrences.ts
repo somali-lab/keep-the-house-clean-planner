@@ -33,6 +33,8 @@ export const occurrenceSchema = z
     recordedDone: z.boolean().optional(),
     /** Idempotency key of the creating request. Missing on older data means null. */
     requestId: z.string().nullable().optional(),
+    /** Points of this execution, fixed when it became done (ADR-0011). Null or missing means not yet snapshotted. */
+    pointsSnapshot: z.number().int().min(0).nullable().optional(),
   })
   .extend(timestampsSchema.shape);
 export type Occurrence = z.infer<typeof occurrenceSchema>;
@@ -74,11 +76,17 @@ export const createOneOffOccurrenceInputSchema = z.object({
 export type CreateOneOffOccurrenceInput = z.infer<typeof createOneOffOccurrenceInputSchema>;
 
 export const patchOccurrenceInputSchema = z.discriminatedUnion('action', [
-  z.object({
-    action: z.literal('complete'),
-    completedBy: objectIdSchema.optional(),
-    takeOver: z.literal(true).optional(),
-  }),
+  z
+    .object({
+      action: z.literal('complete'),
+      completedBy: objectIdSchema.optional(),
+      takeOver: z.literal(true).optional(),
+    })
+    // Two choices at once make no sense: either the named person or the actor performed the work (ADR-0011).
+    .refine((input) => !(input.completedBy !== undefined && input.takeOver === true), {
+      path: ['completedBy'],
+      message: 'completion_choice_conflict',
+    }),
   z.object({ action: z.literal('uncomplete') }),
   z.object({
     action: z.literal('edit_completion'),

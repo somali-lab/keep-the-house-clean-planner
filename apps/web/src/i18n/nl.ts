@@ -104,6 +104,9 @@ export const nl = {
   'stats.purgeDone': 'Oude data zijn opgeschoond. Alles vanaf de gekozen datum bleef staan.',
   'stats.purgeError': 'De oude data konden niet worden opgeschoond.',
   'history.action.reset': '{actor} wiste de statistieken en begon opnieuw',
+  'history.action.recompute': '{actor} berekende de punten opnieuw',
+  'history.action.pointsCreate': '{person} kreeg {amount} punten voor {entity}',
+  'history.action.pointsDelete': '{person} verloor {amount} punten voor {entity}',
 
   'completions.title': 'Gereedmeldingen beheren',
   'completions.explainer':
@@ -368,7 +371,7 @@ export const nl = {
   'today.actionError': 'Dat lukte niet. De wijziging is teruggedraaid.',
   'completionChoice.title': 'Wie heeft “{task}” gedaan?',
   'completionChoice.description':
-    'Deze taak staat op naam van {assignee}. Kies of je namens die persoon afvinkt of de taak zelf hebt overgenomen.',
+    'Deze taak staat op naam van {assignee}. De punten gaan naar wie de taak heeft gedaan: namens {assignee} afvinken geeft {assignee} de punten, zelf overnemen geeft jou de punten.',
   'completionChoice.forAssignee': 'Namens {assignee} afvinken',
   'completionChoice.takeOver': 'Ik heb de taak overgenomen',
   'offline.pendingOne':
@@ -418,6 +421,7 @@ export const nl = {
   'history.entity.cycle': 'cyclus',
   'history.entity.room': 'ruimte',
   'history.entity.import': 'import',
+  'history.entity.points': 'punten',
   'history.entities.task': 'Taken',
   'history.entities.cyclePlan': 'Plannen',
   'history.entities.occurrence': 'Taken op een dag',
@@ -426,6 +430,7 @@ export const nl = {
   'history.entities.settings': 'Instellingen',
   'history.entities.cycle': 'Cycli',
   'history.entities.import': 'Imports',
+  'history.entities.points': 'Punten',
 
   'history.action.create': '{actor} maakte {type} {entity} aan',
   'history.action.update': '{actor} wijzigde {field} van {entity}: {before} → {after}',
@@ -447,6 +452,11 @@ export const nl = {
   'history.action.aiApply': '{actor} paste een AI-voorstel toe op {entity}',
 
   'history.field.name': 'naam',
+  'history.field.personId': 'persoon',
+  'history.field.amount': 'punten',
+  'history.field.weekStart': 'week',
+  'history.field.points': 'punten',
+  'history.field.pointsSnapshot': 'punten van deze keer',
   'history.field.durationMinutes': 'duur',
   'history.field.intervalKey': 'interval',
   'history.field.roomId': 'ruimte',
