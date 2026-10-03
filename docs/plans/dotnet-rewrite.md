@@ -328,3 +328,71 @@ Versions verified against the official documentation and package registries on 2
 | ASP.NET Core OpenAPI           | `Microsoft.AspNetCore.OpenApi` with `AddOpenApi()`/`MapOpenApi()`, OpenAPI 3.1 by default; build-time generation through `Microsoft.Extensions.ApiDescription.Server`; no UI bundled. `openapi-typescript` 7.13.0 and `openapi-fetch` 0.17.0 for the web client.                                                                                         | §4.1 drift test on the build-time document; Scalar UI only in Development.                                                                                                              |
 | Problem Details and validation | `AddProblemDetails()` with `UseExceptionHandler()` and `UseStatusCodePages()`; .NET 10 `AddValidation()` validates data annotations on Minimal API parameters into `HttpValidationProblemDetails` (`errors` dictionary).                                                                                                                                 | Shape validation by annotations, rule validation in the domain as `ValidationErrors`; both end in the same `errors` extension (§4.2).                                                   |
 | Docker images                  | `mcr.microsoft.com/dotnet/aspnet:10.0-noble` sets `APP_UID=1654` and a user `app`; `ASPNETCORE_HTTP_PORTS` defaults to 8080. Chiseled and distroless variants omit ICU, tzdata and fontconfig.                                                                                                                                                           | `10.0-noble` with `USER $APP_UID`, `ASPNETCORE_HTTP_PORTS=3000`, `fontconfig` and a font installed; ICU and tzdata needed for `TimeZoneInfo` with IANA ids and for currency formatting. |
+
+## 14. Unattended run
+
+This section applies when the maintainer starts an unattended run, for example an overnight session. Where it deviates from AGENTS.md or from §5, this section wins for that run; everything it does not mention follows AGENTS.md.
+
+### 14.1 Mandate (settled 2026-10-03)
+
+- Do as much as the usage limit and the night allow: phase 0 first, then phase 1 and onwards in plan order. Do not stop at a phase boundary.
+- Slice pull requests go to the integration branch `next` and are **merged by the orchestrator** (squash) as soon as their CI is green. `main` is never touched; no release, no deploy, no installation.
+- Writing subagents may run in parallel, at most three at a time, each in its own git worktree, and only for slices that touch disjoint files. Dependent slices run after each other.
+- Slice 0.5 builds the OpenTelemetry pipeline without a receiver being available: the OTLP exporter is configured from the standard variables and tested against an OpenTelemetry Collector container with the debug exporter, and the pull request names "verified against the maintainer's Elastic Agent" as the one step left to the maintainer.
+- Tooling present on the maintainer's machine on 2026-10-03: .NET SDK 10.0.401, Docker 29, Node 24, `gh` logged in.
+
+### 14.2 Models
+
+The orchestrator runs on Sonnet. Nothing in this plan needs Fable. Opus is used only as a reviewer of the three slices with structural risk and as the escalation after two failed attempts on one task.
+
+| Level    | Claude Code `model` | Used for                                                                                                                                                               |
+| -------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Light    | `haiku`             | Looking up code and tests, running `dotnet test` or `npm run verify` and reporting only the failures, checking README, requirements and agent context for stale text.  |
+| Standard | `sonnet`            | The orchestrator, every builder, every reviewer not named below.                                                                                                       |
+| Heavy    | `opus`              | Reviewer of 0.3b (architecture rules), 0.6c (transactions and audit) and 0.7a (identity policies) before the merge; builder of any task a Sonnet builder failed twice. |
+
+Builders stay on Sonnet by keeping slices small. Where §8 names one slice, the run splits it:
+
+| §8 slice      | Sub-slices for the run                                                                                                                                                                                                                                                                               |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0.3           | 0.3a projects, references, `Directory.Build.props`, `Directory.Packages.props`, `dotnet build` green, CI job `dotnet-build-test`; 0.3b `Architecture.Tests` with the rules of §3.1.                                                                                                                  |
+| 0.4           | 0.4a options binding with startup validation and the `config.test.ts` cases; 0.4b Problem Details, health, `WebApplicationFactory` fixture, `health.test.ts` and `health-down.test.ts`; 0.4c static files, SPA fallback, `static.test.ts`; 0.4d OpenAPI document, build-time generation, drift test. |
+| 0.6           | 0.6a client, class-map registration, index ensurer, `ensureIndexes` cases; 0.6b `migrations` collection with the two existing migrations; 0.6c transaction runner and the Testcontainers fixture with a replica set.                                                                                 |
+| 0.7           | 0.7a identity port, header adapter, the three policies, `identity.test.ts` and `roles.test.ts`; 0.7b audit writer inside the transaction, `audit-diff.test.ts`.                                                                                                                                      |
+| 0.9           | 0.9a export script and the JSON vectors (TypeScript only); 0.9b `time` and `cycle` in C#; 0.9c `due` in C#.                                                                                                                                                                                          |
+| 1.x and later | One resource per sub-slice: read endpoints first, then each write endpoint with its audit entry and tests.                                                                                                                                                                                           |
+
+### 14.3 Waves for phase 0
+
+| Wave | Parallel (own worktree each)                                                       | Why they do not collide                                                   |
+| ---- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| 1    | 0.1 ADRs · 0.2 skills and agent context · 0.3a solution skeleton                   | `docs/adr`, `.agents` plus AGENTS.md, `apps/api`                          |
+| 2    | 0.9a vector export · 0.3b architecture tests · 0.6a Mongo base                     | `scripts` plus vectors JSON, `tests/Architecture.Tests`, `Adapters.Mongo` |
+| 3    | 0.4a–0.4d in order (all touch `Host/Program.cs`) · 0.6b then 0.6c · 0.9b then 0.9c | Host, Mongo adapter, Domain are disjoint                                  |
+| 4    | 0.7a then 0.7b · 0.8 Dockerfile · 0.5 OpenTelemetry                                | Http adapter, `docker/`, Host telemetry extension                         |
+
+After phase 0 the resources of phases 1 to 6 are independent enough to run two or three at a time, each resource in its own worktree, as long as no two touch the same adapter file; the orchestrator checks the file lists before starting a wave.
+
+### 14.4 Branches
+
+- `next` is created from `main` once at the start of the run if it does not exist; `main` is merged into `next` at the start of every run.
+- A slice branch is named `<type>/claude-<slice>-<short-name>` (for example `feat/claude-0-3a-solution-skeleton`) and starts from the current `next`.
+- The pull request targets `next`, carries a Conventional Commit title, the markers `loop-status: done` or `loop-status: blocked`, the checks that ran, and a heading **Decisions for review** with the lines that would otherwise go to `docs/DECISIONS.md`.
+- `next` has no required checks; the orchestrator waits for `gh pr checks <n> --watch` to report success before `gh pr merge <n> --squash --delete-branch`. A conflict against `next` is resolved by the orchestrator in the slice branch, never by force-push.
+- Worktrees live under `../kthc-worktrees/<branch>` and are removed after the merge.
+
+### 14.5 Every round
+
+1. Read progress from GitHub: `gh pr list --base next --state all --json headRefName,title,url,body`. The first slice in plan order without a `done` pull request, whose dependencies are `done`, is next; several such slices may start together within the limits of 14.3.
+2. Check usage with the host's usage tool (`get_usage` in the desktop app; otherwise `npx -y ccusage@latest blocks --active --json`). At 95% of the five-hour or weekly limit, start nothing: schedule a wake-up of `min(3600, seconds to reset)` and check again on waking. The skill `stay-within-limits` describes this.
+3. For every slice to start: create the worktree and branch, write the slice's steps in `docs/BUILD.md` on that branch, and hand the builder a self-contained brief with the slice text from §8, the Node test files to port, the relevant ADRs and skills, and the acceptance criterion "every named test file ported or its dropped scenarios listed".
+4. Run the controller (`haiku`) and the reviewer, push, open the pull request, read its description back, wait for CI, merge.
+5. Schedule the next round after 60 seconds. When no slice can start (all done, all blocked, or the limit reached), write the end report: per slice the pull request, status, checks, decisions for review and open questions; send a notification if the host can; stop.
+
+### 14.6 Deviations because nobody is watching
+
+- A product question the plan does not answer is not answered by the agent: commit the coherent part, put the question in `docs/BLOCKERS.md` on the branch, open the pull request with `loop-status: blocked` and the question at the top, do not merge it, and continue with the next slice that does not depend on it.
+- Technical design choices within the decisions of §2 may be taken; they are listed under **Decisions for review**. A choice that contradicts §2 is a blocker.
+- A check that still fails after two serious repair attempts makes the slice `blocked` with the relevant output in the pull request.
+- Checkboxes in §8 are ticked in the slice that completes them, in the same pull request.
+- Never merge to `main`, release, deploy, force-push, or touch a real installation or its database.
