@@ -571,6 +571,4271 @@
           "cycleOnTime": 4
         }
       ]
+    },
+    {
+      "name": "bonus_week_done",
+      "function": "isBonusKind",
+      "input": {
+        "kind": "bonus_week_done"
+      },
+      "expected": true
+    },
+    {
+      "name": "bonus_week_ontime",
+      "function": "isBonusKind",
+      "input": {
+        "kind": "bonus_week_ontime"
+      },
+      "expected": true
+    },
+    {
+      "name": "bonus_cycle_done",
+      "function": "isBonusKind",
+      "input": {
+        "kind": "bonus_cycle_done"
+      },
+      "expected": true
+    },
+    {
+      "name": "bonus_cycle_ontime",
+      "function": "isBonusKind",
+      "input": {
+        "kind": "bonus_cycle_ontime"
+      },
+      "expected": true
+    },
+    {
+      "name": "execution is not a bonus kind",
+      "function": "isBonusKind",
+      "input": {
+        "kind": "execution"
+      },
+      "expected": false
+    },
+    {
+      "name": "redemption is not a bonus kind",
+      "function": "isBonusKind",
+      "input": {
+        "kind": "redemption"
+      },
+      "expected": false
+    },
+    {
+      "name": "a prefix is not enough",
+      "function": "isBonusKind",
+      "input": {
+        "kind": "bonus_week"
+      },
+      "expected": false
+    },
+    {
+      "name": "the match is case sensitive",
+      "function": "isBonusKind",
+      "input": {
+        "kind": "BONUS_WEEK_DONE"
+      },
+      "expected": false
+    },
+    {
+      "name": "empty text",
+      "function": "isBonusKind",
+      "input": {
+        "kind": ""
+      },
+      "expected": false
+    },
+    {
+      "name": "a Wednesday",
+      "function": "weekOf",
+      "input": {
+        "day": "2026-09-16"
+      },
+      "expected": {
+        "unit": "week",
+        "start": "2026-09-14",
+        "end": "2026-09-20"
+      }
+    },
+    {
+      "name": "the Sunday that ends the week",
+      "function": "weekOf",
+      "input": {
+        "day": "2026-09-20"
+      },
+      "expected": {
+        "unit": "week",
+        "start": "2026-09-14",
+        "end": "2026-09-20"
+      }
+    },
+    {
+      "name": "the Monday that starts the week",
+      "function": "weekOf",
+      "input": {
+        "day": "2026-09-14"
+      },
+      "expected": {
+        "unit": "week",
+        "start": "2026-09-14",
+        "end": "2026-09-20"
+      }
+    },
+    {
+      "name": "the week of the spring DST switch",
+      "function": "weekOf",
+      "input": {
+        "day": "2026-03-29"
+      },
+      "expected": {
+        "unit": "week",
+        "start": "2026-03-23",
+        "end": "2026-03-29"
+      }
+    },
+    {
+      "name": "the week of the autumn DST switch",
+      "function": "weekOf",
+      "input": {
+        "day": "2026-10-25"
+      },
+      "expected": {
+        "unit": "week",
+        "start": "2026-10-19",
+        "end": "2026-10-25"
+      }
+    },
+    {
+      "name": "a week across the year boundary",
+      "function": "weekOf",
+      "input": {
+        "day": "2026-12-31"
+      },
+      "expected": {
+        "unit": "week",
+        "start": "2026-12-28",
+        "end": "2027-01-03"
+      }
+    },
+    {
+      "name": "a week with a leap day",
+      "function": "weekOf",
+      "input": {
+        "day": "2028-02-29"
+      },
+      "expected": {
+        "unit": "week",
+        "start": "2028-02-28",
+        "end": "2028-03-05"
+      }
+    },
+    {
+      "name": "an invalid day key throws",
+      "function": "weekOf",
+      "input": {
+        "day": "nope"
+      },
+      "throws": "RangeError"
+    },
+    {
+      "name": "the last day of cycle 0",
+      "function": "cycleOf",
+      "input": {
+        "day": "2026-10-11",
+        "anchor": "2026-09-14"
+      },
+      "expected": {
+        "unit": "cycle",
+        "start": "2026-09-14",
+        "end": "2026-10-11"
+      }
+    },
+    {
+      "name": "the first day of cycle 1",
+      "function": "cycleOf",
+      "input": {
+        "day": "2026-10-12",
+        "anchor": "2026-09-14"
+      },
+      "expected": {
+        "unit": "cycle",
+        "start": "2026-10-12",
+        "end": "2026-11-08"
+      }
+    },
+    {
+      "name": "the anchor itself",
+      "function": "cycleOf",
+      "input": {
+        "day": "2026-09-14",
+        "anchor": "2026-09-14"
+      },
+      "expected": {
+        "unit": "cycle",
+        "start": "2026-09-14",
+        "end": "2026-10-11"
+      }
+    },
+    {
+      "name": "the day before the anchor is cycle -1",
+      "function": "cycleOf",
+      "input": {
+        "day": "2026-09-13",
+        "anchor": "2026-09-14"
+      },
+      "expected": {
+        "unit": "cycle",
+        "start": "2026-08-17",
+        "end": "2026-09-13"
+      }
+    },
+    {
+      "name": "far before the anchor",
+      "function": "cycleOf",
+      "input": {
+        "day": "2025-01-01",
+        "anchor": "2026-09-14"
+      },
+      "expected": {
+        "unit": "cycle",
+        "start": "2024-12-09",
+        "end": "2025-01-05"
+      }
+    },
+    {
+      "name": "a cycle across the spring DST switch",
+      "function": "cycleOf",
+      "input": {
+        "day": "2026-03-29",
+        "anchor": "2026-09-14"
+      },
+      "expected": {
+        "unit": "cycle",
+        "start": "2026-03-02",
+        "end": "2026-03-29"
+      }
+    },
+    {
+      "name": "a cycle across the year boundary",
+      "function": "cycleOf",
+      "input": {
+        "day": "2026-12-31",
+        "anchor": "2026-09-14"
+      },
+      "expected": {
+        "unit": "cycle",
+        "start": "2026-12-07",
+        "end": "2027-01-03"
+      }
+    },
+    {
+      "name": "a non-Monday anchor throws",
+      "function": "cycleOf",
+      "input": {
+        "day": "2026-09-16",
+        "anchor": "2026-09-15"
+      },
+      "throws": "RangeError"
+    },
+    {
+      "name": "an invalid day key throws",
+      "function": "cycleOf",
+      "input": {
+        "day": "x",
+        "anchor": "2026-09-14"
+      },
+      "throws": "RangeError"
+    },
+    {
+      "name": "not ended on its last day",
+      "function": "periodEnded",
+      "input": {
+        "period": {
+          "end": "2026-09-20"
+        },
+        "today": "2026-09-20"
+      },
+      "expected": false
+    },
+    {
+      "name": "ended the day after its last day",
+      "function": "periodEnded",
+      "input": {
+        "period": {
+          "end": "2026-09-20"
+        },
+        "today": "2026-09-21"
+      },
+      "expected": true
+    },
+    {
+      "name": "not ended before it started",
+      "function": "periodEnded",
+      "input": {
+        "period": {
+          "end": "2026-09-20"
+        },
+        "today": "2026-09-14"
+      },
+      "expected": false
+    },
+    {
+      "name": "ended long after",
+      "function": "periodEnded",
+      "input": {
+        "period": {
+          "end": "2026-09-20"
+        },
+        "today": "2027-09-20"
+      },
+      "expected": true
+    },
+    {
+      "name": "not ended the day before its last day",
+      "function": "periodEnded",
+      "input": {
+        "period": {
+          "end": "2026-09-20"
+        },
+        "today": "2026-09-19"
+      },
+      "expected": false
+    },
+    {
+      "name": "autumn DST week ends at 23:00Z (169 hours)",
+      "function": "onTimeCutoff",
+      "input": {
+        "period": {
+          "end": "2026-10-25"
+        },
+        "timezone": "Europe/Amsterdam"
+      },
+      "expected": "2026-10-25T23:00:00.000Z"
+    },
+    {
+      "name": "spring DST week ends at 22:00Z (167 hours)",
+      "function": "onTimeCutoff",
+      "input": {
+        "period": {
+          "end": "2026-03-29"
+        },
+        "timezone": "Europe/Amsterdam"
+      },
+      "expected": "2026-03-29T22:00:00.000Z"
+    },
+    {
+      "name": "a summer week ends at 22:00Z",
+      "function": "onTimeCutoff",
+      "input": {
+        "period": {
+          "end": "2026-09-20"
+        },
+        "timezone": "Europe/Amsterdam"
+      },
+      "expected": "2026-09-20T22:00:00.000Z"
+    },
+    {
+      "name": "a winter week ends at 23:00Z",
+      "function": "onTimeCutoff",
+      "input": {
+        "period": {
+          "end": "2026-01-04"
+        },
+        "timezone": "Europe/Amsterdam"
+      },
+      "expected": "2026-01-04T23:00:00.000Z"
+    },
+    {
+      "name": "UTC has no offset",
+      "function": "onTimeCutoff",
+      "input": {
+        "period": {
+          "end": "2026-09-20"
+        },
+        "timezone": "UTC"
+      },
+      "expected": "2026-09-21T00:00:00.000Z"
+    },
+    {
+      "name": "the last day of a leap year",
+      "function": "onTimeCutoff",
+      "input": {
+        "period": {
+          "end": "2028-12-31"
+        },
+        "timezone": "Europe/Amsterdam"
+      },
+      "expected": "2028-12-31T23:00:00.000Z"
+    },
+    {
+      "name": "the leap day",
+      "function": "onTimeCutoff",
+      "input": {
+        "period": {
+          "end": "2028-02-29"
+        },
+        "timezone": "Europe/Amsterdam"
+      },
+      "expected": "2028-02-29T23:00:00.000Z"
+    },
+    {
+      "name": "another timezone",
+      "function": "onTimeCutoff",
+      "input": {
+        "period": {
+          "end": "2026-09-20"
+        },
+        "timezone": "America/New_York"
+      },
+      "expected": "2026-09-21T04:00:00.000Z"
+    },
+    {
+      "name": "an unknown timezone throws",
+      "function": "onTimeCutoff",
+      "input": {
+        "period": {
+          "end": "2026-09-20"
+        },
+        "timezone": "Mars/Base"
+      },
+      "throws": "RangeError"
+    },
+    {
+      "name": "an invalid day key throws",
+      "function": "onTimeCutoff",
+      "input": {
+        "period": {
+          "end": "x"
+        },
+        "timezone": "UTC"
+      },
+      "throws": "RangeError"
+    },
+    {
+      "name": "planned work uses the planned day, also after a reschedule",
+      "function": "periodDayOf",
+      "input": {
+        "occurrence": {
+          "status": "done",
+          "plannedDate": "2026-09-16",
+          "date": "2026-09-23",
+          "recordedDone": false,
+          "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "completedAt": "2026-09-16T09:00:00.000Z"
+        }
+      },
+      "expected": "2026-09-16"
+    },
+    {
+      "name": "a missing recordedDone means planned work",
+      "function": "periodDayOf",
+      "input": {
+        "occurrence": {
+          "status": "done",
+          "plannedDate": "2026-09-16",
+          "date": "2026-09-23",
+          "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "completedAt": "2026-09-16T09:00:00.000Z"
+        }
+      },
+      "expected": "2026-09-16"
+    },
+    {
+      "name": "recorded work uses its date",
+      "function": "periodDayOf",
+      "input": {
+        "occurrence": {
+          "status": "done",
+          "plannedDate": "2026-09-16",
+          "date": "2026-09-23",
+          "recordedDone": true,
+          "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "completedAt": "2026-09-16T09:00:00.000Z"
+        }
+      },
+      "expected": "2026-09-23"
+    },
+    {
+      "name": "no frozen owner means the assignee",
+      "function": "periodOwnerOf",
+      "input": {
+        "occurrence": {
+          "status": "done",
+          "plannedDate": "2026-09-14",
+          "date": "2026-09-14",
+          "recordedDone": false,
+          "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "completedAt": "2026-09-14T09:00:00.000Z"
+        }
+      },
+      "expected": "aaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "name": "a frozen owner wins over the assignee",
+      "function": "periodOwnerOf",
+      "input": {
+        "occurrence": {
+          "status": "done",
+          "plannedDate": "2026-09-14",
+          "date": "2026-09-14",
+          "recordedDone": false,
+          "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "completedAt": "2026-09-14T09:00:00.000Z",
+          "periodOwnerId": "bbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      },
+      "expected": "bbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    {
+      "name": "a frozen null owner is nobody, although there is an assignee",
+      "function": "periodOwnerOf",
+      "input": {
+        "occurrence": {
+          "status": "done",
+          "plannedDate": "2026-09-14",
+          "date": "2026-09-14",
+          "recordedDone": false,
+          "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "completedAt": "2026-09-14T09:00:00.000Z",
+          "periodOwnerId": null
+        }
+      },
+      "expected": null
+    },
+    {
+      "name": "unassigned without a frozen owner is nobody",
+      "function": "periodOwnerOf",
+      "input": {
+        "occurrence": {
+          "status": "done",
+          "plannedDate": "2026-09-14",
+          "date": "2026-09-14",
+          "recordedDone": false,
+          "assigneeId": null,
+          "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "completedAt": "2026-09-14T09:00:00.000Z"
+        }
+      },
+      "expected": null
+    },
+    {
+      "name": "done work is credited to completedBy",
+      "function": "creditedOf",
+      "input": {
+        "occurrence": {
+          "status": "done",
+          "plannedDate": "2026-09-14",
+          "date": "2026-09-14",
+          "recordedDone": false,
+          "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "completedBy": "bbbbbbbbbbbbbbbbbbbbbbbb",
+          "completedAt": "2026-09-14T09:00:00.000Z"
+        }
+      },
+      "expected": "bbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    {
+      "name": "done work without completedBy is credited to the assignee",
+      "function": "creditedOf",
+      "input": {
+        "occurrence": {
+          "status": "done",
+          "plannedDate": "2026-09-14",
+          "date": "2026-09-14",
+          "recordedDone": false,
+          "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "completedBy": null,
+          "completedAt": "2026-09-14T09:00:00.000Z"
+        }
+      },
+      "expected": "aaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "name": "done unassigned work without completedBy is credited to nobody",
+      "function": "creditedOf",
+      "input": {
+        "occurrence": {
+          "status": "done",
+          "plannedDate": "2026-09-14",
+          "date": "2026-09-14",
+          "recordedDone": false,
+          "assigneeId": null,
+          "completedBy": null,
+          "completedAt": "2026-09-14T09:00:00.000Z"
+        }
+      },
+      "expected": null
+    },
+    {
+      "name": "open work is credited to nobody, also with a completedBy",
+      "function": "creditedOf",
+      "input": {
+        "occurrence": {
+          "status": "open",
+          "plannedDate": "2026-09-14",
+          "date": "2026-09-14",
+          "recordedDone": false,
+          "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "completedBy": "bbbbbbbbbbbbbbbbbbbbbbbb",
+          "completedAt": "2026-09-14T09:00:00.000Z"
+        }
+      },
+      "expected": null
+    },
+    {
+      "name": "skipped work is credited to nobody",
+      "function": "creditedOf",
+      "input": {
+        "occurrence": {
+          "status": "skipped",
+          "plannedDate": "2026-09-14",
+          "date": "2026-09-14",
+          "recordedDone": false,
+          "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "completedBy": "bbbbbbbbbbbbbbbbbbbbbbbb",
+          "completedAt": "2026-09-14T09:00:00.000Z"
+        }
+      },
+      "expected": null
+    },
+    {
+      "name": "done by the owner is the owner's done item",
+      "function": "placementsOf",
+      "input": {
+        "occurrence": {
+          "status": "done",
+          "plannedDate": "2026-09-14",
+          "date": "2026-09-14",
+          "recordedDone": false,
+          "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "completedAt": "2026-09-14T09:00:00.000Z"
+        }
+      },
+      "expected": [
+        {
+          "person": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "status": "done",
+          "date": "2026-09-14",
+          "recordedDone": false,
+          "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "completedAt": "2026-09-14T09:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "name": "skipped work is the owner's open item",
+      "function": "placementsOf",
+      "input": {
+        "occurrence": {
+          "status": "skipped",
+          "plannedDate": "2026-09-14",
+          "date": "2026-09-14",
+          "recordedDone": false,
+          "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "completedBy": null,
+          "completedAt": null
+        }
+      },
+      "expected": [
+        {
+          "person": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "status": "skipped",
+          "date": "2026-09-14",
+          "recordedDone": false,
+          "completedBy": null,
+          "completedAt": null
+        }
+      ]
+    },
+    {
+      "name": "unassigned open work is in nobody's set",
+      "function": "placementsOf",
+      "input": {
+        "occurrence": {
+          "status": "open",
+          "plannedDate": "2026-09-14",
+          "date": "2026-09-14",
+          "recordedDone": false,
+          "assigneeId": null,
+          "completedBy": null,
+          "completedAt": null
+        }
+      },
+      "expected": []
+    },
+    {
+      "name": "done by somebody else: open for the owner, non-blocking for the doer",
+      "function": "placementsOf",
+      "input": {
+        "occurrence": {
+          "status": "done",
+          "plannedDate": "2026-09-14",
+          "date": "2026-09-14",
+          "recordedDone": false,
+          "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "completedBy": "bbbbbbbbbbbbbbbbbbbbbbbb",
+          "completedAt": "2026-09-14T09:00:00.000Z"
+        }
+      },
+      "expected": [
+        {
+          "person": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "status": "open",
+          "date": "2026-09-14",
+          "recordedDone": false,
+          "completedBy": null,
+          "completedAt": null
+        },
+        {
+          "person": "bbbbbbbbbbbbbbbbbbbbbbbb",
+          "status": "done",
+          "date": "2026-09-14",
+          "recordedDone": true,
+          "completedBy": "bbbbbbbbbbbbbbbbbbbbbbbb",
+          "completedAt": "2026-09-14T09:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "name": "done by somebody else, owner unassigned: only the doer has an item",
+      "function": "placementsOf",
+      "input": {
+        "occurrence": {
+          "status": "done",
+          "plannedDate": "2026-09-14",
+          "date": "2026-09-14",
+          "recordedDone": false,
+          "assigneeId": null,
+          "completedBy": "bbbbbbbbbbbbbbbbbbbbbbbb",
+          "completedAt": "2026-09-14T09:00:00.000Z",
+          "periodOwnerId": null
+        }
+      },
+      "expected": [
+        {
+          "person": "bbbbbbbbbbbbbbbbbbbbbbbb",
+          "status": "done",
+          "date": "2026-09-14",
+          "recordedDone": true,
+          "completedBy": "bbbbbbbbbbbbbbbbbbbbbbbb",
+          "completedAt": "2026-09-14T09:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "name": "the non-blocking item of the doer takes the planned day as its date",
+      "function": "placementsOf",
+      "input": {
+        "occurrence": {
+          "status": "done",
+          "plannedDate": "2026-09-14",
+          "date": "2026-09-23",
+          "recordedDone": false,
+          "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "completedBy": "bbbbbbbbbbbbbbbbbbbbbbbb",
+          "completedAt": "2026-09-23T10:00:00.000Z"
+        }
+      },
+      "expected": [
+        {
+          "person": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "status": "open",
+          "date": "2026-09-23",
+          "recordedDone": false,
+          "completedBy": null,
+          "completedAt": null
+        },
+        {
+          "person": "bbbbbbbbbbbbbbbbbbbbbbbb",
+          "status": "done",
+          "date": "2026-09-14",
+          "recordedDone": true,
+          "completedBy": "bbbbbbbbbbbbbbbbbbbbbbbb",
+          "completedAt": "2026-09-23T10:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "name": "recorded work belongs to the credited person",
+      "function": "placementsOf",
+      "input": {
+        "occurrence": {
+          "status": "done",
+          "plannedDate": "2026-09-14",
+          "date": "2026-09-14",
+          "recordedDone": true,
+          "assigneeId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+          "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "completedAt": "2026-09-14T09:00:00.000Z"
+        }
+      },
+      "expected": [
+        {
+          "person": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "status": "done",
+          "date": "2026-09-14",
+          "recordedDone": true,
+          "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "completedAt": "2026-09-14T09:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "name": "recorded work without a credited person is in nobody's set",
+      "function": "placementsOf",
+      "input": {
+        "occurrence": {
+          "status": "done",
+          "plannedDate": "2026-09-14",
+          "date": "2026-09-14",
+          "recordedDone": true,
+          "assigneeId": null,
+          "completedBy": null,
+          "completedAt": "2026-09-14T09:00:00.000Z"
+        }
+      },
+      "expected": []
+    },
+    {
+      "name": "a frozen owner keeps the open item when somebody else did the work",
+      "function": "placementsOf",
+      "input": {
+        "occurrence": {
+          "status": "done",
+          "plannedDate": "2026-09-14",
+          "date": "2026-09-14",
+          "recordedDone": false,
+          "assigneeId": "cccccccccccccccccccccccc",
+          "completedBy": "cccccccccccccccccccccccc",
+          "completedAt": "2026-09-14T09:00:00.000Z",
+          "periodOwnerId": "bbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      },
+      "expected": [
+        {
+          "person": "bbbbbbbbbbbbbbbbbbbbbbbb",
+          "status": "open",
+          "date": "2026-09-14",
+          "recordedDone": false,
+          "completedBy": null,
+          "completedAt": null
+        },
+        {
+          "person": "cccccccccccccccccccccccc",
+          "status": "done",
+          "date": "2026-09-14",
+          "recordedDone": true,
+          "completedBy": "cccccccccccccccccccccccc",
+          "completedAt": "2026-09-14T09:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "name": "done work whose frozen owner is the doer is a single done item",
+      "function": "placementsOf",
+      "input": {
+        "occurrence": {
+          "status": "done",
+          "plannedDate": "2026-09-14",
+          "date": "2026-09-14",
+          "recordedDone": false,
+          "assigneeId": "cccccccccccccccccccccccc",
+          "completedBy": "bbbbbbbbbbbbbbbbbbbbbbbb",
+          "completedAt": "2026-09-14T09:00:00.000Z",
+          "periodOwnerId": "bbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      },
+      "expected": [
+        {
+          "person": "bbbbbbbbbbbbbbbbbbbbbbbb",
+          "status": "done",
+          "date": "2026-09-14",
+          "recordedDone": false,
+          "completedBy": "bbbbbbbbbbbbbbbbbbbbbbbb",
+          "completedAt": "2026-09-14T09:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "name": "open work follows the frozen owner",
+      "function": "placementsOf",
+      "input": {
+        "occurrence": {
+          "status": "open",
+          "plannedDate": "2026-09-14",
+          "date": "2026-09-14",
+          "recordedDone": false,
+          "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "completedBy": null,
+          "completedAt": null,
+          "periodOwnerId": "bbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      },
+      "expected": [
+        {
+          "person": "bbbbbbbbbbbbbbbbbbbbbbbb",
+          "status": "open",
+          "date": "2026-09-14",
+          "recordedDone": false,
+          "completedBy": null,
+          "completedAt": null
+        }
+      ]
+    },
+    {
+      "name": "counts the states and needs a planned occurrence to be eligible",
+      "function": "evaluateSet",
+      "input": {
+        "set": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          },
+          {
+            "status": "open",
+            "plannedDate": "2026-09-15",
+            "date": "2026-09-15",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": null,
+            "completedAt": null
+          },
+          {
+            "status": "skipped",
+            "plannedDate": "2026-09-16",
+            "date": "2026-09-16",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": null,
+            "completedAt": null
+          }
+        ],
+        "cutoff": "2026-09-20T22:00:00.000Z"
+      },
+      "expected": {
+        "total": 3,
+        "planned": 3,
+        "done": 1,
+        "open": 1,
+        "skipped": 1,
+        "eligible": true,
+        "allDone": false,
+        "allOnTime": false
+      }
+    },
+    {
+      "name": "an empty set earns nothing",
+      "function": "evaluateSet",
+      "input": {
+        "set": [],
+        "cutoff": "2026-09-20T22:00:00.000Z"
+      },
+      "expected": {
+        "total": 0,
+        "planned": 0,
+        "done": 0,
+        "open": 0,
+        "skipped": 0,
+        "eligible": false,
+        "allDone": false,
+        "allOnTime": false
+      }
+    },
+    {
+      "name": "recorded work alone is done and on time but not eligible",
+      "function": "evaluateSet",
+      "input": {
+        "set": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": true,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          }
+        ],
+        "cutoff": "2026-09-20T22:00:00.000Z"
+      },
+      "expected": {
+        "total": 1,
+        "planned": 0,
+        "done": 1,
+        "open": 0,
+        "skipped": 0,
+        "eligible": false,
+        "allDone": true,
+        "allOnTime": true
+      }
+    },
+    {
+      "name": "one millisecond before the cut-off is on time",
+      "function": "evaluateSet",
+      "input": {
+        "set": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-20T21:59:59.999Z"
+          }
+        ],
+        "cutoff": "2026-09-20T22:00:00.000Z"
+      },
+      "expected": {
+        "total": 1,
+        "planned": 1,
+        "done": 1,
+        "open": 0,
+        "skipped": 0,
+        "eligible": true,
+        "allDone": true,
+        "allOnTime": true
+      }
+    },
+    {
+      "name": "at the cut-off is late",
+      "function": "evaluateSet",
+      "input": {
+        "set": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-20T22:00:00.000Z"
+          }
+        ],
+        "cutoff": "2026-09-20T22:00:00.000Z"
+      },
+      "expected": {
+        "total": 1,
+        "planned": 1,
+        "done": 1,
+        "open": 0,
+        "skipped": 0,
+        "eligible": true,
+        "allDone": true,
+        "allOnTime": false
+      }
+    },
+    {
+      "name": "done work without completedAt is late",
+      "function": "evaluateSet",
+      "input": {
+        "set": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": null
+          }
+        ],
+        "cutoff": "2026-09-20T22:00:00.000Z"
+      },
+      "expected": {
+        "total": 1,
+        "planned": 1,
+        "done": 1,
+        "open": 0,
+        "skipped": 0,
+        "eligible": true,
+        "allDone": true,
+        "allOnTime": false
+      }
+    },
+    {
+      "name": "recorded work is on time whatever its completion instant says",
+      "function": "evaluateSet",
+      "input": {
+        "set": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-16",
+            "date": "2026-09-16",
+            "recordedDone": true,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-23T10:00:00.000Z"
+          }
+        ],
+        "cutoff": "2026-09-20T22:00:00.000Z"
+      },
+      "expected": {
+        "total": 1,
+        "planned": 0,
+        "done": 1,
+        "open": 0,
+        "skipped": 0,
+        "eligible": false,
+        "allDone": true,
+        "allOnTime": true
+      }
+    },
+    {
+      "name": "recorded work that is not marked done does not block",
+      "function": "evaluateSet",
+      "input": {
+        "set": [
+          {
+            "status": "open",
+            "plannedDate": "2026-09-16",
+            "date": "2026-09-16",
+            "recordedDone": true,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": null
+          }
+        ],
+        "cutoff": "2026-09-20T22:00:00.000Z"
+      },
+      "expected": {
+        "total": 1,
+        "planned": 0,
+        "done": 1,
+        "open": 0,
+        "skipped": 0,
+        "eligible": false,
+        "allDone": true,
+        "allOnTime": true
+      }
+    },
+    {
+      "name": "a skipped item blocks all-done",
+      "function": "evaluateSet",
+      "input": {
+        "set": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          },
+          {
+            "status": "skipped",
+            "plannedDate": "2026-09-15",
+            "date": "2026-09-15",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": null,
+            "completedAt": null
+          }
+        ],
+        "cutoff": "2026-09-20T22:00:00.000Z"
+      },
+      "expected": {
+        "total": 2,
+        "planned": 2,
+        "done": 1,
+        "open": 0,
+        "skipped": 1,
+        "eligible": true,
+        "allDone": false,
+        "allOnTime": false
+      }
+    },
+    {
+      "name": "one late item makes the set done but not on time",
+      "function": "evaluateSet",
+      "input": {
+        "set": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-09-15",
+            "date": "2026-09-15",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-25T10:00:00.000Z"
+          }
+        ],
+        "cutoff": "2026-09-20T22:00:00.000Z"
+      },
+      "expected": {
+        "total": 2,
+        "planned": 2,
+        "done": 2,
+        "open": 0,
+        "skipped": 0,
+        "eligible": true,
+        "allDone": true,
+        "allOnTime": false
+      }
+    },
+    {
+      "name": "recorded work next to on-time planned work keeps the set on time",
+      "function": "evaluateSet",
+      "input": {
+        "set": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-09-15",
+            "date": "2026-09-15",
+            "recordedDone": true,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-15T09:00:00.000Z"
+          }
+        ],
+        "cutoff": "2026-09-20T22:00:00.000Z"
+      },
+      "expected": {
+        "total": 2,
+        "planned": 1,
+        "done": 2,
+        "open": 0,
+        "skipped": 0,
+        "eligible": true,
+        "allDone": true,
+        "allOnTime": true
+      }
+    },
+    {
+      "name": "a week bonus",
+      "function": "bonusKey",
+      "input": {
+        "kind": "bonus_week_done",
+        "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "periodStart": "2026-09-14"
+      },
+      "expected": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14"
+    },
+    {
+      "name": "an on-time week bonus",
+      "function": "bonusKey",
+      "input": {
+        "kind": "bonus_week_ontime",
+        "personId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "periodStart": "2026-09-21"
+      },
+      "expected": "bonus_week_ontime:bbbbbbbbbbbbbbbbbbbbbbbb:2026-09-21"
+    },
+    {
+      "name": "a cycle is keyed by its first day",
+      "function": "bonusKey",
+      "input": {
+        "kind": "bonus_cycle_done",
+        "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "periodStart": "2026-08-17"
+      },
+      "expected": "bonus_cycle_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-08-17"
+    },
+    {
+      "name": "an on-time cycle bonus",
+      "function": "bonusKey",
+      "input": {
+        "kind": "bonus_cycle_ontime",
+        "personId": "cccccccccccccccccccccccc",
+        "periodStart": "2026-09-14"
+      },
+      "expected": "bonus_cycle_ontime:cccccccccccccccccccccccc:2026-09-14"
+    },
+    {
+      "name": "an on-time week gets both week bonuses, in addition to each other",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-09-16",
+            "date": "2026-09-16",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-16T09:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-21",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        },
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        }
+      ]
+    },
+    {
+      "name": "a week that has not ended is not paid, also when complete",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-20",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "name": "a week is not paid on its first day",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-14",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "name": "a week is paid the day after its last day",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-21",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        },
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        }
+      ]
+    },
+    {
+      "name": "an empty set pays nothing",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-21",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "name": "recorded work alone earns nothing",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-16",
+            "date": "2026-09-16",
+            "recordedDone": true,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-16T09:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-21",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "name": "recorded work counts inside a set that has planned work",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-16",
+            "date": "2026-09-16",
+            "recordedDone": true,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-16T09:00:00.000Z"
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-21",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        },
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        }
+      ]
+    },
+    {
+      "name": "recorded work is placed by its date and is never late",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-10",
+            "date": "2026-09-16",
+            "recordedDone": true,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-16T10:00:00.000Z"
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-21",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        },
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        }
+      ]
+    },
+    {
+      "name": "autumn DST week (169 hours): 22:59:59.999Z is on time",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-10-19",
+            "date": "2026-10-19",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-10-25T22:59:59.999Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-10-26",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-10-19",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-10-19",
+          "periodEnd": "2026-10-25"
+        },
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-10-19",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-10-19",
+          "periodEnd": "2026-10-25"
+        }
+      ]
+    },
+    {
+      "name": "autumn DST week: 23:00Z is late",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-10-19",
+            "date": "2026-10-19",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-10-25T23:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-10-26",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-10-19",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-10-19",
+          "periodEnd": "2026-10-25"
+        }
+      ]
+    },
+    {
+      "name": "spring DST week (167 hours): 21:59:59.999Z is on time, and the cycle ends the same day",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-03-23",
+            "date": "2026-03-23",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-03-29T21:59:59.999Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-03-30",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_cycle_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-03-02",
+          "kind": "bonus_cycle_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 20,
+          "periodStart": "2026-03-02",
+          "periodEnd": "2026-03-29"
+        },
+        {
+          "key": "bonus_cycle_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-03-02",
+          "kind": "bonus_cycle_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 10,
+          "periodStart": "2026-03-02",
+          "periodEnd": "2026-03-29"
+        },
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-03-23",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-03-23",
+          "periodEnd": "2026-03-29"
+        },
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-03-23",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-03-23",
+          "periodEnd": "2026-03-29"
+        }
+      ]
+    },
+    {
+      "name": "spring DST week: 22:00Z is late",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-03-23",
+            "date": "2026-03-23",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-03-29T22:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-03-30",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_cycle_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-03-02",
+          "kind": "bonus_cycle_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 20,
+          "periodStart": "2026-03-02",
+          "periodEnd": "2026-03-29"
+        },
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-03-23",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-03-23",
+          "periodEnd": "2026-03-29"
+        }
+      ]
+    },
+    {
+      "name": "a complete cycle pays the cycle bonuses and the four week bonuses once it has ended",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-09-21",
+            "date": "2026-09-21",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-21T09:00:00.000Z"
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-09-28",
+            "date": "2026-09-28",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-28T09:00:00.000Z"
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-10-05",
+            "date": "2026-10-05",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-10-05T09:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-10-12",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        },
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        },
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-21",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-09-21",
+          "periodEnd": "2026-09-27"
+        },
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-21",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-09-21",
+          "periodEnd": "2026-09-27"
+        },
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-28",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-09-28",
+          "periodEnd": "2026-10-04"
+        },
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-28",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-09-28",
+          "periodEnd": "2026-10-04"
+        },
+        {
+          "key": "bonus_cycle_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_cycle_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 20,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-10-11"
+        },
+        {
+          "key": "bonus_cycle_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_cycle_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 10,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-10-11"
+        },
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-10-05",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-10-05",
+          "periodEnd": "2026-10-11"
+        },
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-10-05",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-10-05",
+          "periodEnd": "2026-10-11"
+        }
+      ]
+    },
+    {
+      "name": "the cycle has not ended on its last day",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-09-21",
+            "date": "2026-09-21",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-21T09:00:00.000Z"
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-09-28",
+            "date": "2026-09-28",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-28T09:00:00.000Z"
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-10-05",
+            "date": "2026-10-05",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-10-05T09:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-10-11",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        },
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        },
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-21",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-09-21",
+          "periodEnd": "2026-09-27"
+        },
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-21",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-09-21",
+          "periodEnd": "2026-09-27"
+        },
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-28",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-09-28",
+          "periodEnd": "2026-10-04"
+        },
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-28",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-09-28",
+          "periodEnd": "2026-10-04"
+        }
+      ]
+    },
+    {
+      "name": "a partial first cycle earns the whole amount",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-10-05",
+            "date": "2026-10-05",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-10-05T09:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-10-12",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_cycle_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_cycle_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 20,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-10-11"
+        },
+        {
+          "key": "bonus_cycle_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_cycle_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 10,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-10-11"
+        },
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-10-05",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-10-05",
+          "periodEnd": "2026-10-11"
+        },
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-10-05",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-10-05",
+          "periodEnd": "2026-10-11"
+        }
+      ]
+    },
+    {
+      "name": "a cycle before the anchor is keyed by its first day",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-08-20",
+            "date": "2026-08-20",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-08-20T09:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-14",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-08-17",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-08-17",
+          "periodEnd": "2026-08-23"
+        },
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-08-17",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-08-17",
+          "periodEnd": "2026-08-23"
+        },
+        {
+          "key": "bonus_cycle_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-08-17",
+          "kind": "bonus_cycle_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 20,
+          "periodStart": "2026-08-17",
+          "periodEnd": "2026-09-13"
+        },
+        {
+          "key": "bonus_cycle_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-08-17",
+          "kind": "bonus_cycle_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 10,
+          "periodStart": "2026-08-17",
+          "periodEnd": "2026-09-13"
+        }
+      ]
+    },
+    {
+      "name": "an open occurrence blocks the cycle bonus but not the complete weeks",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-09-21",
+            "date": "2026-09-21",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-21T09:00:00.000Z"
+          },
+          {
+            "status": "open",
+            "plannedDate": "2026-09-28",
+            "date": "2026-09-28",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": null,
+            "completedAt": null
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-10-05",
+            "date": "2026-10-05",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-10-05T09:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-10-12",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        },
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        },
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-21",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-09-21",
+          "periodEnd": "2026-09-27"
+        },
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-21",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-09-21",
+          "periodEnd": "2026-09-27"
+        },
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-10-05",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-10-05",
+          "periodEnd": "2026-10-11"
+        },
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-10-05",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-10-05",
+          "periodEnd": "2026-10-11"
+        }
+      ]
+    },
+    {
+      "name": "open or skipped work is not paid",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "skipped",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": null,
+            "completedAt": null
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-09-15",
+            "date": "2026-09-15",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-15T09:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-21",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "name": "work skipped and completed after the week is done but late",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-25T10:00:00.000Z"
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-09-15",
+            "date": "2026-09-15",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-15T09:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-26",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        }
+      ]
+    },
+    {
+      "name": "a late check-off inside the cycle pays done for the week and the cycle, never on time",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-10-12T10:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-10-13",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        },
+        {
+          "key": "bonus_cycle_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_cycle_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 20,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-10-11"
+        }
+      ]
+    },
+    {
+      "name": "done work without completedAt is done but never on time",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": null
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-21",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        }
+      ]
+    },
+    {
+      "name": "rescheduled from week 1 to week 2 and completed there: late for the week, on time for the cycle",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-16",
+            "date": "2026-09-23",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-23T10:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-10-12",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        },
+        {
+          "key": "bonus_cycle_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_cycle_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 20,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-10-11"
+        },
+        {
+          "key": "bonus_cycle_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_cycle_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 10,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-10-11"
+        }
+      ]
+    },
+    {
+      "name": "rescheduled and still open: it keeps blocking the week it was planned in",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "open",
+            "plannedDate": "2026-09-16",
+            "date": "2026-09-23",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": null,
+            "completedAt": null
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-21",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "name": "rescheduled and still open: the week of the new date holds nothing of it",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "open",
+            "plannedDate": "2026-09-16",
+            "date": "2026-09-23",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": null,
+            "completedAt": null
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-09-21",
+            "date": "2026-09-21",
+            "recordedDone": false,
+            "assigneeId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+            "completedBy": "bbbbbbbbbbbbbbbbbbbbbbbb",
+            "completedAt": "2026-09-21T09:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-28",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_done:bbbbbbbbbbbbbbbbbbbbbbbb:2026-09-21",
+          "kind": "bonus_week_done",
+          "personId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+          "amount": 5,
+          "periodStart": "2026-09-21",
+          "periodEnd": "2026-09-27"
+        },
+        {
+          "key": "bonus_week_ontime:bbbbbbbbbbbbbbbbbbbbbbbb:2026-09-21",
+          "kind": "bonus_week_ontime",
+          "personId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+          "amount": 3,
+          "periodStart": "2026-09-21",
+          "periodEnd": "2026-09-27"
+        }
+      ]
+    },
+    {
+      "name": "a take-over is credited to the actor without blocking the assignee",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+            "completedBy": "bbbbbbbbbbbbbbbbbbbbbbbb",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-09-15",
+            "date": "2026-09-15",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-15T09:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-21",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        },
+        {
+          "key": "bonus_week_done:bbbbbbbbbbbbbbbbbbbbbbbb:2026-09-14",
+          "kind": "bonus_week_done",
+          "personId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+          "amount": 5,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        },
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        },
+        {
+          "key": "bonus_week_ontime:bbbbbbbbbbbbbbbbbbbbbbbb:2026-09-14",
+          "kind": "bonus_week_ontime",
+          "personId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+          "amount": 3,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        }
+      ]
+    },
+    {
+      "name": "a third person who did the work is not eligible without work of their own",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "cccccccccccccccccccccccc",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-21",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "name": "a third person with work of their own is paid, the assignee is not",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "cccccccccccccccccccccccc",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-09-15",
+            "date": "2026-09-15",
+            "recordedDone": false,
+            "assigneeId": "cccccccccccccccccccccccc",
+            "completedBy": "cccccccccccccccccccccccc",
+            "completedAt": "2026-09-15T09:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-21",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_done:cccccccccccccccccccccccc:2026-09-14",
+          "kind": "bonus_week_done",
+          "personId": "cccccccccccccccccccccccc",
+          "amount": 5,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        },
+        {
+          "key": "bonus_week_ontime:cccccccccccccccccccccccc:2026-09-14",
+          "kind": "bonus_week_ontime",
+          "personId": "cccccccccccccccccccccccc",
+          "amount": 3,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        }
+      ]
+    },
+    {
+      "name": "unassigned open work blocks nobody",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          },
+          {
+            "status": "open",
+            "plannedDate": "2026-09-15",
+            "date": "2026-09-15",
+            "recordedDone": false,
+            "assigneeId": null,
+            "completedBy": null,
+            "completedAt": null
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-21",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        },
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        }
+      ]
+    },
+    {
+      "name": "unassigned done work counts for the person who did it",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-15",
+            "date": "2026-09-15",
+            "recordedDone": false,
+            "assigneeId": null,
+            "completedBy": "bbbbbbbbbbbbbbbbbbbbbbbb",
+            "completedAt": "2026-09-15T09:00:00.000Z"
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+            "completedBy": "bbbbbbbbbbbbbbbbbbbbbbbb",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-21",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_done:bbbbbbbbbbbbbbbbbbbbbbbb:2026-09-14",
+          "kind": "bonus_week_done",
+          "personId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+          "amount": 5,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        },
+        {
+          "key": "bonus_week_ontime:bbbbbbbbbbbbbbbbbbbbbbbb:2026-09-14",
+          "kind": "bonus_week_ontime",
+          "personId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+          "amount": 3,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        }
+      ]
+    },
+    {
+      "name": "unassigned done work without anybody credited belongs to nobody",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-15",
+            "date": "2026-09-15",
+            "recordedDone": false,
+            "assigneeId": null,
+            "completedBy": null,
+            "completedAt": "2026-09-15T09:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-21",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "name": "every person is evaluated on their own set",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          },
+          {
+            "status": "open",
+            "plannedDate": "2026-09-15",
+            "date": "2026-09-15",
+            "recordedDone": false,
+            "assigneeId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+            "completedBy": null,
+            "completedAt": null
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-21",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        },
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        }
+      ]
+    },
+    {
+      "name": "taking over overdue work of another keeps the finalised week bonus of the taker and gives the owner nothing",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+            "completedBy": "bbbbbbbbbbbbbbbbbbbbbbbb",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-09-15",
+            "date": "2026-09-15",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-23T10:00:00.000Z",
+            "periodOwnerId": "bbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-28",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        },
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        }
+      ]
+    },
+    {
+      "name": "taken-over overdue work is no bonus on its own",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-15",
+            "date": "2026-09-15",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-23T10:00:00.000Z",
+            "periodOwnerId": "bbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-28",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "name": "claimed unassigned overdue work is non-blocking for the claimer and for nobody else",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+            "completedBy": "bbbbbbbbbbbbbbbbbbbbbbbb",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-09-15",
+            "date": "2026-09-15",
+            "recordedDone": false,
+            "assigneeId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+            "completedBy": "bbbbbbbbbbbbbbbbbbbbbbbb",
+            "completedAt": "2026-09-23T10:00:00.000Z",
+            "periodOwnerId": null
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-28",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_done:bbbbbbbbbbbbbbbbbbbbbbbb:2026-09-14",
+          "kind": "bonus_week_done",
+          "personId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+          "amount": 5,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        },
+        {
+          "key": "bonus_week_ontime:bbbbbbbbbbbbbbbbbbbbbbbb:2026-09-14",
+          "kind": "bonus_week_ontime",
+          "personId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+          "amount": 3,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        }
+      ]
+    },
+    {
+      "name": "still unassigned and open after the week blocks nobody",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+            "completedBy": "bbbbbbbbbbbbbbbbbbbbbbbb",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          },
+          {
+            "status": "open",
+            "plannedDate": "2026-09-15",
+            "date": "2026-09-15",
+            "recordedDone": false,
+            "assigneeId": null,
+            "completedBy": null,
+            "completedAt": null,
+            "periodOwnerId": null
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-28",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_done:bbbbbbbbbbbbbbbbbbbbbbbb:2026-09-14",
+          "kind": "bonus_week_done",
+          "personId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+          "amount": 5,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        },
+        {
+          "key": "bonus_week_ontime:bbbbbbbbbbbbbbbbbbbbbbbb:2026-09-14",
+          "kind": "bonus_week_ontime",
+          "personId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+          "amount": 3,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        }
+      ]
+    },
+    {
+      "name": "reassigned open overdue work does not move into the new assignee's ended week",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+            "completedBy": "bbbbbbbbbbbbbbbbbbbbbbbb",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          },
+          {
+            "status": "open",
+            "plannedDate": "2026-09-15",
+            "date": "2026-09-15",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": null,
+            "completedAt": null,
+            "periodOwnerId": "bbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-28",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        },
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        }
+      ]
+    },
+    {
+      "name": "the owner who finishes overdue work late is done but not on time",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+            "completedBy": "bbbbbbbbbbbbbbbbbbbbbbbb",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-09-15",
+            "date": "2026-09-15",
+            "recordedDone": false,
+            "assigneeId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+            "completedBy": "bbbbbbbbbbbbbbbbbbbbbbbb",
+            "completedAt": "2026-09-23T10:00:00.000Z",
+            "periodOwnerId": "bbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-28",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_done:bbbbbbbbbbbbbbbbbbbbbbbb:2026-09-14",
+          "kind": "bonus_week_done",
+          "personId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+          "amount": 5,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        }
+      ]
+    },
+    {
+      "name": "a completion on behalf of the owner inside the week is credited normally",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+            "completedBy": "bbbbbbbbbbbbbbbbbbbbbbbb",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-09-15",
+            "date": "2026-09-15",
+            "recordedDone": false,
+            "assigneeId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+            "completedBy": "bbbbbbbbbbbbbbbbbbbbbbbb",
+            "completedAt": "2026-09-18T10:00:00.000Z",
+            "periodOwnerId": "bbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-28",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_done:bbbbbbbbbbbbbbbbbbbbbbbb:2026-09-14",
+          "kind": "bonus_week_done",
+          "personId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+          "amount": 5,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        },
+        {
+          "key": "bonus_week_ontime:bbbbbbbbbbbbbbbbbbbbbbbb:2026-09-14",
+          "kind": "bonus_week_ontime",
+          "personId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+          "amount": 3,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        }
+      ]
+    },
+    {
+      "name": "recorded work never blocks, also with a corrected date before its completion",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-16",
+            "date": "2026-09-16",
+            "recordedDone": true,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-23T10:00:00.000Z"
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-28",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        },
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        }
+      ]
+    },
+    {
+      "name": "the floor skips periods that start before it, and keeps the ones that start on it",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-09-21",
+            "date": "2026-09-21",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-21T09:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-28",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ],
+          "floor": "2026-09-21"
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-21",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-09-21",
+          "periodEnd": "2026-09-27"
+        },
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-21",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-09-21",
+          "periodEnd": "2026-09-27"
+        }
+      ]
+    },
+    {
+      "name": "no floor evaluates every period",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-09-21",
+            "date": "2026-09-21",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-21T09:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-28",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        },
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        },
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-21",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-09-21",
+          "periodEnd": "2026-09-27"
+        },
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-21",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-09-21",
+          "periodEnd": "2026-09-27"
+        }
+      ]
+    },
+    {
+      "name": "a cycle that starts before the floor is skipped as a whole",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-09-21",
+            "date": "2026-09-21",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-21T09:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-10-12",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ],
+          "floor": "2026-09-21"
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-21",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-09-21",
+          "periodEnd": "2026-09-27"
+        },
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-21",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-09-21",
+          "periodEnd": "2026-09-27"
+        }
+      ]
+    },
+    {
+      "name": "a cycle that starts on the floor is kept",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-09-21",
+            "date": "2026-09-21",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-21T09:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-10-12",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ],
+          "floor": "2026-09-14"
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        },
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        },
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-21",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-09-21",
+          "periodEnd": "2026-09-27"
+        },
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-21",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-09-21",
+          "periodEnd": "2026-09-27"
+        },
+        {
+          "key": "bonus_cycle_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_cycle_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 20,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-10-11"
+        },
+        {
+          "key": "bonus_cycle_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_cycle_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 10,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-10-11"
+        }
+      ]
+    },
+    {
+      "name": "an amount of 0 writes no entry, per kind",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-21",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 0,
+              "weekOnTime": 3,
+              "cycleDone": 0,
+              "cycleOnTime": 0
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        }
+      ]
+    },
+    {
+      "name": "no schedule means no bonuses",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-21",
+          "schedule": []
+        }
+      },
+      "expected": []
+    },
+    {
+      "name": "a schedule that starts after the period ended pays nothing",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-28",
+          "schedule": [
+            {
+              "from": "2026-09-21",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "name": "a schedule row that starts on the last day of the period is in force",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-28",
+          "schedule": [
+            {
+              "from": "2026-09-20",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        },
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        }
+      ]
+    },
+    {
+      "name": "a later schedule change never alters an ended period",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-09-21",
+            "date": "2026-09-21",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-21T09:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-28",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 0,
+              "cycleDone": 0,
+              "cycleOnTime": 0
+            },
+            {
+              "from": "2026-09-21",
+              "weekDone": 50,
+              "weekOnTime": 0,
+              "cycleDone": 0,
+              "cycleOnTime": 0
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        },
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-21",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 50,
+          "periodStart": "2026-09-21",
+          "periodEnd": "2026-09-27"
+        }
+      ]
+    },
+    {
+      "name": "the order of the entries does not depend on the order of the input (forward)",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-21",
+            "date": "2026-09-21",
+            "recordedDone": false,
+            "assigneeId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+            "completedBy": "bbbbbbbbbbbbbbbbbbbbbbbb",
+            "completedAt": "2026-09-21T09:00:00.000Z"
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-09-21",
+            "date": "2026-09-21",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-21T09:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-28",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        },
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        },
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-21",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-09-21",
+          "periodEnd": "2026-09-27"
+        },
+        {
+          "key": "bonus_week_done:bbbbbbbbbbbbbbbbbbbbbbbb:2026-09-21",
+          "kind": "bonus_week_done",
+          "personId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+          "amount": 5,
+          "periodStart": "2026-09-21",
+          "periodEnd": "2026-09-27"
+        },
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-21",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-09-21",
+          "periodEnd": "2026-09-27"
+        },
+        {
+          "key": "bonus_week_ontime:bbbbbbbbbbbbbbbbbbbbbbbb:2026-09-21",
+          "kind": "bonus_week_ontime",
+          "personId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+          "amount": 3,
+          "periodStart": "2026-09-21",
+          "periodEnd": "2026-09-27"
+        }
+      ]
+    },
+    {
+      "name": "the order of the entries does not depend on the order of the input (reversed)",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-21",
+            "date": "2026-09-21",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-21T09:00:00.000Z"
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-09-21",
+            "date": "2026-09-21",
+            "recordedDone": false,
+            "assigneeId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+            "completedBy": "bbbbbbbbbbbbbbbbbbbbbbbb",
+            "completedAt": "2026-09-21T09:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-28",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        },
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        },
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-21",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-09-21",
+          "periodEnd": "2026-09-27"
+        },
+        {
+          "key": "bonus_week_done:bbbbbbbbbbbbbbbbbbbbbbbb:2026-09-21",
+          "kind": "bonus_week_done",
+          "personId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+          "amount": 5,
+          "periodStart": "2026-09-21",
+          "periodEnd": "2026-09-27"
+        },
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-21",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-09-21",
+          "periodEnd": "2026-09-27"
+        },
+        {
+          "key": "bonus_week_ontime:bbbbbbbbbbbbbbbbbbbbbbbb:2026-09-21",
+          "kind": "bonus_week_ontime",
+          "personId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+          "amount": 3,
+          "periodStart": "2026-09-21",
+          "periodEnd": "2026-09-27"
+        }
+      ]
+    },
+    {
+      "name": "a different timezone moves the cut-off",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-20T23:30:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-14",
+          "timezone": "UTC",
+          "today": "2026-09-21",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "key": "bonus_week_done:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_done",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 5,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        },
+        {
+          "key": "bonus_week_ontime:aaaaaaaaaaaaaaaaaaaaaaaa:2026-09-14",
+          "kind": "bonus_week_ontime",
+          "personId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+          "amount": 3,
+          "periodStart": "2026-09-14",
+          "periodEnd": "2026-09-20"
+        }
+      ]
+    },
+    {
+      "name": "a non-Monday anchor throws",
+      "function": "expectedBonusEntries",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "recordedDone": false,
+            "assigneeId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedBy": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "completedAt": "2026-09-14T09:00:00.000Z"
+          }
+        ],
+        "context": {
+          "anchor": "2026-09-15",
+          "timezone": "Europe/Amsterdam",
+          "today": "2026-09-21",
+          "schedule": [
+            {
+              "from": "2026-01-01",
+              "weekDone": 5,
+              "weekOnTime": 3,
+              "cycleDone": 20,
+              "cycleOnTime": 10
+            }
+          ]
+        }
+      },
+      "throws": "RangeError"
     }
   ]
 }

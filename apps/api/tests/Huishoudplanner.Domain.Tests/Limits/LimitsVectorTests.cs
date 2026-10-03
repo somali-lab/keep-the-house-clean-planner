@@ -35,7 +35,7 @@ public class LimitsVectorTests
     private static object? Dispatch(VectorCase c) => c.Function switch
     {
         "limits" => Flatten(HouseholdLimits.Current),
-        "defaultPointsForDuration" => TaskPoints.DefaultForDuration(c.WholeNumber("minutes")),
+        "defaultPointsForDuration" => TaskPoints.DefaultForDuration(c.Input.GetProperty("minutes").GetDouble()),
         _ => throw new NotSupportedException($"No C# counterpart mapped for {c.Function}"),
     };
 

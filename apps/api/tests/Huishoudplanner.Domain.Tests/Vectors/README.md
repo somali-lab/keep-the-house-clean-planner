@@ -11,8 +11,7 @@ file differs from what the TypeScript functions return today.
 
 ## Files
 
-One file per TypeScript module: `time.json`, `cycle.json`, `due.json`, `bonuses.json` (the schedule rules `bonusAmountsOn`, `sameBonusAmounts`, `scheduleWithAmounts`; the other functions of `bonuses.ts` are `pending` in `scripts/vectors.ts` until slice 4.2), `validation.json` (`isWeekendDay`, `budgetFor`, `validatePlan` of `validation/plan.ts`). `limits.json` is the odd one out: it pins every limit and default of `GET /api/v2/meta/limits` (the function `limits`, keys `group.name`) and `defaultPointsForDuration`. Later slices add
-`points.json`, `badges.json` and `rewards.json` in the same format.
+One file per TypeScript module: `time.json`, `cycle.json`, `due.json`, `bonuses.json` (the schedule rules `bonusAmountsOn`, `sameBonusAmounts`, `scheduleWithAmounts` and the period, set and entry rules of `bonuses.ts`), `points.json` (`pointsToCents`, `isTwoDecimalCurrency`; `formatCents` is display only and omitted), `rewards.json` (the reward meter of `rewards.ts`), `badges.json` (the rule evaluation, image sniffing and examples of `badges.ts`), `validation.json` (`isWeekendDay`, `budgetFor`, `validatePlan` of `validation/plan.ts`). `limits.json` is the odd one out: it pins every limit and default of `GET /api/v2/meta/limits` (the function `limits`, keys `group.name`) and `defaultPointsForDuration`.
 
 ## Format
 
@@ -57,3 +56,5 @@ One file per TypeScript module: `time.json`, `cycle.json`, `due.json`, `bonuses.
   of the expectation.
 - `dueState` takes a `ratio` and returns `ok`, `due` or `overdue`.
 - `validatePlan` takes `slots`, `tasks`, `users` and `intervals` and returns `{ errors, warnings, summary }`. The order of `errors`, `warnings` and every list in `summary` is part of the expectation. An issue carries only the fields of its code (absent fields are not null); `required: null` in a task summary is a real value. A fractional `weekIndex` is not a vector: the C# `PlanSlot` holds an `int`, so request binding refuses it before validation.
+- Bonus, reward and badge vectors: an occurrence is `{ status, plannedDate, date, recordedDone?, assigneeId, periodOwnerId?, completedBy, completedAt }`. An **absent** `periodOwnerId` means "not frozen" (the assignee), `null` means frozen as unassigned; an absent `recordedDone` is false. `expectedBonusEntries` takes `{ items, context: { anchor, timezone, today, schedule, floor? } }` and returns the entries in order (`key`, `kind` as ledger name such as `bonus_week_done`, `personId`, `amount`, `periodStart`, `periodEnd`). `placementsOf` returns a projection (`person`, `status`, `date`, `recordedDone`, `completedBy`, `completedAt`) of each placed item.
+- `exampleBadges` and `limits` are constant documents, not functions of the source; `exampleBadgeMatches` tests the task-name patterns the way the TypeScript does (`new RegExp(pattern, 'i')`).

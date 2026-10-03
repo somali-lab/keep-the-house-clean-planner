@@ -2,15 +2,30 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { buildVectors, MODULES, serializeVectors, VECTORS_DIR } from '../../../scripts/vectors.ts';
+import * as badgesSource from './badges.ts';
 import * as bonuses from './bonuses.ts';
 import * as cycle from './cycle.ts';
 import * as due from './due.ts';
-import { defaultPointsForDuration } from './points.ts';
+import * as points from './points.ts';
+import * as rewards from './rewards.ts';
 import * as time from './time.ts';
 import * as validation from './validation/plan.ts';
 
 // limits: the constants are a single generated document (the function named limits stands for it), plus the one rule of points.ts.
-const limits = { limits: () => undefined, defaultPointsForDuration };
+const limits = {
+  limits: () => undefined,
+  defaultPointsForDuration: points.defaultPointsForDuration,
+};
+// badges: the examples are a constant document (the functions named exampleBadges and exampleBadgeMatches stand for it).
+const badges = {
+  ...badgesSource,
+  exampleBadges: () => undefined,
+  exampleBadgeMatches: () => undefined,
+};
+// points: defaultPointsForDuration is covered by the limits module.
+const pointsFunctions = Object.fromEntries(
+  Object.entries(points).filter(([name]) => name !== 'defaultPointsForDuration'),
+);
 const SOURCES: Record<string, Record<string, unknown>> = {
   time,
   cycle,
@@ -18,6 +33,9 @@ const SOURCES: Record<string, Record<string, unknown>> = {
   limits,
   validation,
   bonuses,
+  points: pointsFunctions,
+  rewards,
+  badges,
 };
 
 /** Exported values that are constants or types of the module, not functions to port. */
@@ -39,10 +57,10 @@ describe('golden vectors', () => {
   );
 
   it('covers every function of the exported modules', () => {
-    for (const { module, functions, pending = [] } of MODULES) {
+    for (const { module, functions, pending = [], omitted = [] } of MODULES) {
       const source = SOURCES[module];
       expect(source, `no source module registered for ${module}`).toBeDefined();
-      expect([...Object.keys(functions), ...pending].sort()).toEqual(
+      expect([...Object.keys(functions), ...pending, ...omitted].sort()).toEqual(
         EXPORTED_FUNCTIONS(source ?? {}),
       );
     }
