@@ -36,6 +36,16 @@ node scripts/smoke-dotnet.mjs   # or: npm run smoke:dotnet
 
 Every rule is proven three ways: it passes on the shipped assemblies, it passes with positive results on a conforming layout, and it fails on deliberately violating types (or csproj text). The violating and conforming types live in `fixtures/Huishoudplanner.Architecture.Tests.Fixtures` (never shipped, only referenced by the architecture tests). Adding a rule means adding a violating type there and an entry in `ArchitectureRuleTests`, `IlRules` or `BuildRules`.
 
+## Audit coverage
+
+Every actual state change has an audit entry in the same transaction; a no-op writes and audits nothing (ADR-0004). Two Integration tests prove it against the real host and a real replica set, the counterparts of `audit-coverage.test.ts` and `write-routes-coverage.test.ts`:
+
+- **`WriteCapture`** (`Fixtures/WriteCapture.cs`, switched on per test factory with `ApiFactory.WithWriteCapture`) listens to the MongoDB driver's command events on the application's own client, through the internal `IMongoClientSettingsCustomizer` seam in `Adapters.Mongo` (nothing registers it in production). It records every command that changed something (insert, update, delete, findAndModify, and schema commands such as `createIndexes`), the collection and the number of documents. An update that modified nothing (like the insert-if-absent upsert of the generation) and a delete that removed nothing are no-ops and are not recorded; writes of an aborted transaction are dropped. `Writes()` leaves out the audit log itself and `migrations`.
+- **`AuditCoverageTests`** checks what an audit entry records (actor, source, fields), that a no-op update sends no write at all, and that a deliberately bad test-only endpoint writing around the audit recording is caught by the capture.
+- **`WriteRouteCoverageTests`** walks every non-GET endpoint registered by the real host. Each one needs a scenario in its `Scenarios` table, arranged against a seeded household; the scenario is executed and the capture must show audit entries of the expected entity, action and source attributed to the requesting profile for every state change, no write outside the collections of `MongoCollections`, no schema change while serving a request, and, where marked `Idempotent`, that the same request repeated writes nothing. Read-only POSTs must write nothing at all; the endpoints that deliberately record no audit entry (`DELETE /api/v2/audit` and `POST /api/v2/jobs/audit-retention`, which prune the log itself) are `Unaudited` scenarios with a reason and may only touch the audit log.
+
+**A new write endpoint fails `WriteRouteCoverageTests` until it has a scenario.** The message lists the endpoints without one. Slices that add write endpoints (the points ledger, promote, ad-hoc work, badges, import and so on) extend the table in the same change.
+
 ## Configuration
 
 All configuration comes from environment variables, listed in [requirements section 9](../../docs/huishoudplanner-requirements.md). They are bound to `AppOptions` (`src/Huishoudplanner.Host/Configuration`) through `IOptions<AppOptions>` and validated when the host starts: an invalid configuration refuses to start and the message names the offending variables without ever echoing their values. An empty variable counts as unset.
