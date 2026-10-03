@@ -20,27 +20,52 @@ The screenshots show a scripted demo household with fictional people and sample 
 
 ## What it does
 
-- Builds household schedules around a reusable four-week cycle.
-- Publishes upcoming tasks from the active plan in the week overview and My tasks. Tasks in a draft appear there only after the plan is activated and their dates are in view.
-- Plan management previews which upcoming tasks will be replaced or kept before activating another plan.
-- Shows today's chores, the upcoming days, and overdue work.
-- Records extra executions of a task and one-off tasks that never enter the task list, with an undo, so work that was not in the plan still counts in history and statistics.
-- Assigns chores to household members and separates weekday from weekend workload.
-- Awards points per completed chore to the person who did the work, kept in a ledger that corrects itself when a completion is undone or corrected, with balances and entries on the statistics page. Administrators can set bonuses for doing everything in a week or a cycle, and for doing it all on time, under **Settings → Calendar**; a bonus is paid out after the period has ended and is only ever based on the amounts that applied then. Administrators can also set a currency and what one point is worth (**Settings → Calendar**); people then redeem points for a payout or reward from the Points tab, a booking can never take the balance below zero, is audited, and can be undone on the same day.
-- Shows a reward meter on the **Beloning** tab of the overview: the points a person earned this week or cycle against a goal, what they are worth in money, a basket that fills with one egg per 10%, and a chicken that walks along the meter. The goal is automatic (the points of the work planned for that person) unless an administrator sets one under **Settings → Calendar**; the meter plays a short completion animation once per person and period, shows a static message instead when reduced motion is on, and always gives the progress as text. The person's badges appear below it.
-- Lets administrators create badges under **Badges** in the management area: a name, an uploaded picture (PNG, JPEG or WebP, at most 256 KB) and a rule on chosen tasks, such as 10 executions of the toilet task, 300 minutes of mopping, or 4 weeks with everything on time (this one needs bonuses to be set). Badges are awarded automatically from the same audited completions as the points, at the moment the threshold was crossed, and are shown in the Points tab and in "Mijn badges" on the Today page with the day they were earned or the progress so far. An award follows the data, so undoing work below the threshold takes the badge away again. **Add example badges** creates ready-made examples once; names and thresholds stay editable.
-- Reviews workload per person, per week, and across the full cycle.
-- Searches tasks by name in the planner and week overview, shows cycle-week information, and keeps each person's filter choices after a reload.
-- Groups My tasks into dated, sliding week blocks so the task date and cycle week stay clear.
-- Checks whether chores that occur multiple times per cycle are spread evenly.
-- Records who completed, skipped, moved, or changed a chore.
-- Exports printable daily, weekly, and complete chore lists as PDF.
-- Supports Dutch and English, with English as the fallback language.
-- Offers light, dark, and system colour modes.
-- Works as an installable PWA and queues completions while temporarily offline.
-- Shows personal browser notifications of a person's open and overdue chores at times they choose, while the planner is open.
-- Can generate optional AI-assisted planning suggestions that require approval before they are applied.
-- Shows an About page with the running version, the date and time of the latest release, and links to the license and changelog.
+### Planning
+
+- **Four-week cycle** - one reusable plan repeats every four weeks, and the app turns it into real tasks on real days.
+- **Planner** - drag chores onto days and people; it warns about wrong frequencies and overloaded days, and refuses days someone is unavailable.
+- **Plan management** - keep, copy and rename several plans; before another plan is activated, a preview shows which upcoming tasks are replaced and which stay.
+- **Distribution** - check how the work is shared between people, weekdays and weekends, and whether recurring chores are spread evenly.
+- **Vacations** - no tasks are generated on vacation days.
+- **Plan suggestions** - when you keep moving the same task the same way, the app offers to update the plan.
+- **AI drafts (optional)** - an AI assistant can propose, rebalance or explain a plan and suggest missing tasks; a proposal opens as a draft in plan management and changes nothing until you activate it.
+
+### Daily use
+
+- **Today** - the day's open chores: yours, unclaimed, other people's and overdue; look ahead a day or two.
+- **Week** - a twelve-day overview with drag-to-reschedule, filter by person and search by name.
+- **My tasks** - your chores and the unclaimed ones for the next 1, 2 or 4 weeks, in dated weekly blocks.
+- **Overdue** - chores that are due or running behind their interval, ranked, with schedule, done now and extra.
+- **Check off, skip, claim** - undo a check-off, skip with a reason, claim an unclaimed chore, and say who did it when it was someone else's.
+- **Extra task** - record or plan work that was not in the plan: an extra time for a known task, or a one-off task that never enters the task list.
+
+### Rewards
+
+- **Points** - every completed chore earns points for the person who did it, one per minute unless set differently; the ledger corrects itself when a completion is undone or corrected.
+- **Bonuses** - administrators can set bonuses for doing everything in a week or a cycle, and for doing it all on time, under **Settings → Calendar**.
+- **Redemptions and money** - set a currency and what a point is worth; people redeem points for a payout or reward, never below their balance.
+- **Badges** - administrators define badges with a picture and a rule; they are awarded automatically and taken back if the work is undone.
+- **Reward meter** - the **Reward** tab shows progress towards the goal of the week or cycle with a chicken and a basket of eggs.
+
+### Insight
+
+- **Statistics** - workload, fairness, completion rate, rhythm against the planned interval, timing against the planned day, and points, each with a table.
+- **History** - an audit trail of who completed, skipped, moved or changed what.
+- **Completion corrections** - administrators can correct who finished a chore and when, or delete a completion.
+
+### Notifications
+
+- **Browser notifications** - personal reminders at times you choose, shown while the planner is open in a browser tab; they need HTTPS or `localhost`.
+- **ntfy and Home Assistant** - an optional morning summary per person, sent by the server even when no browser is open.
+
+### Data and app
+
+- **PDF** - printable day, week, two-week and four-week schedules, an overdue list and a task list.
+- **Export and import** - a full JSON export and import, next to nightly backups.
+- **Installable and offline** - works as a PWA and queues check-offs while temporarily offline.
+- **Languages and themes** - Dutch and English, and light, dark or system colours.
+- **Filters** - filter choices are remembered per person, and one button in the header resets them for the current screen.
+- **About** - the running version, the date and time of the latest release, and links to the license and changelog.
 
 > [!IMPORTANT]
 > This application has no built-in authentication. Selecting a profile only records who performs an action; it is not a login. Keep the app on a trusted home network, use a VPN, or place it behind an authenticated reverse proxy.
@@ -73,7 +98,7 @@ You need Docker with Docker Compose.
 
 4. Open <http://localhost:3000>.
 
-On its first start, the application creates the base settings, household profiles, several rooms, and an empty active plan. Names, colours, rooms, holidays, and planning settings can then be changed under **Settings**.
+On its first start, the application creates the base settings, household profiles (the first one is an administrator, the others are members), several rooms, and an empty active plan. Names, colours, rooms, holidays, and planning settings can then be changed under **Settings**.
 
 The Docker stack contains:
 
@@ -116,6 +141,7 @@ Configuration is read from `.env`; see [.env.example](.env.example) for a ready-
 - `TZ_APP` — timezone used for dates, cycles, and scheduled jobs; defaults to `Europe/Amsterdam`.
 - `SEED_USERS` — JSON array of profiles created only when no profiles exist yet.
 - `LOG_LEVEL` — `fatal`, `error`, `warn`, `info`, `debug`, `trace`, or `silent`.
+- `APP_IMAGE_TAG` — image tag used by Docker Compose; defaults to `latest`.
 - `BACKUP_HOST_DIR` — host backup directory; defaults to `./backups`.
 - `BACKUP_RETENTION_DAYS` — number of days the backup container retains automatic backups; defaults to `14`.
 - `AUDIT_RETENTION_DAYS` — optional maximum history age; empty keeps the complete history.
@@ -159,13 +185,13 @@ docker compose restart app
 > [!WARNING]
 > `--drop` replaces the current database. Create a fresh backup before restoring an archive.
 
-A full JSON export and import are also available under **Settings → Data**. Imports are validated before replacing the current data. The export includes the badge definitions with their pictures; the awards are rebuilt on import.
+A full JSON export and import are also available under **Settings → Data**. Imports are validated before replacing the current data. The export includes the badge definitions with their pictures and the redemptions; the points and badge awards are rebuilt from the imported work. Importing an older file that would remove existing redemptions or badges first asks you to confirm that.
 
 ## Optional integrations
 
 ### AI planning suggestions
 
-Under **Settings → AI assistant**, choose one of the supported providers:
+Under **Settings → AI**, choose one of the supported providers:
 
 - **Off** — the default.
 - **Demo** — deterministic suggestions without an external AI service.
@@ -173,7 +199,7 @@ Under **Settings → AI assistant**, choose one of the supported providers:
 - **OpenAI-compatible** — requires an endpoint and model.
 - **Ollama** — for a locally hosted model; from Docker the endpoint is commonly `http://host.docker.internal:11434`.
 
-Set `AI_API_KEY` in `.env` when the provider requires a secret, then restart the stack. Suggestions never become active automatically: review them in plan management and explicitly activate (through the activation preview) or delete them.
+Set `AI_API_KEY` in `.env` when the provider requires a secret, then restart the stack. A proposed plan never becomes active automatically: it opens as a draft in plan management, where you can edit it, delete it, or activate it after reviewing the preview of what changes. Suggested tasks are only added when you choose to add them.
 
 ### Notifications
 
