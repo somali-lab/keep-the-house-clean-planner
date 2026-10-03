@@ -77,11 +77,44 @@ public static class RoomEndpoints
         IRoomService rooms,
         ILogger<IRoomService> logger,
         CancellationToken cancellationToken,
-        bool? active = null,
-        int? limit = null,
+        string? active = null,
+        string? limit = null,
         string? cursor = null)
     {
-        var result = await rooms.ListAsync(active, limit, cursor, cancellationToken);
+        // Bound as strings so that a malformed value is a field-keyed validation_error, not a framework binding failure.
+        var errors = new Dictionary<string, string[]>();
+        bool? activeFilter = null;
+        if (active is not null)
+        {
+            if (active is "true" or "false")
+            {
+                activeFilter = active == "true";
+            }
+            else
+            {
+                errors["active"] = ["Must be 'true' or 'false'."];
+            }
+        }
+
+        int? limitValue = null;
+        if (limit is not null)
+        {
+            if (int.TryParse(limit, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var parsed))
+            {
+                limitValue = parsed;
+            }
+            else
+            {
+                errors["limit"] = ["Must be an integer."];
+            }
+        }
+
+        if (errors.Count > 0)
+        {
+            return ProblemResults.From(new Huishoudplanner.Domain.Errors.ValidationErrors(errors));
+        }
+
+        var result = await rooms.ListAsync(activeFilter, limitValue, cursor, cancellationToken);
         return result.Match(
             list => Results.Ok(new RoomListResponse([.. list.Items.Select(RoomResponse.From)], list.NextCursor)),
             ProblemResults.From,

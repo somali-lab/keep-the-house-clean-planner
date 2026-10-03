@@ -227,6 +227,8 @@ public sealed class RoomEndpointTests : IDisposable
     [InlineData("limit=0", "limit")]
     [InlineData("limit=201", "limit")]
     [InlineData("cursor=garbage", "cursor")]
+    [InlineData("limit=abc", "limit")]
+    [InlineData("active=maybe", "active")]
     public async Task List_withABadLimitOrCursor_is400ValidationError(string query, string field)
     {
         var (response, body) = await Get("/api/v2/rooms?" + query);
