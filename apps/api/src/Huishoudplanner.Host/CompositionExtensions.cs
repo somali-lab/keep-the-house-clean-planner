@@ -1,9 +1,12 @@
 using System.Reflection;
 using Huishoudplanner.Adapters.Http;
+using Huishoudplanner.Adapters.Http.Calendar;
 using Huishoudplanner.Adapters.Http.Health;
+using Huishoudplanner.Adapters.Http.Meta;
 using Huishoudplanner.Adapters.Http.WebApp;
 using Huishoudplanner.Adapters.Mongo;
 using Huishoudplanner.Application;
+using Huishoudplanner.Domain.Ports.Driven;
 using Huishoudplanner.Domain.Ports.Driving;
 using Huishoudplanner.Adapters.Http.Rooms;
 using Huishoudplanner.Host.Configuration;
@@ -24,6 +27,10 @@ public static class CompositionExtensions
         services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton(new AppVersion(CurrentVersion()));
         services.AddScoped<IHealthService, HealthService>();
+        services.AddSingleton<IMetaService, MetaService>();
+        services.AddSingleton(sp => new HouseholdOptions(sp.GetRequiredService<IOptions<AppOptions>>().Value.Timezone));
+        services.AddScoped<ICalendarService, CalendarService>();
+        services.TryAddSingleton<ForReadingCycleAnchor, PendingCycleAnchor>();
         services.AddMongoAdapter(sp => sp.GetRequiredService<IOptions<AppOptions>>().Value.MongoUrl);
         services.AddRooms();
         return services;
@@ -35,6 +42,8 @@ public static class CompositionExtensions
         app.UseHttpAdapter();
         app.MapHealthEndpoints();
         app.MapRoomEndpoints();
+        app.MapMetaEndpoints();
+        app.MapCalendarEndpoints();
         if (app.Environment.IsDevelopment())
         {
             // The document at /openapi/v2.json and its Scalar UI at /scalar/v2 exist in Development only; the checked-in

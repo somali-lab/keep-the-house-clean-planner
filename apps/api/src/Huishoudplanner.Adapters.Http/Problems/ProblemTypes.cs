@@ -8,6 +8,7 @@ public static class ProblemTypes
     public const string NotFound = "not_found";
     public const string ValidationError = "validation_error";
     public const string InternalError = "internal_error";
+    public const string SettingsMissing = "settings_missing";
     public const string ProfileRequired = "profile_required";
     public const string PermissionDenied = "permission_denied";
 

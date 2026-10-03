@@ -223,7 +223,7 @@ Each phase ends in something demonstrable. Slices are small enough for one pull 
 - [ ] 1.1 Users: list, create, patch, browser notification moments, `last_admin` rule, seeding from `SEED_USERS`. Port `users.test.ts`, `seed.test.ts`, `browser-notifications.test.ts`.
 - [x] 1.2 Rooms and `room_in_use`. Port `rooms.test.ts`.
 - [ ] 1.3 Settings: read, patch, the bonus schedule rows with `bonus_schedule_conflict`, currency and cents per point, reward goals, intervals, AI settings without the key, `settings_missing`. Port `settings.test.ts`, `interval-change.test.ts`.
-- [ ] 1.4 `GET /meta/limits` and `GET /calendar` (§4.3).
+- [x] 1.4 `GET /meta/limits` and `GET /calendar` (§4.3).
 
 ### Phase 2 — Tasks and plans
 

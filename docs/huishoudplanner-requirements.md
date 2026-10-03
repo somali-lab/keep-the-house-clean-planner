@@ -564,6 +564,8 @@ The active profile travels in the header `x-profile-id` (the id of an active use
 ```
 GET    /api/health   (v2: GET /api/v2/health answers { status, version, database } and reports a failed database ping as 503 with "error" in both status fields)
 
+GET    /api/v2/meta/limits   GET /api/v2/calendar?from&to   (v2 only, see below)
+
 GET    /api/users                           POST /api/users            PATCH /api/users/:id
 PUT    /api/users/:id/browser-notifications (own moments, or any person's for an admin)
 GET    /api/rooms                           POST /api/rooms            PATCH /api/rooms/:id
@@ -619,6 +621,10 @@ GET    /api/export/pdf                      GET  /api/export/pdf/day
 GET    /api/export/pdf/due                  GET  /api/export/pdf/tasks
 GET    /api/export/json                     POST /api/import/json
 ```
+
+`GET /api/v2/meta/limits` (v2 only) answers every limit and default the web app needs as one document grouped by resource (`calendar`, `tasks`, `points`, `bonuses`, `rewards`, `badges`, `notifications`, `ai`, `audit`, `statistics`, `defaults`, names in camelCase), so the web app holds no copy of them; the values equal the constants of the Node implementation. `defaults` carries the currency, the AI timeout and the default intervals. The default points of a task (one point per minute, between 1 and `tasks.maxPoints`) are not published as a rule: `POST /api/v2/tasks` and a one-off task apply it on the server when `points` is omitted. It needs no profile and cannot fail except with `500 internal_error`.
+
+`GET /api/v2/calendar?from&to` (v2 only) takes two required day keys and answers `{ timezone, days }` with one entry per day from `from` to `to`, both included: `dayKey`, `weekday` (0 Sunday to 6 Saturday), `cycleIndex` (negative before the anchor), `weekIndex` (0 to 3 inside the cycle), `isoWeek` (for example `2026-W38`) and `weekStart` (the Monday of the week). The days come from the shared day-key and cycle helpers with the cycle anchor of the settings, so a DST day is one day like any other, and `timezone` names the household timezone the day keys are read in. The range is at most 371 days (`limits.calendar.maxRangeDays`). It needs no profile. Errors: `400 validation_error` with `required` or `invalid_day_key` on `from` or `to`, `from_after_to` on `from`, `range_too_long` on `to`; `500 settings_missing` when the installation has no settings.
 
 `POST /api/occurrences` takes `{ taskId, date, assigneeId?, done?, requestId? }` and answers `201` with the occurrence and its `warnings`, or `200` when a repeated `requestId` replays the stored record. Errors: `400 validation_error` (`unknown_task`, `inactive_task`, `unknown_user`, `inactive_user`, `done_requires_today`, `done_requires_person`), `409 cycle_not_generated`, `409 idempotency_key_conflict`. `POST /api/occurrences/:id/retract` answers `200 { retracted: true, id }`, `409 not_retractable` for anything but recorded extra work, `409 retract_not_today` when the record's date is not today in the household timezone, and `404` when it is already gone.
 
