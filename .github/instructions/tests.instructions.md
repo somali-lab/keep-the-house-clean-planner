@@ -1,6 +1,6 @@
 ---
 description: Deterministic regression-test conventions
-applyTo: '**/*.test.ts,**/*.test.tsx,**/*.spec.ts,**/*.spec.tsx'
+applyTo: '**/*.test.ts,**/*.test.tsx,**/*.spec.ts,**/*.spec.tsx,apps/api/tests/**/*.cs'
 ---
 
 # Test rules
@@ -8,6 +8,7 @@ applyTo: '**/*.test.ts,**/*.test.tsx,**/*.spec.ts,**/*.spec.tsx'
 - Reproduce the bug or desired behavior in a focused test before or with the implementation.
 - Use fixed dates and clocks; never depend on the machine's current date or timezone.
 - Server tests use `createTestApp()` and its isolated database. Clean up every app and external handle.
+- .NET tests (`apps/api/tests`) use xunit.v3 with a `FakeTimeProvider`, a Testcontainers `mongo:8` replica set shared per assembly and a uniquely named database per test class, and `WebApplicationFactory` for the HTTP pipeline; see `.agents/skills/xunit-tdd-workflow`.
 - Web tests use existing fixtures and `renderWithProviders()` where applicable; assert user-visible behavior.
 - E2E tests use the supplied fixtures and must not target an existing local or production database.
 - AI and notification tests use mocks or fakes and never contact external services.
