@@ -3,6 +3,7 @@ import {
   ArrowRight,
   Check,
   CheckCircle2,
+  CirclePlus,
   Circle,
   Hand,
   MoreHorizontal,
@@ -22,11 +23,15 @@ import { format, t } from '../../i18n/nl.ts';
 
 export interface OccurrenceItemProps {
   occurrence: OccurrenceView;
+  /** The household's today; recorded work can only be undone on the day it was recorded. */
+  todayKey: string;
   roomName: string | undefined;
   users: User[];
   completionControl?: 'circle' | 'thumb';
   onComplete(): void;
   onUncomplete(): void;
+  /** Undo of recorded extra work, which is deleted instead of reopened. */
+  onRetract(): void;
   onSkip(reason: string): void;
   onClaim(): void;
   onAssign(assigneeId: string | null): void;
@@ -41,11 +46,13 @@ export function shortDate(dayKey: string): string {
 
 export function OccurrenceItem({
   occurrence: occ,
+  todayKey,
   roomName,
   users,
   completionControl = 'circle',
   onComplete,
   onUncomplete,
+  onRetract,
   onSkip,
   onClaim,
   onAssign,
@@ -60,6 +67,7 @@ export function OccurrenceItem({
       ? t('today.anyone')
       : (users.find((u) => u._id === id)?.name ?? t('tasks.unknownUser'));
   const isOpen = occ.status === 'open';
+  const recorded = occ.recordedDone === true;
 
   return (
     <li
@@ -110,6 +118,12 @@ export function OccurrenceItem({
           >
             {task}
           </strong>
+          {recorded && (
+            <Badge variant="secondary" className="w-fit">
+              <CirclePlus aria-hidden="true" />
+              {t('today.extra')}
+            </Badge>
+          )}
           <span className="text-sm text-muted-foreground">
             {[
               roomName,
@@ -160,12 +174,12 @@ export function OccurrenceItem({
               {t('today.claim')}
             </Button>
           )}
-          {occ.status === 'done' && (
+          {occ.status === 'done' && (!recorded || occ.date === todayKey) && (
             <Button
               type="button"
               variant="ghost"
               className="h-11 rounded-full px-3 text-muted-foreground"
-              onClick={onUncomplete}
+              onClick={recorded ? onRetract : onUncomplete}
               aria-label={format('today.undoNamed', { task })}
             >
               <Undo2 aria-hidden="true" />

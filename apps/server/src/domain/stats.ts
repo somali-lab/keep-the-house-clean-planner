@@ -26,7 +26,8 @@ import { HttpError } from '../http/errors.ts';
 
 /**
  * Clears execution history while preserving people, rooms, tasks and cycle plans.
- * Without `before`, every occurrence resets to open ("start over from today"). With `before`,
+ * Without `before`, every occurrence resets to open ("start over from today"), except recorded
+ * extra work, which has no planned state and is deleted. With `before`,
  * only occurrences and cycles strictly older than that day are purged; anything from `before`
  * onward (including its completion status) is left untouched.
  */
@@ -204,7 +205,8 @@ export async function completionStats(db: Db, now: Date, count: number, groupBy:
     ...(groupBy === 'room'
       ? [
           { $lookup: { from: COLLECTIONS.tasks, localField: 'taskId', foreignField: '_id', as: 'task' } },
-          { $set: { roomId: { $first: '$task.roomId' } } },
+          // A one-off task has no task record: its room is the snapshot (ADR-0009).
+          { $set: { roomId: { $ifNull: [{ $first: '$task.roomId' }, '$roomIdSnapshot'] } } },
         ]
       : []),
     {
@@ -254,7 +256,8 @@ export async function intervalStats(db: Db, now: Date, count: number, weeks?: nu
       ? []
       : await occurrencesCollection(db)
           .aggregate<{ _id: ObjectId; completions: number; averageDays: number | null }>([
-            { $match: { cycleId: { $in: cycles.map((c) => c._id) }, ...periodDateMatch(period), status: 'done', completedAt: { $ne: null } } },
+            // One-off tasks (taskId null) have no interval (ADR-0009).
+            { $match: { cycleId: { $in: cycles.map((c) => c._id) }, ...periodDateMatch(period), taskId: { $ne: null }, status: 'done', completedAt: { $ne: null } } },
             {
               $setWindowFields: {
                 partitionBy: '$taskId',
@@ -327,6 +330,9 @@ export async function deviationStats(db: Db, now: Date, count: number, weeks?: n
           ...periodDateMatch(period),
           status: 'done',
           completedAt: { $ne: null },
+          // Recorded work and one-off tasks have no planned slot to deviate from (ADR-0009).
+          taskId: { $ne: null },
+          recordedDone: { $ne: true },
         },
       },
       {

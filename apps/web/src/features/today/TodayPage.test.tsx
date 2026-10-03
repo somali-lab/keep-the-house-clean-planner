@@ -63,6 +63,27 @@ function setup(settings = makeSettings()) {
       return db.filter((occurrence) => occurrence.date >= from && occurrence.date <= to);
     },
     ...Object.fromEntries(db.map((o) => [`PATCH /api/occurrences/${o._id}`, patch(o._id)])),
+    'POST /api/occurrences': (init: RequestInit | undefined) => {
+      const body = JSON.parse(String(init?.body)) as { taskId: string; date: string; assigneeId: string };
+      const created = makeOccurrence({
+        _id: 'o-recorded',
+        taskId: body.taskId,
+        taskNameSnapshot: 'Badkamer',
+        date: body.date,
+        assigneeId: body.assigneeId,
+        status: 'done',
+        completedAt: NOW.toISOString(),
+        completedBy: body.assigneeId,
+        origin: 'adhoc',
+        recordedDone: true,
+      });
+      db = [...db, created];
+      return created;
+    },
+    'POST /api/occurrences/o-recorded/retract': () => {
+      db = db.filter((o) => o._id !== 'o-recorded');
+      return { retracted: true, id: 'o-recorded' };
+    },
     'POST /api/occurrences/o-free/claim': () => {
       db = db.map((o) => (o._id === 'o-free' ? { ...o, assigneeId: ANNA._id } : o));
       return db.find((o) => o._id === 'o-free');
@@ -245,6 +266,156 @@ describe('TodayPage', () => {
     fireEvent.click(within(doneRow).getByRole('button', { name: 'Badkamer ongedaan maken' }));
     await waitFor(() => expect(db.find((o) => o._id === 'o-mine')?.status).toBe('skipped'));
     expect(await inSection('Afgerond', 'Overgeslagen: geen tijd')).toBeInTheDocument();
+  });
+
+  it('opens the record-work dialog, records an extra execution for today and offers undo as a retract', async () => {
+    const fetchMock = setup();
+    renderWithProviders(<TodayPage now={NOW} />);
+    // Recorded work is dated today, also when another day is being looked at.
+    fireEvent.click(await screen.findByRole('button', { name: 'Morgen' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Werk vastleggen' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Gedaan werk vastleggen' });
+    expect(within(dialog).getByRole('radio', { name: 'Extra keer voor een bestaande taak' })).toBeChecked();
+    expect(within(dialog).getByRole('radio', { name: 'Eenmalige taak (komt niet in de takenlijst)' })).toBeInTheDocument();
+    await waitFor(() => expect(within(within(dialog).getByLabelText('Taak')).getAllByRole('option')).toHaveLength(2));
+    fireEvent.change(within(dialog).getByLabelText('Taak', { selector: 'select' }), { target: { value: 't2' } });
+    // Badkamer is still open in today's plan: checking that off is the default, an extra one is the alternative.
+    fireEvent.click(await within(dialog).findByRole('radio', { name: 'Toch een extra keer registreren' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Vastleggen' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    const posted = fetchMock.mock.calls
+      .filter(([u, init]) => u === '/api/occurrences' && (init as RequestInit | undefined)?.method === 'POST')
+      .map(([, init]) => JSON.parse(String((init as RequestInit).body)));
+    expect(posted).toEqual([
+      { taskId: 't2', date: TODAY, assigneeId: ANNA._id, done: true, requestId: expect.stringMatching(/^[A-Za-z0-9_-]{16,64}$/) },
+    ]);
+
+    // The page jumped back to today and shows the record as finished, marked as extra.
+    expect(screen.getByRole('button', { name: 'Vandaag' })).toHaveAttribute('aria-pressed', 'true');
+    const row = (await inSection('Afgerond', 'Gedaan door Anna')).closest('li')!;
+    expect(within(row).getByText('Extra')).toBeInTheDocument();
+    const snackbar = screen.getByRole('status');
+    expect(snackbar).toHaveTextContent('"Badkamer" is vastgelegd.');
+
+    const refetchesBefore = (url: string) => fetchMock.mock.calls.filter(([u]) => u === url).length;
+    const [tasksBefore] = [refetchesBefore('/api/tasks')];
+    fireEvent.click(within(snackbar).getByRole('button', { name: 'Ongedaan maken' }));
+    await waitFor(() => expect(db.some((o) => o._id === 'o-recorded')).toBe(false));
+    // The retract also refreshes what the deleted work had fed: the tasks (lastCompletedAt).
+    await waitFor(() => expect(refetchesBefore('/api/tasks')).toBeGreaterThan(tasksBefore));
+    expect(patchBodies(fetchMock, 'o-recorded')).toEqual([]);
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Afgerond' })).not.toBeInTheDocument());
+  });
+
+  it('checks off the planned task from the dialog and offers undo as an uncomplete', async () => {
+    const fetchMock = setup();
+    renderWithProviders(<TodayPage now={NOW} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Werk vastleggen' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Gedaan werk vastleggen' });
+    await waitFor(() => expect(within(within(dialog).getByLabelText('Taak', { selector: 'select' })).getAllByRole('option')).toHaveLength(2));
+    fireEvent.change(within(dialog).getByLabelText('Taak', { selector: 'select' }), { target: { value: 't2' } });
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Afvinken' }));
+
+    await waitFor(() => expect(db.find((o) => o._id === 'o-mine')?.status).toBe('done'));
+    expect(patchBodies(fetchMock, 'o-mine')).toEqual([{ action: 'complete', completedBy: ANNA._id }]);
+    expect(fetchMock.mock.calls.filter(([u, init]) => u === '/api/occurrences' && (init as RequestInit | undefined)?.method === 'POST')).toEqual([]);
+    const snackbar = await screen.findByRole('status');
+    expect(snackbar).toHaveTextContent('"Badkamer" afgevinkt.');
+    fireEvent.click(within(snackbar).getByRole('button', { name: 'Ongedaan maken' }));
+    await waitFor(() => expect(db.find((o) => o._id === 'o-mine')?.status).toBe('open'));
+  });
+
+  it('marks recorded extra work with an Extra badge, and its undo retracts instead of uncompleting', async () => {
+    storeProfile(ANNA._id);
+    db = [
+      makeOccurrence({
+        _id: 'o-extra',
+        taskId: 't2',
+        taskNameSnapshot: 'Badkamer',
+        date: TODAY,
+        assigneeId: ANNA._id,
+        status: 'done',
+        completedBy: ANNA._id,
+        completedAt: NOW.toISOString(),
+        origin: 'adhoc',
+        recordedDone: true,
+      }),
+      makeOccurrence({ _id: 'o-plain', taskId: 't3', taskNameSnapshot: 'Ramen', date: TODAY, assigneeId: ANNA._id, status: 'done', completedBy: ANNA._id }),
+    ];
+    const fetchMock = mockApi({
+      '/api/users': [ANNA, BRAM],
+      '/api/settings': makeSettings(),
+      '/api/rooms': [makeRoom({ _id: 'r1', name: 'Badkamer-ruimte' })],
+      '/api/tasks': [makeTask({ _id: 't2', name: 'Badkamer', roomId: 'r1' })],
+      '/api/occurrences': () => db,
+      'POST /api/occurrences/o-extra/retract': () => {
+        db = db.filter((o) => o._id !== 'o-extra');
+        return { retracted: true, id: 'o-extra' };
+      },
+    });
+    renderWithProviders(<TodayPage now={NOW} />);
+
+    const finished = await screen.findByRole('region', { name: 'Afgerond' });
+    const rows = within(finished).getAllByRole('listitem');
+    expect(rows).toHaveLength(2);
+    expect(within(rows[0]!).getByText('Extra')).toBeInTheDocument();
+    expect(within(rows[1]!).queryByText('Extra')).not.toBeInTheDocument();
+
+    fireEvent.click(within(rows[0]!).getByRole('button', { name: 'Badkamer ongedaan maken' }));
+    await waitFor(() => expect(within(screen.getByRole('region', { name: 'Afgerond' })).queryByText('Extra')).not.toBeInTheDocument());
+    expect(patchBodies(fetchMock, 'o-extra')).toEqual([]);
+    expect(fetchMock.mock.calls.filter(([u, init]) => u === '/api/occurrences/o-extra/retract' && (init as RequestInit).method === 'POST')).toHaveLength(1);
+    expect(db.map((o) => o._id)).toEqual(['o-plain']);
+  });
+
+  it('shows a one-off task (no task record) from its snapshots', async () => {
+    storeProfile(ANNA._id);
+    db = [
+      makeOccurrence({
+        _id: 'o-oneoff',
+        taskId: null,
+        taskNameSnapshot: 'Gordijnen ophangen',
+        roomIdSnapshot: 'r1',
+        roomNameSnapshot: 'Woonkamer',
+        date: TODAY,
+        assigneeId: ANNA._id,
+        origin: 'adhoc',
+      }),
+      makeOccurrence({ _id: 'o-roomless', taskId: null, taskNameSnapshot: 'Kast ophalen', date: TODAY, assigneeId: ANNA._id, origin: 'adhoc' }),
+    ];
+    mockApi({
+      '/api/users': [ANNA, BRAM],
+      '/api/settings': makeSettings(),
+      '/api/rooms': [makeRoom({ _id: 'r1', name: 'Woonkamer' })],
+      '/api/tasks': [],
+      '/api/occurrences': () => db,
+    });
+    renderWithProviders(<TodayPage now={NOW} />);
+
+    expect(await screen.findByText('Gordijnen ophangen')).toBeInTheDocument();
+    expect(screen.getByText(/Woonkamer/)).toBeInTheDocument();
+    expect(screen.getByText('Kast ophalen')).toBeInTheDocument();
+  });
+
+  it('treats a second retract (404) as already undone', async () => {
+    storeProfile(ANNA._id);
+    db = [
+      makeOccurrence({ _id: 'o-extra', taskId: 't2', taskNameSnapshot: 'Badkamer', date: TODAY, assigneeId: ANNA._id, status: 'done', completedBy: ANNA._id, origin: 'adhoc', recordedDone: true }),
+    ];
+    mockApi({
+      '/api/users': [ANNA, BRAM],
+      '/api/settings': makeSettings(),
+      '/api/rooms': [],
+      '/api/tasks': [],
+      '/api/occurrences': () => db,
+      // The record is gone already: the mock has no retract route and answers 404.
+    });
+    renderWithProviders(<TodayPage now={NOW} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Badkamer ongedaan maken' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Badkamer ongedaan maken' })).toBeInTheDocument());
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('claims an unclaimed item', async () => {

@@ -8,8 +8,9 @@ import { listCycles } from '../src/data/cycles.ts';
 import { COLLECTIONS } from '../src/data/db.ts';
 import {
   countOccurrences,
+  deleteOccurrences,
   findOccurrences,
-  insertOccurrencesIdempotent,
+  insertAdhocOccurrence,
   updateOccurrence,
   type OccurrenceDoc,
 } from '../src/data/occurrences.ts';
@@ -117,6 +118,64 @@ describe('generateCycle via nightly job', () => {
     ]);
     expect(await countOccurrences(c.t.db)).toBe(count);
     expect(await listCycles(c.t.db)).toHaveLength(2);
+  });
+
+  it('(a2) an ad-hoc occurrence on a slot day no longer blocks the generated one', async () => {
+    const c = await setup();
+    const weekly = await c.task('Badkamer', '1w');
+    await c.putSlots(
+      c.planId,
+      [0, 1, 2, 3].map((w) => ({ taskId: weekly, weekIndex: w, weekday: 3 })),
+    );
+    await c.nightly();
+    const taskId = new ObjectId(weekly);
+    const slotDay = (docs: OccurrenceDoc[]) => docs.find((o) => toDayKey(o.date) === '2026-09-16')!;
+    const generated = slotDay(await findOccurrences(c.t.db, { taskId, origin: 'generated' }));
+
+    // An ad-hoc occurrence on the same task and day is accepted next to the generated one.
+    const created = await c.t.app.inject({
+      method: 'POST',
+      url: '/api/occurrences',
+      headers: asProfile(c.p1),
+      payload: { taskId: weekly, date: '2026-09-16' },
+    });
+    expect(created.statusCode, created.body).toBe(201);
+    const adhocId = new ObjectId(created.json<{ _id: string }>()._id);
+
+    // Remove the generated one: the preview and the nightly run both treat the slot as free.
+    await deleteOccurrences(c.t.systemCtx(), [generated], { setup: true });
+    const copy = await c.t.app.inject({
+      method: 'POST',
+      url: '/api/cycle-plans',
+      headers: asProfile(c.p1),
+      payload: { name: 'Zelfde slots', copyFromId: c.planId },
+    });
+    const preview = (
+      await c.t.app.inject({
+        method: 'GET',
+        url: `/api/cycle-plans/${copy.json<{ _id: string }>()._id}/activation-preview`,
+        headers: asProfile(c.p1),
+      })
+    ).json<{
+      added: { date: string }[];
+      preserved: { adhoc: { occurrenceId: string }[] };
+    }>();
+    expect(preview.added.map((item) => item.date)).toContain('2026-09-16');
+    expect(preview.preserved.adhoc.map((item) => item.occurrenceId)).toEqual([adhocId.toHexString()]);
+
+    await c.nightly();
+    const afterRepair = await findOccurrences(c.t.db, { taskId });
+    expect(afterRepair.filter((o) => toDayKey(o.date) === '2026-09-16').map((o) => o.origin).sort()).toEqual([
+      'adhoc',
+      'generated',
+    ]);
+    const count = await countOccurrences(c.t.db);
+
+    // A second run inserts and removes nothing.
+    const again = await c.nightly();
+    expect(again.removed).toBe(0);
+    expect(again.generated.map((g) => g.inserted)).toEqual([0, 0]);
+    expect(await countOccurrences(c.t.db)).toBe(count);
   });
 
   it('audits each generated occurrence with the run id', async () => {
@@ -600,23 +659,22 @@ describe('POST /api/cycle-plans/:id/activate', () => {
       { date: new Date('2026-09-28T22:00:00Z') },
       { action: 'reschedule' },
     );
-    const [adhoc] = await insertOccurrencesIdempotent(
+    const adhocResult = await insertAdhocOccurrence(
       ctx,
-      [
-        {
-          ...done,
-          _id: new ObjectId(),
-          date: new Date('2026-09-29T22:00:00Z'),
-          plannedDate: new Date('2026-09-29T22:00:00Z'),
-          status: 'open',
-          completedAt: null,
-          completedBy: null,
-          origin: 'adhoc',
-          planId: null,
-        },
-      ],
+      {
+        ...done,
+        _id: new ObjectId(),
+        date: new Date('2026-09-29T22:00:00Z'),
+        plannedDate: new Date('2026-09-29T22:00:00Z'),
+        status: 'open',
+        completedAt: null,
+        completedBy: null,
+        origin: 'adhoc',
+        planId: null,
+      },
       {},
     );
+    const adhoc = adhocResult.inserted ? adhocResult.doc : undefined;
 
     // Two days later a new plan is activated
     c.t.clock.set('2026-09-16T08:00:00.000Z');

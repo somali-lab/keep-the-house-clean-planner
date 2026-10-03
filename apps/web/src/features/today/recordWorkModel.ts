@@ -1,0 +1,57 @@
+import type { MessageKey } from '../../i18n/nl.ts';
+import type { RecordWorkInput } from './api.ts';
+
+export type RecordWorkKind = 'extra' | 'oneOff';
+
+/** Raw form values; numbers stay text until validated. */
+export interface RecordWorkForm {
+  kind: RecordWorkKind;
+  taskId: string;
+  name: string;
+  roomId: string;
+  duration: string;
+  doneBy: string;
+}
+
+export type RecordWorkField = 'taskId' | 'name' | 'duration' | 'doneBy';
+
+/** What is being recorded; the idempotency key belongs to this intent, not to the form. */
+export type RecordWorkBody = RecordWorkInput;
+
+export const RECORD_WORK_ERRORS: Record<RecordWorkField, MessageKey> = {
+  taskId: 'recordWork.error.task',
+  name: 'recordWork.error.name',
+  duration: 'recordWork.error.duration',
+  doneBy: 'recordWork.error.doneBy',
+};
+
+export type RecordWorkResult =
+  | { ok: true; body: RecordWorkBody }
+  | { ok: false; errors: Partial<Record<RecordWorkField, MessageKey>> };
+
+/** Validates the form like the server does and builds the request body without its idempotency key. */
+export function buildRecordWork(form: RecordWorkForm, todayKey: string): RecordWorkResult {
+  const errors: Partial<Record<RecordWorkField, MessageKey>> = {};
+  if (!form.doneBy) errors.doneBy = RECORD_WORK_ERRORS.doneBy;
+  if (form.kind === 'extra') {
+    if (!form.taskId) errors.taskId = RECORD_WORK_ERRORS.taskId;
+  } else {
+    if (form.name.trim().length === 0) errors.name = RECORD_WORK_ERRORS.name;
+    if (!/^\d+$/.test(form.duration.trim()) || Number(form.duration) < 1) errors.duration = RECORD_WORK_ERRORS.duration;
+  }
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+  if (form.kind === 'extra') {
+    return { ok: true, body: { kind: 'extra', taskId: form.taskId, date: todayKey, assigneeId: form.doneBy } };
+  }
+  return {
+    ok: true,
+    body: {
+      kind: 'oneOff',
+      name: form.name.trim(),
+      roomId: form.roomId || null,
+      durationMinutes: Number(form.duration),
+      date: todayKey,
+      assigneeId: form.doneBy,
+    },
+  };
+}

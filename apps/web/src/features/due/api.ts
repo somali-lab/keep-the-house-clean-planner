@@ -1,6 +1,7 @@
 import type { OccurrenceView } from '@huishoudplanner/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/index.ts';
+import { releaseRequestKey, requestKeyFor } from '../../api/requestKey.ts';
 
 /** JSON shape of GET /api/due items. */
 export interface DueItemView {
@@ -45,19 +46,26 @@ export function useDueActions() {
   });
 
   const doneNow = useMutation({
-    mutationFn: async (input: { item: DueItemView; todayKey: string; profileId: string }) => {
-      // Complete today's planned occurrence if there is one; otherwise add one for today and complete it.
-      const plannedToday = input.item.nextOccurrence?.date === input.todayKey ? input.item.nextOccurrence.id : null;
-      const id =
-        plannedToday ??
-        (
-          await api.post<OccurrenceView>('/api/occurrences', {
-            taskId: input.item.taskId,
-            date: input.todayKey,
-            assigneeId: input.profileId,
-          })
-        ).data._id;
-      return (await api.patch<OccurrenceView>(`/api/occurrences/${id}`, { action: 'complete' })).data;
+    mutationFn: async (input: { item: DueItemView; todayKey: string }) => {
+      // Today's planned occurrence is completed in place; otherwise the extra execution is recorded
+      // as done in one request. The key makes a retry of the same click idempotent (ADR-0009).
+      if (input.item.nextOccurrence?.date === input.todayKey) {
+        return (
+          await api.patch<OccurrenceView>(`/api/occurrences/${input.item.nextOccurrence.id}`, { action: 'complete' })
+        ).data;
+      }
+      // One key per intent, kept across retries and page changes until the request succeeded.
+      const intent = `done-now:${input.item.taskId}:${input.todayKey}`;
+      const created = (
+        await api.post<OccurrenceView>('/api/occurrences', {
+          taskId: input.item.taskId,
+          date: input.todayKey,
+          done: true,
+          requestId: requestKeyFor(intent),
+        })
+      ).data;
+      releaseRequestKey(intent);
+      return created;
     },
     onSuccess: refresh,
   });

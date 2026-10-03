@@ -16,4 +16,5 @@ Records are never rewritten to hide history. When a decision is replaced, the ol
 | [0006](0006-server-side-pdf-rendering.md)                                           | Server-side PDF rendering                                           | Accepted |
 | [0007](0007-release-automation-and-build-identity.md)                               | Release automation and build identity                               | Accepted |
 | [0008](0008-optimistic-activation-preview.md)                                        | Optimistic activation preview                                        | Accepted |
+| [0009](0009-extra-executions-and-one-off-tasks.md)                                   | Extra executions and one-off tasks as ad-hoc occurrences             | Proposed |
 | [0010](0010-browser-notifications-while-the-planner-is-open.md)                      | Browser notifications while the planner is open                     | Proposed |

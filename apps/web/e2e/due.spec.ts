@@ -14,7 +14,7 @@ test('a task not done for 1.5 times its interval is "Flink achter" and can be pl
   await openAs(page, app, anna, '/due');
   const row = page.locator('.due-item', { hasText: 'Oven schoonmaken' });
   await expect(row).toContainText('Flink achter');
-  await expect(row).toContainText('21 dagen geleden');
+  await expect(row).toContainText('Eerste keer aan de beurt op wo 9 sep');
 
   await row.getByRole('button', { name: 'Oven schoonmaken inplannen' }).click();
   const form = page.getByRole('form', { name: 'Oven schoonmaken inplannen' });

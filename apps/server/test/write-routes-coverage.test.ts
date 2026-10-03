@@ -163,6 +163,20 @@ const SCENARIOS: Scenario[] = [
     run: () => call('POST', '/api/occurrences', { taskId: ids.task, date: '2026-09-17' }),
   },
   {
+    route: 'POST /api/occurrences/one-off',
+    audit: { entity: 'occurrence', action: 'create' },
+    run: () => call('POST', '/api/occurrences/one-off', { name: 'Eenmalige klus', durationMinutes: 15, date: '2026-09-17' }),
+  },
+  {
+    // Recorded work is created by the scenario above (date today, done) and then undone.
+    route: 'POST /api/occurrences/:id/retract',
+    audit: { entity: 'occurrence', action: 'delete' },
+    run: async () => {
+      const recorded = await call('POST', '/api/occurrences', { taskId: ids.task, date: '2026-09-16', done: true });
+      return call('POST', `/api/occurrences/${recorded.json<{ _id: string }>()._id}/retract`);
+    },
+  },
+  {
     route: 'POST /api/promote-suggestions/dismiss',
     audit: { entity: 'settings', action: 'update' },
     run: () =>

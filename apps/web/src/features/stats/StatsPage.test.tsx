@@ -67,13 +67,17 @@ const COMPLETION = (groupBy: string): CompletionResponse =>
   groupBy === 'room'
     ? {
         groupBy: 'room',
-        rows: [{ key: 'r1', name: 'Badkamer', done: 3, skipped: 1, missed: 1, rate: 0.6 }],
+        rows: [
+          { key: 'r1', name: 'Badkamer', done: 3, skipped: 1, missed: 1, rate: 0.6 },
+          { key: null, name: '', done: 1, skipped: 0, missed: 0, rate: 1 },
+        ],
       }
     : {
         groupBy: 'task',
         rows: [
           { key: 't1', name: 'Badkamer schoonmaken', done: 3, skipped: 1, missed: 1, rate: 0.6 },
           { key: 't2', name: 'Keuken dweilen', done: 2, skipped: 0, missed: 0, rate: 1 },
+          { key: null, name: '', done: 2, skipped: 0, missed: 0, rate: 1 },
         ],
       };
 
@@ -287,6 +291,8 @@ describe('StatsPage', () => {
     );
     const first = within(section).getAllByRole('row')[1]!;
     expect(first).toHaveTextContent('Badkamer schoonmakenBadkamer31160%');
+    // One-off tasks have no task record: one combined row, labelled instead of unnamed.
+    expect(within(section).getByRole('rowheader', { name: 'Eenmalige taak' })).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Voltooiing per'), { target: { value: 'room' } });
     await waitFor(() =>
@@ -295,6 +301,7 @@ describe('StatsPage', () => {
     expect(
       await within(section).findByRole('columnheader', { name: 'Ruimte' }),
     ).toBeInTheDocument();
+    expect(await within(section).findByRole('rowheader', { name: 'Zonder ruimte' })).toBeInTheDocument();
   });
 
   it('flags intervals that are wishful thinking with an icon and words, not colour', async () => {

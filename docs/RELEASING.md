@@ -79,6 +79,10 @@ Published images also pass `APP_RELEASE_DATE`: the commit timestamp of the relea
 
 The image currently targets `linux/amd64`, matching the Proxmox VM deployment target. It also contains OCI source, version, and revision labels, a software bill of materials, and build provenance.
 
+### Rolling back across the occurrence index change
+
+The release that introduced extra executions and one-off tasks (ADR-0009) replaces the unique occurrence index on `(cycleId, taskId, plannedDate)` with one that only covers generated occurrences, and it writes data that older images cannot read (`taskId: null`, `recordedDone`, `requestId`, export `schemaVersion: 2`). Once extra executions share a slot, an older image can no longer rebuild its full unique index, so it fails on startup. Rolling back to an image from before that release therefore requires restoring a pre-upgrade export or database backup first. Take a JSON export (Settings, Data) or a database dump before upgrading, and keep it until the new version has proven itself.
+
 ## One-time GitHub settings
 
 In **Settings → Actions → General → Workflow permissions**, enable **Allow GitHub Actions to create and approve pull requests**. The workflow declares only the permissions needed to create the release pull request, GitHub Release, and GHCR package.

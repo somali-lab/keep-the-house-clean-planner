@@ -74,7 +74,8 @@ export async function currentCycleIndex(ctx: AuditContext): Promise<number> {
 
 /**
  * Generates occurrences for one cycle from the active plan. Idempotent: the
- * unique index (cycleId, taskId, plannedDate) drops duplicates, and only real
+ * partial unique index (cycleId, taskId, plannedDate) on generated occurrences
+ * drops duplicates, and only real
  * inserts are audited. Skipped: vacation days, inactive tasks, and days before
  * today (so a plan activated mid-cycle does not create instant overdue items).
  */
@@ -169,8 +170,8 @@ export async function generateUpcoming(
   };
 }
 
-function occurrenceKey(taskId: ObjectId, plannedDate: Date): string {
-  return `${taskId.toHexString()}:${plannedDate.getTime()}`;
+function occurrenceKey(taskId: ObjectId | null, plannedDate: Date): string {
+  return `${taskId?.toHexString() ?? 'none'}:${plannedDate.getTime()}`;
 }
 
 async function upcomingOccurrencesNeedReplacement(
@@ -214,8 +215,11 @@ async function upcomingOccurrencesNeedReplacement(
       $lt: fromDayKey(cycleStart(currentCycle + 2, settings.cycleAnchorDate), settings.timezone),
     },
   });
+  // Only generated occurrences occupy a slot (ADR-0009); ad-hoc ones never suppress it.
   const existingKeys = new Set(
-    occurrences.map((occurrence) => occurrenceKey(occurrence.taskId, occurrence.plannedDate)),
+    occurrences
+      .filter((occurrence) => occurrence.origin === 'generated')
+      .map((occurrence) => occurrenceKey(occurrence.taskId, occurrence.plannedDate)),
   );
   if ([...expected.keys()].some((key) => !existingKeys.has(key))) return true;
 

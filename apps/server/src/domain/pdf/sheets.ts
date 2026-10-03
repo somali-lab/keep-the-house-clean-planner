@@ -117,7 +117,7 @@ export async function buildWeekSheets(db: Db, fromWeek: string, weeks: number): 
       if (!day) continue;
       day.cells[0]!.push({
         name: occ.taskNameSnapshot,
-        room: occ.roomNameSnapshot ?? taskRoom.get(occ.taskId.toHexString()) ?? null,
+        room: occ.roomNameSnapshot ?? (occ.taskId ? taskRoom.get(occ.taskId.toHexString()) : null) ?? null,
         assignee: occ.assigneeId ? (userNames.get(occ.assigneeId.toHexString()) ?? '?') : ANYONE_COLUMN_NAME,
         minutes: occ.durationMinutesSnapshot,
       });

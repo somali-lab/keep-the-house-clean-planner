@@ -264,3 +264,68 @@ describe('GET /api/stats/deviations', () => {
     ]);
   });
 });
+
+describe('statistics with one-off tasks (taskId null)', () => {
+  const oneOff = (payload: Record<string, unknown>) =>
+    t.app.inject({ method: 'POST', url: '/api/occurrences/one-off', headers: asProfile(p1), payload });
+
+  beforeAll(async () => {
+    t.clock.set('2026-10-14T08:00:00.000Z');
+    const woonkamer = (await seededRoom(t, 'Woonkamer'))._id.toHexString();
+    const withRoom = await oneOff({ name: 'Gordijnen ophangen', roomId: woonkamer, durationMinutes: 40, date: '2026-10-14', done: true, assigneeId: p2._id.toHexString() });
+    expect(withRoom.statusCode, withRoom.body).toBe(201);
+    const roomless = await oneOff({ name: 'Kast ophalen', durationMinutes: 25, date: '2026-10-14', done: true });
+    expect(roomless.statusCode, roomless.body).toBe(201);
+  });
+
+  it('counts them in workload as planned and done minutes', async () => {
+    const { cycles } = await get<WorkloadResponse>('/api/stats/workload?cycles=2');
+    const users = cycles.find((c) => c.index === 1)!.users;
+    expect(users.find((u) => u.userId === p1._id.toHexString())).toMatchObject({ plannedMinutes: 120 + 25, doneMinutes: 30 + 25 });
+    expect(users.find((u) => u.userId === p2._id.toHexString())).toMatchObject({ plannedMinutes: 40 + 40, doneMinutes: 40 });
+    expect(cycles.find((c) => c.index === 1)!.unassignedPlannedMinutes).toBe(45);
+  });
+
+  it('shows all one-off tasks as one combined row without a key when grouped by task', async () => {
+    const { rows } = await get<CompletionResponse>('/api/stats/completion?cycles=2&groupBy=task');
+    expect(rows.filter((r) => r.key === null)).toEqual([{ key: null, name: '', done: 2, skipped: 0, missed: 0, rate: 1 }]);
+    expect(rows.filter((r) => r.key !== null).map((r) => r.name).sort()).toEqual(['Badkamer schoonmaken', 'Keuken dweilen', 'Ramen lappen']);
+  });
+
+  it('groups by the room snapshot, with one row without a room for room-less one-off tasks', async () => {
+    const { rows } = await get<CompletionResponse>('/api/stats/completion?cycles=2&groupBy=room');
+    const byName = Object.fromEntries(rows.map((r) => [r.name, r.done]));
+    expect(byName).toMatchObject({ Badkamer: 3, Keuken: 2, Woonkamer: 2 });
+    expect(rows.find((r) => r.key === null)).toMatchObject({ done: 1 });
+  });
+
+  it('counts them for the person who did them', async () => {
+    const { rows } = await get<CompletionResponse>('/api/stats/completion?cycles=2&groupBy=user');
+    expect(rows.find((r) => r.key === p1._id.toHexString())).toMatchObject({ done: 5 });
+    expect(rows.find((r) => r.key === p2._id.toHexString())).toMatchObject({ done: 3 });
+  });
+
+  it('excludes them from interval and deviation statistics', async () => {
+    const intervals = await get<IntervalsResponse>('/api/stats/intervals?cycles=2');
+    expect(intervals.rows.map((r) => [r.name, r.completions])).toEqual([
+      ['Badkamer schoonmaken', 3],
+      ['Keuken dweilen', 2],
+      ['Ramen lappen', 1],
+    ]);
+    const deviations = await get<DeviationsResponse>('/api/stats/deviations?cycles=2');
+    expect(deviations.rows).toHaveLength(3);
+    expect(deviations.rows.every((r) => r.taskId !== null)).toBe(true);
+  });
+
+  it('answers every report for a period that contains only one-off work', async () => {
+    for (const url of [
+      '/api/stats/workload?weeks=1',
+      '/api/stats/completion?weeks=1&groupBy=task',
+      '/api/stats/completion?weeks=1&groupBy=room',
+      '/api/stats/intervals?weeks=1',
+      '/api/stats/deviations?weeks=1',
+    ]) {
+      expect((await t.app.inject({ method: 'GET', url })).statusCode, url).toBe(200);
+    }
+  });
+});

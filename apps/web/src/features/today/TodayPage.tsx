@@ -1,6 +1,6 @@
 import type { OccurrenceView } from '@huishoudplanner/shared';
 import { weekIndexFor } from '@huishoudplanner/shared/cycle';
-import { ChevronLeft, ChevronRight, Sun, TriangleAlert, Undo2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Sun, TriangleAlert, Undo2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { EmptyState } from '@/components/EmptyState';
 import { useFilterReset } from '@/components/FilterReset';
@@ -23,6 +23,7 @@ import {
   type OccurrenceAction,
 } from './api.ts';
 import { OccurrenceItem, shortDate } from './OccurrenceItem.tsx';
+import { RecordWorkDialog } from './RecordWorkDialog.tsx';
 import { longDay } from '../week/weekModel.ts';
 import {
   addDaysKey,
@@ -61,7 +62,8 @@ export function TodayPage({ now }: { now?: Date }) {
   const profileId = profile?._id ?? '';
   const action = useOccurrenceAction(occurrenceKeys.range(from, selectedDay), { profileId, todayKey });
 
-  const [snackbar, setSnackbar] = useState<{ id: string; task: string } | null>(null);
+  const [snackbar, setSnackbar] = useState<{ id: string; task: string; recorded?: true } | null>(null);
+  const [recordOpen, setRecordOpen] = useState(false);
   const [failed, setFailed] = useState(false);
   const [completionChoice, setCompletionChoice] = useState<OccurrenceView | null>(null);
 
@@ -90,10 +92,10 @@ export function TodayPage({ now }: { now?: Date }) {
       </p>
     );
 
-  const run = (next: OccurrenceAction, occ: OccurrenceView) => {
+  const run = (next: OccurrenceAction, occ?: OccurrenceView) => {
     setFailed(false);
-    if (next.kind === 'complete') setSnackbar({ id: occ._id, task: occ.taskNameSnapshot });
-    if (next.kind === 'uncomplete') setSnackbar(null);
+    if (next.kind === 'complete' && occ) setSnackbar({ id: occ._id, task: occ.taskNameSnapshot });
+    if (next.kind === 'uncomplete' || next.kind === 'retract') setSnackbar(null);
     action.mutate(next, {
       onError: () => {
         setFailed(true);
@@ -144,6 +146,12 @@ export function TodayPage({ now }: { now?: Date }) {
         title={t('nav.today')}
         description={`${longDay(selectedDay)} · ${cycleLabel}`}
         className="mb-0"
+        actions={
+          <Button type="button" className="h-11 rounded-full" onClick={() => setRecordOpen(true)}>
+            <Plus aria-hidden="true" />
+            {t('recordWork.open')}
+          </Button>
+        }
       />
       <div className="grid gap-3 rounded-2xl border bg-card p-3 shadow-sm sm:grid-cols-[minmax(0,1fr)_12rem] sm:items-center">
         <div
@@ -259,11 +267,13 @@ export function TodayPage({ now }: { now?: Date }) {
                   <OccurrenceItem
                     key={occ._id}
                     occurrence={occ}
-                    roomName={occ.roomNameSnapshot ?? roomByTask.get(occ.taskId)}
+                    todayKey={todayKey}
+                    roomName={occ.roomNameSnapshot ?? (occ.taskId ? roomByTask.get(occ.taskId) : undefined)}
                     users={activeUsers}
                     completionControl={settings.data.completionControl ?? 'circle'}
                     onComplete={() => requestComplete(occ)}
                     onUncomplete={() => run({ id: occ._id, kind: 'uncomplete' }, occ)}
+                    onRetract={() => run({ id: occ._id, kind: 'retract' }, occ)}
                     onSkip={(reason) => run({ id: occ._id, kind: 'skip', reason }, occ)}
                     onClaim={() => run({ id: occ._id, kind: 'claim' }, occ)}
                     onAssign={(assigneeId) => run({ id: occ._id, kind: 'assign', assigneeId }, occ)}
@@ -304,19 +314,41 @@ export function TodayPage({ now }: { now?: Date }) {
         />
       )}
 
+      <RecordWorkDialog
+        open={recordOpen}
+        onOpenChange={setRecordOpen}
+        todayKey={todayKey}
+        onRecorded={(recorded, how) => {
+          // Recorded work is dated today: show it, and offer the undo (a retract) like a check-off.
+          setDayOffset(0);
+          setFailed(false);
+          // A checked-off planned task is undone like any check-off; recorded work is undone with a retract.
+          setSnackbar(
+            how === 'recorded'
+              ? { id: recorded._id, task: recorded.taskNameSnapshot, recorded: true }
+              : { id: recorded._id, task: recorded.taskNameSnapshot },
+          );
+        }}
+      />
+
       {snackbar && (
         <div
           className="snackbar fixed inset-x-4 bottom-24 z-30 mx-auto flex max-w-md items-center justify-between gap-3 rounded-full bg-foreground py-1.5 pr-1.5 pl-5 text-background shadow-lg"
           role="status"
         >
           <span className="min-w-0 truncate text-sm font-semibold">
-            {format('today.snackbar', { task: snackbar.task })}
+            {format(snackbar.recorded ? 'recordWork.recorded' : 'today.snackbar', { task: snackbar.task })}
           </span>
           <Button
             type="button"
             variant="ghost"
             className="h-11 shrink-0 rounded-full bg-background/15 px-4 font-bold text-background hover:bg-background/25 hover:text-background"
             onClick={() => {
+              // Recorded work is retracted by its stored id; it does not have to be in the current list yet.
+              if (snackbar.recorded) {
+                run({ id: snackbar.id, kind: 'retract' });
+                return;
+              }
               const occ = occurrences.data.find((o) => o._id === snackbar.id);
               if (occ) run({ id: occ._id, kind: 'uncomplete' }, occ);
             }}

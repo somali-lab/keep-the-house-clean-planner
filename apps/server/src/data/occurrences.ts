@@ -1,5 +1,5 @@
 import type { AuditAction, OccurrenceStatus } from '@huishoudplanner/shared';
-import { MongoBulkWriteError, ObjectId, type Db, type Filter } from 'mongodb';
+import { MongoBulkWriteError, MongoServerError, ObjectId, type Db, type Filter } from 'mongodb';
 import type { AuditContext } from '../audit/context.ts';
 import { diffFields, isEmptyDiff } from '../audit/diff.ts';
 import { record } from '../audit/record.ts';
@@ -7,7 +7,8 @@ import { COLLECTIONS } from './db.ts';
 
 export interface OccurrenceDoc {
   _id: ObjectId;
-  taskId: ObjectId;
+  /** Null for a one-off task (ADR-0009): name, duration and room live in the snapshot fields only. */
+  taskId: ObjectId | null;
   cycleId: ObjectId;
   /** Plan the occurrence was generated from; null for ad-hoc occurrences. */
   planId: ObjectId | null;
@@ -27,6 +28,10 @@ export interface OccurrenceDoc {
   roomIdSnapshot?: ObjectId | null;
   roomNameSnapshot?: string | null;
   origin: 'generated' | 'adhoc';
+  /** Created directly in the done state (no planned state to return to); missing on older data means false. */
+  recordedDone?: boolean;
+  /** Client idempotency key of an ad-hoc creation; missing on older data means null. */
+  requestId?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -37,6 +42,10 @@ export const occurrencesCollection = (db: Db) => db.collection<OccurrenceDoc>(CO
 
 export function findOccurrenceById(db: Db, id: ObjectId): Promise<OccurrenceDoc | null> {
   return occurrencesCollection(db).findOne({ _id: id });
+}
+
+export function findOccurrenceByRequestId(db: Db, requestId: string): Promise<OccurrenceDoc | null> {
+  return occurrencesCollection(db).findOne({ requestId });
 }
 
 export function findOccurrences(db: Db, filter: Filter<OccurrenceDoc>): Promise<OccurrenceDoc[]> {
@@ -70,7 +79,8 @@ export async function backfillOccurrenceRoomSnapshots(db: Db): Promise<number> {
     })
     .toArray();
   if (docs.length === 0) return 0;
-  const taskIds = [...new Map(docs.map((doc) => [doc.taskId.toHexString(), doc.taskId])).values()];
+  // A one-off task (taskId null) always has its snapshots written and is never matched here.
+  const taskIds = [...new Map(docs.flatMap((doc) => (doc.taskId ? [[doc.taskId.toHexString(), doc.taskId] as const] : []))).values()];
   const tasks = await db.collection<{ _id: ObjectId; roomId: ObjectId }>(COLLECTIONS.tasks).find({ _id: { $in: taskIds } }).toArray();
   const roomIds = [...new Map(tasks.map((task) => [task.roomId.toHexString(), task.roomId])).values()];
   const rooms = await db.collection<{ _id: ObjectId; name: string }>(COLLECTIONS.rooms).find({ _id: { $in: roomIds } }).toArray();
@@ -78,7 +88,7 @@ export async function backfillOccurrenceRoomSnapshots(db: Db): Promise<number> {
   const roomName = new Map(rooms.map((room) => [room._id.toHexString(), room.name]));
   const result = await occurrencesCollection(db).bulkWrite(
     docs.map((doc) => {
-      const roomId = taskRoom.get(doc.taskId.toHexString()) ?? null;
+      const roomId = (doc.taskId ? taskRoom.get(doc.taskId.toHexString()) : null) ?? null;
       return {
         updateOne: {
           filter: { _id: doc._id },
@@ -111,8 +121,9 @@ export async function updateUpcomingOccurrenceRoomSnapshots(
 }
 
 /**
- * Idempotent bulk insert keyed on the unique index (cycleId, taskId, plannedDate):
- * duplicates are ignored, and only documents that were actually inserted are audited.
+ * Idempotent bulk insert of generated occurrences, keyed on the partial unique
+ * index (cycleId, taskId, plannedDate) for origin 'generated': duplicates are
+ * ignored, and only documents that were actually inserted are audited.
  */
 export async function insertOccurrencesIdempotent(
   ctx: AuditContext,
@@ -120,6 +131,9 @@ export async function insertOccurrencesIdempotent(
   meta: Record<string, unknown>,
 ): Promise<OccurrenceDoc[]> {
   if (docs.length === 0) return [];
+  if (docs.some((doc) => doc.origin !== 'generated')) {
+    throw new Error('insertOccurrencesIdempotent accepts generated occurrences only');
+  }
   let failed = new Set<number>();
   try {
     await occurrencesCollection(ctx.db).insertMany(docs, { ordered: false });
@@ -135,6 +149,46 @@ export async function insertOccurrencesIdempotent(
     await record(ctx, { entity: 'occurrence', entityId: doc._id, action: 'create', after, meta });
   }
   return inserted;
+}
+
+/**
+ * Inserts one ad-hoc occurrence and audits it. A duplicate key (a repeated
+ * requestId) is reported as `inserted: false` instead of being swallowed, so the
+ * caller can decide between replaying and conflicting.
+ */
+export async function insertAdhocOccurrence(
+  ctx: AuditContext,
+  doc: OccurrenceDoc,
+  meta: Record<string, unknown>,
+): Promise<{ inserted: true; doc: OccurrenceDoc } | { inserted: false }> {
+  if (doc.origin !== 'adhoc') throw new Error('insertAdhocOccurrence accepts ad-hoc occurrences only');
+  try {
+    await occurrencesCollection(ctx.db).insertOne(doc);
+  } catch (err) {
+    if (err instanceof MongoServerError && err.code === 11000) return { inserted: false };
+    throw err;
+  }
+  const { after } = diffFields({}, { ...doc }, { ignore: AUDIT_IGNORE });
+  await record(ctx, { entity: 'occurrence', entityId: doc._id, action: 'create', after, meta });
+  return { inserted: true, doc };
+}
+
+/**
+ * Atomically deletes recorded work (an ad-hoc occurrence created done) and audits it as
+ * 'delete' with the retract reason. Returns null, writing and auditing nothing, when no such
+ * occurrence exists (any more).
+ */
+export async function retractRecordedOccurrence(ctx: AuditContext, id: ObjectId): Promise<OccurrenceDoc | null> {
+  const doc = await occurrencesCollection(ctx.db).findOneAndDelete({
+    _id: id,
+    origin: 'adhoc',
+    recordedDone: true,
+    status: 'done',
+  });
+  if (!doc) return null;
+  const { before } = diffFields({ ...doc }, {}, { ignore: AUDIT_IGNORE });
+  await record(ctx, { entity: 'occurrence', entityId: doc._id, action: 'delete', before, meta: { reason: 'retract' } });
+  return doc;
 }
 
 /** Deletes the given occurrences, auditing each as action 'delete' with its previous fields. */

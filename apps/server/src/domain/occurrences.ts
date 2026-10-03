@@ -1,6 +1,7 @@
 import {
   cycleIndexFor,
   fromDayKey,
+  today,
   toDayKey,
   weekdaySun0,
   type ApiWarning,
@@ -12,8 +13,10 @@ import { findCycleByIndex } from '../data/cycles.ts';
 import {
   deleteOccurrences,
   findOccurrenceById,
+  findOccurrenceByRequestId,
   findOccurrences,
-  insertOccurrencesIdempotent,
+  insertAdhocOccurrence,
+  retractRecordedOccurrence,
   updateOccurrence,
   type OccurrenceDoc,
 } from '../data/occurrences.ts';
@@ -32,6 +35,8 @@ export function toOccurrenceView(doc: OccurrenceDoc, todayKey: string, timezone:
     ...toApi(doc),
     date,
     plannedDate,
+    recordedDone: doc.recordedDone ?? false,
+    requestId: doc.requestId ?? null,
     isOverdue: doc.status === 'open' && date < todayKey,
     movedFrom: date === plannedDate ? null : plannedDate,
   };
@@ -47,7 +52,8 @@ const invalidTransition = (from: string, action: string) =>
   new HttpError(409, 'invalid_transition', `Cannot ${action} an occurrence that is ${from}`, { status: from, action });
 
 /** lastCompletedAt = newest completedAt of the task's done occurrences. */
-async function refreshLastCompletedAt(ctx: AuditContext, taskId: ObjectId, occurrenceId: ObjectId): Promise<void> {
+async function refreshLastCompletedAt(ctx: AuditContext, taskId: ObjectId | null, occurrenceId: ObjectId): Promise<void> {
+  if (!taskId) return; // a one-off task has no task record to refresh (ADR-0009)
   const done = await findOccurrences(ctx.db, { taskId, status: 'done', completedAt: { $ne: null } });
   const latest = done.reduce<Date | null>(
     (max, o) => (o.completedAt && (!max || o.completedAt > max) ? o.completedAt : max),
@@ -111,6 +117,10 @@ export async function completeOccurrence(
 export async function uncompleteOccurrence(ctx: AuditContext, id: ObjectId): Promise<OccurrenceDoc> {
   const current = await requireOccurrence(ctx, id);
   if (current.status !== 'done') throw invalidTransition(current.status, 'uncomplete');
+  // Recorded work has no planned state to return to; reopening it would leave a record that later counts as missed.
+  if (current.recordedDone) {
+    throw new HttpError(409, 'retract_required', 'Recorded work cannot be uncompleted; retract it instead');
+  }
   const result = await updateOccurrence(
     ctx,
     id,
@@ -174,6 +184,27 @@ export async function deleteCompletedOccurrence(ctx: AuditContext, id: ObjectId)
   const current = await requireOccurrence(ctx, id);
   if (current.status !== 'done') throw invalidTransition(current.status, 'delete');
   await deleteOccurrences(ctx, [current], { correction: 'completion' });
+  await refreshLastCompletedAt(ctx, current.taskId, id);
+}
+
+/**
+ * Undo of recorded work: an audited delete (reason retract) that also restores lastCompletedAt.
+ * It is an undo, not a correction: only work of today can be retracted by any profile. Deleting
+ * older completions stays an administrator's correction (DELETE /occurrences/:id).
+ */
+export async function retractOccurrence(ctx: AuditContext, id: ObjectId): Promise<void> {
+  const current = await requireOccurrence(ctx, id);
+  if (current.origin !== 'adhoc' || !current.recordedDone || current.status !== 'done') {
+    throw new HttpError(409, 'not_retractable', 'Only recorded extra work can be retracted');
+  }
+  const settings = await getSettings(ctx.db);
+  if (!settings) throw new HttpError(500, 'settings_missing');
+  if (toDayKey(current.date, settings.timezone) !== today(settings.timezone, ctx.clock.now())) {
+    throw new HttpError(409, 'retract_not_today', 'Only work recorded today can be retracted');
+  }
+  // A concurrent retract already removed it: the same answer as a second retract.
+  const deleted = await retractRecordedOccurrence(ctx, id);
+  if (!deleted) throw notFound('occurrence');
   await refreshLastCompletedAt(ctx, current.taskId, id);
 }
 
@@ -269,18 +300,139 @@ export async function assignOccurrence(ctx: AuditContext, id: ObjectId, assignee
 export interface AdhocOccurrenceInput {
   taskId: ObjectId;
   date: string;
-  /** undefined = the task's default assignee; null = "wie dan ook". */
+  /** undefined = the task's default assignee (the actor when done); null = "wie dan ook". */
   assigneeId?: ObjectId | null;
+  /** Record the work as already done; only allowed for today. */
+  done?: boolean;
+  /** Client idempotency key; a repeat of the same request replays the stored record. */
+  requestId?: string;
+}
+
+/** A one-off task (ADR-0009): no task record, everything lives in the occurrence snapshots. */
+export interface OneOffOccurrenceInput {
+  name: string;
+  roomId?: ObjectId | null;
+  durationMinutes: number;
+  date: string;
+  /** undefined = unassigned (the actor when done); null = "wie dan ook". */
+  assigneeId?: ObjectId | null;
+  done?: boolean;
+  requestId?: string;
+}
+
+export interface AdhocResult extends ChangeResult {
+  /** False when a repeated requestId replayed an existing record. */
+  created: boolean;
+}
+
+const idempotencyConflict = () =>
+  new HttpError(409, 'idempotency_key_conflict', 'This request key was already used for a different request');
+
+/** What a repeated request key must match to count as the same request. */
+interface RequestIdentity {
+  /** Existing task, or null for a one-off task (matched on its snapshot name). */
+  taskId: ObjectId | null;
+  name: string;
+  date: string;
+  done: boolean;
+}
+
+/** The same key for the same request returns the stored record; anything else is a conflict. */
+function replayOrConflict(existing: OccurrenceDoc, identity: RequestIdentity, timezone: string): AdhocResult {
+  const sameTarget = identity.taskId
+    ? (existing.taskId?.equals(identity.taskId) ?? false)
+    : existing.taskId === null && existing.taskNameSnapshot === identity.name;
+  const same =
+    sameTarget &&
+    toDayKey(existing.plannedDate, timezone) === identity.date &&
+    (existing.recordedDone ?? false) === identity.done;
+  if (!same) throw idempotencyConflict();
+  return { doc: existing, warnings: [], created: false };
+}
+
+type Settings = NonNullable<Awaited<ReturnType<typeof getSettings>>>;
+
+async function requireSettings(ctx: AuditContext): Promise<Settings> {
+  const settings = await getSettings(ctx.db);
+  if (!settings) throw new HttpError(500, 'settings_missing');
+  return settings;
+}
+
+/** Recorded work must be for today and by a person; the actor is the default person. */
+function assertRecordedWorkRules(
+  ctx: AuditContext,
+  settings: Settings,
+  input: { date: string; done: boolean; assigneeId?: ObjectId | null },
+): void {
+  if (!input.done) return;
+  if (input.date !== today(settings.timezone, ctx.clock.now())) {
+    throw new HttpError(400, 'validation_error', 'Recorded work must be for today', [
+      { field: 'date', message: 'done_requires_today' },
+    ]);
+  }
+  if (input.assigneeId === null) {
+    throw new HttpError(400, 'validation_error', 'Someone did the work', [
+      { field: 'assigneeId', message: 'done_requires_person' },
+    ]);
+  }
+}
+
+async function assertActiveAssignee(ctx: AuditContext, assigneeId: ObjectId | null): Promise<void> {
+  if (!assigneeId) return;
+  const user = await findUserById(ctx.db, assigneeId);
+  if (!user?.active) {
+    throw new HttpError(400, 'validation_error', 'Invalid assignee', [
+      { field: 'assigneeId', message: user ? 'inactive_user' : 'unknown_user' },
+    ]);
+  }
+}
+
+async function requireGeneratedCycle(ctx: AuditContext, settings: Settings, date: string) {
+  const cycle = await findCycleByIndex(ctx.db, cycleIndexFor(date, settings.cycleAnchorDate));
+  if (!cycle) {
+    throw new HttpError(409, 'cycle_not_generated', 'That day is not generated yet', undefined, { date });
+  }
+  return cycle;
+}
+
+/** Inserts the record; losing a race against the same key lets the winner decide between replay and conflict. */
+async function insertAdhoc(
+  ctx: AuditContext,
+  settings: Settings,
+  doc: OccurrenceDoc,
+  kind: 'extra' | 'one_off',
+  identity: RequestIdentity,
+  warnings: ApiWarning[],
+): Promise<AdhocResult> {
+  const result = await insertAdhocOccurrence(ctx, doc, {
+    origin: 'adhoc',
+    kind,
+    recordedDone: doc.recordedDone ?? false,
+    requestId: doc.requestId ?? null,
+  });
+  if (!result.inserted) {
+    const existing = doc.requestId ? await findOccurrenceByRequestId(ctx.db, doc.requestId) : null;
+    if (!existing) throw idempotencyConflict();
+    return replayOrConflict(existing, identity, settings.timezone);
+  }
+  return { doc: result.doc, warnings, created: true };
 }
 
 /**
- * Plans a task on a day outside the template (e.g. a quarterly task from the
- * due list). Only within cycles that are already generated, so exports and
- * generation never see a half-filled cycle. One per task per day (409).
+ * An extra execution of an existing task (ADR-0009): planned on a day outside the template
+ * or, with `done`, recorded as already done today. Only within cycles that are already
+ * generated, so exports and generation never see a half-filled cycle. Several executions of
+ * one task on one day coexist; a requestId makes a retried request idempotent.
  */
-export async function createAdhocOccurrence(ctx: AuditContext, input: AdhocOccurrenceInput): Promise<OccurrenceDoc> {
-  const settings = await getSettings(ctx.db);
-  if (!settings) throw new HttpError(500, 'settings_missing');
+export async function createAdhocOccurrence(ctx: AuditContext, input: AdhocOccurrenceInput): Promise<AdhocResult> {
+  const settings = await requireSettings(ctx);
+  const done = input.done ?? false;
+  const identity: RequestIdentity = { taskId: input.taskId, name: '', date: input.date, done };
+
+  if (input.requestId) {
+    const existing = await findOccurrenceByRequestId(ctx.db, input.requestId);
+    if (existing) return replayOrConflict(existing, identity, settings.timezone);
+  }
 
   const task = await findTaskById(ctx.db, input.taskId);
   if (!task?.active) {
@@ -288,26 +440,26 @@ export async function createAdhocOccurrence(ctx: AuditContext, input: AdhocOccur
       { field: 'taskId', message: task ? 'inactive_task' : 'unknown_task' },
     ]);
   }
+  assertRecordedWorkRules(ctx, settings, { date: input.date, done, assigneeId: input.assigneeId });
   const room = await findRoomById(ctx.db, task.roomId);
-  const assigneeId = input.assigneeId === undefined ? task.defaultAssigneeId : input.assigneeId;
-  if (assigneeId) {
-    const user = await findUserById(ctx.db, assigneeId);
-    if (!user?.active) {
-      throw new HttpError(400, 'validation_error', 'Invalid assignee', [
-        { field: 'assigneeId', message: user ? 'inactive_user' : 'unknown_user' },
-      ]);
-    }
-  }
-
-  const cycle = await findCycleByIndex(ctx.db, cycleIndexFor(input.date, settings.cycleAnchorDate));
-  if (!cycle) {
-    throw new HttpError(409, 'cycle_not_generated', 'That day is not generated yet', undefined, {
-      date: input.date,
-    });
-  }
+  const assigneeId =
+    input.assigneeId === undefined ? (done ? ctx.actorId : task.defaultAssigneeId) : input.assigneeId;
+  await assertActiveAssignee(ctx, assigneeId);
+  const cycle = await requireGeneratedCycle(ctx, settings, input.date);
 
   const now = ctx.clock.now();
   const date = fromDayKey(input.date, settings.timezone);
+  const warnings: ApiWarning[] = [];
+  // Also when recording it as done: the client can then offer to check off the planned occurrence instead.
+  const planned = await findOccurrences(ctx.db, { taskId: task._id, status: 'open', date });
+  if (planned.length > 0) {
+    warnings.push({
+      code: 'task_already_planned',
+      message: 'This task is already planned on that day',
+      details: { taskId: task._id.toHexString(), date: input.date },
+    });
+  }
+
   const doc: OccurrenceDoc = {
     _id: new ObjectId(),
     taskId: task._id,
@@ -316,24 +468,79 @@ export async function createAdhocOccurrence(ctx: AuditContext, input: AdhocOccur
     date,
     plannedDate: date,
     assigneeId,
-    status: 'open',
+    status: done ? 'done' : 'open',
     statusBeforeCompletion: null,
-    completedAt: null,
-    completedBy: null,
+    completedAt: done ? now : null,
+    completedBy: done ? assigneeId : null,
     skipReason: null,
     durationMinutesSnapshot: task.durationMinutes,
     taskNameSnapshot: task.name,
     roomIdSnapshot: task.roomId,
     roomNameSnapshot: room?.name ?? null,
     origin: 'adhoc',
+    recordedDone: done,
+    requestId: input.requestId ?? null,
     createdAt: now,
     updatedAt: now,
   };
-  const [inserted] = await insertOccurrencesIdempotent(ctx, [doc], { origin: 'adhoc' });
-  if (!inserted) {
-    throw new HttpError(409, 'occurrence_exists', 'This task is already planned on that day');
+  const result = await insertAdhoc(ctx, settings, doc, 'extra', identity, warnings);
+  if (result.created && done) await refreshLastCompletedAt(ctx, task._id, doc._id);
+  return result;
+}
+
+/**
+ * A one-off task (ADR-0009): an ad-hoc occurrence without a task record. Name, duration and
+ * room live in the snapshot fields only, so it never shows up in the task list, the due
+ * list, the planner or the AI input. Same idempotency and recorded-work rules as an extra
+ * execution; a missing room is stored as null.
+ */
+export async function createOneOffOccurrence(ctx: AuditContext, input: OneOffOccurrenceInput): Promise<AdhocResult> {
+  const settings = await requireSettings(ctx);
+  const done = input.done ?? false;
+  const identity: RequestIdentity = { taskId: null, name: input.name, date: input.date, done };
+
+  if (input.requestId) {
+    const existing = await findOccurrenceByRequestId(ctx.db, input.requestId);
+    if (existing) return replayOrConflict(existing, identity, settings.timezone);
   }
-  return inserted;
+
+  const room = input.roomId ? await findRoomById(ctx.db, input.roomId) : null;
+  if (input.roomId && !room?.active) {
+    throw new HttpError(400, 'validation_error', 'Invalid room', [
+      { field: 'roomId', message: room ? 'inactive_room' : 'unknown_room' },
+    ]);
+  }
+  assertRecordedWorkRules(ctx, settings, { date: input.date, done, assigneeId: input.assigneeId });
+  const assigneeId = input.assigneeId === undefined ? (done ? ctx.actorId : null) : input.assigneeId;
+  await assertActiveAssignee(ctx, assigneeId);
+  const cycle = await requireGeneratedCycle(ctx, settings, input.date);
+
+  const now = ctx.clock.now();
+  const date = fromDayKey(input.date, settings.timezone);
+  const doc: OccurrenceDoc = {
+    _id: new ObjectId(),
+    taskId: null,
+    cycleId: cycle._id,
+    planId: null,
+    date,
+    plannedDate: date,
+    assigneeId,
+    status: done ? 'done' : 'open',
+    statusBeforeCompletion: null,
+    completedAt: done ? now : null,
+    completedBy: done ? assigneeId : null,
+    skipReason: null,
+    durationMinutesSnapshot: input.durationMinutes,
+    taskNameSnapshot: input.name,
+    roomIdSnapshot: room?._id ?? null,
+    roomNameSnapshot: room?.name ?? null,
+    origin: 'adhoc',
+    recordedDone: done,
+    requestId: input.requestId ?? null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  return insertAdhoc(ctx, settings, doc, 'one_off', identity, []);
 }
 
 /** Sets the actor as assignee only while unassigned (atomic); otherwise 409. */

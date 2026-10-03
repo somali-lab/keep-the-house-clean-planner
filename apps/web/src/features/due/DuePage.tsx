@@ -1,5 +1,5 @@
 import type { User } from '@huishoudplanner/shared';
-import { CalendarDays, CheckCircle2, Circle, Clock, ThumbsUp, TriangleAlert } from 'lucide-react';
+import { CalendarDays, CheckCircle2, Circle, CirclePlus, Clock, ThumbsUp, TriangleAlert } from 'lucide-react';
 import { useId, useState, type FormEvent } from 'react';
 import { EmptyState } from '@/components/EmptyState';
 import { NativeSelect } from '@/components/NativeSelect';
@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { useSettings } from '../../api/queries.ts';
 import { format, t } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
+import { RecordWorkDialog } from '../today/RecordWorkDialog.tsx';
 import { dayKeyInZone } from '../today/todayModel.ts';
 import { useDue, useDueActions, type DueItemView } from './api.ts';
 
@@ -28,10 +29,13 @@ export function spokenDate(dayKey: string): string {
 export function DuePage({ now }: { now?: Date }) {
   const settings = useSettings();
   const due = useDue();
-  const { profile, activeUsers } = useProfile();
+  const { activeUsers } = useProfile();
   const { plan, doneNow } = useDueActions();
   const [planning, setPlanning] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  // The task an extra execution is being recorded for, and the confirmation of the one that was just recorded.
+  const [extraFor, setExtraFor] = useState<string | null>(null);
+  const [recorded, setRecorded] = useState<string | null>(null);
 
   if (settings.isPending || due.isPending)
     return (
@@ -63,6 +67,13 @@ export function DuePage({ now }: { now?: Date }) {
         </p>
       )}
 
+      {recorded && (
+        <p role="status" className="flex items-center gap-2 rounded-2xl bg-success/10 p-4 font-semibold text-success">
+          <CheckCircle2 className="size-5 shrink-0" aria-hidden="true" />
+          {recorded}
+        </p>
+      )}
+
       {items.length === 0 ? (
         <EmptyState icon={<CheckCircle2 className="size-6" aria-hidden="true" />}>
           {t('due.empty')}
@@ -79,6 +90,7 @@ export function DuePage({ now }: { now?: Date }) {
               todayKey={todayKey}
               planning={planning === item.taskId}
               busy={plan.isPending || doneNow.isPending}
+              onOpenExtra={() => setExtraFor(item.taskId)}
               onOpenPlan={() => setPlanning(item.taskId)}
               onCancelPlan={() => setPlanning(null)}
               onPlan={(date, assigneeId) => {
@@ -90,12 +102,25 @@ export function DuePage({ now }: { now?: Date }) {
               }}
               onDoneNow={() => {
                 setFailed(false);
-                doneNow.mutate({ item, todayKey, profileId: profile?._id ?? '' }, { onError });
+                doneNow.mutate({ item, todayKey }, { onError });
               }}
             />
           ))}
         </ol>
       )}
+
+      <RecordWorkDialog
+        open={extraFor !== null}
+        onOpenChange={(open) => {
+          if (!open) setExtraFor(null);
+        }}
+        todayKey={todayKey}
+        initialTaskId={extraFor ?? undefined}
+        onRecorded={(occurrence, how) => {
+          setFailed(false);
+          setRecorded(format(how === 'recorded' ? 'recordWork.recorded' : 'today.snackbar', { task: occurrence.taskNameSnapshot }));
+        }}
+      />
     </section>
   );
 }
@@ -108,6 +133,7 @@ interface DueRowProps {
   todayKey: string;
   planning: boolean;
   busy: boolean;
+  onOpenExtra(): void;
   onOpenPlan(): void;
   onCancelPlan(): void;
   onPlan(date: string, assigneeId: string | null): void;
@@ -122,6 +148,7 @@ function DueRow({
   todayKey,
   planning,
   busy,
+  onOpenExtra,
   onOpenPlan,
   onCancelPlan,
   onPlan,
@@ -228,6 +255,18 @@ function DueRow({
           {t('due.doneNow')}
         </Button>
       </div>
+
+      <Button
+        type="button"
+        variant="ghost"
+        className="h-11 rounded-full text-muted-foreground"
+        onClick={onOpenExtra}
+        disabled={busy}
+        aria-label={format('due.extraNamed', { task })}
+      >
+        <CirclePlus aria-hidden="true" />
+        {t('due.extra')}
+      </Button>
 
       {planning && (
         <form

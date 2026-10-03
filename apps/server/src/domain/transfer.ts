@@ -26,7 +26,12 @@ import {
 import { HttpError, parseOrThrow, zodIssues, type FieldIssue } from '../http/errors.ts';
 import { toApi } from '../http/serialize.ts';
 
-export const EXPORT_SCHEMA_VERSION = 1;
+/**
+ * Written by every export. Version 2 adds `recordedDone`, `requestId` and a nullable occurrence
+ * `taskId` (ADR-0009). An import also accepts version 1, which is valid unchanged because the new
+ * fields are optional.
+ */
+export const EXPORT_SCHEMA_VERSION = 2;
 
 /**
  * Export file. `collections` is MongoDB relaxed Extended JSON (`{"$oid"}`,
@@ -41,7 +46,7 @@ export interface ExportFile {
 const rawDocs = z.array(z.record(z.string(), z.unknown()));
 
 const envelopeSchema = z.object({
-  schemaVersion: z.literal(EXPORT_SCHEMA_VERSION),
+  schemaVersion: z.union([z.literal(1), z.literal(2)]),
   exportedAt: isoDateTimeSchema,
   collections: z.object({
     settings: rawDocs,
@@ -104,6 +109,29 @@ function typeIssues(name: TransferCollection, doc: Document, path: string): Fiel
   return issues;
 }
 
+/**
+ * Occurrences that would violate a unique index (generated slot key, requestId). Replacing the
+ * data deletes first and inserts after, so such a file has to be refused before anything is written.
+ */
+function duplicateKeyIssues(occurrences: Document[]): FieldIssue[] {
+  const issues: FieldIssue[] = [];
+  const slots = new Set<string>();
+  const requestIds = new Set<string>();
+  occurrences.forEach((doc, i) => {
+    const path = `collections.occurrences.${i}`;
+    if (doc.origin === 'generated' && doc.cycleId instanceof ObjectId && doc.plannedDate instanceof Date) {
+      const key = `${doc.cycleId.toHexString()}:${doc.taskId instanceof ObjectId ? doc.taskId.toHexString() : 'null'}:${doc.plannedDate.getTime()}`;
+      if (slots.has(key)) issues.push({ field: `${path}.plannedDate`, message: 'duplicate_slot' });
+      slots.add(key);
+    }
+    if (typeof doc.requestId === 'string') {
+      if (requestIds.has(doc.requestId)) issues.push({ field: `${path}.requestId`, message: 'duplicate_request_id' });
+      requestIds.add(doc.requestId);
+    }
+  });
+  return issues;
+}
+
 export async function buildExport(db: Db, now: Date): Promise<ExportFile> {
   const docs = await readAllCollections(db);
   return {
@@ -114,6 +142,7 @@ export async function buildExport(db: Db, now: Date): Promise<ExportFile> {
 }
 
 export interface ParsedImport {
+  schemaVersion: number;
   exportedAt: string;
   docs: TransferDocs;
 }
@@ -151,8 +180,10 @@ export function parseImport(body: unknown): ParsedImport {
   if (!docs.users.some((u) => u.active === true)) {
     issues.push({ field: 'collections.users', message: 'no_active_user' });
   }
+  // The keys are built from typed values, so check them only once every document has the right types.
+  if (issues.length === 0) issues.push(...duplicateKeyIssues(docs.occurrences));
   if (issues.length > 0) throw new HttpError(400, 'validation_error', 'Invalid import file', issues);
-  return { exportedAt: envelope.exportedAt, docs };
+  return { schemaVersion: envelope.schemaVersion, exportedAt: envelope.exportedAt, docs };
 }
 
 export type ImportResult = ReplaceResult;
@@ -165,7 +196,7 @@ export async function importData(ctx: AuditContext, parsed: ParsedImport): Promi
     entityId: new ObjectId(),
     action: 'create',
     after: { ...result.replaced, auditAdded: result.auditAdded },
-    meta: { mode: 'replace', schemaVersion: EXPORT_SCHEMA_VERSION, exportedAt: parsed.exportedAt },
+    meta: { mode: 'replace', schemaVersion: parsed.schemaVersion, exportedAt: parsed.exportedAt },
   });
   return result;
 }

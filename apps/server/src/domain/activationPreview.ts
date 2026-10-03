@@ -13,7 +13,7 @@ import { plannedOccurrences } from './generation.ts';
 
 const byDateAndId = (a: ActivationPreviewItem, b: ActivationPreviewItem) =>
   a.date.localeCompare(b.date) || a.taskName.localeCompare(b.taskName) ||
-  a.taskId.localeCompare(b.taskId) || (a.occurrenceId ?? '').localeCompare(b.occurrenceId ?? '');
+  (a.taskId ?? '').localeCompare(b.taskId ?? '') || (a.occurrenceId ?? '').localeCompare(b.occurrenceId ?? '');
 
 /** Read-only simulation of activation. No cycle documents are created here. */
 export async function activationPreview(ctx: AuditContext, planId: ObjectId): Promise<ActivationPreview> {
@@ -46,7 +46,7 @@ export async function activationPreview(ctx: AuditContext, planId: ObjectId): Pr
     occurrenceId: occurrence._id.toHexString(),
     cycleIndex: cycleIndexById.get(occurrence.cycleId.toHexString()) ??
       cycleIndexFor(toDayKey(occurrence.plannedDate, settings.timezone), settings.cycleAnchorDate),
-    taskId: occurrence.taskId.toHexString(),
+    taskId: occurrence.taskId?.toHexString() ?? null,
     taskName: occurrence.taskNameSnapshot,
     date: toDayKey(occurrence.date, settings.timezone),
     assigneeId: occurrence.assigneeId?.toHexString() ?? null,
@@ -64,10 +64,12 @@ export async function activationPreview(ctx: AuditContext, planId: ObjectId): Pr
   }
   for (const group of Object.values(preserved)) group.sort(byDateAndId);
 
-  // The unique index is (cycleId, taskId, plannedDate). Surviving records with
-  // that key suppress an insert, including skipped and moved occurrences.
-  const occupied = new Set(existing.filter((occurrence) => !removedIds.has(occurrence._id.toHexString()))
-    .map((occurrence) => `${occurrence.cycleId.toHexString()}:${occurrence.taskId.toHexString()}:${occurrence.plannedDate.getTime()}`));
+  // The unique index is (cycleId, taskId, plannedDate) for generated occurrences.
+  // Surviving generated records with that key suppress an insert, including
+  // skipped and moved ones; ad-hoc occurrences never occupy a slot.
+  const occupied = new Set(existing
+    .filter((occurrence) => occurrence.origin === 'generated' && !removedIds.has(occurrence._id.toHexString()))
+    .map((occurrence) => `${occurrence.cycleId.toHexString()}:${occurrence.taskId?.toHexString() ?? 'none'}:${occurrence.plannedDate.getTime()}`));
   const added: ActivationPreviewItem[] = [];
   for (const cycleIndex of [current, current + 1]) {
     const cycleId = cycles[cycleIndex - current]?._id.toHexString() ?? `new:${cycleIndex}`;
@@ -108,7 +110,7 @@ export async function activationPreview(ctx: AuditContext, planId: ObjectId): Pr
       id: occurrence._id.toHexString(),
       cycleId: occurrence.cycleId.toHexString(),
       planId: occurrence.planId?.toHexString() ?? null,
-      taskId: occurrence.taskId.toHexString(),
+      taskId: occurrence.taskId?.toHexString() ?? null,
       date: occurrence.date.toISOString(),
       plannedDate: occurrence.plannedDate.toISOString(),
       assigneeId: occurrence.assigneeId?.toHexString() ?? null,
