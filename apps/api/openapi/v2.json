@@ -1702,6 +1702,170 @@
         }
       }
     },
+    "/api/v2/cycle-plans/{id}/activation-preview": {
+      "get": {
+        "tags": [
+          "Cycle plans"
+        ],
+        "summary": "Previews what activating a plan would change (planners).",
+        "description": "Read-only: nothing is written or audited. For the current and the next cycle it lists the open generated occurrences that activation removes, the occurrences it adds, and what stays (done, skipped, moved by hand, ad hoc). previewToken fingerprints the plan, the tasks and settings it uses and the occurrences of the window; send it to the activation. Answers 404 not_found for an unknown plan and 500 settings_missing when the installation has no settings.",
+        "operationId": "previewCyclePlanActivation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivationPreviewResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/cycle-plans/{id}/activation": {
+      "post": {
+        "tags": [
+          "Cycle plans"
+        ],
+        "summary": "Activates a plan after its preview (planners).",
+        "description": "One transaction: the preview is recomputed and its token compared first; a different token answers 409 stale_activation_preview and nothing is written, so the client fetches a new preview. Otherwise every other active plan is deactivated (audited as update), the plan is activated (audited as activate; an AI draft stops being a draft) and the open generated occurrences of the current and the next cycle are replaced by those of the plan (audited with the system as source and the same runId). Activating the active plan again regenerates its upcoming occurrences. Two concurrent activations are serialised: one wins, the other answers 409 stale_activation_preview. Answers 404 not_found for an unknown plan.",
+        "operationId": "activateCyclePlan",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActivatePlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanActivatedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/ai/prompt-info": {
       "get": {
         "tags": [
@@ -2627,6 +2791,106 @@
   },
   "components": {
     "schemas": {
+      "ActivatePlanRequest": {
+        "required": [
+          "previewToken"
+        ],
+        "type": "object",
+        "properties": {
+          "previewToken": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The previewToken of GET /api/v2/cycle-plans/{id}/activation-preview: 64 lowercase hexadecimal characters."
+          }
+        }
+      },
+      "ActivationPreviewItemResponse": {
+        "required": [
+          "occurrenceId",
+          "cycleIndex",
+          "taskId",
+          "taskName",
+          "date",
+          "assigneeId"
+        ],
+        "type": "object",
+        "properties": {
+          "occurrenceId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "cycleIndex": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "taskId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "taskName": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "description": "YYYY-MM-DD."
+          },
+          "assigneeId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "ActivationPreviewResponse": {
+        "required": [
+          "planId",
+          "previewToken",
+          "asOfDate",
+          "removed",
+          "added",
+          "preserved"
+        ],
+        "type": "object",
+        "properties": {
+          "planId": {
+            "type": "string"
+          },
+          "previewToken": {
+            "type": "string",
+            "description": "An opaque fingerprint of the previewed state; send it back to activate."
+          },
+          "asOfDate": {
+            "type": "string",
+            "description": "Today in the household timezone, YYYY-MM-DD."
+          },
+          "removed": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivationPreviewItemResponse"
+            }
+          },
+          "added": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivationPreviewItemResponse"
+            }
+          },
+          "preserved": {
+            "$ref": "#/components/schemas/PreservedOccurrencesResponse"
+          }
+        }
+      },
       "AiExplanationResponse": {
         "required": [
           "rationale"
@@ -4374,6 +4638,38 @@
           }
         }
       },
+      "PlanActivatedResponse": {
+        "required": [
+          "plan",
+          "runId",
+          "removed",
+          "generated"
+        ],
+        "type": "object",
+        "properties": {
+          "plan": {
+            "$ref": "#/components/schemas/CyclePlanResponse"
+          },
+          "runId": {
+            "type": "string"
+          },
+          "removed": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "How many open generated occurrences of the current and the next cycle were removed.",
+            "format": "int32"
+          },
+          "generated": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GenerationResultResponse"
+            }
+          }
+        }
+      },
       "PlanDiffResponse": {
         "required": [
           "planId",
@@ -4811,6 +5107,41 @@
               "string"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "PreservedOccurrencesResponse": {
+        "required": [
+          "done",
+          "skipped",
+          "moved",
+          "adhoc"
+        ],
+        "type": "object",
+        "properties": {
+          "done": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivationPreviewItemResponse"
+            }
+          },
+          "skipped": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivationPreviewItemResponse"
+            }
+          },
+          "moved": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivationPreviewItemResponse"
+            }
+          },
+          "adhoc": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivationPreviewItemResponse"
+            }
           }
         }
       },

@@ -230,7 +230,7 @@ Each phase ends in something demonstrable. Slices are small enough for one pull 
 - [x] 2.1 Tasks: CRUD, bulk create per room, default points, `interval_in_use`, deactivate instead of delete. Port `tasks.test.ts`.
 - [x] 2.2 Cycle plans: CRUD, slots, `default_plan`, `active_plan`, diff. Port `cyclePlans.test.ts`.
 - [x] 2.3 Plan validation as a domain service and the two validation endpoints (§4.3); golden vectors from `validation/plan.test.ts`.
-- [ ] 2.4 Activation preview and activation in one transaction with the preview token (ADR-0008 amended). Port the preview and activation cases of `cyclePlans.test.ts`.
+- [x] 2.4 Activation preview and activation in one transaction with the preview token (ADR-0008 amended). Port the preview and activation cases of `cyclePlans.test.ts`.
 
 ### Phase 3 — Cycles, generation, daily use
 
