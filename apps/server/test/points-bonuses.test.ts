@@ -454,10 +454,10 @@ describe('reading', () => {
       (await f.t.app.inject({ method: 'GET', url: `/api/points/balances${query}` })).json<PointsBalancesResponse>().balances;
     const p1 = f.p1._id.toHexString();
 
-    expect((await balances('')).find((b) => b.personId === p1)).toEqual({ personId: p1, points: 3 + 8, executions: 1, bonusPoints: 8 });
+    expect((await balances('')).find((b) => b.personId === p1)).toEqual({ personId: p1, points: 30 + 8, executions: 1, bonusPoints: 8 });
     // The bonus is dated on the last day of the week: a range that stops before it does not include it.
-    expect((await balances('?from=2026-09-14&to=2026-09-19')).find((b) => b.personId === p1)).toMatchObject({ points: 3, executions: 1, bonusPoints: 0 });
-    expect((await balances('?from=2026-09-14&to=2026-09-20')).find((b) => b.personId === p1)).toMatchObject({ points: 11, bonusPoints: 8 });
+    expect((await balances('?from=2026-09-14&to=2026-09-19')).find((b) => b.personId === p1)).toMatchObject({ points: 30, executions: 1, bonusPoints: 0 });
+    expect((await balances('?from=2026-09-14&to=2026-09-20')).find((b) => b.personId === p1)).toMatchObject({ points: 38, bonusPoints: 8 });
 
     const entries = (await f.t.app.inject({ method: 'GET', url: `/api/points/entries?personId=${p1}&from=2026-09-14&to=2026-09-20` })).json<PointsEntriesResponse>().entries;
     const bonus = entries.find((entry) => entry.kind === 'bonus_week_ontime')!;

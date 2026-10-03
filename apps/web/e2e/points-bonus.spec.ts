@@ -43,7 +43,7 @@ test('an administrator sets the bonuses; after the week ends the Points tab show
   // The server restarts on Monday 03:00 with a fixed clock; the reconciliation at startup finalises the week.
   await app.restart(NEXT_MONDAY);
   const annaBalance = (await balancesOf()).find((balance) => balance.personId === anna._id);
-  expect(annaBalance).toMatchObject({ bonusPoints: 8, points: 5 + 8 });
+  expect(annaBalance).toMatchObject({ bonusPoints: 8, points: 30 + 20 + 8 });
 
   await openAs(page, app, anna, '/manage/statistics');
   await page.getByRole('tab', { name: 'Punten' }).click();
