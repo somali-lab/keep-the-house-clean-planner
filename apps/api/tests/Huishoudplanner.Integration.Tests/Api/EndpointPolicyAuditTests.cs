@@ -47,6 +47,7 @@ public sealed class EndpointPolicyAuditTests
         ["POST /api/v2/occurrences/{id}/assignment"] = AuthorizationPolicies.ActorPolicy,
         ["POST /api/v2/occurrences/{id}/claim"] = AuthorizationPolicies.ActorPolicy,
         ["DELETE /api/v2/occurrences/{id}"] = AuthorizationPolicies.AdminPolicy,
+        ["POST /api/v2/points/recompute"] = AuthorizationPolicies.AdminPolicy,
         ["POST /api/v2/occurrences"] = AuthorizationPolicies.ActorPolicy,
         ["POST /api/v2/occurrences/one-off"] = AuthorizationPolicies.ActorPolicy,
         ["POST /api/v2/occurrences/{id}/retraction"] = AuthorizationPolicies.ActorPolicy,
@@ -128,6 +129,18 @@ public sealed class EndpointPolicyAuditTests
         var due = EndpointsOf(factory).Single(e => e.RoutePattern.RawText == "/api/v2/due");
 
         due.Metadata.GetOrderedMetadata<IAuthorizeData>().Should().BeEmpty("routes/due.ts has no guard");
+    }
+
+    [Theory]
+    [InlineData("/api/v2/points/balances")]
+    [InlineData("/api/v2/points/entries")]
+    public void ThePointsReads_stayOpenLikeTheNodeRoutes(string route)
+    {
+        using var factory = ApiFactory.WithoutDatabase();
+
+        var read = EndpointsOf(factory).Single(e => e.RoutePattern.RawText == route);
+
+        read.Metadata.GetOrderedMetadata<IAuthorizeData>().Should().BeEmpty("routes/points.ts reads need no profile");
     }
 
     [Fact]

@@ -7,8 +7,11 @@ using Microsoft.Extensions.Logging;
 namespace Huishoudplanner.Adapters.Jobs;
 
 /// <summary>
-/// The nightly generation at 03:00 (requirements 4.10): the current and the next cycle, attributed to the system. The Node job continues with the
-/// reconciliation of the points ledger, the bonuses and the badge awards; that step joins this job with the points slices (6.3b).
+/// The nightly run at 03:00 (requirements 4.10), attributed to the system: the generation of the current and the next cycle, followed by the
+/// reconciliation of the points ledger (<see cref="INightlyService"/>, ADR-0011), which repairs drift between an occurrence and its entry within a
+/// day. A reconciliation that fails is logged by the use case and never fails the run. The bonus step (slice 4.2) and the badge step (slice 4.5)
+/// join the same reconciliation. The name stays <c>nightly-generation</c>, the stable tag of the run counter; the manual generation of the planners
+/// is a separate trigger that never reconciles.
 /// </summary>
 public sealed partial class NightlyGenerationJob(ILogger<NightlyGenerationJob> logger) : IJob
 {
@@ -23,13 +26,18 @@ public sealed partial class NightlyGenerationJob(ILogger<NightlyGenerationJob> l
     public async Task<JobOutcome> RunAsync(IServiceProvider services, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(services);
-        var generation = services.GetRequiredService<IGenerationService>();
-        var result = await generation.GenerateUpcomingAsync(AuditActor.System, GenerationRunIds.New(), cancellationToken).ConfigureAwait(false);
+        var nightly = services.GetRequiredService<INightlyService>();
+        var result = await nightly.RunAsync(AuditActor.System, GenerationRunIds.New(), cancellationToken).ConfigureAwait(false);
         return result.Match(
             run =>
             {
-                var inserted = run.Generated.Sum(g => g.Inserted);
-                LogCompleted(logger, run.RunId, run.Removed, inserted);
+                var inserted = run.Generation.Generated.Sum(g => g.Inserted);
+                LogCompleted(logger, run.Generation.RunId, run.Generation.Removed, inserted);
+                if (run.Points is { } points)
+                {
+                    LogReconciled(logger, run.Generation.RunId, points.Created, points.Updated, points.Removed, points.Skipped, points.CorrectionsTotal);
+                }
+
                 return JobOutcome.Succeeded;
             },
             _ =>
@@ -52,6 +60,9 @@ public sealed partial class NightlyGenerationJob(ILogger<NightlyGenerationJob> l
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Generation run {RunId} completed: removed {Removed}, inserted {Inserted}")]
     private static partial void LogCompleted(ILogger logger, string runId, int removed, int inserted);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Points reconciliation of run {RunId} completed: created {Created}, updated {Updated}, removed {Removed}, skipped {Skipped}, corrections {Corrections}")]
+    private static partial void LogReconciled(ILogger logger, string runId, int created, int updated, int removed, int skipped, int corrections);
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Generation run failed: {Reason}")]
     private static partial void LogFailed(ILogger logger, string reason);

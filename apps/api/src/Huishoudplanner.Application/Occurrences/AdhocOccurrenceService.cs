@@ -6,6 +6,7 @@ using Huishoudplanner.Domain.Generation;
 using Huishoudplanner.Domain.Identity;
 using Huishoudplanner.Domain.Limits;
 using Huishoudplanner.Domain.Occurrences;
+using Huishoudplanner.Domain.Points;
 using Huishoudplanner.Domain.Ports.Driven;
 using Huishoudplanner.Domain.Ports.Driving;
 using Huishoudplanner.Domain.Settings;
@@ -25,8 +26,8 @@ namespace Huishoudplanner.Application.Occurrences;
 /// one key at once both find nothing and both insert; the unique index lets exactly one commit. The loser fails inside its transaction
 /// (a duplicate key, or a write conflict the transaction runner retries), the attempt is rolled back and started again, and its second
 /// lookup finds the winner: replay for the same request, <c>idempotency_key_conflict</c> for another.</para>
-/// <para>Not here yet: the points ledger entry that follows recorded work (<c>syncExecutionPoints</c>, phase 4); the <c>pointsSnapshot</c> of recorded
-/// work is written, because it is a field of the occurrence.</para>
+/// <para>The points ledger entry of recorded work (reasons <c>recorded</c> and <c>retract</c>) is made by <see cref="IExecutionPointsService"/> in the
+/// same transaction (slice 4.1); a replay repairs a lost entry.</para>
 /// </remarks>
 public sealed class AdhocOccurrenceService(
     ForStoringOccurrences occurrences,
@@ -37,7 +38,8 @@ public sealed class AdhocOccurrenceService(
     ForStoringCycles cycles,
     ForRunningTransactions transactions,
     ForRecordingAudit audit,
-    TimeProvider time) : IAdhocOccurrenceService
+    TimeProvider time,
+    IExecutionPointsService points) : IAdhocOccurrenceService
 {
     /// <summary>A lost race for a request key is settled by the winner's record; a handful of attempts is far more than one race needs.</summary>
     private const int MaxAttempts = 3;
@@ -92,7 +94,7 @@ public sealed class AdhocOccurrenceService(
 
         if (replay is not null)
         {
-            return new Attempt(replay);
+            return await ReplayAttemptAsync(actor, replay, ct).ConfigureAwait(false);
         }
 
         if (!(await tasks.FindAsync(command.TaskId, ct).ConfigureAwait(false)).AsOptional().TryGet(out var task, out var taskFailure))
@@ -192,7 +194,7 @@ public sealed class AdhocOccurrenceService(
 
         if (replay is not null)
         {
-            return new Attempt(replay);
+            return await ReplayAttemptAsync(actor, replay, ct).ConfigureAwait(false);
         }
 
         Domain.Rooms.Room? room = null;
@@ -312,7 +314,11 @@ public sealed class AdhocOccurrenceService(
             return refreshFailure;
         }
 
-        // The ledger entry is removed with it in phase 4 (syncExecutionPoints, reason retract).
+        if (!(await SyncPointsAsync(actor, id, PointsSyncReason.Retract, ct).ConfigureAwait(false)).TryGet(out _, out var syncFailure))
+        {
+            return syncFailure;
+        }
+
         return true;
     }
 
@@ -417,8 +423,32 @@ public sealed class AdhocOccurrenceService(
             return refreshFailure;
         }
 
-        // The ledger entry of recorded work follows in phase 4 (syncExecutionPoints, reason recorded).
+        if (occurrence.Status == OccurrenceStatus.Done &&
+            !(await SyncPointsAsync(actor, occurrence.Id, PointsSyncReason.Recorded, ct).ConfigureAwait(false)).TryGet(out _, out var syncFailure))
+        {
+            return syncFailure;
+        }
+
         return new Attempt(new AdhocResult(context.ViewOf(occurrence), warnings, true));
+    }
+
+    /// <summary>Makes the ledger entry of the execution follow (ADR-0011, <c>syncExecutionPoints</c>), inside the same transaction.</summary>
+    private async Task<Step<bool>> SyncPointsAsync(AuditActor actor, string occurrenceId, PointsSyncReason reason, CancellationToken ct) =>
+        (await points.SyncAsync(actor, occurrenceId, reason, ct).ConfigureAwait(false)).Match<Step<bool>>(_ => true, error => error);
+
+    /// <summary>
+    /// A replay normally finds its ledger entry in place and writes nothing; it only repairs one that a lost write left behind (<c>syncAdhocPoints</c>).
+    /// </summary>
+    private async Task<Step<Attempt>> ReplayAttemptAsync(AuditActor actor, AdhocResult replay, CancellationToken ct)
+    {
+        var stored = replay.View.Occurrence;
+        if (stored.Status == OccurrenceStatus.Done &&
+            !(await SyncPointsAsync(actor, stored.Id, PointsSyncReason.Recorded, ct).ConfigureAwait(false)).TryGet(out _, out var syncFailure))
+        {
+            return syncFailure;
+        }
+
+        return new Attempt(replay);
     }
 
     private async Task<Step<bool>> RecordAsync(AuditEntry entry, CancellationToken ct)
