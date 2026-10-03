@@ -16,7 +16,7 @@ internal static class ArchitectureRules
     private const string MongoDb = @"^MongoDB(\..*)?$";
     private const string QuestPdf = @"^QuestPDF(\..*)?$";
     private const string AspNetCore = @"^Microsoft\.AspNetCore(\..*)?$";
-    private const string ExtensionsAi = @"^Microsoft\.Extensions\.AI(\..*)?$";
+    private const string ExtensionsAi = @"^(Microsoft\.Extensions\.AI|Anthropic|OllamaSharp|OpenAI)(\..*)?$";
 
     private static string Any(params string[] patterns) => string.Join("|", patterns);
 
@@ -93,7 +93,7 @@ internal static class ArchitectureRules
             .Should().NotDependOnAnyTypesThat().ResideInNamespaceMatching(AspNetCore)
             .Because("ASP.NET Core lives only in Adapters.Http and Host");
 
-    /// <summary>Microsoft.Extensions.AI only inside Adapters.Ai.</summary>
+    /// <summary>Microsoft.Extensions.AI and the model provider SDKs (Anthropic, OpenAI, OllamaSharp) only inside Adapters.Ai.</summary>
     public static IArchRule ExtensionsAiOnlyInAiAdapter(Layout l) =>
         Types().That().Are(Ours(l)).And().AreNot(InNamespace(l.Adapter("Ai"), "the Ai adapter"))
             .Should().NotDependOnAnyTypesThat().ResideInNamespaceMatching(ExtensionsAi)

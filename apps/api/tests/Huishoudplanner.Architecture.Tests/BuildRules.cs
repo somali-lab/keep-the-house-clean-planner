@@ -23,6 +23,8 @@ internal static class BuildRules
         new("QuestPDF", @"^QuestPDF(\..*)?$", ["Adapters.Pdf"]),
         new("ASP.NET Core packages, framework reference and Web SDK", @"^(Microsoft\.AspNetCore(\..*)?|Microsoft\.NET\.Sdk\.Web)$", ["Adapters.Http", "Host"]),
         new("Microsoft.Extensions.AI packages", @"^Microsoft\.Extensions\.AI(\..*)?$", ["Adapters.Ai"]),
+        // Slice 6.1a: the provider SDKs behind IChatClient share the one home of Microsoft.Extensions.AI.
+        new("AI provider SDK packages (Anthropic, OpenAI, OllamaSharp)", @"^(Anthropic|OpenAI|OllamaSharp)(\..*)?$", ["Adapters.Ai"]),
     ];
 
     /// <summary>Host (the composition root) is absent on purpose: it may reference everything.</summary>
