@@ -64,3 +64,7 @@ The singleton settings document (id `000000000000000000000001`). `HouseholdSetti
 Driving ports `ISettingsService` (read, patch) and `ISettingsSeedService`; driven ports `ForStoringSettings` (read, set fields, insert once) and `ForCheckingIntervalUsage` (the interval keys tasks use, an interim read until the task slice). `IntervalInUse(Keys)` is the `409 interval_in_use` value.
 
 Differences: the Node compare-and-set on the stored schedule is replaced by the transaction that reads, checks and writes (a retried attempt recomputes the row), and `bonus_schedule_conflict` is the runner's exhausted write conflict on a patch that sets amounts.
+
+## Rooms (`Huishoudplanner.Domain.Rooms`)
+
+Port of `routes/rooms.ts` and `data/rooms.ts`. Driving port `IRoomService` (list, create, update, delete; the HTTP adapter decides who may write), driven ports `ForStoringRooms` and `ForCheckingRoomUsage` (a read port on the `tasks` collection until the task domain exists). Create, update and delete are one transaction with their audit entry (`room`/`create`, `update`, `delete`; create records the four fields `name, sortOrder, active, virtual`, update the changed ones, delete the fields it removed). An update that changes nothing writes and audits nothing. A delete is refused with `RoomInUse(TaskCount)` while any task, active or inactive, uses the room. The list is ordered by sort order, name and id and paged with an opaque `RoomCursor`.
