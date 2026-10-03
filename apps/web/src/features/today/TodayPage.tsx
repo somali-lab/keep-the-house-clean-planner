@@ -62,7 +62,7 @@ export function TodayPage({ now }: { now?: Date }) {
   const profileId = profile?._id ?? '';
   const action = useOccurrenceAction(occurrenceKeys.range(from, selectedDay), { profileId, todayKey });
 
-  const [snackbar, setSnackbar] = useState<{ id: string; task: string; recorded?: true } | null>(null);
+  const [snackbar, setSnackbar] = useState<{ id: string; task: string; recorded?: true; plannedFor?: string } | null>(null);
   const [recordOpen, setRecordOpen] = useState(false);
   const [failed, setFailed] = useState(false);
   const [completionChoice, setCompletionChoice] = useState<OccurrenceView | null>(null);
@@ -323,10 +323,13 @@ export function TodayPage({ now }: { now?: Date }) {
           setDayOffset(0);
           setFailed(false);
           // A checked-off planned task is undone like any check-off; recorded work is undone with a retract.
+          // Planned work is an open occurrence like any other: it has no undo here.
           setSnackbar(
-            how === 'recorded'
-              ? { id: recorded._id, task: recorded.taskNameSnapshot, recorded: true }
-              : { id: recorded._id, task: recorded.taskNameSnapshot },
+            how === 'planned'
+              ? { id: recorded._id, task: recorded.taskNameSnapshot, plannedFor: recorded.date }
+              : how === 'recorded'
+                ? { id: recorded._id, task: recorded.taskNameSnapshot, recorded: true }
+                : { id: recorded._id, task: recorded.taskNameSnapshot },
           );
         }}
       />
@@ -337,8 +340,11 @@ export function TodayPage({ now }: { now?: Date }) {
           role="status"
         >
           <span className="min-w-0 truncate text-sm font-semibold">
-            {format(snackbar.recorded ? 'recordWork.recorded' : 'today.snackbar', { task: snackbar.task })}
+            {snackbar.plannedFor
+              ? format('recordWork.scheduled', { task: snackbar.task, date: shortDate(snackbar.plannedFor) })
+              : format(snackbar.recorded ? 'recordWork.recorded' : 'today.snackbar', { task: snackbar.task })}
           </span>
+          {!snackbar.plannedFor && (
           <Button
             type="button"
             variant="ghost"
@@ -356,6 +362,7 @@ export function TodayPage({ now }: { now?: Date }) {
             <Undo2 aria-hidden="true" />
             {t('today.undo')}
           </Button>
+          )}
         </div>
       )}
     </section>

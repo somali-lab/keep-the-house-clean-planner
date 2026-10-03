@@ -1,6 +1,6 @@
 import { weekIndexFor } from '@huishoudplanner/shared/cycle';
-import { ListChecks } from 'lucide-react';
-import { useMemo } from 'react';
+import { ListChecks, Plus } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { useFilterReset } from '@/components/FilterReset';
 import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import { format, t } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
 import { usePersistedFilter } from '../../hooks/usePersistedFilter.ts';
 import { useOccurrences } from '../today/api.ts';
+import { RecordWorkDialog } from '../today/RecordWorkDialog.tsx';
 import { addDaysKey, dayKeyInZone } from '../today/todayModel.ts';
 import {
   compactDate,
@@ -26,6 +27,7 @@ export function MobileTasksPage({ now }: { now?: Date }) {
   const tasks = useTasks();
   const rooms = useRooms();
   const { profile } = useProfile();
+  const [recordOpen, setRecordOpen] = useState(false);
   const [weeks, setWeeks, resetWeeks] = usePersistedFilter<WeekRange>('mobileTasks.period', profile?._id ?? null, 1);
   const [hiddenRoomIds, setHiddenRoomIds, resetRooms] = usePersistedFilter<string[]>('mobileTasks.rooms', profile?._id ?? null, []);
   useFilterReset(() => { resetWeeks(); resetRooms(); }, weeks !== 1 || hiddenRoomIds.length > 0);
@@ -79,6 +81,12 @@ export function MobileTasksPage({ now }: { now?: Date }) {
           to: compactDate(to),
         })}${weeks === 1 && cycleWeek !== null ? ` · ${format('cycle.week', { week: cycleWeek })}` : ''}`}
         className="mb-0"
+        actions={
+          <Button type="button" className="h-11 rounded-full" onClick={() => setRecordOpen(true)}>
+            <Plus aria-hidden="true" />
+            {t('recordWork.open')}
+          </Button>
+        }
       />
 
       <div className="grid gap-3 rounded-2xl border bg-card p-3 shadow-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
@@ -160,6 +168,9 @@ export function MobileTasksPage({ now }: { now?: Date }) {
           })}
         </div>
       )}
+
+      {/* Saving invalidates the occurrence queries, so a planned task shows up in its dated block right away. */}
+      <RecordWorkDialog open={recordOpen} onOpenChange={setRecordOpen} todayKey={from} />
     </section>
   );
 }

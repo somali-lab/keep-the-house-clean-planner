@@ -268,14 +268,14 @@ describe('TodayPage', () => {
     expect(await inSection('Afgerond', 'Overgeslagen: geen tijd')).toBeInTheDocument();
   });
 
-  it('opens the record-work dialog, records an extra execution for today and offers undo as a retract', async () => {
+  it('opens the Extra Task dialog, records an extra execution for today and offers undo as a retract', async () => {
     const fetchMock = setup();
     renderWithProviders(<TodayPage now={NOW} />);
     // Recorded work is dated today, also when another day is being looked at.
     fireEvent.click(await screen.findByRole('button', { name: 'Morgen' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Werk vastleggen' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Extra taak' }));
 
-    const dialog = await screen.findByRole('dialog', { name: 'Gedaan werk vastleggen' });
+    const dialog = await screen.findByRole('dialog', { name: 'Extra taak' });
     expect(within(dialog).getByRole('radio', { name: 'Extra keer voor een bestaande taak' })).toBeChecked();
     expect(within(dialog).getByRole('radio', { name: 'Eenmalige taak (komt niet in de takenlijst)' })).toBeInTheDocument();
     await waitFor(() => expect(within(within(dialog).getByLabelText('Taak')).getAllByRole('option')).toHaveLength(2));
@@ -312,8 +312,8 @@ describe('TodayPage', () => {
   it('checks off the planned task from the dialog and offers undo as an uncomplete', async () => {
     const fetchMock = setup();
     renderWithProviders(<TodayPage now={NOW} />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Werk vastleggen' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Gedaan werk vastleggen' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Extra taak' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Extra taak' });
     await waitFor(() => expect(within(within(dialog).getByLabelText('Taak', { selector: 'select' })).getAllByRole('option')).toHaveLength(2));
     fireEvent.change(within(dialog).getByLabelText('Taak', { selector: 'select' }), { target: { value: 't2' } });
     fireEvent.click(await within(dialog).findByRole('button', { name: 'Afvinken' }));

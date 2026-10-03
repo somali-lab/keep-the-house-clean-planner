@@ -33,7 +33,7 @@ const assignedToSomeoneElse = makeOccurrence({
   assigneeId: BRAM._id,
 });
 
-function setup() {
+function setup(routes: Record<string, unknown> = {}) {
   storeProfile(ANNA._id);
   return mockApi({
     '/api/users': [ANNA, BRAM],
@@ -48,6 +48,7 @@ function setup() {
         (occurrence) => occurrence.date >= from && occurrence.date <= to,
       );
     },
+    ...routes,
   });
 }
 
@@ -160,5 +161,40 @@ describe('MobileTasksPage', () => {
     expect(within(block).getByRole('row', { name: /Stofzuigen/ })).toHaveTextContent('Cyclusweek 2');
     fireEvent.click(screen.getByRole('button', { name: 'Filters van dit scherm resetten' }));
     expect(await screen.findByRole('button', { name: '1 week' })).toHaveAttribute('aria-pressed', 'true');
+  });
+  it('opens the Extra Task dialog from the header, on already done, and shows a planned task in its dated block', async () => {
+    const created = makeOccurrence({ _id: 'o-new', taskId: BEDDING._id, taskNameSnapshot: BEDDING.name, date: '2026-09-17', assigneeId: ANNA._id, origin: 'adhoc' });
+    const fetchMock = setup({
+      'POST /api/occurrences': () => {
+        planned.push(created);
+        return created;
+      },
+    });
+    try {
+      renderWithProviders(<MobileTasksPage now={NOW} />);
+      const mine = await screen.findByRole('region', { name: 'Aan mij toegewezen' });
+      expect(within(mine).queryByRole('row', { name: /Beddengoed/ })).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Extra taak' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Extra taak' });
+      expect(within(dialog).getByRole('radio', { name: 'Al gedaan (vandaag)' })).toBeChecked();
+
+      fireEvent.click(within(dialog).getByRole('radio', { name: 'Inplannen' }));
+      const task = within(dialog).getByLabelText('Taak', { selector: 'select' });
+      await waitFor(() => expect(within(task).getAllByRole('option')).toHaveLength(3));
+      fireEvent.change(task, { target: { value: BEDDING._id } });
+      fireEvent.change(within(dialog).getByLabelText('Datum'), { target: { value: '2026-09-17' } });
+      fireEvent.change(within(dialog).getByLabelText('Voor wie'), { target: { value: ANNA._id } });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Inplannen' }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      const posted = fetchMock.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === 'POST');
+      expect(posted).toHaveLength(1);
+      // The list was refetched: the planned task shows up under "assigned to me" on its day.
+      const row = await within(await screen.findByRole('region', { name: 'Aan mij toegewezen' })).findByRole('row', { name: /Beddengoed/ });
+      expect(within(row).getByText('do 17 sep')).toBeInTheDocument();
+    } finally {
+      planned.splice(planned.indexOf(created), 1);
+    }
   });
 });

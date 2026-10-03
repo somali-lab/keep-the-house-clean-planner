@@ -143,7 +143,7 @@ describe('DuePage', () => {
     renderWithProviders(<DuePage now={NOW} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Extra keer voor Stofzuigen vastleggen' }));
 
-    const dialog = await screen.findByRole('dialog', { name: 'Gedaan werk vastleggen' });
+    const dialog = await screen.findByRole('dialog', { name: 'Extra taak' });
     const task = within(dialog).getByLabelText('Taak');
     await waitFor(() => expect(task).toHaveValue('t2'));
     await waitFor(() => expect(within(dialog).getByLabelText('Gedaan door')).toHaveValue(ANNA._id));
