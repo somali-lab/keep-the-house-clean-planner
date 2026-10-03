@@ -4004,6 +4004,202 @@
         }
       }
     },
+    "/api/v2/points/redemptions/count": {
+      "get": {
+        "tags": [
+          "Points"
+        ],
+        "summary": "How many redemptions exist.",
+        "description": "Needs no profile. The import screen warns that importing an older file removes the redemptions.",
+        "operationId": "countRedemptions",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RedemptionCountResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/points/redemptions": {
+      "post": {
+        "tags": [
+          "Points"
+        ],
+        "summary": "Books a redemption: a person gives up points.",
+        "description": "Body { personId?, points, note?, requestId? }. personId defaults to the active profile; only an administrator may book for someone else (403 permission_denied), and the person must be active (400 validation_error unknown_user, inactive_user). points is a whole number of at least 1 and at most the balance over the whole ledger: a larger booking is 409 insufficient_balance with the balance and the requested points. note is trimmed, at most 200 characters, empty is none. The booking is a negative ledger entry dated today in the household timezone that keeps the factor and currency in force now; the reconciliation never touches it. Two bookings of one person at once never overdraw the balance: the check and the insert are one transaction and the bookings of one person conflict on a guard document, so the later one reads the earlier one's entry (a booking that keeps losing answers 409 write_conflict; retry it). requestId makes the request idempotent: the same key for the same person, points and note answers 200 with the stored booking and writes and audits nothing, the same key for another request answers 409 idempotency_key_conflict; of concurrent requests with one key exactly one creates (201). Audited as one points create entry with meta reason redemption; the request key is not part of it. Answers the ledger entry without its request key.",
+        "operationId": "bookRedemption",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRedemptionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PointEntryResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PointEntryResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/points/redemptions/{id}": {
+      "delete": {
+        "tags": [
+          "Points"
+        ],
+        "summary": "Takes a redemption back.",
+        "description": "The person the redemption belongs to can undo it on the day it was booked (household timezone); an administrator at any time. Later the owner gets 403 redemption_locked, anybody else 403 permission_denied. An unknown id and an entry that is not a redemption are 404; a second undo is 404 too and writes nothing. Audited as one points delete entry with meta reason redemption_undone that keeps the removed fields.",
+        "operationId": "undoRedemption",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteRedemptionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/audit": {
       "get": {
         "tags": [
@@ -6001,6 +6197,48 @@
           }
         }
       },
+      "CreateRedemptionRequest": {
+        "required": [
+          "personId",
+          "points",
+          "note",
+          "requestId"
+        ],
+        "type": "object",
+        "properties": {
+          "personId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The person; left out: the active profile. Only an administrator may name another person."
+          },
+          "points": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "description": "The points to give up: a whole number of at least 1, at most the balance of the person over the whole ledger.",
+            "format": "int32"
+          },
+          "note": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Free text, trimmed, at most 200 characters; empty means none."
+          },
+          "requestId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Idempotency key, 16 to 64 characters of letters, digits, underscore and hyphen."
+          }
+        }
+      },
       "CreateRoomRequest": {
         "required": [
           "name",
@@ -6461,6 +6699,17 @@
         }
       },
       "DeleteOccurrenceResponse": {
+        "required": [
+          "deleted"
+        ],
+        "type": "object",
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          }
+        }
+      },
+      "DeleteRedemptionResponse": {
         "required": [
           "deleted"
         ],
@@ -8688,6 +8937,22 @@
               "string"
             ],
             "description": "Free-text wishes, at most 2000 characters after trimming."
+          }
+        }
+      },
+      "RedemptionCountResponse": {
+        "required": [
+          "count"
+        ],
+        "type": "object",
+        "properties": {
+          "count": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           }
         }
       },

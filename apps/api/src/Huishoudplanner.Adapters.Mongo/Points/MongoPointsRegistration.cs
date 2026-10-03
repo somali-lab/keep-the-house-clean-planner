@@ -8,7 +8,7 @@ namespace Huishoudplanner.Adapters.Mongo.Points;
 public static class MongoPointsRegistration
 {
     /// <summary>
-    /// Registers the ledger store and the store of the field backfill, plus the transaction runner they run in (registered with <c>TryAdd</c>, so
+    /// Registers the ledger store, the store of the redemptions and the store of the field backfill, plus the transaction runner they run in (registered with <c>TryAdd</c>, so
     /// any slice may ask for it). Needs <see cref="MongoAdapterRegistration.AddMongoAdapter"/>.
     /// </summary>
     public static IServiceCollection AddMongoPoints(this IServiceCollection services)
@@ -18,6 +18,8 @@ public static class MongoPointsRegistration
             new MongoTransactionRunner(sp.GetRequiredService<IMongoClient>(), sp.GetRequiredService<TimeProvider>()));
         services.AddSingleton<ForStoringPointEntries>(sp =>
             new MongoPointEntryStore(sp.GetRequiredService<IMongoClient>(), sp.GetRequiredService<MongoOptions>()));
+        services.AddSingleton<ForStoringRedemptions>(sp =>
+            new MongoRedemptionStore(sp.GetRequiredService<IMongoClient>(), sp.GetRequiredService<MongoOptions>()));
         services.AddSingleton<ForBackfillingPoints>(sp =>
             new MongoPointsBackfillStore(sp.GetRequiredService<IMongoClient>(), sp.GetRequiredService<MongoOptions>()));
         return services;

@@ -48,6 +48,8 @@ public sealed class EndpointPolicyAuditTests
         ["POST /api/v2/occurrences/{id}/claim"] = AuthorizationPolicies.ActorPolicy,
         ["DELETE /api/v2/occurrences/{id}"] = AuthorizationPolicies.AdminPolicy,
         ["POST /api/v2/points/recompute"] = AuthorizationPolicies.AdminPolicy,
+        ["POST /api/v2/points/redemptions"] = AuthorizationPolicies.ActorPolicy,
+        ["DELETE /api/v2/points/redemptions/{id}"] = AuthorizationPolicies.ActorPolicy,
         ["POST /api/v2/occurrences"] = AuthorizationPolicies.ActorPolicy,
         ["POST /api/v2/occurrences/one-off"] = AuthorizationPolicies.ActorPolicy,
         ["POST /api/v2/occurrences/{id}/retraction"] = AuthorizationPolicies.ActorPolicy,
@@ -134,6 +136,7 @@ public sealed class EndpointPolicyAuditTests
     [Theory]
     [InlineData("/api/v2/points/balances")]
     [InlineData("/api/v2/points/entries")]
+    [InlineData("/api/v2/points/redemptions/count")]
     public void ThePointsReads_stayOpenLikeTheNodeRoutes(string route)
     {
         using var factory = ApiFactory.WithoutDatabase();
