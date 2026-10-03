@@ -21,6 +21,9 @@ public static partial class ProblemResults
         return Problem(StatusCodes.Status409Conflict, error.Code, error.Detail);
     }
 
+    public static IResult From(SettingsMissing _) =>
+        Problem(StatusCodes.Status500InternalServerError, ProblemTypes.SettingsMissing, "The installation has no settings yet.");
+
     public static IResult From(ValidationErrors error)
     {
         ArgumentNullException.ThrowIfNull(error);
