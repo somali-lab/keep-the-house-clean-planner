@@ -32,7 +32,7 @@ public static class MongoAdapterRegistration
                 DatabaseName = databaseName ?? MongoUrl.Create(url).DatabaseName ?? DefaultDatabaseName,
             };
         });
-        services.TryAddSingleton<IMongoClient>(sp => MongoClientFactory.CreateClient(sp.GetRequiredService<MongoOptions>()));
+        services.TryAddSingleton<IMongoClient>(sp => MongoClientFactory.CreateClient(sp.GetRequiredService<MongoOptions>(), sp.GetServices<IMongoClientSettingsCustomizer>()));
         services.AddSingleton<ForCheckingHealth>(sp =>
             new MongoHealthCheck(sp.GetRequiredService<IMongoClient>(), sp.GetRequiredService<MongoOptions>()));
         services.AddSingleton<ForPreparingStorage>(sp => new MongoStoragePreparer(
