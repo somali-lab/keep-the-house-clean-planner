@@ -1,6 +1,6 @@
 # ADR-0009 — Extra executions and one-off tasks as ad-hoc occurrences
 
-Status: Proposed
+Status: Accepted
 
 ## Context
 
