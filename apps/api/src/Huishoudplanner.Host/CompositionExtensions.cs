@@ -23,6 +23,7 @@ using Huishoudplanner.Host.CyclePlans;
 using Huishoudplanner.Host.Generation;
 using Huishoudplanner.Host.Jobs;
 using Huishoudplanner.Host.Notifications;
+using Huishoudplanner.Host.Statistics;
 using Huishoudplanner.Host.Occurrences;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
@@ -57,6 +58,7 @@ public static class CompositionExtensions
         services.AddAi();
         services.AddNotifications();
         services.AddAuditLog();
+        services.AddStatistics();
         services.AddJobs();
         return services;
     }
@@ -76,6 +78,7 @@ public static class CompositionExtensions
         app.MapGeneration();
         app.MapOccurrences();
         app.MapAuditEndpoints();
+        app.MapStatistics();
         app.MapJobs();
         app.MapMetaEndpoints();
         app.MapCalendarEndpoints();
