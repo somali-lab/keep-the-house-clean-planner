@@ -23,6 +23,13 @@ public static partial class ProblemResults
             : Problem(StatusCodes.Status409Conflict, error.Code, error.Detail);
     }
 
+    /// <summary>403 with the code of the rule (<c>redemption_locked</c>), <c>permission_denied</c> when it has none.</summary>
+    public static IResult From(Forbidden error)
+    {
+        ArgumentNullException.ThrowIfNull(error);
+        return Problem(StatusCodes.Status403Forbidden, error.Code ?? ProblemTypes.PermissionDenied, error.Detail);
+    }
+
     public static IResult From(SettingsMissing _) =>
         Problem(StatusCodes.Status500InternalServerError, ProblemTypes.SettingsMissing, "The installation has no settings yet.");
 

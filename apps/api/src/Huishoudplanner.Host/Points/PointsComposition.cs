@@ -21,6 +21,7 @@ public static class PointsComposition
         services.AddSingleton<ReconcileGate>();
         services.AddSingleton<PointsService>();
         services.AddSingleton<IPointsService>(sp => sp.GetRequiredService<PointsService>());
+        services.AddSingleton<IRedemptionService, RedemptionService>();
         services.AddSingleton<IExecutionPointsService>(sp => sp.GetRequiredService<PointsService>());
         services.AddScoped<INightlyService, NightlyService>();
         // After every seed step: the reconciliation needs the settings and the users the seeds write (Node: reconcile after seed).
@@ -28,7 +29,7 @@ public static class PointsComposition
         return services;
     }
 
-    public static IEndpointRouteBuilder MapPoints(this IEndpointRouteBuilder routes) => routes.MapPointsEndpoints();
+    public static IEndpointRouteBuilder MapPoints(this IEndpointRouteBuilder routes) => routes.MapPointsEndpoints().MapRedemptionEndpoints();
 }
 
 /// <summary>
