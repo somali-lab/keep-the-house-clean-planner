@@ -14,7 +14,7 @@ namespace Huishoudplanner.Application.Rooms;
 /// </summary>
 public sealed class RoomService(
     ForStoringRooms rooms,
-    ForCheckingRoomUsage usage,
+    ForStoringTasks tasks,
     ForRunningTransactions transactions,
     ForRecordingAudit audit,
     TimeProvider time) : IRoomService
@@ -195,7 +195,7 @@ public sealed class RoomService(
             return Abort(findError);
         }
 
-        var counted = await usage.CountTasksInRoomAsync(id, ct).ConfigureAwait(false);
+        var counted = await tasks.CountInRoomAsync(id, ct).ConfigureAwait(false);
         if (counted.TryPickT1(out var countError, out var taskCount))
         {
             return Abort(countError);

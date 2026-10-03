@@ -576,6 +576,7 @@ DELETE /api/rooms/:id
                                             (v2: /api/v2/rooms; GET is paged like the audit log, `?active&limit&cursor`, and answers `{ items, nextCursor }`; a room has `id` instead of `_id`; DELETE answers `200 { deleted: true }`)
 GET    /api/tasks                           POST /api/tasks            PATCH /api/tasks/:id
 DELETE /api/tasks/:id                       POST /api/rooms/:id/tasks/bulk
+                                            (v2: /api/v2/tasks and /api/v2/rooms/{id}/tasks/bulk; GET is paged like the rooms, `?roomId&active&limit&cursor`, ordered by name, and answers `{ items, nextCursor }`; a task has `id` instead of `_id`; a malformed field, query value, body or id is a `validation_error` problem keyed by field, the reference messages `unknown_room`, `inactive_room`, `unknown_interval`, `unknown_user`, `inactive_user` are unchanged; the bulk route answers `{ updated }`. DELETE is not in v2 yet: it arrives with the plans and badges it cascades into)
 
 GET    /api/cycles
 GET    /api/cycle-plans                     GET  /api/cycle-plans/active

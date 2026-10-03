@@ -419,7 +419,7 @@ public sealed class RoomEndpointTests : IDisposable
     {
         var created = await Send(Request(HttpMethod.Post, "/api/v2/rooms", new { name = "Gebruikte kamer" }));
         var id = created.Body.GetProperty("id").GetString()!;
-        // The task domain does not exist yet: a task is a document of the tasks collection, here an inactive one.
+        // A task is a document of the tasks collection, here a raw inactive one as an older installation may hold.
         await Tasks.InsertOneAsync(new BsonDocument { { "name", "Klus" }, { "roomId", ObjectId.Parse(id) }, { "intervalKey", "1w" }, { "durationMinutes", 5 }, { "active", false } }, cancellationToken: Ct);
 
         var (response, body) = await Send(Request(HttpMethod.Delete, $"/api/v2/rooms/{id}"));
@@ -499,7 +499,7 @@ public sealed class RoomEndpointTests : IDisposable
     public void EveryRoomWrite_requiresTheAdminPolicy_andTheReadRequiresNone()
     {
         var endpoints = factory.Services.GetRequiredService<EndpointDataSource>().Endpoints.OfType<RouteEndpoint>()
-            .Where(e => e.RoutePattern.RawText?.StartsWith("/api/v2/rooms", StringComparison.Ordinal) == true)
+            .Where(e => e.RoutePattern.RawText?.StartsWith("/api/v2/rooms", StringComparison.Ordinal) == true && !e.RoutePattern.RawText.EndsWith("/tasks/bulk", StringComparison.Ordinal))
             .ToList();
 
         endpoints.Should().HaveCount(4);
