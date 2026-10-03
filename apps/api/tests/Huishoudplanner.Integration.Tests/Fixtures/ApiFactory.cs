@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using OneOf;
 
@@ -18,6 +19,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 {
     private readonly string mongoUrl;
     private readonly List<Action<IServiceCollection>> overrides = [];
+
+    private readonly List<ILoggerProvider> logProviders = [];
 
     private ApiFactory(string mongoUrl) => this.mongoUrl = mongoUrl;
 
@@ -34,6 +37,14 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     /// <summary>A MongoDB address nothing listens on, for the "database is down" case with the real adapter.</summary>
     public static ApiFactory ForUnreachableMongo() => new("mongodb://127.0.0.1:1/unreachable");
 
+    /// <summary>Collects what the host logs.</summary>
+    public ApiFactory WithLogProvider(ILoggerProvider provider)
+    {
+        ArgumentNullException.ThrowIfNull(provider);
+        logProviders.Add(provider);
+        return this;
+    }
+
     /// <summary>Replaces the registration of a driven port with a fake.</summary>
     public ApiFactory WithPort<TPort>(TPort fake)
         where TPort : class
@@ -48,6 +59,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         ArgumentNullException.ThrowIfNull(builder);
         builder.UseEnvironment("Test");
         builder.UseSetting("MONGO_URL", mongoUrl);
+        builder.ConfigureLogging(logging => logProviders.ForEach(p => logging.AddProvider(p)));
         builder.ConfigureTestServices(services =>
         {
             foreach (var apply in overrides)

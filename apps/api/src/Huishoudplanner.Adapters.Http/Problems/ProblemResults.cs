@@ -1,5 +1,6 @@
 using Huishoudplanner.Domain.Errors;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 
 namespace Huishoudplanner.Adapters.Http.Problems;
 
@@ -7,7 +8,7 @@ namespace Huishoudplanner.Adapters.Http.Problems;
 /// Maps the error values of the ports to RFC 9457 Problem Details. The <c>traceId</c> is added by the
 /// pipeline (see <see cref="HttpAdapterExtensions.AddHttpAdapter"/>), so every problem carries one.
 /// </summary>
-public static class ProblemResults
+public static partial class ProblemResults
 {
     public const string UnexpectedErrorDetail = "An unexpected error occurred.";
 
@@ -33,9 +34,17 @@ public static class ProblemResults
         return Results.Problem(problem);
     }
 
-    /// <summary>The message of a port error is for logs; the client only learns that something went wrong.</summary>
-    public static IResult From(PortError _) =>
-        Problem(StatusCodes.Status500InternalServerError, ProblemTypes.InternalError, UnexpectedErrorDetail);
+    /// <summary>The message of a port error is logged here (the seam where it becomes a 500); the client only learns that something went wrong.</summary>
+    public static IResult From(PortError error, ILogger logger)
+    {
+        ArgumentNullException.ThrowIfNull(error);
+        ArgumentNullException.ThrowIfNull(logger);
+        LogPortError(logger, error.Message);
+        return Problem(StatusCodes.Status500InternalServerError, ProblemTypes.InternalError, UnexpectedErrorDetail);
+    }
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Port error became a 500: {Reason}")]
+    private static partial void LogPortError(ILogger logger, string reason);
 
     public static IResult Problem(int status, string code, string detail) =>
         Results.Problem(new ProblemDetails

@@ -31,7 +31,7 @@ public sealed class ProblemDetailsTests : IAsyncLifetime
         app.MapGet("/not-found", () => ProblemResults.From(new NotFound()));
         app.MapGet("/conflict", () => ProblemResults.From(new ConflictError("room_in_use", "The room still has tasks.")));
         app.MapGet("/validation", () => ProblemResults.From(ValidationErrors.For("name", "Name is required.", "Name is too short.")));
-        app.MapGet("/port-error", () => ProblemResults.From(new PortError("secret connection string leaked")));
+        app.MapGet("/port-error", (ILogger<PortError> logger) => ProblemResults.From(new PortError("secret connection string leaked"), logger));
         app.MapGet("/throws", () => ThrowSecret());
         app.MapPost("/post-only", () => "x");
         await app.StartAsync(TestContext.Current.CancellationToken);
