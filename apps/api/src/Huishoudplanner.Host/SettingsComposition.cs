@@ -2,6 +2,7 @@ using Huishoudplanner.Adapters.Http.Settings;
 using Huishoudplanner.Adapters.Mongo;
 using Huishoudplanner.Application.Settings;
 using Huishoudplanner.Domain.Ports.Driving;
+using Huishoudplanner.Host.Startup;
 
 namespace Huishoudplanner.Host;
 
@@ -14,12 +15,7 @@ public static class SettingsComposition
         services.AddMongoSettings();
         services.AddSingleton<ISettingsService, SettingsService>();
         services.AddSingleton<ISettingsSeedService, SettingsSeedService>();
-        if (!BuildTimeGeneration.IsRunning)
-        {
-            // Build-time OpenAPI generation has no database (see BuildTimeGeneration).
-            services.AddHostedService<SettingsSeedingStartup>();
-        }
-
+        services.AddSingleton<ISeedStep, SettingsSeedStep>();
         return services;
     }
 

@@ -1,7 +1,7 @@
 
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Ports.Driven;
-using Huishoudplanner.Host;
+using Huishoudplanner.Host.Startup;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Routing;
@@ -24,28 +24,31 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 {
     private readonly string mongoUrl;
     private readonly List<Action<IServiceCollection>> overrides = [];
-    private readonly Dictionary<string, string> settings = [];
 
     private readonly List<ILoggerProvider> logProviders = [];
+    private readonly Dictionary<string, string> settings = [];
+    private readonly bool runStartup;
     private string environment = "Test";
     private string? webDistDir;
-    private bool seedsAtStartup;
 
-    private ApiFactory(string mongoUrl) => this.mongoUrl = mongoUrl;
+    private ApiFactory(string mongoUrl, bool runStartup)
+    {
+        this.mongoUrl = mongoUrl;
+        this.runStartup = runStartup;
+    }
 
     /// <summary>Backed by a real MongoDB (use the shared <see cref="MongoContainerFixture"/>), in its own database.</summary>
     public static ApiFactory ForMongo(MongoContainerFixture mongo, string? databaseName = null)
     {
         ArgumentNullException.ThrowIfNull(mongo);
-        // A factory with a real database runs the startup seed like the application does; one without would wait for a database that is not there.
-        return new ApiFactory(WithDatabase(mongo.ConnectionString, databaseName ?? MongoContainerFixture.NewDatabaseName())) { seedsAtStartup = true };
+        return new ApiFactory(WithDatabase(mongo.ConnectionString, databaseName ?? MongoContainerFixture.NewDatabaseName()), runStartup: true);
     }
 
     /// <summary>For tests that replace every port they touch: no database is contacted unless a real adapter is used.</summary>
-    public static ApiFactory WithoutDatabase() => new("mongodb://127.0.0.1:1/unused");
+    public static ApiFactory WithoutDatabase() => new("mongodb://127.0.0.1:1/unused", runStartup: false);
 
     /// <summary>A MongoDB address nothing listens on, for the "database is down" case with the real adapter.</summary>
-    public static ApiFactory ForUnreachableMongo() => new("mongodb://127.0.0.1:1/unreachable");
+    public static ApiFactory ForUnreachableMongo() => new("mongodb://127.0.0.1:1/unreachable", runStartup: false);
 
     /// <summary>Runs the host in another environment than <c>Test</c> (for example <c>Development</c>, where the OpenAPI document is served).</summary>
     public ApiFactory InEnvironment(string environmentName)
@@ -74,27 +77,20 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         return this;
     }
 
-    /// <summary>Serves the web app from this directory (<c>WEB_DIST_DIR</c>).</summary>
-    public ApiFactory WithWebDist(string directory)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(directory);
-        webDistDir = directory;
-        return this;
-    }
-
-    /// <summary>The same factory with the startup seed switched off, for a test that needs an empty database.</summary>
-    public ApiFactory WithoutStartupSeed()
-    {
-        seedsAtStartup = false;
-        return this;
-    }
-
-    /// <summary>Sets a configuration value (an environment variable of requirements section 9) for this host only.</summary>
+    /// <summary>Sets a configuration value (an environment-variable style key such as <c>SEED_USERS</c>) for this host only.</summary>
     public ApiFactory WithSetting(string key, string value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
         ArgumentNullException.ThrowIfNull(value);
         settings[key] = value;
+        return this;
+    }
+
+    /// <summary>Serves the web app from this directory (<c>WEB_DIST_DIR</c>).</summary>
+    public ApiFactory WithWebDist(string directory)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(directory);
+        webDistDir = directory;
         return this;
     }
 
@@ -125,11 +121,12 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         builder.ConfigureLogging(logging => logProviders.ForEach(p => logging.AddProvider(p)));
         builder.ConfigureTestServices(services =>
         {
-            if (!seedsAtStartup)
+            if (!runStartup)
             {
-                foreach (var seed in services.Where(d => d.ServiceType == typeof(IHostedService) && d.ImplementationType == typeof(SettingsSeedingStartup)).ToList())
+                // No real database behind this host: nothing to migrate, index or seed.
+                foreach (var startup in services.Where(d => d.ImplementationType == typeof(StartupService)).ToList())
                 {
-                    services.Remove(seed);
+                    services.Remove(startup);
                 }
             }
 
