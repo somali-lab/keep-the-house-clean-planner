@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { BrowserRouter, useLocation, useNavigate } from 'react-router';
 import { t } from './i18n/nl.ts';
 import { LanguageProvider } from './i18n/LanguageProvider.tsx';
+import { BrowserNotificationHost } from './features/notifications/BrowserNotificationHost.tsx';
 import { ProfilePicker, ProfileProvider, useProfile } from './identity/index.ts';
 import { DesktopLayout } from './layouts/DesktopLayout.tsx';
 import { MobileLayout } from './layouts/MobileLayout.tsx';
@@ -56,6 +57,7 @@ export function App({ queryClient }: { queryClient?: QueryClient }) {
             <BrowserRouter>
               <LanguageProvider>
                 <PwaStatus />
+                <BrowserNotificationHost />
                 <AppShell />
               </LanguageProvider>
             </BrowserRouter>

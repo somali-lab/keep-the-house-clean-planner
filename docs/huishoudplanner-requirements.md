@@ -53,6 +53,7 @@ _id, name, color, active, role: 'admin' | 'planner' | 'member',
 unavailableWeekdays: [0..6]              // 0 = Sunday
 dailyBudgetMinutes: { weekday, weekend } // target load
 maxDailyMinutes:    { weekday, weekend } // hard ceiling
+browserNotifications: { enabled, times: ['HH:mm', ...] } // at most 6, unique, sorted, household timezone; absent reads as disabled
 ```
 
 The number of users is configuration, not an assumption in the code. A fresh installation seeds the configured set.
@@ -250,9 +251,18 @@ Every state change is recorded with who, when, which entity, which action, the c
 
 - A nightly job generates upcoming occurrences and, when configured, applies audit retention.
 - A morning notification summarises the day: what is planned per person and what is overdue. It is suppressed when there is nothing to report.
-- Supported channels are none, an ntfy topic, and a Home Assistant webhook. The channel and its credentials come from the environment.
+- Supported server channels are none, an ntfy topic, and a Home Assistant webhook. The channel and its credentials come from the environment. These reach the household whether or not a browser is open, and stay a separate setting from browser notifications.
 - Generation, the morning notification and audit retention can each be triggered manually from the settings screen, which is also how an installation is verified after a change.
 - The scheduler can be disabled entirely, which is required for reproducible tests.
+
+Browser notifications (ADR-0010) are a second, personal channel:
+
+- They are shown only while the planner is open in a browser tab, also when that tab is not active. There is no service worker push and no delivery to a closed browser.
+- Each person sets their own moments: up to six unique `HH:mm` times in the household timezone, plus an on/off switch. A person changes their own moments; an administrator can change anyone's. Users without stored moments read as disabled with no times.
+- A notification summarises that person's open tasks for today and their overdue tasks, listing up to five task names and the number of others. When nothing is open, no notification is shown.
+- A moment is delivered when the tab is open at that time or within ten minutes after it; earlier moments are not caught up. With several tabs open, at most one summary is shown per person, day and moment.
+- The browser permission belongs to the device. The notifications page asks for it with an explicit button, shows whether it is not yet asked, allowed, blocked or unsupported, and can send a test notification. Notifications need a secure origin (HTTPS or localhost); on a plain-HTTP address the page reports that they cannot work and disables the permission and test buttons.
+- Changes to the moments are audited like other user changes; a change that changes nothing is neither written nor audited.
 
 ### 4.11 Data management
 
@@ -315,8 +325,8 @@ The fridge is a legitimate output device. The schedule must work without a phone
 ### 7.1 Structure
 
 - A compact overview is the default at every screen width: the week grid, the day view, the overdue list and the task list.
-- Management screens — planner, tasks, distribution, statistics, history, completions and settings — live behind a separate management area and are reachable from anywhere.
-- The settings screen is organised in tabs so that cycle, intervals, AI, notifications, appearance and maintenance stay separable.
+- Management screens — planner, tasks, distribution, statistics, history, notifications, completions and settings — live behind a separate management area and are reachable from anywhere. The notifications page is available to every role, because each person sets their own browser notifications.
+- The settings screen is organised in tabs so that cycle, intervals, AI, scheduled jobs (including the ntfy and Home Assistant morning notification), appearance and maintenance stay separable.
 
 ### 7.2 Interaction
 
@@ -346,6 +356,7 @@ All endpoints live under `/api`. Identifiers are 24-character hexadecimal string
 GET    /api/health
 
 GET    /api/users                           POST /api/users            PATCH /api/users/:id
+PUT    /api/users/:id/browser-notifications (own moments, or any person's for an admin)
 GET    /api/rooms                           POST /api/rooms            PATCH /api/rooms/:id
 DELETE /api/rooms/:id
 GET    /api/tasks                           POST /api/tasks            PATCH /api/tasks/:id

@@ -3,8 +3,10 @@ import {
   addDays,
   daysBetween,
   fromDayKey,
+  fromDayKeyTime,
   isDayKey,
   isMonday,
+  isTimeOfDay,
   isoWeek,
   isoWeekLabel,
   mon0ToSun0,
@@ -106,5 +108,35 @@ describe('ISO weeks', () => {
     expect(mondayOfIsoWeek('2026-W53')).toBe('2026-12-28');
     expect(mondayOfIsoWeek('2027-W53')).toBeNull();
     expect(mondayOfIsoWeek('2026-38')).toBeNull();
+  });
+});
+
+describe('wall-clock times on a day key', () => {
+  it('validates the HH:mm format', () => {
+    expect(['00:00', '07:30', '23:59'].every(isTimeOfDay)).toBe(true);
+    expect(['24:00', '7:30', '07:60', '0730', ''].some(isTimeOfDay)).toBe(false);
+  });
+
+  it('reads the time in the timezone', () => {
+    expect(fromDayKeyTime('2026-09-16', '10:00', TZ).toISOString()).toBe('2026-09-16T08:00:00.000Z');
+    expect(fromDayKeyTime('2026-12-16', '10:00', TZ).toISOString()).toBe('2026-12-16T09:00:00.000Z');
+    expect(fromDayKeyTime('2026-09-16', '10:00', 'UTC').toISOString()).toBe('2026-09-16T10:00:00.000Z');
+  });
+
+  it('follows the offset of the day on DST days', () => {
+    // 29 March 2026: 02:00 jumps to 03:00. 08:00 is already summer time.
+    expect(fromDayKeyTime('2026-03-29', '08:00', TZ).toISOString()).toBe('2026-03-29T06:00:00.000Z');
+    expect(fromDayKeyTime('2026-03-29', '01:30', TZ).toISOString()).toBe('2026-03-29T00:30:00.000Z');
+    // The skipped 02:30 lands after the gap.
+    expect(fromDayKeyTime('2026-03-29', '02:30', TZ).toISOString()).toBe('2026-03-29T01:30:00.000Z');
+    // 25 October 2026: 03:00 falls back to 02:00. 08:00 is winter time; 02:30 means its first occurrence.
+    expect(fromDayKeyTime('2026-10-25', '08:00', TZ).toISOString()).toBe('2026-10-25T07:00:00.000Z');
+    expect(fromDayKeyTime('2026-10-25', '02:30', TZ).toISOString()).toBe('2026-10-25T00:30:00.000Z');
+  });
+
+  it('throws on invalid input', () => {
+    expect(() => fromDayKeyTime('nope', '10:00', TZ)).toThrow(RangeError);
+    expect(() => fromDayKeyTime('2026-09-16', '25:00', TZ)).toThrow(RangeError);
+    expect(() => fromDayKeyTime('2026-09-16', '10:00', 'Not/AZone')).toThrow(RangeError);
   });
 });

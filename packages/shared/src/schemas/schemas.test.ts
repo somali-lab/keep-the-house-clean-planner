@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_BROWSER_NOTIFICATIONS,
   DEFAULT_INTERVALS,
+  browserNotificationsSchema,
   createTaskInputSchema,
   patchOccurrenceInputSchema,
   updateSettingsInputSchema,
+  userSchema,
   vacationRangeSchema,
 } from './index.ts';
 
@@ -53,5 +56,35 @@ describe('schemas', () => {
       takeOver: true,
     });
     expect(patchOccurrenceInputSchema.safeParse({ action: 'complete', takeOver: false }).success).toBe(false);
+  });
+});
+
+describe('browser notification moments', () => {
+  const parse = (times: string[], enabled = true) => browserNotificationsSchema.safeParse({ enabled, times });
+
+  it('accepts up to six unique HH:mm times', () => {
+    expect(parse([]).success).toBe(true);
+    expect(parse(['07:30', '12:00', '18:45', '21:00', '22:15', '23:59']).success).toBe(true);
+    expect(parse(['07:30', '12:00', '18:45', '21:00', '22:15', '23:59', '00:00']).success).toBe(false);
+  });
+
+  it('rejects malformed and duplicate times', () => {
+    expect(parse(['24:00']).success).toBe(false);
+    expect(parse(['7:30']).success).toBe(false);
+    expect(parse(['08:00', '08:00']).error?.issues.map((i) => i.message)).toContain('duplicate_time');
+  });
+
+  it('reads a user without stored moments as disabled with no times', () => {
+    const user = userSchema.parse({
+      _id: ID,
+      name: 'Anna',
+      color: '#2563eb',
+      active: true,
+      unavailableWeekdays: [],
+      dailyBudgetMinutes: { weekday: 60, weekend: 120 },
+      createdAt: '2026-09-14T08:00:00.000Z',
+      updatedAt: '2026-09-14T08:00:00.000Z',
+    });
+    expect(user.browserNotifications).toEqual(DEFAULT_BROWSER_NOTIFICATIONS);
   });
 });

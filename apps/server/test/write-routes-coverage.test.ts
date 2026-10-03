@@ -53,6 +53,15 @@ const SCENARIOS: Scenario[] = [
     run: () => call('PATCH', `/api/users/${p2._id.toHexString()}`, { name: 'Bram' }),
   },
   {
+    route: 'PUT /api/users/:id/browser-notifications',
+    audit: { entity: 'user', action: 'update' },
+    run: () =>
+      call('PUT', `/api/users/${p2._id.toHexString()}/browser-notifications`, {
+        enabled: true,
+        times: ['18:30', '08:00'],
+      }),
+  },
+  {
     route: 'POST /api/rooms',
     audit: { entity: 'room', action: 'create' },
     run: async () => {

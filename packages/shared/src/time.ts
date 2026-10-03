@@ -46,6 +46,25 @@ export function fromDayKey(key: DayKey, tz: string = APP_TIMEZONE): Date {
   return dt.toJSDate();
 }
 
+const TIME_OF_DAY_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+export function isTimeOfDay(value: string): boolean {
+  return TIME_OF_DAY_RE.test(value);
+}
+
+/**
+ * Instant of a wall-clock time ('HH:mm') on a day key in the timezone. A time
+ * that the day skips (spring-forward gap) lands the same distance after the
+ * gap; an ambiguous time (fall-back overlap) means its first occurrence.
+ */
+export function fromDayKeyTime(key: DayKey, time: string, tz: string = APP_TIMEZONE): Date {
+  assertDayKey(key);
+  if (!isTimeOfDay(time)) throw new RangeError(`Invalid time of day: ${time}`);
+  const dt = DateTime.fromISO(`${key}T${time}`, { zone: tz });
+  if (!dt.isValid) throw new RangeError(`Invalid timezone: ${tz}`);
+  return dt.toJSDate();
+}
+
 /** Calendar arithmetic on day keys; independent of DST. */
 export function addDays(key: DayKey, days: number): DayKey {
   return assertDayKey(key).plus({ days }).toISODate() as DayKey;

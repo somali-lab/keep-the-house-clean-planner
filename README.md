@@ -34,6 +34,7 @@ The screenshots show a scripted demo household with fictional people and sample 
 - Supports Dutch and English, with English as the fallback language.
 - Offers light, dark, and system colour modes.
 - Works as an installable PWA and queues completions while temporarily offline.
+- Shows personal browser notifications of a person's open and overdue chores at times they choose, while the planner is open.
 - Can generate optional AI-assisted planning suggestions that require approval before they are applied.
 
 > [!IMPORTANT]
@@ -126,7 +127,7 @@ All times follow `TZ_APP`:
 - `03:00` — generate upcoming cycles.
 - `03:30` — the separate backup container creates a database backup.
 - `03:45` — remove old history when audit retention is enabled.
-- `07:30` — send the morning notification when notifications are enabled.
+- `07:30` — send the ntfy or Home Assistant morning notification when `NOTIFY_TYPE` is set. Browser notifications use each person's own times and do not run on the server.
 
 ## Backups and data transfer
 
@@ -169,7 +170,11 @@ Set `AI_API_KEY` in `.env` when the provider requires a secret, then restart the
 
 ### Notifications
 
-Set `NOTIFY_TYPE` to `ntfy` or `homeassistant` to send each active profile a morning summary of today's and overdue chores. Profiles with nothing to do do not receive a message.
+There are two separate kinds of notification.
+
+**Browser notifications** are personal and need no configuration. Under **Notifications** in the management area, each person switches them on, sets up to six times of day (household timezone) and grants the browser permission with the **Ask for permission** button. **Send test notification** checks that this device shows them. At each set time the person's open tasks for today and their overdue tasks are shown as one notification; nothing open means no notification. They only appear while the planner is open in a browser tab, also when that tab is not active, and a moment that was missed by more than ten minutes is skipped. With several tabs open only one notification is shown. Browsers only allow notifications on HTTPS (for example through the reverse proxy) or on `localhost`: browser notifications do not work on a plain-HTTP address on the home network such as `http://192.168.x.x:3000` or `http://huis.local`, and the page then says so. Permission is per device and browser. An administrator can set the times of any person.
+
+**ntfy and Home Assistant** notifications are configured in the environment and also reach people when no browser is open. Set `NOTIFY_TYPE` to `ntfy` or `homeassistant` to send each active profile a morning summary of today's and overdue chores. Profiles with nothing to do do not receive a message.
 
 Example ntfy configuration:
 
@@ -189,7 +194,7 @@ NOTIFY_URL=http://homeassistant.local:8123/api/webhook/your-webhook-id
 
 - Do not expose the application directly to the public internet.
 - Prefer a home network, WireGuard, Tailscale, or an authenticated reverse proxy.
-- Enable HTTPS at the reverse proxy, especially when installing the PWA on a phone.
+- Enable HTTPS at the reverse proxy. It is required for browser notifications and for installing the PWA on a phone: browsers disable both on a plain-HTTP LAN address.
 - MongoDB is not published to the host by the supplied Compose configuration; keep it private.
 
 ## Local development
