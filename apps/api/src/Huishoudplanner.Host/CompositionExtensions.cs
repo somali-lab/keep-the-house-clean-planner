@@ -5,7 +5,9 @@ using Huishoudplanner.Adapters.Http.WebApp;
 using Huishoudplanner.Adapters.Mongo;
 using Huishoudplanner.Application;
 using Huishoudplanner.Domain.Ports.Driving;
+using Huishoudplanner.Adapters.Http.Rooms;
 using Huishoudplanner.Host.Configuration;
+using Huishoudplanner.Host.Rooms;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Scalar.AspNetCore;
@@ -23,6 +25,7 @@ public static class CompositionExtensions
         services.AddSingleton(new AppVersion(CurrentVersion()));
         services.AddScoped<IHealthService, HealthService>();
         services.AddMongoAdapter(sp => sp.GetRequiredService<IOptions<AppOptions>>().Value.MongoUrl);
+        services.AddRooms();
         return services;
     }
 
@@ -31,6 +34,7 @@ public static class CompositionExtensions
         ArgumentNullException.ThrowIfNull(app);
         app.UseHttpAdapter();
         app.MapHealthEndpoints();
+        app.MapRoomEndpoints();
         if (app.Environment.IsDevelopment())
         {
             // The document at /openapi/v2.json and its Scalar UI at /scalar/v2 exist in Development only; the checked-in

@@ -13,6 +13,8 @@ public static class OpenApiSetup
 
     public const string HealthTag = "Health";
 
+    public const string RoomsTag = "Rooms";
+
     public static IServiceCollection AddOpenApiDocument(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -32,6 +34,7 @@ public static class OpenApiSetup
             document.Tags = new HashSet<OpenApiTag>
             {
                 new() { Name = HealthTag, Description = "Liveness and database reachability, for load balancers and the container healthcheck." },
+                new() { Name = RoomsTag, Description = "The rooms of the house: everyone reads them, administrators create, change and delete them." },
             };
             return Task.CompletedTask;
         }));
