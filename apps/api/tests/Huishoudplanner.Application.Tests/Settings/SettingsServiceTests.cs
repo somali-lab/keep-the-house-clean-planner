@@ -1,4 +1,5 @@
 using Huishoudplanner.Application.Settings;
+using Huishoudplanner.Application.Tests.Tasks;
 using Huishoudplanner.Domain.Audit;
 using Huishoudplanner.Domain.Due;
 using Huishoudplanner.Domain.Errors;
@@ -23,7 +24,8 @@ public class SettingsServiceTests
         {
             Store = new FakeSettingsStore(missing ? null : settings ?? SettingsSamples.Seeded());
             Audit = new FakeAudit();
-            Usage = new FakeIntervalUsage(intervalsInUse ?? []);
+            Usage = new FakeTaskStore();
+            Usage.ExtraIntervalsInUse.AddRange(intervalsInUse ?? []);
             Transactions = new FakeTransactions(Store, Audit);
             Clock = new FixedClock(DateTimeOffset.Parse(now, System.Globalization.CultureInfo.InvariantCulture));
             Service = new SettingsService(Store, Usage, Audit, Transactions, Clock);
@@ -33,7 +35,7 @@ public class SettingsServiceTests
 
         public FakeAudit Audit { get; }
 
-        public FakeIntervalUsage Usage { get; }
+        public FakeTaskStore Usage { get; }
 
         public FakeTransactions Transactions { get; }
 
@@ -246,7 +248,7 @@ public class SettingsServiceTests
 
         view.Settings.Intervals.Should().Contain(SettingsSamples.Year);
         rig.OnlyEntry.After["intervals"].Should().BeOfType<AuditArray>().Which.Items.Should().HaveCount(intervals.Count);
-        rig.Usage.Calls.Should().Be(0, "nothing was removed, so no task needs to be asked");
+        rig.Usage.IntervalReads.Should().Be(0, "nothing was removed, so no task needs to be asked");
     }
 
     [Fact]

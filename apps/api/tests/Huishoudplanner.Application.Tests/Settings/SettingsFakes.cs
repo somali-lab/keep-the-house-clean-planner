@@ -62,19 +62,6 @@ internal sealed class FakeSettingsStore(HouseholdSettings? initial) : ForStoring
     }
 }
 
-internal sealed class FakeIntervalUsage(params string[] inUse) : ForCheckingIntervalUsage
-{
-    public PortError? Failure { get; set; }
-
-    public int Calls { get; private set; }
-
-    public Task<OneOf<IReadOnlyList<string>, PortError>> GetKeysInUseAsync(CancellationToken cancellationToken)
-    {
-        Calls++;
-        return Task.FromResult<OneOf<IReadOnlyList<string>, PortError>>(Failure is { } failure ? failure : inUse);
-    }
-}
-
 internal sealed class FakeAudit : ForRecordingAudit
 {
     public List<AuditEntry> Entries { get; } = [];

@@ -8,8 +8,7 @@ namespace Huishoudplanner.Adapters.Mongo;
 public static class MongoSettingsRegistration
 {
     /// <summary>
-    /// Registers the settings document store as <see cref="ForStoringSettings"/> and <see cref="ForReadingCycleAnchor"/> (one instance), and the
-    /// read of the intervals tasks use. Needs the client and options of <see cref="MongoAdapterRegistration.AddMongoAdapter"/> and the host's <see cref="TimeProvider"/>.
+    /// Registers the settings document store as <see cref="ForStoringSettings"/> and <see cref="ForReadingCycleAnchor"/> (one instance). Needs the client and options of <see cref="MongoAdapterRegistration.AddMongoAdapter"/> and the host's <see cref="TimeProvider"/>.
     /// </summary>
     public static IServiceCollection AddMongoSettings(this IServiceCollection services)
     {
@@ -23,8 +22,6 @@ public static class MongoSettingsRegistration
             sp.GetRequiredService<TimeProvider>()));
         services.AddSingleton<ForStoringSettings>(sp => sp.GetRequiredService<MongoSettingsStore>());
         services.AddSingleton<ForReadingCycleAnchor>(sp => sp.GetRequiredService<MongoSettingsStore>());
-        services.AddSingleton<ForCheckingIntervalUsage>(sp =>
-            new MongoIntervalUsage(sp.GetRequiredService<IMongoClient>(), sp.GetRequiredService<MongoOptions>()));
         return services;
     }
 }

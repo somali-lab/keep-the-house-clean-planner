@@ -16,6 +16,7 @@ using Huishoudplanner.Host.Configuration;
 using Huishoudplanner.Host.Startup;
 using Huishoudplanner.Host.Users;
 using Huishoudplanner.Host.Rooms;
+using Huishoudplanner.Host.Tasks;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Scalar.AspNetCore;
@@ -40,6 +41,7 @@ public static class CompositionExtensions
         services.AddStartup();
         services.AddSettings();
         services.AddRooms();
+        services.AddTasks();
         services.AddAuditLog();
         return services;
     }
@@ -51,6 +53,7 @@ public static class CompositionExtensions
         app.MapHealthEndpoints();
         app.MapUserEndpoints();
         app.MapRoomEndpoints();
+        app.MapTasks();
         app.MapAuditEndpoints();
         app.MapMetaEndpoints();
         app.MapCalendarEndpoints();
