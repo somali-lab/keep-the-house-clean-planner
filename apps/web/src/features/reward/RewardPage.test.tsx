@@ -264,9 +264,13 @@ describe('RewardPage', () => {
       await waitFor(() => expect(scene()).toHaveAttribute('data-celebrating', 'true'));
 
       // The last egg lands: the animation is over, the message stays.
-      const eggs = scene().querySelectorAll('.reward-egg');
-      fireEvent(eggs[eggs.length - 1]!, new Event('animationend', { bubbles: true }));
-      await waitFor(() => expect(scene()).toHaveAttribute('data-celebrating', 'false'));
+      // Fire on the current last egg each attempt: the listener is attached after render and
+      // the eggs can be re-rendered, so a single early event could miss it on a slow runner.
+      await waitFor(() => {
+        const eggs = scene().querySelectorAll('.reward-egg');
+        fireEvent(eggs[eggs.length - 1]!, new Event('animationend', { bubbles: true }));
+        expect(scene()).toHaveAttribute('data-celebrating', 'false');
+      });
       expect(screen.getByText('Doel gehaald!')).toBeInTheDocument();
 
       // The last task is undone and done again: the meter is full again, and nothing plays.
