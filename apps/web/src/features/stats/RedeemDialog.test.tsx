@@ -41,6 +41,7 @@ const entryFor = (personId: string, points: number, note: string | null, cents: 
   titleSnapshot: '',
   note,
   centsPerPointSnapshot: cents,
+  currencyCodeSnapshot: 'EUR',
   source: 'live',
   createdAt: '2026-09-16T08:00:00.000Z',
   updatedAt: '2026-09-16T08:00:00.000Z',

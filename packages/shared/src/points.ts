@@ -21,6 +21,19 @@ export const DEFAULT_CURRENCY_CODE = 'EUR';
 /** Longest note of a redemption, in characters. */
 export const MAX_REDEMPTION_NOTE_LENGTH = 200;
 
+/**
+ * Whether a currency has exactly two fraction digits, so that whole cents are its smallest unit (EUR and USD
+ * yes; JPY with none and KWD with three no). Money is stored as integer cents, which only fits these currencies.
+ * False for a code the runtime cannot format.
+ */
+export function isTwoDecimalCurrency(code: string): boolean {
+  try {
+    return new Intl.NumberFormat('en', { style: 'currency', currency: code }).resolvedOptions().maximumFractionDigits === 2;
+  } catch {
+    return false;
+  }
+}
+
 /** Money is always whole cents: points times the factor, with no rounding needed. */
 export function pointsToCents(points: number, centsPerPoint: number): number {
   return points * centsPerPoint;

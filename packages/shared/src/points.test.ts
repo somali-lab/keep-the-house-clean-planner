@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultPointsForDuration, formatCents, MAX_CENTS_PER_POINT, MAX_TASK_POINTS, MIN_CENTS_PER_POINT, MIN_TASK_POINTS, pointsToCents } from './points.ts';
+import { defaultPointsForDuration, formatCents, MAX_CENTS_PER_POINT, MAX_TASK_POINTS, MIN_CENTS_PER_POINT, MIN_TASK_POINTS, isTwoDecimalCurrency, pointsToCents } from './points.ts';
 
 describe('defaultPointsForDuration', () => {
   it.each([
@@ -37,6 +37,11 @@ describe('points to money (ADR-0013)', () => {
     expect(pointsToCents(-4, 10)).toBe(-40);
     expect(pointsToCents(1000, MAX_CENTS_PER_POINT)).toBe(10_000_000);
     expect(MIN_CENTS_PER_POINT).toBe(0);
+  });
+
+  it('knows which currencies have exactly two fraction digits', () => {
+    for (const code of ['EUR', 'USD', 'GBP', 'CHF']) expect(isTwoDecimalCurrency(code)).toBe(true);
+    for (const code of ['JPY', 'KWD', 'BHD', 'not a code', '']) expect(isTwoDecimalCurrency(code)).toBe(false);
   });
 
   it('formats cents in the currency and locale with Intl', () => {

@@ -1,5 +1,11 @@
 import type { Settings } from '@huishoudplanner/shared';
-import { DEFAULT_CURRENCY_CODE, formatCents, MAX_CENTS_PER_POINT, MIN_CENTS_PER_POINT } from '@huishoudplanner/shared/points';
+import {
+  DEFAULT_CURRENCY_CODE,
+  formatCents,
+  isTwoDecimalCurrency,
+  MAX_CENTS_PER_POINT,
+  MIN_CENTS_PER_POINT,
+} from '@huishoudplanner/shared/points';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Coins, Save } from 'lucide-react';
 import { useId, useMemo, useState, type FormEvent } from 'react';
@@ -19,9 +25,14 @@ type Message = { kind: 'status' | 'alert'; text: string } | null;
 /** A fallback for runtimes without `Intl.supportedValuesOf`. */
 const COMMON_CURRENCIES = ['EUR', 'USD', 'GBP', 'CHF', 'SEK', 'NOK', 'DKK', 'PLN', 'CZK', 'JPY'];
 
-/** The currencies the runtime knows, with the household's current one always among them. */
+/**
+ * The currencies the runtime knows that have exactly two fraction digits (money is whole cents), with the
+ * household's current one always among them so the select can show it.
+ */
 export function currencyCodes(current: string): string[] {
-  const known = (Intl as { supportedValuesOf?: (key: string) => string[] }).supportedValuesOf?.('currency') ?? COMMON_CURRENCIES;
+  const known = ((Intl as { supportedValuesOf?: (key: string) => string[] }).supportedValuesOf?.('currency') ?? COMMON_CURRENCIES).filter(
+    isTwoDecimalCurrency,
+  );
   return known.includes(current) ? known : [...known, current].sort();
 }
 
@@ -75,6 +86,10 @@ export function ConversionSection({ settings }: { settings: Settings }) {
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
+    if (!isTwoDecimalCurrency(currencyCode)) {
+      setMessage({ kind: 'alert', text: t('settings.conversion.currencyInvalid') });
+      return;
+    }
     if (parsed === null) {
       setMessage({ kind: 'alert', text: t('settings.conversion.invalid') });
       return;

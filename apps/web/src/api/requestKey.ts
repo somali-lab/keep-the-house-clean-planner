@@ -19,20 +19,27 @@ export function createRequestKey(fill: RandomFill = (bytes) => globalThis.crypto
   return key;
 }
 
+/**
+ * How long a key that has not succeeded is kept. A retry or a reopened dialog within this time reuses it; a
+ * deliberate identical action later (for example redeeming the same points again after a failed attempt that
+ * was abandoned) gets a new key instead of being mistaken for the old one.
+ */
+export const REQUEST_KEY_TTL_MS = 10 * 60 * 1000;
+
 /** Keys of requests that have not succeeded yet, by intent. Module-level, so they outlive a closed dialog or an unmounted page. */
-const pendingKeys = new Map<string, string>();
+const pendingKeys = new Map<string, { key: string; createdAt: number }>();
 
 /**
  * The key for one user intent (any string that identifies what is being requested). The same intent
- * gets the same key until `releaseRequestKey` is called, so a retry after a failure, a closed and
- * reopened dialog or a page that was left in between does not create the record twice.
+ * gets the same key until `releaseRequestKey` is called or {@link REQUEST_KEY_TTL_MS} has passed since the key
+ * was made, so a retry after a failure, a closed and reopened dialog or a page that was left in between does
+ * not create the record twice, while a deliberate later repeat is a new request.
  */
-export function requestKeyFor(intent: string): string {
-  let key = pendingKeys.get(intent);
-  if (key === undefined) {
-    key = createRequestKey();
-    pendingKeys.set(intent, key);
-  }
+export function requestKeyFor(intent: string, now: number = Date.now()): string {
+  const kept = pendingKeys.get(intent);
+  if (kept !== undefined && now - kept.createdAt < REQUEST_KEY_TTL_MS) return kept.key;
+  const key = createRequestKey();
+  pendingKeys.set(intent, { key, createdAt: now });
   return key;
 }
 

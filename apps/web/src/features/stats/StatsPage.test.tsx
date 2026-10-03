@@ -460,6 +460,7 @@ describe('StatsPage: points', () => {
     titleSnapshot: title,
     note: null,
     centsPerPointSnapshot: null,
+    currencyCodeSnapshot: null,
     source: 'live' as const,
     createdAt: '2026-09-16T08:00:00.000Z',
     updatedAt: '2026-09-16T08:00:00.000Z',
@@ -492,17 +493,22 @@ describe('StatsPage: points', () => {
     expect(section).toHaveTextContent('14 september 2026 tot 20 september 2026');
 
     const balances = await within(section).findByRole('table', { name: 'Punten per persoon' });
-    expect(within(balances).getAllByRole('row').slice(1).map((row) => row.textContent)).toEqual([
-      'Anna8300',
-      'Bram de Vries0000',
-      'Carla (inactief)4100',
-    ]);
+    // Net in the period, executions, bonus, redeemed, and the all-time balance (the same data here).
+    await waitFor(() =>
+      expect(within(balances).getAllByRole('row').slice(1).map((row) => row.textContent)).toEqual([
+        'Anna83008',
+        'Bram de Vries00000',
+        'Carla (inactief)41004',
+      ]),
+    );
     const entries = await within(section).findByRole('table', { name: 'Posten van Anna' });
     expect(within(entries).getAllByRole('row').slice(1).map((row) => row.textContent)).toEqual([
       '16 september 2026Ramen lappen+5',
       '14 september 2026Stofzuigen+3',
     ]);
-    expect(pointsUrls(fetchMock)).toEqual([
+    // The balance over the whole ledger is read without a range.
+    expect([...pointsUrls(fetchMock)].sort()).toEqual([
+      '/api/points/balances',
       '/api/points/balances?from=2026-09-14&to=2026-09-20',
       '/api/points/entries?personId=a00000000000000000000001&from=2026-09-14&to=2026-09-20',
     ]);
@@ -572,8 +578,8 @@ describe('StatsPage: points', () => {
     renderWithProviders(<StatsPage now={NOW} />);
     await selectStatsTab('Punten');
     const balances = await screen.findByRole('table', { name: 'Punten per persoon' });
-    expect(within(balances).getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual(['Persoon', 'Saldo', 'Uitvoeringen', 'Bonus', 'Ingewisseld']);
-    expect(within(balances).getAllByRole('row')[1]!.textContent).toBe('Anna411380');
+    expect(within(balances).getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual(['Persoon', 'Netto in periode', 'Uitvoeringen', 'Bonus', 'Ingewisseld', 'Saldo']);
+    await waitFor(() => expect(within(balances).getAllByRole('row')[1]!.textContent).toBe('Anna41138041'));
 
     const entries = await screen.findByRole('table', { name: 'Posten van Anna' });
     const rows = within(entries).getAllByRole('row').slice(1);
@@ -591,13 +597,14 @@ describe('StatsPage: points', () => {
 
   describe('redemptions', () => {
     const REDEMPTION_ID = 'd00000000000000000000001';
-    const redemption = (id: string, personId: string, date: string, amount: number, note: string | null, cents = 25): PointEntryView => ({
+    const redemption = (id: string, personId: string, date: string, amount: number, note: string | null, cents = 25, currency = 'EUR'): PointEntryView => ({
       ...entry(id, personId, date, amount, ''),
       key: `redemption:${id}`,
       kind: 'redemption',
       occurrenceId: null,
       note,
       centsPerPointSnapshot: cents,
+      currencyCodeSnapshot: currency,
     });
     const withEntries = (personId: string, entries: PointEntryView[]) => {
       const original = ENTRIES[personId]!;
@@ -624,14 +631,40 @@ describe('StatsPage: points', () => {
       const balances = await screen.findByRole('table', { name: 'Punten per persoon' });
       expect(within(balances).getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual([
         'Persoon',
-        'Saldo',
+        'Netto in periode',
         'Uitvoeringen',
         'Bonus',
         'Ingewisseld',
-        'Waarde',
+        'Waarde in periode',
+        'Saldo',
+        'Waarde saldo',
       ]);
       const row = within(balances).getAllByRole('row')[1]!;
-      expect(row).toHaveTextContent(/^Anna6304.*€\s1,50$/);
+      // Period value €1,50 and, from the same data for the all-time balance, 6 points worth €1,50.
+      await waitFor(() => expect(row).toHaveTextContent(/^Anna6304€\s1,506€\s1,50$/));
+    });
+
+    it('shows the all-time balance next to the net of the period, from the whole ledger', async () => {
+      const ALL_TIME: PointsBalancesResponse = {
+        from: null,
+        to: null,
+        currencyCode: 'EUR',
+        centsPerPoint: 25,
+        balances: [
+          { ...bal(ANNA._id, 30, 9), earned: 40, redeemed: 10, money: { earned: 1000, redeemed: 250, balance: 750 } },
+          { ...bal(BRAM._id, 2, 1), money: { earned: 50, redeemed: 0, balance: 50 } },
+        ],
+      };
+      setup(WORKLOAD, {
+        ...pointsRoutes(MONEY),
+        '/api/points/balances': (_init: RequestInit | undefined, url: string) => (url.includes('?') ? MONEY : ALL_TIME),
+      });
+      renderWithProviders(<StatsPage now={NOW} />);
+      await selectStatsTab('Punten');
+      const balances = await screen.findByRole('table', { name: 'Punten per persoon' });
+      const rows = within(balances).getAllByRole('row').slice(1);
+      await waitFor(() => expect(rows[0]).toHaveTextContent(/^Anna6304€\s1,5030€\s7,50$/));
+      expect(rows[1]).toHaveTextContent(/^Bram de Vries0000€\s0,002€\s0,50$/);
     });
 
     it('shows no value column while a point is worth nothing', async () => {
@@ -639,7 +672,8 @@ describe('StatsPage: points', () => {
       renderWithProviders(<StatsPage now={NOW} />);
       await selectStatsTab('Punten');
       const balances = await screen.findByRole('table', { name: 'Punten per persoon' });
-      expect(within(balances).queryByRole('columnheader', { name: 'Waarde' })).not.toBeInTheDocument();
+      expect(within(balances).queryByRole('columnheader', { name: /Waarde/ })).not.toBeInTheDocument();
+      expect(within(balances).getByRole('columnheader', { name: 'Saldo' })).toBeInTheDocument();
     });
 
     it('lists a redemption with an icon, its note, the points and what they were worth then, and an undo button for an administrator', async () => {
@@ -661,6 +695,24 @@ describe('StatsPage: points', () => {
       expect(rows[0]!.querySelector('svg')).not.toBeNull();
       expect(rows[2]!.querySelector('svg')).toBeNull();
       expect(within(entries).getByRole('button', { name: 'Inwisseling van 4 punten ongedaan maken' })).toBeInTheDocument();
+    });
+
+    it('shows each redemption in the currency and at the factor it was booked with, also after the household switched', async () => {
+      withEntries(ANNA._id, [
+        redemption(REDEMPTION_ID, ANNA._id, '2026-09-16', -4, null, 20, 'USD'),
+        redemption('d00000000000000000000002', ANNA._id, '2026-09-15', -2, null, 10, 'EUR'),
+        { ...redemption('d00000000000000000000003', ANNA._id, '2026-09-14', -1, null, 50), currencyCodeSnapshot: null },
+      ]);
+      // The household currency now is EUR, 25 cents.
+      setup(WORKLOAD, pointsRoutes(MONEY));
+      renderWithProviders(<StatsPage now={NOW} />);
+      await selectStatsTab('Punten');
+      const entries = await screen.findByRole('table', { name: 'Posten van Anna' });
+      const rows = within(entries).getAllByRole('row').slice(1).map((row) => row.textContent ?? '');
+      expect(rows[0]).toMatch(/-4\s\(US\$\s?0,80\)/);
+      expect(rows[1]).toMatch(/-2\s\(€\s0,20\)/);
+      // A booking from before the currency was kept falls back to the household currency.
+      expect(rows[2]).toMatch(/-1\s\(€\s0,50\)/);
     });
 
     it('lets a member undo their own redemption of today only, and nobody else\'s', async () => {
@@ -716,10 +768,14 @@ describe('StatsPage: points', () => {
     });
 
     it('opens the redeem dialog from the Redeem button and confirms the booking with the money it is worth', async () => {
-      setup(WORKLOAD, {
-        ...pointsRoutes(MONEY),
-        'POST /api/points/redemptions': { ...redemption(REDEMPTION_ID, ANNA._id, '2026-09-16', -4, null), amount: -4 },
-      });
+      setup(WORKLOAD, pointsRoutes(MONEY));
+      const original = globalThis.fetch;
+      // 201: a new booking (the route table of mockApi always answers 200, which means a replay).
+      vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) =>
+        init?.method === 'POST' && String(input) === '/api/points/redemptions'
+          ? new Response(JSON.stringify(redemption(REDEMPTION_ID, ANNA._id, '2026-09-16', -4, null)), { status: 201 })
+          : original(input, init),
+      );
       renderWithProviders(<StatsPage now={NOW} />);
       await selectStatsTab('Punten');
       await screen.findByRole('table', { name: 'Punten per persoon' });
@@ -730,6 +786,27 @@ describe('StatsPage: points', () => {
       fireEvent.click(within(dialog).getByRole('button', { name: 'Inwisselen' }));
       expect(await screen.findByText(/4 punten ingewisseld \(€\s1,00\)\./)).toBeInTheDocument();
       await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    });
+
+    it('tells the person when the server replayed a redemption it already had, instead of saying it was booked', async () => {
+      storeProfile(ANNA._id);
+      setup(WORKLOAD, pointsRoutes(MONEY));
+      const original = globalThis.fetch;
+      vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) =>
+        init?.method === 'POST' && String(input) === '/api/points/redemptions'
+          ? new Response(JSON.stringify(redemption(REDEMPTION_ID, ANNA._id, '2026-09-16', -4, null)), { status: 200 })
+          : original(input, init),
+      );
+      renderWithProviders(<StatsPage now={NOW} />);
+      await selectStatsTab('Punten');
+      await screen.findByRole('table', { name: 'Punten per persoon' });
+      fireEvent.click(screen.getByRole('button', { name: 'Inwisselen' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Punten inwisselen' });
+      await within(dialog).findByText(/Beschikbaar saldo/);
+      fireEvent.change(within(dialog).getByLabelText('Aantal punten'), { target: { value: '4' } });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Inwisselen' }));
+      expect(await screen.findByText('Deze inwisseling was al geboekt.')).toBeInTheDocument();
+      expect(screen.queryByText(/4 punten ingewisseld/)).not.toBeInTheDocument();
     });
   });
 

@@ -40,6 +40,13 @@ describe('currencyCodes', () => {
     expect(codes).toEqual(expect.arrayContaining(['EUR', 'USD', 'GBP']));
     expect(currencyCodes('ZZZ')).toContain('ZZZ');
   });
+
+  it('only offers currencies with two fraction digits: EUR and USD yes, JPY and KWD no', () => {
+    const codes = currencyCodes('EUR');
+    expect(codes).toEqual(expect.arrayContaining(['EUR', 'USD']));
+    expect(codes).not.toContain('JPY');
+    expect(codes).not.toContain('KWD');
+  });
 });
 
 describe('ConversionSection', () => {
@@ -74,8 +81,8 @@ describe('ConversionSection', () => {
     const form = await screen.findByRole('form', { name: 'Puntenwaarde' });
     fireEvent.change(within(form).getByLabelText('Waarde van één punt (in centen)'), { target: { value: '150' } });
     expect(within(form).getByText(/1 punt = €\s1,50/)).toBeInTheDocument();
-    fireEvent.change(within(form).getByLabelText('Valuta'), { target: { value: 'JPY' } });
-    expect(within(form).getByText(/1 punt = /)).toHaveTextContent(/¥|JP¥/);
+    fireEvent.change(within(form).getByLabelText('Valuta'), { target: { value: 'GBP' } });
+    expect(within(form).getByText(/1 punt = /)).toHaveTextContent(/£\s?1,50/);
   });
 
   it('refuses a value outside 0 to 10000 or that is not a whole number, without calling the server', async () => {
@@ -99,6 +106,21 @@ describe('ConversionSection', () => {
     fireEvent.click(within(form).getByRole('button', { name: 'Puntenwaarde opslaan' }));
     await waitFor(() => expect(patchBodies(fetchMock)).toEqual([{ currencyCode: 'GBP', centsPerPoint: 20 }]));
     expect(await within(form).findByRole('status')).toHaveTextContent('Opgeslagen.');
+  });
+
+  it('does not offer JPY or KWD, and refuses one that is stored anyway, without calling the server', async () => {
+    const fetchMock = setup(ANNA._id);
+    renderWithProviders(<ConversionSection settings={makeSettings({ currencyCode: 'JPY', centsPerPoint: 10 })} />);
+    const form = await screen.findByRole('form', { name: 'Puntenwaarde' });
+    const options = within(within(form).getByLabelText('Valuta')).getAllByRole('option').map((option) => (option as HTMLOptionElement).value);
+    expect(options).not.toContain('KWD');
+    expect(options.filter((code) => code === 'JPY')).toHaveLength(1); // only the stored one, so the select can show it
+    fireEvent.click(within(form).getByRole('button', { name: 'Puntenwaarde opslaan' }));
+    expect(within(form).getByRole('alert')).toHaveTextContent('Deze valuta heeft geen twee decimalen');
+    expect(patchBodies(fetchMock)).toEqual([]);
+    fireEvent.change(within(form).getByLabelText('Valuta'), { target: { value: 'EUR' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Puntenwaarde opslaan' }));
+    await waitFor(() => expect(patchBodies(fetchMock)).toEqual([{ currencyCode: 'EUR', centsPerPoint: 10 }]));
   });
 
   it('turns money off with 0', async () => {

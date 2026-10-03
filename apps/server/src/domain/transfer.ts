@@ -1,6 +1,7 @@
 import {
   auditEntrySchema,
   centsPerPointSchema,
+  currencyCodeSchema,
   cyclePlanSchema,
   cycleSchema,
   isoDateTimeSchema,
@@ -19,6 +20,7 @@ import { BSON, ObjectId, type Db, type Document } from 'mongodb';
 import { z } from 'zod';
 import type { AuditContext } from '../audit/context.ts';
 import { record } from '../audit/record.ts';
+import { countRedemptions } from '../data/points.ts';
 import { SETTINGS_ID } from '../data/settings.ts';
 import { reconcilePoints, reconcilePointsSafely } from './points.ts';
 import {
@@ -96,6 +98,8 @@ const redemptionDocSchema = z.object({
   source: pointEntrySourceSchema,
   note: z.string().max(MAX_REDEMPTION_NOTE_LENGTH).nullable(),
   centsPerPointSnapshot: centsPerPointSchema,
+  // Missing in a file from before the currency was kept with a booking; the household currency then applies.
+  currencyCodeSnapshot: currencyCodeSchema.optional(),
   requestId: requestKeySchema.nullable(),
   createdAt: isoDateTimeSchema,
   updatedAt: isoDateTimeSchema,
@@ -293,6 +297,14 @@ export function parseImport(body: unknown, now: Date = new Date()): ParsedImport
 export type ImportResult = ReplaceResult;
 
 /**
+ * The redemptions an import would remove without bringing any back: a file of version 4 or older has none
+ * (ADR-0013). Zero for a version 5 file, which carries its own redemptions and replaces them like any other collection.
+ */
+export async function redemptionsLostByImport(db: Db, parsed: ParsedImport): Promise<number> {
+  return parsed.schemaVersion < 5 ? countRedemptions(db) : 0;
+}
+
+/**
  * Replaces all data (audit log merged), records a single `import` audit entry and rebuilds the
  * derived points ledger from the imported occurrences (ADR-0011), which also fills in the points of an
  * older file; the imported redemptions are kept (ADR-0013). The rebuild writes its own summary entry
@@ -308,7 +320,12 @@ export async function importData(
     entity: 'import',
     entityId: new ObjectId(),
     action: 'create',
-    after: { ...result.replaced, auditAdded: result.auditAdded, removedPointEntries: result.removedPointEntries },
+    after: {
+      ...result.replaced,
+      auditAdded: result.auditAdded,
+      removedPointEntries: result.removedPointEntries,
+      removedRedemptions: result.removedRedemptions,
+    },
     meta: { mode: 'replace', schemaVersion: parsed.schemaVersion, exportedAt: parsed.exportedAt },
   });
   // The data is already replaced and audited: a failing rebuild is logged, and the nightly run repeats it.

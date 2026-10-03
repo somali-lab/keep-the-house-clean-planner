@@ -180,6 +180,7 @@ describe('import', () => {
       },
       auditAdded: snapshot.auditLog.length,
       removedPointEntries: 0,
+      removedRedemptions: 0,
     });
 
     const after = await readAllCollections(target.db);

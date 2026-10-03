@@ -34,6 +34,8 @@ export interface PointEntryDoc {
   note?: string | null;
   /** Redemptions only: cents one point was worth when it was booked (ADR-0013). */
   centsPerPointSnapshot?: number | null;
+  /** Redemptions only: the household currency when it was booked (ADR-0013); missing on a booking from before it was kept. */
+  currencyCodeSnapshot?: string | null;
   /** Redemptions only: idempotency key of the booking request (ADR-0013). */
   requestId?: string | null;
   createdAt: Date;
@@ -49,7 +51,8 @@ export type PointEntryFields = Pick<
 /** Fixed id of the ledger as a whole, the audit entityId of a reconciliation summary (like SETTINGS_ID). */
 export const POINTS_LEDGER_ID = new ObjectId('000000000000000000000002');
 
-const AUDIT_IGNORE = ['_id', 'createdAt', 'updatedAt'];
+// The request key is bookkeeping for retries, not history: it never shows in an audit entry (ADR-0013).
+const AUDIT_IGNORE = ['_id', 'createdAt', 'updatedAt', 'requestId'];
 
 export const pointEntriesCollection = (db: Db) => db.collection<PointEntryDoc>(COLLECTIONS.pointEntries);
 
@@ -315,8 +318,14 @@ export type RedemptionDoc = PointEntryDoc & {
   taskId: null;
   note: string | null;
   centsPerPointSnapshot: number;
+  currencyCodeSnapshot: string;
   requestId: string | null;
 };
+
+/** The number of redemptions in the ledger; an import of an older file removes them (ADR-0013). */
+export function countRedemptions(db: Db): Promise<number> {
+  return pointEntriesCollection(db).countDocuments({ kind: 'redemption' });
+}
 
 export const redemptionKey = (id: ObjectId): string => `redemption:${id.toHexString()}`;
 

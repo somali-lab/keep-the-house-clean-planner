@@ -19,7 +19,7 @@ interface RedeemDialogProps {
   open: boolean;
   onOpenChange(open: boolean): void;
   /** Called after the booking succeeded, with the stored entry and the money it is worth (null while a point is worth nothing). */
-  onRedeemed?(entry: PointEntryView, money: string | null): void;
+  onRedeemed?(entry: PointEntryView, money: string | null, replayed: boolean): void;
 }
 
 /**
@@ -38,8 +38,8 @@ export function RedeemDialog({ open, onOpenChange, onRedeemed }: RedeemDialogPro
         {/* Mounted only while open, so every opening starts with an empty form and a fresh balance. */}
         <RedeemFormBody
           onCancel={() => onOpenChange(false)}
-          onRedeemed={(entry, money) => {
-            onRedeemed?.(entry, money);
+          onRedeemed={(entry, money, replayed) => {
+            onRedeemed?.(entry, money, replayed);
             onOpenChange(false);
           }}
         />
@@ -55,7 +55,7 @@ function RedeemFormBody({
   onRedeemed,
 }: {
   onCancel(): void;
-  onRedeemed(entry: PointEntryView, money: string | null): void;
+  onRedeemed(entry: PointEntryView, money: string | null, replayed: boolean): void;
 }) {
   const idPrefix = useId();
   const { profile, activeUsers } = useProfile();
@@ -111,8 +111,12 @@ function RedeemFormBody({
     inFlight.current = true;
     setFailure(null);
     try {
-      const entry = await redeem.mutateAsync({ personId, points: result.points, note: result.note });
-      onRedeemed(entry, entry.centsPerPointSnapshot ? money(result.points * entry.centsPerPointSnapshot) : null);
+      const { entry, replayed } = await redeem.mutateAsync({ personId, points: result.points, note: result.note });
+      // The booking is shown in the currency and at the factor it was stored with.
+      const worth = entry.centsPerPointSnapshot
+        ? formatCents(-entry.amount * entry.centsPerPointSnapshot, entry.currencyCodeSnapshot ?? currencyCode, getLocale())
+        : null;
+      onRedeemed(entry, worth, replayed);
     } catch (error) {
       setFailure(error instanceof ApiRequestError && error.code === 'insufficient_balance' ? 'insufficient' : 'failed');
     } finally {

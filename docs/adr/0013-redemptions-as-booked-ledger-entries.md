@@ -22,7 +22,7 @@ ADR-0011 built the points ledger as a keyed projection of the occurrences and re
 
 Settings gain two fields:
 
-- `currencyCode`: an ISO 4217 code, three capitals that the runtime knows as a currency. A missing value means `EUR`.
+- `currencyCode`: an ISO 4217 code, three capitals that the runtime knows as a currency and that has exactly two fraction digits (`Intl` reports `maximumFractionDigits` 2). A missing value means `EUR`. Money is stored as whole cents, which only fits currencies whose smallest unit is a hundredth: a currency without fraction digits (JPY) or with three (KWD) is refused with `currency_not_two_decimals`, on the server and in the settings card, which only offers the fitting currencies.
 - `centsPerPoint`: an integer from `0` to `10000`. A missing value means `0`, which shows no money anywhere.
 
 Money is always integer cents. The only division by 100 is where a number is shown, with `Intl.NumberFormat` in the active locale, and the points-to-cents multiplication needs no rounding because both factors are whole numbers.
@@ -42,6 +42,7 @@ A redemption is a document in `pointEntries` with kind `redemption`:
   occurrenceId: null, taskId: null, periodStart: null, titleSnapshot: '',
   note: string | null,          // optional, at most 200 characters, trimmed
   centsPerPointSnapshot: number,// the factor in force when it was booked
+  currencyCodeSnapshot: string, // the household currency when it was booked
   requestId: string | null,     // idempotency key of the booking request
   source: 'live',
 }
@@ -49,7 +50,7 @@ A redemption is a document in `pointEntries` with kind `redemption`:
 
 The date is always today: a redemption is a payout that happens now, not a correction of the past. `amount` was signed from ADR-0011 on for exactly this entry. A new partial unique index on `requestId` (where it is a string) makes a repeated request one booking. Redemptions are **never** loaded, compared, updated or deleted by `reconcilePoints`; this is covered by a test that recomputes with redemptions present, with an orphan entry repaired next to them, and after the earned points were taken away.
 
-The snapshot `centsPerPointSnapshot` keeps what a point was worth when the redemption was booked. The entry list shows each redemption at its own snapshot; balances show money at the factor in force now, so that earned minus redeemed is always the balance in money.
+The snapshots `centsPerPointSnapshot` and `currencyCodeSnapshot` keep what a point was worth, and in which currency, when the redemption was booked, so a later switch of currency never relabels an earlier payout. The entry list shows each redemption at its own snapshots (a booking from before the currency was kept, which has none, falls back to the household currency); balances show money at the factor in force now, so that earned minus redeemed is always the balance in money.
 
 ### Booking and undoing
 
@@ -59,15 +60,15 @@ The booking runs inside the same per-database queue as the reconciliation (`excl
 
 1. looks up a known `requestId` first: the same person, points and note replay the stored booking with `200` and write nothing; anything else is `409 idempotency_key_conflict`, the same pattern as ADR-0009;
 2. sums every ledger entry of the person, over the whole ledger and not the range on screen, and refuses a booking above that balance with `409 insufficient_balance` (the body carries `balance` and `requested`);
-3. inserts the entry and audits it as `points` / `create` with `meta: { reason: 'redemption' }`.
+3. inserts the entry and audits it as `points` / `create` with `meta: { reason: 'redemption' }`. The request key is left out of every audit entry of a point entry: it is retry bookkeeping, not history.
 
-The queue makes the check and the insert one step for a single process, which is the process model of ADR-0005. It does not cover a live execution sync that lands between the check and the insert, so a balance can still go negative afterwards; see Consequences.
+The queue makes the check and the insert one step for a single process, which is the process model of ADR-0005. The live execution sync (`syncExecutionPoints`, after a check-off, an undo or a correction) runs in the same queue, reading the occurrence inside it, so it never lands between the check and the insert either. The reconciliation and the booking never call it from inside the queue, which would wait for itself. A balance can still go negative afterwards when work that was redeemed against is undone; see Consequences.
 
 `DELETE /api/points/redemptions/:id` takes a redemption back. An administrator can do that at any time. The person it belongs to can do it on the day it was booked, in the household timezone; later it answers `403 redemption_locked`. Anybody else gets `403 permission_denied`, and an id that is not a redemption, including every derived entry, is `404`. It is audited as `points` / `delete` with the entry before and `meta: { reason: 'redemption_undone' }`.
 
 ### Balances
 
-`GET /api/points/balances` keeps `points`, which is now the balance: the sum of all entries in the range, earned minus redeemed. It gains `earned` (executions and bonuses), `redeemed` (a positive number) and, when `centsPerPoint > 0`, `money: { earned, redeemed, balance }` in cents at the factor in force now, otherwise `null`. The response carries `currencyCode` and `centsPerPoint` at the top. The entry view gains `note` and `centsPerPointSnapshot`, both `null` for a derived entry, and never shows the request key.
+`GET /api/points/balances` keeps `points`, which is now the balance: the sum of all entries in the range, earned minus redeemed. It gains `earned` (executions and bonuses), `redeemed` (a positive number) and, when `centsPerPoint > 0`, `money: { earned, redeemed, balance }` in cents at the factor in force now, otherwise `null`. The response carries `currencyCode` and `centsPerPoint` at the top. The entry view gains `note`, `centsPerPointSnapshot` and `currencyCodeSnapshot`, all `null` for a derived entry, and never shows the request key.
 
 ### Statistics reset
 
@@ -75,11 +76,11 @@ A redemption belongs to the history it was booked in, like the points it spends.
 
 ### Transfer
 
-Redemptions are exported, because they cannot be derived: export `schemaVersion` becomes `5` and the file gains `collections.pointEntries`, which holds only entries of kind `redemption`. The derived entries are still rebuilt on import. Import accepts versions 1 to 5. An import replaces the ledger and puts the redemptions of the file back before the reconciliation rebuilds the rest, so a file of version 4 or older, which has none, drops the redemptions it replaces, like every other replaced collection. A version 5 file without `collections.pointEntries` is refused. Import checks every redemption in the API shape and in the storage shape, refuses one of a person who is not in the file, and refuses a duplicate key or a duplicate request key (`unknown_user`, `duplicate_key`, `duplicate_request_id`) before anything is written. Settings of the file carry `currencyCode` and `centsPerPoint` and are validated like the rest.
+Redemptions are exported, because they cannot be derived: export `schemaVersion` becomes `5` and the file gains `collections.pointEntries`, which holds only entries of kind `redemption`. The derived entries are still rebuilt on import. Import accepts versions 1 to 5. An import replaces the ledger and puts the redemptions of the file back before the reconciliation rebuilds the rest, so a file of version 4 or older, which has none, drops the redemptions it replaces, like every other replaced collection. That loss is not silent: while redemptions exist, an older file is refused with `409 redemptions_would_be_removed` (with the `count`) unless the request carries `acknowledgeRedemptions=true`, and the number removed is reported as `removedRedemptions` in the import result and in the import audit entry. The import screen reads the number from `GET /api/points/redemptions/count`, warns with it when the chosen file is older than version 5, and enables the existing confirmation only after the person acknowledges the loss. A version 5 file without `collections.pointEntries` is refused. Import checks every redemption in the API shape and in the storage shape, refuses one of a person who is not in the file, and refuses a duplicate key or a duplicate request key (`unknown_user`, `duplicate_key`, `duplicate_request_id`) before anything is written. Settings of the file carry `currencyCode` and `centsPerPoint` and are validated like the rest.
 
 ### Web
 
-The Points tab gets a Redeem action for the active profile; an administrator also picks a person in the dialog. The dialog shows the available balance, the amount with a preview of the money it is worth, and an optional note, and cannot book more than the balance. A double click is safe: the request key belongs to the intent (person, points, note), is kept across retries, and is released after a success, the same way as recorded work (ADR-0009). Redemptions are listed with an icon and text and, when allowed, an undo button. A settings card for administrators sets the currency and the cents per point, next to the bonuses.
+The Points tab gets a Redeem action for the active profile; an administrator also picks a person in the dialog. The dialog shows the available balance, the amount with a preview of the money it is worth, and an optional note, and cannot book more than the balance. A double click is safe: the request key belongs to the intent (person, points, note), is kept across retries for ten minutes, and is released after a success, the same way as recorded work (ADR-0009); after the ten minutes a deliberate identical redemption is a new request. When the server answers `200` instead of `201`, the booking was a replay and the dialog says it was already booked instead of reporting a new one. Redemptions are listed with an icon and text and, when allowed, an undo button. A settings card for administrators sets the currency and the cents per point, next to the bonuses.
 
 ## Alternatives considered
 
@@ -95,6 +96,7 @@ The Points tab gets a Redeem action for the active profile; an administrator als
 - A booking never makes the balance negative, but undoing earned work later can: an execution that is uncompleted after the points were redeemed leaves a negative balance. The booked redemption is never rewritten, the balance shows the negative number, and an administrator can undo the redemption. This is a product default; the alternatives are to refuse the uncomplete or to block the redemption of points that were earned in the last days.
 - A purge before a date can leave a negative balance for the same reason, which is why the reset is flagged as a product default.
 - Export version 5 cannot be imported by an older application. Downgrading was never supported.
+- A booking and its audit entry are two writes, not one transaction: if the audit insert fails after the entry was written, the entry stays and the failure is logged. This is the repository-wide limit of having no transactions (ADR-0004, ADR-0009), and holds for every entry written through the data layer.
 - The reconciliation does not need to know about redemptions, because it only manages derived kinds. A new booked kind later needs its own writer and no change to it.
 - Money in balances follows the factor in force now. Raising the factor raises every balance in money, including the points that were earned at the old one; the redemptions in the entry list keep the value they were booked at.
 - **Open product questions,** answered here with defaults:

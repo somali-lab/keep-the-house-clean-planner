@@ -36,6 +36,8 @@ export const pointEntryViewSchema = z.object({
   titleSnapshot: z.string(),
   /** Free text of a redemption; null for a derived entry (ADR-0013). */
   note: z.string().nullable(),
+  /** Currency of the household when a redemption was booked; null for a derived entry (ADR-0013). */
+  currencyCodeSnapshot: z.string().regex(/^[A-Z]{3}$/).nullable(),
   /** Cents one point was worth when a redemption was booked; null for a derived entry (ADR-0013). */
   centsPerPointSnapshot: z.number().int().min(0).max(MAX_CENTS_PER_POINT).nullable(),
   source: pointEntrySourceSchema,

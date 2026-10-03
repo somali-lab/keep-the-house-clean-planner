@@ -173,6 +173,7 @@ describe('GET /api/points/entries', () => {
       titleSnapshot: 'Taak',
       note: null,
       centsPerPointSnapshot: null,
+      currencyCodeSnapshot: null,
       source: 'live',
       createdAt: expect.stringMatching(/Z$/),
       updatedAt: expect.stringMatching(/Z$/),

@@ -118,17 +118,18 @@ export function useRedeemPoints() {
   const queryClient = useQueryClient();
   return useMutation({
     networkMode: 'always',
-    mutationFn: async (input: RedeemInput): Promise<PointEntryView> => {
+    mutationFn: async (input: RedeemInput): Promise<{ entry: PointEntryView; replayed: boolean }> => {
       const intent = `redeem:${JSON.stringify(input)}`;
       const requestId = requestKeyFor(intent);
-      const { data } = await api.post<PointEntryView>('/api/points/redemptions', {
+      const { data, status } = await api.post<PointEntryView>('/api/points/redemptions', {
         personId: input.personId,
         points: input.points,
         ...(input.note ? { note: input.note } : {}),
         requestId,
       });
       releaseRequestKey(intent);
-      return data;
+      // 201 is a new booking; 200 means the server already had this request and replayed it.
+      return { entry: data, replayed: status === 200 };
     },
     // The balance may also have changed under us (insufficient_balance), so refetch whatever the outcome.
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['points'] }),

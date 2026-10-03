@@ -1,6 +1,6 @@
 import { MongoBulkWriteError, type Db, type Document } from 'mongodb';
 import { COLLECTIONS } from './db.ts';
-import { clearPointEntries } from './points.ts';
+import { clearPointEntries, countRedemptions } from './points.ts';
 
 /**
  * Every collection in an export, in the order they are replaced on import. `pointEntries` holds only
@@ -38,6 +38,8 @@ export interface ReplaceResult {
   auditAdded: number;
   /** Entries of the points ledger that were dropped; the caller rebuilds the derived entries. */
   removedPointEntries: number;
+  /** The redemptions among them: a file of version 4 or older has none to put back (ADR-0013). */
+  removedRedemptions: number;
 }
 
 /**
@@ -59,6 +61,7 @@ export async function replaceAllCollections(db: Db, docs: TransferDocs): Promise
 
   // The derived part of the ledger is not exported: the old ledger is dropped, the booked redemptions of the file
   // are put back, and the caller rebuilds the rest from the new occurrences (ADR-0011, ADR-0013).
+  const removedRedemptions = await countRedemptions(db);
   const removedPointEntries = await clearPointEntries(db);
   const redemptions = docs[COLLECTIONS.pointEntries];
   if (redemptions.length > 0) await db.collection(COLLECTIONS.pointEntries).insertMany(redemptions, { ordered: true });
@@ -76,5 +79,5 @@ export async function replaceAllCollections(db: Db, docs: TransferDocs): Promise
       duplicates = writeErrors.length;
     }
   }
-  return { replaced, auditAdded: audit.length - duplicates, removedPointEntries };
+  return { replaced, auditAdded: audit.length - duplicates, removedPointEntries, removedRedemptions };
 }

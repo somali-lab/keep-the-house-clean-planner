@@ -214,8 +214,13 @@ describe('one-off task schemas', () => {
   });
 
   it('accepts ISO 4217 currency codes the runtime knows and nothing else (ADR-0013)', () => {
-    for (const code of ['EUR', 'USD', 'GBP', 'JPY', 'CHF']) expect(currencyCodeSchema.safeParse(code).success).toBe(true);
+    for (const code of ['EUR', 'USD', 'GBP', 'SEK', 'CHF']) expect(currencyCodeSchema.safeParse(code).success).toBe(true);
     for (const code of ['eur', 'EURO', 'EU', '', 'E1R', 'ZZZ', ' EUR']) expect(currencyCodeSchema.safeParse(code).success).toBe(false);
+    // Money is whole cents, so only currencies with exactly two fraction digits qualify.
+    for (const code of ['JPY', 'KWD', 'BHD']) {
+      const result = currencyCodeSchema.safeParse(code);
+      expect(result.success ? [] : result.error.issues.map((i) => i.message)).toEqual(['currency_not_two_decimals']);
+    }
     const bad = currencyCodeSchema.safeParse('eur');
     expect(bad.success ? [] : bad.error.issues.map((i) => i.message)).toContain('invalid_currency_code');
   });
@@ -254,7 +259,7 @@ describe('one-off task schemas', () => {
     expect(pointEntryKindSchema.safeParse('redemption').success).toBe(true);
     const view = {
       _id: ID, key: 'redemption:' + ID, kind: 'redemption', personId: ID, amount: -4, date: '2026-09-16', weekStart: '2026-09-14', periodStart: null,
-      occurrenceId: null, taskId: null, titleSnapshot: '', note: 'Pizza', centsPerPointSnapshot: 25, source: 'live',
+      occurrenceId: null, taskId: null, titleSnapshot: '', note: 'Pizza', centsPerPointSnapshot: 25, currencyCodeSnapshot: 'EUR', source: 'live',
       createdAt: '2026-09-16T08:00:00.000Z', updatedAt: '2026-09-16T08:00:00.000Z',
     };
     expect(pointEntryViewSchema.safeParse(view).success).toBe(true);

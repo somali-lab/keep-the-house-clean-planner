@@ -1,6 +1,7 @@
 import { createRedemptionInputSchema, pointsBalancesQuerySchema, pointsEntriesQuerySchema } from '@huishoudplanner/shared';
 import type { FastifyPluginAsync } from 'fastify';
 import { ObjectId } from 'mongodb';
+import { countRedemptions } from '../data/points.ts';
 import { getSettings } from '../data/settings.ts';
 import { pointEntriesOfPerson, pointsBalances, reconcilePoints, toPointEntryView } from '../domain/points.ts';
 import { bookRedemption, undoRedemption } from '../domain/redemptions.ts';
@@ -22,6 +23,9 @@ export const pointsRoutes: FastifyPluginAsync = async (app) => {
   app.post('/points/recompute', { preHandler: requireAdmin }, async (request) => {
     return reconcilePoints(auditContext(request), 'admin');
   });
+
+  /** How many redemptions exist: the import screen warns that an older file removes them (ADR-0013). Needs no profile. */
+  app.get('/points/redemptions/count', async () => ({ count: await countRedemptions(app.deps.db) }));
 
   /**
    * Books a redemption (ADR-0013): a person gives up points for themselves, an administrator for anyone.

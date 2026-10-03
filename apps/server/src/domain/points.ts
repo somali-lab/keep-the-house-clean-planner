@@ -100,12 +100,21 @@ export type SyncOutcome = 'created' | 'updated' | 'deleted' | 'unchanged';
  * creates, updates or deletes that one entry through the data layer, with one audit entry per
  * real change and nothing on a no-op. The occurrence may be gone (retract, delete), in which
  * case any entry is removed. Run it after every successful write that can change an execution.
+ *
+ * It runs in the same per-database queue as the reconciliation and the redemption bookings, so the
+ * read-compare-write of one sync never interleaves with a reconciliation or a booking (ADR-0013). It reads
+ * the occurrence inside the queue, so it always writes what is true at that moment. The reconciliation and
+ * the booking never call it from inside the queue, which would wait for itself; keep it that way.
  */
-export async function syncExecutionPoints(
+export function syncExecutionPoints(
   ctx: AuditContext,
   occurrenceId: ObjectId,
   reason: PointsSyncReason,
 ): Promise<SyncOutcome> {
+  return exclusively(ctx.db, () => syncNow(ctx, occurrenceId, reason));
+}
+
+async function syncNow(ctx: AuditContext, occurrenceId: ObjectId, reason: PointsSyncReason): Promise<SyncOutcome> {
   const settings = await getSettings(ctx.db);
   if (!settings) return 'unchanged';
   const occurrence = await findOccurrenceById(ctx.db, occurrenceId);
@@ -479,6 +488,7 @@ export function toPointEntryView(doc: PointEntryDoc, timezone: string): PointEnt
     periodStart: doc.periodStart ? toDayKey(doc.periodStart, timezone) : null,
     note: doc.note ?? null,
     centsPerPointSnapshot: doc.centsPerPointSnapshot ?? null,
+    currencyCodeSnapshot: doc.currencyCodeSnapshot ?? null,
   }) as PointEntryView;
 }
 

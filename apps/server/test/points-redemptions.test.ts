@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { COLLECTIONS } from '../src/data/db.ts';
 import { findPointEntries } from '../src/data/points.ts';
 import { readAllCollections } from '../src/data/transfer.ts';
-import { reconcilePoints } from '../src/domain/points.ts';
+import { exclusively, reconcilePoints } from '../src/domain/points.ts';
 import type { ExportFile } from '../src/domain/transfer.ts';
 import { captureWrites, expectAudited } from './helpers/audit.ts';
 import { asProfile, seededUsers } from './helpers/http.ts';
@@ -93,6 +93,7 @@ describe('POST /api/points/redemptions', () => {
       titleSnapshot: '',
       note: 'Pizza',
       centsPerPointSnapshot: 25,
+      currencyCodeSnapshot: 'EUR',
       source: 'live',
       createdAt: '2026-09-16T08:00:00.000Z',
       updatedAt: '2026-09-16T08:00:00.000Z',
@@ -101,6 +102,10 @@ describe('POST /api/points/redemptions', () => {
     expect(result.json()).not.toHaveProperty('requestId');
     expect(entries[0]).toMatchObject({ meta: { reason: 'redemption' }, after: { kind: 'redemption', amount: -4, note: 'Pizza', centsPerPointSnapshot: 25 } });
     expect((entries[0]!.actorId as ObjectId).equals(p1._id)).toBe(true);
+    // The request key is retry bookkeeping: it is in the entry but never in the audit entry.
+    expect(entries[0]!.after).not.toHaveProperty('requestId');
+    expect(JSON.stringify(entries[0])).not.toContain(KEY_A);
+    expect(await findPointEntries(t.db, { kind: 'redemption' })).toMatchObject([{ requestId: KEY_A }]);
 
     expect(await balance(p1)).toMatchObject({
       points: 6,
@@ -311,6 +316,7 @@ describe('DELETE /api/points/redemptions/:id', () => {
     expect(result.statusCode, result.body).toBe(200);
     expect(result.json()).toEqual({ deleted: true });
     expect(entries[0]).toMatchObject({ before: { kind: 'redemption', amount: -3, note: 'Taart' }, meta: { reason: 'redemption_undone' } });
+    expect(entries[0]!.before).not.toHaveProperty('requestId');
     expect((entries[0]!.actorId as ObjectId).equals(f.p2._id)).toBe(true);
     expect(await f.redemptions()).toEqual([]);
     expect(await f.balance(f.p2)).toMatchObject({ points: 10, redeemed: 0 });
@@ -433,6 +439,51 @@ describe('redemptions and the reconciliation', () => {
   });
 });
 
+describe('GET /api/points/redemptions/count', () => {
+  it('counts the redemptions without a profile', async () => {
+    const f = await fixture();
+    await f.earn(10);
+    const count = async () => (await f.t.app.inject({ method: 'GET', url: '/api/points/redemptions/count' })).json();
+    expect(await count()).toEqual({ count: 0 });
+    await f.redeem({ points: 2 });
+    await f.redeem({ points: 3 });
+    expect(await count()).toEqual({ count: 2 });
+  });
+});
+
+describe('the ledger queue', () => {
+  it('makes a live execution sync wait for a running reconciliation or booking, and runs on afterwards', async () => {
+    const f = await fixture();
+    let release!: () => void;
+    const held = exclusively(f.t.db, () => new Promise<void>((resolve) => { release = resolve; }));
+    // A recorded check-off syncs its entry; while the queue is held that write cannot happen.
+    const earning = f.earn(5);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(await findPointEntries(f.t.db, { kind: 'execution' })).toEqual([]);
+    release();
+    await held;
+    await earning;
+    expect(await findPointEntries(f.t.db, { kind: 'execution' })).toHaveLength(1);
+  });
+
+  it('does not deadlock when check-offs, bookings and reconciliations run at once, and ends consistent', async () => {
+    const f = await fixture();
+    await f.earn(10);
+    const calls = [
+      f.earn(3),
+      f.redeem({ points: 2 }),
+      f.call('POST', '/api/points/recompute'),
+      f.earn(4, f.p2),
+      f.redeem({ points: 1 }),
+      reconcilePoints(f.t.systemCtx(), 'nightly'),
+    ];
+    await Promise.all(calls);
+    expect((await findPointEntries(f.t.db, { kind: 'execution' })).map((e) => e.amount).sort()).toEqual([10, 3, 4]);
+    expect(await reconcilePoints(f.t.systemCtx(), 'nightly')).toMatchObject({ created: 0, updated: 0, removed: 0 });
+    expect(await f.balance(f.p1)).toMatchObject({ points: 10, redeemed: 3 });
+  });
+});
+
 describe('the statistics reset', () => {
   async function twoDays(f: Fixture) {
     await f.earn(10);
@@ -484,7 +535,7 @@ describe('transfer', () => {
     const file = await exported(f);
     expect(file.schemaVersion).toBe(5);
     expect(file.collections.pointEntries).toHaveLength(1);
-    expect(file.collections.pointEntries[0]).toMatchObject({ kind: 'redemption', amount: -4, note: 'Pizza', centsPerPointSnapshot: 15, requestId: KEY_A });
+    expect(file.collections.pointEntries[0]).toMatchObject({ kind: 'redemption', amount: -4, note: 'Pizza', centsPerPointSnapshot: 15, currencyCodeSnapshot: 'USD', requestId: KEY_A });
     expect(file.collections.settings[0]).toMatchObject({ currencyCode: 'USD', centsPerPoint: 15 });
 
     const target = await fixture();
@@ -492,7 +543,7 @@ describe('transfer', () => {
     // The import replaces the users, so act as the imported administrator.
     expect((await readAllCollections(target.t.db)).pointEntries).toHaveLength(1);
     const redemption = (await findPointEntries(target.t.db, { kind: 'redemption' }))[0]!;
-    expect(redemption).toMatchObject({ amount: -4, note: 'Pizza', centsPerPointSnapshot: 15, requestId: KEY_A, source: 'live' });
+    expect(redemption).toMatchObject({ amount: -4, note: 'Pizza', centsPerPointSnapshot: 15, currencyCodeSnapshot: 'USD', requestId: KEY_A, source: 'live' });
     // Derived entries were rebuilt from the occurrences: both executions are back, the balance is the same.
     expect((await findPointEntries(target.t.db, { kind: 'execution' })).map((e) => e.amount).sort()).toEqual([10, 10]);
     const before = (await f.t.app.inject({ method: 'GET', url: '/api/points/balances' })).json<PointsBalancesResponse>();
@@ -526,12 +577,51 @@ describe('transfer', () => {
     await target.earn(10);
     await target.redeem({ points: 2 });
     expect(await target.redemptions()).toHaveLength(1);
-    const res = await importFile(target, legacy);
+    // The redemptions that would be lost must be acknowledged; nothing is written until they are.
+    const refused = await captureWrites(target.t, () => importFile(target, legacy));
+    expect(refused.result.statusCode).toBe(409);
+    expect(refused.result.json()).toMatchObject({ code: 'redemptions_would_be_removed', count: 1 });
+    expect(refused.writes).toEqual([]);
+    expect(await target.redemptions()).toHaveLength(1);
+
+    const res = await target.call('POST', '/api/import/json?mode=replace&confirm=true&acknowledgeRedemptions=true', legacy as unknown as Record<string, unknown>);
     expect(res.statusCode, res.body).toBe(200);
-    expect(res.json()).toMatchObject({ replaced: { pointEntries: 0 } });
+    expect(res.json()).toMatchObject({ replaced: { pointEntries: 0 }, removedRedemptions: 1 });
+    // The import audit entry says how many redemptions it removed.
+    const imports = await target.t.db.collection(COLLECTIONS.auditLog).find({ entity: 'import' }).toArray();
+    expect(imports.at(-1)!.after).toMatchObject({ removedRedemptions: 1 });
     expect(await target.redemptions()).toEqual([]);
     expect((await findPointEntries(target.t.db, { kind: 'execution' })).map((e) => e.amount)).toEqual([10]);
     expect((await target.t.app.inject({ method: 'GET', url: '/api/settings' })).json<Settings>()).toMatchObject({ currencyCode: 'EUR', centsPerPoint: 0 });
+  });
+
+  it('needs no acknowledgement for an older file when there are no redemptions, nor for a version 5 file', async () => {
+    const f = await fixture();
+    await f.earn(10);
+    const old = structuredClone(await exported(f));
+    old.schemaVersion = 3 as never;
+    delete (old.collections as Partial<ExportFile['collections']>).pointEntries;
+    const none = await importFile(f, old);
+    expect(none.statusCode, none.body).toBe(200);
+    expect(none.json()).toMatchObject({ removedRedemptions: 0 });
+
+    await f.redeem({ points: 2 });
+    const current = await exported(f);
+    const res = await importFile(f, current);
+    expect(res.statusCode, res.body).toBe(200);
+    expect(res.json()).toMatchObject({ removedRedemptions: 1, replaced: { pointEntries: 1 } });
+    expect(await f.redemptions()).toHaveLength(1);
+  });
+
+  it('imports a version 5 file from before the currency was kept with a booking', async () => {
+    const f = await fixture();
+    await f.earn(10);
+    await f.redeem({ points: 2 });
+    const file = structuredClone(await exported(f));
+    delete file.collections.pointEntries[0]!.currencyCodeSnapshot;
+    expect((await importFile(f, file)).statusCode).toBe(200);
+    const entries = (await f.t.app.inject({ method: 'GET', url: `/api/points/entries?personId=${f.p1._id.toHexString()}&from=2026-09-14&to=2026-09-20` })).json<PointsEntriesResponse>().entries;
+    expect(entries.find((e) => e.kind === 'redemption')).toMatchObject({ currencyCodeSnapshot: null });
   });
 
   it.each([
@@ -637,6 +727,8 @@ describe('the conversion settings', () => {
     ['a lowercase code', { currencyCode: 'eur' }, 'currencyCode'],
     ['a code of four letters', { currencyCode: 'EURO' }, 'currencyCode'],
     ['a code that is no currency', { currencyCode: 'ZZZ' }, 'currencyCode'],
+    ['a currency without fraction digits', { currencyCode: 'JPY' }, 'currencyCode'],
+    ['a currency with three fraction digits', { currencyCode: 'KWD' }, 'currencyCode'],
     ['a negative factor', { centsPerPoint: -1 }, 'centsPerPoint'],
     ['a factor above 10000', { centsPerPoint: 10001 }, 'centsPerPoint'],
     ['a fractional factor', { centsPerPoint: 2.5 }, 'centsPerPoint'],
@@ -649,10 +741,46 @@ describe('the conversion settings', () => {
     expect(capture.writes).toEqual([]);
   });
 
+  it('names the reason when a currency does not have two fraction digits, and accepts real two-digit currencies', async () => {
+    const f = await fixture();
+    for (const code of ['JPY', 'KWD']) {
+      const res = await f.call('PATCH', '/api/settings', { currencyCode: code });
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({ details: [{ field: 'currencyCode', message: 'currency_not_two_decimals' }] });
+    }
+    const unknown = await f.call('PATCH', '/api/settings', { currencyCode: 'ZZZ' });
+    expect(unknown.json()).toMatchObject({ details: [{ field: 'currencyCode', message: 'invalid_currency_code' }] });
+    for (const code of ['EUR', 'USD', 'CHF']) expect((await f.call('PATCH', '/api/settings', { currencyCode: code })).statusCode).toBe(200);
+    expect((await settings(f)).currencyCode).toBe('CHF');
+  });
+
   it('accepts the bounds 0 and 10000', async () => {
     const f = await fixture();
     expect((await f.call('PATCH', '/api/settings', { centsPerPoint: 10000 })).statusCode).toBe(200);
     expect((await f.call('PATCH', '/api/settings', { centsPerPoint: 0 })).statusCode).toBe(200);
+  });
+
+  it('keeps the currency and the factor of a booking after the household switches currency', async () => {
+    const f = await fixture();
+    await f.earn(10);
+    await f.call('PATCH', '/api/settings', { currencyCode: 'EUR', centsPerPoint: 20 });
+    const first = await f.redeem({ points: 2 });
+    await f.call('PATCH', '/api/settings', { currencyCode: 'USD', centsPerPoint: 30 });
+    const second = await f.redeem({ points: 3 });
+    expect(first.json()).toMatchObject({ currencyCodeSnapshot: 'EUR', centsPerPointSnapshot: 20 });
+    expect(second.json()).toMatchObject({ currencyCodeSnapshot: 'USD', centsPerPointSnapshot: 30 });
+    const entries = (await f.t.app.inject({ method: 'GET', url: `/api/points/entries?personId=${f.p1._id.toHexString()}&from=2026-09-14&to=2026-09-20` })).json<PointsEntriesResponse>().entries;
+    expect(entries.filter((e) => e.kind === 'redemption').map((e) => [e.amount, e.currencyCodeSnapshot, e.centsPerPointSnapshot]).sort()).toEqual([
+      [-2, 'EUR', 20],
+      [-3, 'USD', 30],
+    ]);
+    // Derived entries carry no currency; the booking audit entry does.
+    expect(entries.find((e) => e.kind === 'execution')).toMatchObject({ currencyCodeSnapshot: null });
+    const created = await auditOf(f.t, 'create');
+    expect(created.at(-1)!.after).toMatchObject({ currencyCodeSnapshot: 'USD', centsPerPointSnapshot: 30 });
+    // Balances are in the currency in force now.
+    const balances = (await f.t.app.inject({ method: 'GET', url: '/api/points/balances' })).json<PointsBalancesResponse>();
+    expect(balances.currencyCode).toBe('USD');
   });
 
   it('keeps the factor a redemption was booked at, while the balances use the factor in force now', async () => {

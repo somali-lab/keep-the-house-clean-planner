@@ -10,7 +10,7 @@ import { format, t } from '../../i18n/nl.ts';
 import { getLocale } from '../../i18n/runtime.ts';
 import { useProfile } from '../../identity/index.ts';
 import { dayKeyInZone } from '../today/todayModel.ts';
-import { usePointsBalances, usePointsEntries, useUndoRedemption, type StatsPeriod } from './api.ts';
+import { useAllTimeBalances, usePointsBalances, usePointsEntries, useUndoRedemption, type StatsPeriod } from './api.ts';
 import { statsTableClass } from './ChartFrame.tsx';
 import { bonusText } from './bonusText.ts';
 import { bonusLabel, canUndoRedemption, pointsRange } from './pointsModel.ts';
@@ -38,6 +38,7 @@ export function PointsSection({ period, now }: { period: StatsPeriod; now?: Date
   const [redeemOpen, setRedeemOpen] = useState(false);
   const [message, setMessage] = useState<{ kind: 'status' | 'alert'; text: string } | null>(null);
   const undo = useUndoRedemption();
+  const allTime = useAllTimeBalances();
 
   const range = settings.data
     ? pointsRange(period, settings.data.cycleAnchorDate, dayKeyInZone(now ?? new Date(), settings.data.timezone))
@@ -73,7 +74,10 @@ export function PointsSection({ period, now }: { period: StatsPeriod; now?: Date
 
   const earned = rows.some((row) => row.executions > 0 || row.points !== 0 || row.redeemed > 0);
   const centsPerPoint = balances.data?.centsPerPoint ?? 0;
-  const money = (cents: number) => formatCents(cents, balances.data?.currencyCode ?? 'EUR', getLocale());
+  const currencyCode = balances.data?.currencyCode ?? 'EUR';
+  const money = (cents: number, currency: string = currencyCode) => formatCents(cents, currency, getLocale());
+  /** The balance over the whole ledger, the number the redeem dialog works with; a dash until it is known. */
+  const allTimeOf = (id: string) => allTime.data?.balances.find((balance) => balance.personId === id);
   const hasRedemptions = entries.data?.entries.some((entry) => entry.kind === 'redemption') ?? false;
 
   const undoRedemption = (id: string) => {
@@ -123,12 +127,14 @@ export function PointsSection({ period, now }: { period: StatsPeriod; now?: Date
       <RedeemDialog
         open={redeemOpen}
         onOpenChange={setRedeemOpen}
-        onRedeemed={(entry, worth) =>
+        onRedeemed={(entry, worth, replayed) =>
           setMessage({
             kind: 'status',
-            text: worth
-              ? format('stats.points.redeemedDoneMoney', { amount: formatNumber(-entry.amount), money: worth })
-              : format('stats.points.redeemedDone', { amount: formatNumber(-entry.amount) }),
+            text: replayed
+              ? t('stats.points.redeemedReplay')
+              : worth
+                ? format('stats.points.redeemedDoneMoney', { amount: formatNumber(-entry.amount), money: worth })
+                : format('stats.points.redeemedDone', { amount: formatNumber(-entry.amount) }),
           })
         }
       />
@@ -145,6 +151,8 @@ export function PointsSection({ period, now }: { period: StatsPeriod; now?: Date
                 <th scope="col">{t('stats.points.bonus')}</th>
                 <th scope="col">{t('stats.points.redeemed')}</th>
                 {centsPerPoint > 0 && <th scope="col">{t('stats.points.worth')}</th>}
+                <th scope="col">{t('stats.points.allTime')}</th>
+                {centsPerPoint > 0 && <th scope="col">{t('stats.points.allTimeWorth')}</th>}
               </tr>
             </thead>
             <tbody>
@@ -156,6 +164,12 @@ export function PointsSection({ period, now }: { period: StatsPeriod; now?: Date
                   <td className="tabular-nums">{formatNumber(row.bonusPoints)}</td>
                   <td className="tabular-nums">{formatNumber(row.redeemed)}</td>
                   {centsPerPoint > 0 && <td className="tabular-nums">{money(row.money?.balance ?? row.points * centsPerPoint)}</td>}
+                  <td className="font-bold tabular-nums">{allTime.data ? formatNumber(allTimeOf(row.personId)?.points ?? 0) : '—'}</td>
+                  {centsPerPoint > 0 && (
+                    <td className="tabular-nums">
+                      {allTime.data ? money(allTimeOf(row.personId)?.money?.balance ?? 0, allTime.data.currencyCode) : '—'}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -222,7 +236,7 @@ export function PointsSection({ period, now }: { period: StatsPeriod; now?: Date
                         {redemption && (entry.centsPerPointSnapshot ?? 0) > 0 && (
                           <span className="font-normal text-muted-foreground">
                             {' '}
-                            ({money(-entry.amount * (entry.centsPerPointSnapshot ?? 0))})
+                            ({money(-entry.amount * (entry.centsPerPointSnapshot ?? 0), entry.currencyCodeSnapshot ?? currencyCode)})
                           </span>
                         )}
                       </td>

@@ -1,4 +1,4 @@
-import { fromDayKey, mondayOf, toDayKey, type UserRole } from '@huishoudplanner/shared';
+import { DEFAULT_CURRENCY_CODE, fromDayKey, mondayOf, toDayKey, type UserRole } from '@huishoudplanner/shared';
 import { ObjectId } from 'mongodb';
 import type { AuditContext } from '../audit/context.ts';
 import {
@@ -87,6 +87,7 @@ export function bookRedemption(ctx: AuditContext, input: BookRedemptionInput): P
       source: 'live',
       note: input.note,
       centsPerPointSnapshot: settings.centsPerPoint ?? 0,
+      currencyCodeSnapshot: settings.currencyCode ?? DEFAULT_CURRENCY_CODE,
       requestId: input.requestId ?? null,
       createdAt: now,
       updatedAt: now,

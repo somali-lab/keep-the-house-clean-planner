@@ -2,6 +2,8 @@ import type { ApiWarning } from '@huishoudplanner/shared/schemas/api';
 
 export interface ApiResult<T> {
   data: T;
+  /** The HTTP status; 200 where 201 was expected means the server replayed an earlier request. */
+  status: number;
   warnings: ApiWarning[];
 }
 
@@ -69,7 +71,7 @@ export function createApiClient(options: ApiClientOptions) {
     }
 
     const warnings = isRecord(json) && Array.isArray(json.warnings) ? (json.warnings as ApiWarning[]) : [];
-    return { data: json as T, warnings };
+    return { data: json as T, status: res.status, warnings };
   }
 
   return {
