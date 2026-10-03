@@ -262,7 +262,7 @@ public sealed class CyclePlanService(
     // ---- slots
 
     public async Task<OneOf<PlanSlotsSaved, NotFound, ValidationErrors, InvalidPlan, ConflictError, PortError, SettingsMissing>> ReplaceSlotsAsync(
-        Actor actor, string id, IReadOnlyList<CyclePlanSlot> slots, CancellationToken cancellationToken)
+        Actor actor, string id, IReadOnlyList<CyclePlanSlot> slots, CancellationToken cancellationToken, AuditObject? meta = null)
     {
         ArgumentNullException.ThrowIfNull(actor);
         ArgumentNullException.ThrowIfNull(slots);
@@ -277,7 +277,7 @@ public sealed class CyclePlanService(
         }
 
         var normalised = CyclePlanRules.Normalise(slots);
-        var ran = await transactions.RunAsync(ct => ReplaceSlotsInTransactionAsync(actor, id.ToLowerInvariant(), normalised, ct), cancellationToken).ConfigureAwait(false);
+        var ran = await transactions.RunAsync(ct => ReplaceSlotsInTransactionAsync(actor, id.ToLowerInvariant(), normalised, meta, ct), cancellationToken).ConfigureAwait(false);
         return ran.Match<OneOf<PlanSlotsSaved, NotFound, ValidationErrors, InvalidPlan, ConflictError, PortError, SettingsMissing>>(
             outcome => outcome.Match<OneOf<PlanSlotsSaved, NotFound, ValidationErrors, InvalidPlan, ConflictError, PortError, SettingsMissing>>(
                 saved => saved, notFound => notFound, rejected => rejected, error => error, missing => missing),
@@ -286,7 +286,7 @@ public sealed class CyclePlanService(
     }
 
     private async Task<TransactionOutcome<OneOf<PlanSlotsSaved, NotFound, InvalidPlan, PortError, SettingsMissing>>> ReplaceSlotsInTransactionAsync(
-        Actor actor, string id, IReadOnlyList<CyclePlanSlot> slots, CancellationToken ct)
+        Actor actor, string id, IReadOnlyList<CyclePlanSlot> slots, AuditObject? meta, CancellationToken ct)
     {
         static TransactionOutcome<OneOf<PlanSlotsSaved, NotFound, InvalidPlan, PortError, SettingsMissing>> Abort(OneOf<PlanSlotsSaved, NotFound, InvalidPlan, PortError, SettingsMissing> value) => TransactionOutcome.Abort(value);
 
@@ -329,7 +329,7 @@ public sealed class CyclePlanService(
                 return Abort(replaceError);
             }
 
-            var recorded = await audit.RecordAsync(CyclePlanAudit.ForSlots(AuditActor.From(actor), id, diff), ct).ConfigureAwait(false);
+            var recorded = await audit.RecordAsync(CyclePlanAudit.ForSlots(AuditActor.From(actor), id, diff, meta), ct).ConfigureAwait(false);
             if (recorded.TryPickT1(out var auditError, out _))
             {
                 return Abort(auditError);

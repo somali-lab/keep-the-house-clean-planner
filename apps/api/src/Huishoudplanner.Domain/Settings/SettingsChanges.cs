@@ -29,6 +29,9 @@ public sealed record SettingsChanges
 
     public RewardGoals? RewardGoals { get; init; }
 
+    /// <summary>The whole new list of dismissed promote suggestions (written by the promote slice).</summary>
+    public IReadOnlyList<DismissedPromotion>? DismissedPromotions { get; init; }
+
     /// <summary>The settings after these changes (the modification time is the store's business).</summary>
     public HouseholdSettings ApplyTo(HouseholdSettings current)
     {
@@ -47,6 +50,7 @@ public sealed record SettingsChanges
             CurrencyCode = CurrencyCode ?? current.CurrencyCode,
             CentsPerPoint = CentsPerPoint ?? current.CentsPerPoint,
             RewardGoals = RewardGoals ?? current.RewardGoals,
+            DismissedPromotions = DismissedPromotions ?? current.DismissedPromotions,
         };
     }
 }

@@ -322,7 +322,7 @@ public static class CyclePlanEndpoints
     /// <c>422 invalid_plan</c> with the validation of the save as extension members (Node: <c>details</c>): the same <c>errors</c>,
     /// <c>issues</c>, <c>warnings</c> and <c>summary</c> as the validation endpoints.
     /// </summary>
-    private static IResult InvalidPlanProblem(InvalidPlan invalid)
+    internal static IResult InvalidPlanProblem(InvalidPlan invalid)
     {
         var validation = PlanValidationResponse.From(invalid.Validation);
         return ProblemResults.Problem(
