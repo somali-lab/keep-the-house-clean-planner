@@ -17,6 +17,7 @@ using Huishoudplanner.Host.Startup;
 using Huishoudplanner.Host.Users;
 using Huishoudplanner.Host.Rooms;
 using Huishoudplanner.Host.Tasks;
+using Huishoudplanner.Host.Notifications;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Scalar.AspNetCore;
@@ -42,6 +43,7 @@ public static class CompositionExtensions
         services.AddSettings();
         services.AddRooms();
         services.AddTasks();
+        services.AddNotifications();
         services.AddAuditLog();
         return services;
     }
