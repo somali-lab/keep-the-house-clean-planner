@@ -73,6 +73,10 @@ Differences: the Node compare-and-set on the stored schedule is replaced by the 
 
 Port of `routes/rooms.ts` and `data/rooms.ts`. Driving port `IRoomService` (list, create, update, delete; the HTTP adapter decides who may write), driven ports `ForStoringRooms` and `ForCheckingRoomUsage` (a read port on the `tasks` collection until the task domain exists). Create, update and delete are one transaction with their audit entry (`room`/`create`, `update`, `delete`; create records the four fields `name, sortOrder, active, virtual`, update the changed ones, delete the fields it removed). An update that changes nothing writes and audits nothing. A delete is refused with `RoomInUse(TaskCount)` while any task, active or inactive, uses the room. The list is ordered by sort order, name and id and paged with an opaque `RoomCursor`.
 
+## Notifications (`Huishoudplanner.Domain.Notifications`)
+
+`NotifyMessage` (title, body, structured data) and the driven port `ForSendingNotifications` (never throws; `PortError` messages carry the notifier and HTTP status only, never URL or token; `IsEnabled` is false for the none notifier). `MorningMessage.Compose(MorningCounts)` is the pure Dutch morning text of `domain/notify/morning.ts`; the orchestration (one message per active user, once a day) belongs to the jobs slice.
+
 ## Audit log read (`Huishoudplanner.Domain.Audit`)
 
 `AuditLogEntry` is the read model of a stored entry (wire names as strings, `before`/`after`/`meta` as `AuditObject`), `AuditLogFilter` and `AuditLogPage` its query and page, and `AuditCursor` the keyset cursor (same base64url `"{ISO instant}|{id}"` encoding as the Node server). Driving ports `IAuditLogService` (list, clear) and `IAuditRetentionService`; driven ports `ForReadingAuditLog`, `ForDeletingAuditEntries` (the only deletes of the log: clear and retention), `ForReadingOccurrenceContext` and `ForReadingAuditRetention` (`AUDIT_RETENTION_DAYS`).
