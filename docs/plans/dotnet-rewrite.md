@@ -42,6 +42,8 @@ These decisions were taken with the maintainer before the plan was written. Each
 | D19 | The OIDC design note in ADR-0017 is provider-neutral: Authorization Code with PKCE, JWT validation through the discovery document, `sub` mapped to a user through `externalId`.                                                                                                                          | ADR-0017                                |
 | D20 | Slices land on the integration branch `next`; `main` keeps releasing the Node application until the switch.                                                                                                                                                                                              | This plan (§9), AGENTS.md               |
 
+ADR numbers: the table and the rest of this plan say ADR-0015 to ADR-0020, but 0015 is retired and numbers are never reused (see the ADR index). The ADRs are therefore numbered one higher: plan 0015 is ADR-0016, 0016 is ADR-0017, 0017 is ADR-0018, 0018 is ADR-0019, 0019 is ADR-0020 and 0020 is ADR-0021.
+
 No open points remain from planning; the four raised on 2026-10-03 were settled the same day and are D17–D20.
 
 ## 3. Target architecture
@@ -206,7 +208,7 @@ Each phase ends in something demonstrable. Slices are small enough for one pull 
 
 ### Phase 0 — Foundation (nothing visible to the household yet)
 
-- [ ] 0.1 ADRs 0015–0020 written and indexed; ADR-0001 and ADR-0006 marked superseded; ADR-0004 and ADR-0008 amended for transactions. `docs/DECISIONS.md` lists the pointers.
+- [x] 0.1 ADRs 0015–0020 written and indexed; ADR-0001 and ADR-0006 marked superseded; ADR-0004 and ADR-0008 amended for transactions. `docs/DECISIONS.md` lists the pointers.
 - [ ] 0.2 Skills copied and adapted into `.agents/skills/` (D13), AGENTS.md gains the .NET rules and the repository map entry for `apps/api`; `.github/instructions/api.instructions.md` and its Cursor mirror exist.
 - [ ] 0.3 Solution skeleton: all projects of §3.1, `Directory.Build.props`, central package versions, `OneOf`, nullable and analyzers on; `Architecture.Tests` green with the dependency rules (the .NET counterpart of `lint-rule.test.ts`: writes only in the Mongo adapter); `dotnet build` and `dotnet test` in CI.
 - [ ] 0.4 Host: configuration binding with startup validation (§3.7), Problem Details, OpenAPI generation and drift test, health endpoint `GET /api/v2/health` reporting database reachability, static files and SPA fallback. `WebApplicationFactory` fixture. Port `config.test.ts`, `static.test.ts`, `health.test.ts` (health cases), `health-down.test.ts`.

@@ -1,6 +1,6 @@
 # ADR-0001 — Monorepo without a build step for server and shared code
 
-Status: Accepted
+Status: Superseded in part by ADR-0016 (the server no longer runs as TypeScript sources; the web application and the shared package keep this decision until the shared package is removed)
 
 ## Context
 

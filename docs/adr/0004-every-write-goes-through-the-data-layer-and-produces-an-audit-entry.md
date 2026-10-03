@@ -25,3 +25,7 @@ A coverage test walks every registered write route and asserts that it either pr
 - Deleting a task is not supported; deactivating it is. Removing a task would orphan its history, which is the opposite of the point.
 - Entries hold identifiers, not names, so they carry enough context — such as the task name at the time — to stay readable after the referenced entity changes or disappears.
 - Adding a write route costs the author a coverage scenario. That is the mechanism, not an inconvenience.
+
+## Amendment 2026-10-03 — transactions
+
+In the rebuilt backend an entity write and its audit entry are committed in one database transaction, so a change without its audit entry, or the reverse, can no longer occur. A write that changes nothing still writes and audits nothing. See ADR-0021.
