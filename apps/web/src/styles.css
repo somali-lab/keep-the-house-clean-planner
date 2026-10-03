@@ -734,64 +734,6 @@ a {
   font-weight: 600;
 }
 
-.proposal-review {
-  margin-top: 1.5rem;
-  padding-top: 1rem;
-  border-top: 2px solid #111827;
-}
-
-.diff-grid {
-  border-collapse: collapse;
-  table-layout: fixed;
-  min-width: 100%;
-}
-
-.diff-grid th,
-.diff-grid td {
-  border: 1px solid #d1d5db;
-  padding: 0.25rem;
-  vertical-align: top;
-  min-width: 8rem;
-  font-size: 0.8125rem;
-}
-
-.diff-grid ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 0.25rem;
-}
-
-/* Change type is carried by icon and words; weight and style only reinforce it. */
-.diff-added {
-  font-weight: 700;
-}
-
-.diff-removed {
-  text-decoration: line-through;
-}
-
-.diff-moved,
-.diff-moved-out {
-  font-style: italic;
-}
-
-.minutes-table {
-  border-collapse: collapse;
-}
-
-.minutes-table th,
-.minutes-table td {
-  border: 1px solid #d1d5db;
-  padding: 0.25rem 0.5rem;
-  text-align: left;
-}
-
-.rationale li {
-  margin-bottom: 0.25rem;
-}
-
 .offline-banner {
   margin: 0;
   padding: 0.5rem 1rem;

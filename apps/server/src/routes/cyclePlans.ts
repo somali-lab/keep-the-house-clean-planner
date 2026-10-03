@@ -20,7 +20,7 @@ import {
 import { z } from 'zod';
 import { listTasks } from '../data/tasks.ts';
 import { listRooms } from '../data/rooms.ts';
-import { activatePlan, applyProposal, discardProposal } from '../domain/activation.ts';
+import { activatePlan } from '../domain/activation.ts';
 import { activationPreview } from '../domain/activationPreview.ts';
 import { diffPlans } from '../domain/planDiff.ts';
 import { replaceUpcomingOccurrences } from '../domain/generation.ts';
@@ -139,16 +139,6 @@ export const cyclePlanRoutes: FastifyPluginAsync = async (app) => {
       summary: { before: before.summary.weeks, after: after.summary.weeks },
       warnings: after.warnings,
     };
-  });
-
-  app.post('/cycle-plans/:id/apply-proposal', { preHandler: requirePlanner }, async (request) => {
-    const id = parseIdParam(request.params);
-    return toApi(await applyProposal(auditContext(request), id));
-  });
-
-  app.post('/cycle-plans/:id/discard', { preHandler: requirePlanner }, async (request) => {
-    const id = parseIdParam(request.params);
-    return toApi(await discardProposal(auditContext(request), id));
   });
 
   app.put('/cycle-plans/:id/slots', { preHandler: requirePlanner }, async (request) => {

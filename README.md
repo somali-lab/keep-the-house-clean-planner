@@ -173,7 +173,7 @@ Under **Settings → AI assistant**, choose one of the supported providers:
 - **OpenAI-compatible** — requires an endpoint and model.
 - **Ollama** — for a locally hosted model; from Docker the endpoint is commonly `http://host.docker.internal:11434`.
 
-Set `AI_API_KEY` in `.env` when the provider requires a secret, then restart the stack. Suggestions never become active automatically: review them and explicitly choose **Apply** or **Discard**.
+Set `AI_API_KEY` in `.env` when the provider requires a secret, then restart the stack. Suggestions never become active automatically: review them in plan management and explicitly activate (through the activation preview) or delete them.
 
 ### Notifications
 

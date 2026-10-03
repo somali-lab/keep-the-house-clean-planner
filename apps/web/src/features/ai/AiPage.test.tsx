@@ -3,7 +3,6 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ANNA, BRAM, mockApi, storeProfile } from '../../test/fixtures.ts';
 import { makeRoom, makeSettings, renderWithProviders } from '../../test/render.tsx';
-import type { PlanDiffResponse } from './api.ts';
 import { AiPage } from './AiPage.tsx';
 
 const STAMP = '2026-09-14T08:00:00.000Z';
@@ -31,65 +30,16 @@ const DRAFT = plan({
   rationale: ['Week 1: rustig.', 'Week 2: meer badkamer.', 'Week 3: ramen.', 'Week 4: gelijk verdeeld.'],
 });
 
-const week = (weekIndex: number, anna: number, bram: number) => ({
-  weekIndex,
-  users: [
-    { userId: ANNA._id, minutes: anna },
-    { userId: BRAM._id, minutes: bram },
-  ],
-  unassignedMinutes: 0,
-});
-
-const DIFF: PlanDiffResponse = {
-  planId: 'p-draft',
-  againstPlanId: 'p-active',
-  added: [{ taskId: 't3', taskName: 'Ramen lappen', roomName: 'Woonkamer', durationMinutes: 60, weekIndex: 2, weekday: 5, assigneeId: null }],
-  removed: [{ taskId: 't2', taskName: 'Wastafel', roomName: 'Badkamer', durationMinutes: 10, weekIndex: 2, weekday: 6, assigneeId: BRAM._id }],
-  moved: [
-    {
-      taskId: 't1',
-      taskName: 'Badkamer',
-      roomName: 'Badkamer',
-      durationMinutes: 30,
-      from: { weekIndex: 1, weekday: 1, assigneeId: ANNA._id },
-      to: { weekIndex: 1, weekday: 2, assigneeId: BRAM._id },
-    },
-    {
-      taskId: 't2',
-      taskName: 'Wastafel',
-      roomName: 'Badkamer',
-      durationMinutes: 10,
-      from: { weekIndex: 0, weekday: 3, assigneeId: BRAM._id },
-      to: { weekIndex: 0, weekday: 3, assigneeId: ANNA._id },
-    },
-  ],
-  unchanged: 1,
-  summary: {
-    before: [week(0, 30, 10), week(1, 30, 0), week(2, 0, 10), week(3, 0, 0)],
-    after: [week(0, 40, 0), week(1, 0, 30), week(2, 0, 0), week(3, 0, 0)],
-  },
-  warnings: [{ code: 'interval_mismatch', taskId: 't2', placed: 1, required: 8 }],
-};
-
 function setup(aiType: 'none' | 'mock') {
   storeProfile(ANNA._id);
-  let plans = [ACTIVE, DRAFT];
+  const plans = [ACTIVE, DRAFT];
   return mockApi({
     '/api/users': [ANNA, BRAM],
     '/api/settings': makeSettings({ aiProvider: { type: aiType } }),
     '/api/rooms': [makeRoom({ _id: 'r1', name: 'Keuken' })],
     '/api/cycle-plans': () => plans,
-    '/api/cycle-plans/p-draft/diff': DIFF,
     'POST /api/ai/propose-plan': { planId: 'p-draft', proposalId: 'prop-1', warnings: [], rationale: DRAFT.rationale },
     'POST /api/ai/explain': { rationale: ['Week 1 rustig.', 'Week 2 verdeeld.', 'Week 3 logisch.', 'Week 4 eerlijk.'] },
-    'POST /api/cycle-plans/p-draft/apply-proposal': () => {
-      plans = [{ ...ACTIVE, active: false }, { ...DRAFT, active: true, draft: false }];
-      return { plan: plans[1] };
-    },
-    'POST /api/cycle-plans/p-draft/discard': () => {
-      plans = [ACTIVE, { ...DRAFT, discarded: true }];
-      return plans[1];
-    },
   });
 }
 
