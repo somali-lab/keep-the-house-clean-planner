@@ -15,7 +15,7 @@ namespace Huishoudplanner.Integration.Tests;
 
 /// <summary>
 /// Ports apps/server/test/audit-retention.test.ts onto <see cref="IAuditRetentionService"/> with a fixed clock and a real
-/// MongoDB replica set (the manual trigger, <c>POST /api/jobs/audit-retention</c>, belongs to the jobs slice).
+/// MongoDB replica set (the manual trigger, <c>POST /api/v2/jobs/audit-retention</c>, is tested in Api/JobEndpointTests).
 /// </summary>
 public sealed class AuditRetentionTests : IDisposable
 {
