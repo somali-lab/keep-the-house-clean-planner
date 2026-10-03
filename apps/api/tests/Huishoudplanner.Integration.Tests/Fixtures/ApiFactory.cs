@@ -23,6 +23,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 {
     private readonly string mongoUrl;
     private readonly List<Action<IServiceCollection>> overrides = [];
+    private bool skipSeeds;
 
     private readonly List<ILoggerProvider> logProviders = [];
     private readonly Dictionary<string, string> settings = [];
@@ -93,6 +94,13 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         return this;
     }
 
+    /// <summary>Keeps migrations and index creation but runs no seed step, so a test starts from empty collections (the users seed writes audit entries).</summary>
+    public ApiFactory WithoutSeeding()
+    {
+        skipSeeds = true;
+        return this;
+    }
+
     /// <summary>Replaces the registration of a driven port with a fake.</summary>
     public ApiFactory WithPort<TPort>(TPort fake)
         where TPort : class
@@ -126,6 +134,14 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                 foreach (var startup in services.Where(d => d.ImplementationType == typeof(StartupService)).ToList())
                 {
                     services.Remove(startup);
+                }
+            }
+
+            if (skipSeeds)
+            {
+                foreach (var seed in services.Where(d => d.ServiceType == typeof(ISeedStep)).ToList())
+                {
+                    services.Remove(seed);
                 }
             }
 

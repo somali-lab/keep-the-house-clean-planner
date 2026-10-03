@@ -56,7 +56,7 @@ public sealed class AuditRetentionTests : IDisposable
 
     private IAuditRetentionService Service(int? days)
     {
-        var factory = ApiFactory.ForMongo(mongo, databaseName)
+        var factory = ApiFactory.ForMongo(mongo, databaseName).WithoutSeeding()
             .WithPort<ForReadingAuditRetention>(new Retention(days))
             .WithPort<TimeProvider>(new FixedClock(Now));
         disposables.Add(factory);

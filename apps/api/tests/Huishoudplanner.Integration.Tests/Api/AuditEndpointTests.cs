@@ -42,7 +42,7 @@ public sealed class AuditEndpointTests : IDisposable
         planner = users.Add(Role.Planner);
         mongoClient = new MongoClient(mongo.ConnectionString);
         database = mongoClient.GetDatabase(databaseName);
-        factory = ApiFactory.ForMongo(mongo, databaseName)
+        factory = ApiFactory.ForMongo(mongo, databaseName).WithoutSeeding()
             .WithPort<ForFindingUsers>(users)
             .WithPort<TimeProvider>(new FixedClock(Now));
         client = factory.CreateClient();
