@@ -31,3 +31,9 @@ Two variables were renamed for .NET: `NODE_ENV` is now `ASPNETCORE_ENVIRONMENT` 
 ## Observability
 
 Traces, metrics and logs go out over OTLP when `OTEL_EXPORTER_OTLP_ENDPOINT` is set; without it the application logs JSON to stdout only. The pipeline lives in `src/Huishoudplanner.Host/Telemetry`; variables, the Elastic example and the verification status are in [docs/OBSERVABILITY.md](../../docs/OBSERVABILITY.md).
+
+## Errors and health
+
+Errors leave the API as RFC 9457 Problem Details (`application/problem+json`): `type` is `urn:huishoudplanner:problem:<code>`, plus `status`, `detail` and an always present `traceId`; validation problems add an `errors` object. Port error values (`NotFound`, `ConflictError`, `ValidationErrors`, `PortError` in `Domain/Errors`) are mapped by `ProblemResults` in `Adapters.Http`; unhandled exceptions and empty 4xx/5xx responses go through `UseExceptionHandler` and `UseStatusCodePages` and never leak a message.
+
+`GET /api/v2/health` answers `{ "status": "ok", "version": "1.7.0", "database": "ok" }`, or `503` with `"error"` in both status fields when the database ping fails. Integration tests build the host with `ApiFactory` (`tests/Huishoudplanner.Integration.Tests/Fixtures`): swap a driven port with `WithPort`, or use `ForMongo` for the Docker-backed variant.

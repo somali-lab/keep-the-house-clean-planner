@@ -1,3 +1,4 @@
+using Huishoudplanner.Host;
 using Huishoudplanner.Host.Configuration;
 using Huishoudplanner.Host.Telemetry;
 
@@ -11,8 +12,11 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 builder.Configuration.AddLegacyEnvironmentAliases();
 builder.Services.AddAppOptions(builder.Configuration);
 builder.Services.AddAppTelemetry(builder.Configuration);
+builder.Services.AddApiServices();
 
 var app = builder.Build();
+
+app.UseApiPipeline();
 
 await app.RunAsync();
 
