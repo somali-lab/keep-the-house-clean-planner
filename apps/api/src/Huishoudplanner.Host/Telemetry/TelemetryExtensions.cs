@@ -70,7 +70,7 @@ public static class TelemetryExtensions
                 logOptions =>
                 {
                     logOptions.IncludeFormattedMessage = true;
-                    logOptions.IncludeScopes = true;
+                    logOptions.IncludeScopes = false; // scopes cannot be filtered per entry; trace and span ids are on every record anyway
                     logOptions.ParseStateValues = true;
                 });
 

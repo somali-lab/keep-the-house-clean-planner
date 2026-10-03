@@ -12,6 +12,9 @@ public static class Redaction
 {
     public static readonly IReadOnlyList<string> Headers = ["authorization", "x-api-key"];
 
+    /// <summary>Replaces a log message that was formatted from a sensitive field.</summary>
+    public const string MaskedMessage = "[redacted: the message contained a sensitive field]";
+
     /// <summary>
     /// True for a tag or attribute that carries a sensitive header: the bare header name or a key that ends in
     /// it, such as <c>http.request.header.authorization</c> or its underscore form <c>http.request.header.x_api_key</c>.
@@ -73,5 +76,11 @@ public sealed class RedactingLogRecordProcessor : BaseProcessor<LogRecord>
         }
 
         data.Attributes = [.. attributes.Where(a => !Redaction.IsSensitiveKey(a.Key))];
+
+        // The formatted message was rendered from the same values, so it may hold the secret.
+        if (data.FormattedMessage is not null)
+        {
+            data.FormattedMessage = Redaction.MaskedMessage;
+        }
     }
 }

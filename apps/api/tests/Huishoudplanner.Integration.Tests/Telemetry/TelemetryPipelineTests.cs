@@ -146,6 +146,49 @@ public sealed class TelemetryPipelineTests
         keys.Should().NotContain("authorization").And.NotContain("x-api-key");
     }
 
+    [Fact]
+    public void Processor_masksTheFormattedMessageWhenASensitiveFieldIsPresent()
+    {
+        var logs = new List<LogRecord>();
+        using var host = Build(Config(), logs: logs);
+        var logger = host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("probe");
+
+        logger.LogInformation("{authorization} and {kept}", "ApiKey secret-value", "visible");
+        logger.LogInformation("plain {kept}", "visible");
+        host.Services.GetRequiredService<LoggerProvider>().ForceFlush();
+
+        logs.Should().HaveCount(2);
+        logs[0].FormattedMessage.Should().NotContain("secret-value");
+        logs[1].FormattedMessage.Should().Be("plain visible");
+    }
+
+    [Fact]
+    public void Scopes_neverReachTheOtlpLogRecords()
+    {
+        var logs = new List<LogRecord>();
+        using var host = Build(Config(), logs: logs);
+        var logger = host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("probe");
+
+        using (logger.BeginScope(new Dictionary<string, object> { ["authorization"] = "ApiKey secret-value" }))
+        {
+            logger.LogInformation("inside a scope");
+        }
+
+        host.Services.GetRequiredService<LoggerProvider>().ForceFlush();
+
+        var seen = new List<string>();
+        logs.Should().ContainSingle().Subject.ForEachScope(
+            (scope, state) =>
+            {
+                foreach (var item in scope)
+                {
+                    state.Add($"{item.Key}={item.Value}");
+                }
+            },
+            seen);
+        seen.Should().BeEmpty();
+    }
+
     [Theory]
     [InlineData("authorization", true)]
     [InlineData("Authorization", true)]
