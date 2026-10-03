@@ -215,7 +215,7 @@ Each phase ends in something demonstrable. Slices are small enough for one pull 
 - [ ] 0.5 OpenTelemetry pipeline with OTLP export, stdout JSON logs, redaction processor, `docs/OBSERVABILITY.md` with the Elastic example; verified against the maintainer's Elastic stack. (built and verified against an OTel Collector; verification against the maintainer's Elastic Agent is still to do)
 - [ ] 0.6 Mongo adapter base: client, class-map registration, index ensurer with today's index list, `migrations` collection with the two existing migrations, transaction runner, Testcontainers fixture with a single-node replica set; compose `mongo` as replica set with a documented `rs.initiate()` step for existing installations. Port the `ensureIndexes` cases of `health.test.ts`.
 - [ ] 0.7 Identity port and the profile-header adapter, the three authorization policies, and the audit writer (`ForRecordingAudit`) inside the transaction. Port `identity.test.ts`, `roles.test.ts`, `audit-diff.test.ts`.
-- [ ] 0.8 `docker/Dockerfile.dotnet` and a smoke test that starts the image against the compose Mongo and calls health.
+- [x] 0.8 `docker/Dockerfile.dotnet` and a smoke test that starts the image against the compose Mongo and calls health.
 - [x] 0.9 Golden vectors exported from the TypeScript tests (§7.2); the `time`, `cycle` and `due` helpers ported and green against them.
 
 ### Phase 1 — People, rooms, settings

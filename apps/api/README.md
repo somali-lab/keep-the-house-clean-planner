@@ -12,6 +12,20 @@ dotnet test       # xunit.v3 on Microsoft Testing Platform, all four test projec
 
 The SDK is pinned in `global.json` (10.0.x). Package versions live only in `Directory.Packages.props`; the version number comes from the repository-root `version.txt`.
 
+## Container image
+
+`docker/Dockerfile.dotnet` builds the web app in a Node stage, publishes the Host (`dotnet publish -c Release`, central package management) and runs it on `mcr.microsoft.com/dotnet/aspnet:10.0-noble` as the non-root `app` user (`USER $APP_UID`). The image installs `fontconfig` and `fonts-dejavu-core` for QuestPDF, has ICU and tzdata, and contains no browser. It takes the same `APP_OFFICIAL_BUILD` and `APP_RELEASE_DATE` build arguments as `docker/Dockerfile` (they reach the web build; the API version comes from `version.txt`). At the switch (slice 8.3) it replaces `docker/Dockerfile`.
+
+```bash
+docker build -f docker/Dockerfile.dotnet -t huishoudplanner-app:dotnet .
+docker run --rm -p 3000:3000 -e MONGO_URL='mongodb://host:27017/huishoudplanner?replicaSet=rs0' huishoudplanner-app:dotnet
+node scripts/smoke-dotnet.mjs   # or: npm run smoke:dotnet
+```
+
+- The listening port is set by `ASPNETCORE_HTTP_PORTS=3000`. `PORT` is validated by `AppOptions` but not applied to Kestrel yet, so setting `PORT` alone does not move the listener; change `ASPNETCORE_HTTP_PORTS` (and the published port) instead.
+- The image has neither `curl` nor `wget`, so the `HEALTHCHECK` is a plain `bash` TCP request to `/api/v2/health` on `ASPNETCORE_HTTP_PORTS`.
+- The application needs a single-node replica set (ADR-0021). The compose Mongo is still a standalone instance, so the smoke test adds `docker/docker-compose.dotnet-smoke.yml`, which starts Mongo with `--replSet rs0`, initiates it from the healthcheck and points `MONGO_URL` at it. `scripts/smoke-dotnet.mjs` uses its own compose project, port (3200, `SMOKE_PORT`), image tag and volumes, checks health, `/`, a SPA deep link and the Problem Details 404, and always removes everything again. CI runs it as the `dotnet-container-smoke` job.
+
 ## Architecture rules
 
 `tests/Huishoudplanner.Architecture.Tests` guards what project references cannot. Three mechanisms, because no single one sees everything:

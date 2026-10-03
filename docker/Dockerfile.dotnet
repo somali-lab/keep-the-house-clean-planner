@@ -1,0 +1,70 @@
+# syntax=docker/dockerfile:1
+
+# The .NET image of the rewrite (docs/plans/dotnet-rewrite.md section 6). It replaces docker/Dockerfile at the switch.
+ARG NODE_IMAGE=node:24-bookworm-slim
+ARG DOTNET_SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0
+ARG DOTNET_RUNTIME_IMAGE=mcr.microsoft.com/dotnet/aspnet:10.0-noble
+
+# ---------- web: install all deps, build the web app ----------
+FROM ${NODE_IMAGE} AS web
+WORKDIR /app
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+COPY package.json package-lock.json ./
+COPY packages/shared/package.json packages/shared/
+COPY apps/server/package.json apps/server/
+COPY apps/web/package.json apps/web/
+RUN npm ci
+COPY tsconfig.base.json ./
+COPY version.txt ./
+COPY packages/shared packages/shared
+COPY apps/web apps/web
+# Build identity is declared last so a new release moment does not invalidate the dependency layers.
+ARG APP_OFFICIAL_BUILD=false
+ARG APP_RELEASE_DATE=
+ENV APP_OFFICIAL_BUILD=${APP_OFFICIAL_BUILD} \
+    APP_RELEASE_DATE=${APP_RELEASE_DATE}
+RUN npm run build --workspace apps/web
+
+# ---------- publish: restore (central package management) and publish the Host ----------
+FROM ${DOTNET_SDK_IMAGE} AS publish
+WORKDIR /src
+# Directory.Build.props reads the version from ../../version.txt relative to apps/api.
+COPY version.txt ./
+COPY apps/api/global.json apps/api/Directory.Build.props apps/api/Directory.Packages.props apps/api/
+COPY apps/api/src/Huishoudplanner.Domain/*.csproj apps/api/src/Huishoudplanner.Domain/
+COPY apps/api/src/Huishoudplanner.Application/*.csproj apps/api/src/Huishoudplanner.Application/
+COPY apps/api/src/Huishoudplanner.Adapters.Mongo/*.csproj apps/api/src/Huishoudplanner.Adapters.Mongo/
+COPY apps/api/src/Huishoudplanner.Adapters.Http/*.csproj apps/api/src/Huishoudplanner.Adapters.Http/
+COPY apps/api/src/Huishoudplanner.Adapters.Ai/*.csproj apps/api/src/Huishoudplanner.Adapters.Ai/
+COPY apps/api/src/Huishoudplanner.Adapters.Notify/*.csproj apps/api/src/Huishoudplanner.Adapters.Notify/
+COPY apps/api/src/Huishoudplanner.Adapters.Pdf/*.csproj apps/api/src/Huishoudplanner.Adapters.Pdf/
+COPY apps/api/src/Huishoudplanner.Adapters.Jobs/*.csproj apps/api/src/Huishoudplanner.Adapters.Jobs/
+COPY apps/api/src/Huishoudplanner.Host/*.csproj apps/api/src/Huishoudplanner.Host/
+RUN dotnet restore apps/api/src/Huishoudplanner.Host/Huishoudplanner.Host.csproj
+COPY apps/api/src apps/api/src
+RUN dotnet publish apps/api/src/Huishoudplanner.Host/Huishoudplanner.Host.csproj \
+    --configuration Release --no-restore --output /out /p:UseAppHost=false
+
+# ---------- runtime: ASP.NET Core on Ubuntu noble, no browser ----------
+FROM ${DOTNET_RUNTIME_IMAGE} AS runtime
+# QuestPDF bundles Skia but needs fontconfig and one font on a slim image. The image already carries ICU and
+# tzdata, which TimeZoneInfo needs for IANA ids; the build fails when one of them is missing.
+USER root
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y fontconfig fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/* \
+    && ls /usr/share/zoneinfo/Europe/Amsterdam >/dev/null \
+    && ls /usr/lib/x86_64-linux-gnu/libicuuc.so.* >/dev/null 2>&1 || ls /usr/lib/aarch64-linux-gnu/libicuuc.so.* >/dev/null
+
+WORKDIR /app
+ENV ASPNETCORE_HTTP_PORTS=3000 \
+    WEB_DIST_DIR=/app/web
+COPY --from=publish /out ./
+COPY --from=web /app/apps/web/dist ./web
+
+USER $APP_UID
+EXPOSE 3000
+# The image has neither curl nor wget: a plain bash TCP request keeps it free of extra packages.
+HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=5 \
+    CMD ["bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/${ASPNETCORE_HTTP_PORTS}; printf 'GET /api/v2/health HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3; head -n 1 <&3 | grep -q ' 200 '"]
+ENTRYPOINT ["dotnet", "Huishoudplanner.Host.dll"]
