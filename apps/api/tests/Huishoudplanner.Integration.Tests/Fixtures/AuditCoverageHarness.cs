@@ -160,6 +160,21 @@ public sealed class AuditCoverageHarness : IAsyncLifetime
         (await Database.GetCollection<BsonDocument>("auditLog").Find(FilterDefinition<BsonDocument>.Empty).Sort(Builders<BsonDocument>.Sort.Ascending("_id")).ToListAsync(Ct))
             .Where(d => !known.Contains(d["_id"].AsObjectId)).ToList();
 
+    /// <summary>Points a person earned, as a ledger entry written below the application: the balance a redemption is booked against.</summary>
+    public async Task InsertEarnedEntryAsync(UserIdentity person, int amount)
+    {
+        var now = new BsonDateTime(DateTime.Parse(Wednesday, CultureInfo.InvariantCulture).ToUniversalTime());
+        var day = new BsonDateTime(DateTime.Parse(Monday, CultureInfo.InvariantCulture).ToUniversalTime().Date);
+        await Database.GetCollection<BsonDocument>("pointEntries").InsertOneAsync(
+            new BsonDocument
+            {
+                { "_id", ObjectId.GenerateNewId() }, { "key", "execution:" + ObjectId.GenerateNewId() }, { "kind", "execution" }, { "personId", ObjectId.Parse(person.Id) },
+                { "amount", amount }, { "date", day }, { "weekStart", day }, { "occurrenceId", ObjectId.GenerateNewId() }, { "taskId", BsonNull.Value },
+                { "titleSnapshot", "Verdiend" }, { "source", "live" }, { "createdAt", now }, { "updatedAt", now },
+            },
+            cancellationToken: Ct);
+    }
+
     /// <summary>Drift only a reconciliation repairs: an execution ledger entry whose occurrence does not exist (written below the application, like the Node test).</summary>
     public async Task InsertStrayLedgerEntryAsync()
     {

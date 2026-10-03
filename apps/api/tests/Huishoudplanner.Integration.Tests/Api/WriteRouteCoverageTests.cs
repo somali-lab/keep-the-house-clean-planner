@@ -36,7 +36,9 @@ public sealed class WriteRouteCoverageTests(AuditCoverageHarness h) : IClassFixt
     /// <summary>
     /// Collections of derived state (ADR-0011): the points ledger is kept in step with the occurrences by the sync hook inside the same transaction,
     /// and its changes are not audited one by one. A write to them is covered by the audit entry of the occurrence change that caused it (or by the
-    /// one summary entry of a reconciliation), so a request that writes only derived collections without a <c>points</c> summary is a failure.
+    /// one summary entry of a reconciliation), so a request that writes only derived collections without a <c>points</c> summary is a failure. The one
+    /// exception is the redemption (slice 4.3): a booked entry of the same collection that is a primary write, audited one by one with entity <c>points</c>
+    /// (<c>create</c> and <c>delete</c>), so its scenarios declare that entity and the harness lets them through (<c>scenario.Entity == "points"</c>).
     /// </summary>
     private static readonly HashSet<string> DerivedCollections = [MongoCollections.PointEntries];
 
@@ -201,6 +203,17 @@ public sealed class WriteRouteCoverageTests(AuditCoverageHarness h) : IClassFixt
             await h.InsertStrayLedgerEntryAsync();
             return new(HttpMethod.Post, "/api/v2/points/recompute", null, h.Admin);
         }, "points", "recompute", Idempotent: true),
+        new("POST /api/v2/points/redemptions", Kind.Audited, async h =>
+        {
+            await h.InsertEarnedEntryAsync(h.P1, 10);
+            return new(HttpMethod.Post, "/api/v2/points/redemptions", new { points = 3, note = "Pizza", requestId = "coverage-redemption-key" }, h.P1);
+        }, "points", "create", Idempotent: true, Covers: [MongoCollections.PointGuards]), // a redemption is a booked entry, a primary write of the points entity (not derived); the balance guard (ADR-0021) is bookkeeping of the booking, not household state; a repeat of the request key replays it
+        new("DELETE /api/v2/points/redemptions/{id}", Kind.Audited, async h =>
+        {
+            var (status, booked) = await h.SendAsync(HttpMethod.Post, "/api/v2/points/redemptions", new { points = 2 }, h.P1);
+            status.Should().Be(HttpStatusCode.Created, booked.ToString());
+            return new(HttpMethod.Delete, $"/api/v2/points/redemptions/{booked.GetProperty("id").GetString()}", null, h.P1);
+        }, "points", "delete", Idempotent: true), // a second undo is a 404 and writes nothing
         new("DELETE /api/v2/stats", Kind.Audited, Fixed(h => new(HttpMethod.Delete, "/api/v2/stats", null, h.Admin)), "settings", "reset", Covers: [MongoCollections.Occurrences, MongoCollections.Tasks, MongoCollections.Cycles]), // one summary entry stands for every document the reset touches // not idempotent by design (as in Node): a reset that finds nothing to reset still records its counts as one audit entry
 
         // The only deliberately unaudited writes. Both only ever delete audit entries; neither may touch other state.
