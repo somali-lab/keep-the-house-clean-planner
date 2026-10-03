@@ -14,8 +14,8 @@ namespace Huishoudplanner.Integration.Tests.Api;
 /// <summary>
 /// Ports apps/server/test/ai-proposals.test.ts (propose and rebalance with validation, the one re-prompt, the completion of partial plans,
 /// the editable templates and prompts) and apps/server/test/ai-draft.test.ts (the diff of an AI draft against the active plan). The model is the
-/// deterministic mock behind <c>ForSelectingAModel</c>; the real HTTP pipeline and MongoDB are used. Deferred to slice 2.4: the activation of an
-/// AI draft (<c>POST /cycle-plans/:id/activate</c> of ai-draft.test.ts) that clears the draft flag.
+/// deterministic mock behind <c>ForSelectingAModel</c>; the real HTTP pipeline and MongoDB are used. The activation of an
+/// AI draft (<c>POST /cycle-plans/:id/activate</c> of ai-draft.test.ts), which clears the draft flag, is ported at the end (slice 2.4).
 /// </summary>
 public sealed class AiProposalEndpointTests(MongoContainerFixture mongo)
 {
@@ -614,5 +614,31 @@ public sealed class AiProposalEndpointTests(MongoContainerFixture mongo)
 
         ShouldBeProblem(unknown, await AiHarness.Body(unknown), HttpStatusCode.NotFound, "not_found");
         ShouldBeProblem(yesterday, await AiHarness.Body(yesterday), HttpStatusCode.BadRequest, "validation_error");
+    }
+
+    [Fact]
+    public async Task Activating_anAiDraft_clearsTheDraftFlag_auditsIt_andKeepsItANonDraftAfterAnotherPlanIsActivated()
+    {
+        var (world, _, activeId, draftId) = await DraftSetupAsync();
+        await using var h = world.H;
+        var preview = await OkAsync(await h.Send(HttpMethod.Get, $"/api/v2/cycle-plans/{draftId}/activation-preview"));
+
+        var activated = await h.Send(HttpMethod.Post, $"/api/v2/cycle-plans/{draftId}/activation", new { previewToken = preview.GetProperty("previewToken").GetString() });
+
+        await OkAsync(activated);
+        var entries = await h.PlanAudit("activate");
+        entries.Should().ContainSingle();
+        entries[0]["entityId"].AsObjectId.ToString().Should().Be(draftId);
+        entries[0]["before"].AsBsonDocument.ToJson().Should().Be("{ \"active\" : false, \"draft\" : true }");
+        entries[0]["after"].AsBsonDocument.ToJson().Should().Be("{ \"active\" : true, \"draft\" : false }");
+        var stored = await h.Plan(draftId);
+        (stored["active"].AsBoolean, stored["draft"].AsBoolean, stored["source"].AsString).Should().Be((true, false, "ai"));
+
+        // Activating the original plan again leaves the former AI plan inactive and not a draft.
+        var back = await OkAsync(await h.Send(HttpMethod.Get, $"/api/v2/cycle-plans/{activeId}/activation-preview"));
+        var reactivated = await h.Send(HttpMethod.Post, $"/api/v2/cycle-plans/{activeId}/activation", new { previewToken = back.GetProperty("previewToken").GetString() });
+        await OkAsync(reactivated);
+        var former = await h.Plan(draftId);
+        (former["active"].AsBoolean, former["draft"].AsBoolean, former["source"].AsString).Should().Be((false, false, "ai"));
     }
 }

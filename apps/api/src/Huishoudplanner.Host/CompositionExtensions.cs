@@ -50,6 +50,7 @@ public static class CompositionExtensions
         services.AddDue();
         services.AddGeneration();
         services.AddCyclePlans();
+        services.AddActivation();
         services.AddAi();
         services.AddNotifications();
         services.AddAuditLog();
@@ -66,6 +67,7 @@ public static class CompositionExtensions
         app.MapTasks();
         app.MapDue();
         app.MapCyclePlans();
+        app.MapActivation();
         app.MapAi();
         app.MapGeneration();
         app.MapAuditEndpoints();

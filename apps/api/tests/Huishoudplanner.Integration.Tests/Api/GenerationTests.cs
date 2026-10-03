@@ -11,7 +11,7 @@ namespace Huishoudplanner.Integration.Tests.Api;
 /// that the unique slot index enforces, the audit entries with the run id, snapshots, vacation, inactive tasks and the past, DST, intervals,
 /// the repair of stale occurrences (anchor and slot changes) and the synchronisation when the slots of the active plan are saved.
 /// Deferred to slice 6.3 (the scheduler and the job endpoints): the three <c>scheduler</c> tests and the HTTP trigger
-/// <c>POST /jobs/generation</c> (the use case behind it is called directly here). Deferred to slice 2.4: the <c>activate</c> block
+/// <c>POST /jobs/generation</c> (the use case behind it is called directly here). Ported in slice 2.4 (see ActivationTests): the <c>activate</c> block
 /// (activation preview, token, mid-cycle activation). Deferred to slice 3.2: the occurrence query of "shows a newly assigned active-plan task"
 /// (the stored occurrences are asserted instead).
 /// </summary>
