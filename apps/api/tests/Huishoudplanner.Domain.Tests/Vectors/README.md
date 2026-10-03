@@ -11,7 +11,7 @@ file differs from what the TypeScript functions return today.
 
 ## Files
 
-One file per TypeScript module: `time.json`, `cycle.json`, `due.json`. Later slices add
+One file per TypeScript module: `time.json`, `cycle.json`, `due.json`. `limits.json` is the odd one out: it pins every limit and default of `GET /api/v2/meta/limits` (the function `limits`, keys `group.name`) and `defaultPointsForDuration`. Later slices add
 `bonuses.json`, `points.json`, `badges.json`, `rewards.json` and `validation.json` in the same format.
 
 ## Format

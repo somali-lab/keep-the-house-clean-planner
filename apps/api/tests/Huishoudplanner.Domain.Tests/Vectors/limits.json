@@ -1,0 +1,149 @@
+{
+  "module": "limits",
+  "cases": [
+    {
+      "name": "all limits and defaults of the endpoint",
+      "function": "limits",
+      "input": {},
+      "expected": {
+        "calendar.cycleDays": 28,
+        "calendar.cycleWeeks": 4,
+        "calendar.planWeeks": 4,
+        "calendar.maxRangeDays": 371,
+        "tasks.minPoints": 0,
+        "tasks.maxPoints": 1000,
+        "tasks.minDurationMinutes": 1,
+        "tasks.oneOffNameMaxLength": 120,
+        "tasks.intervalKeyMaxLength": 32,
+        "tasks.skipReasonMaxLength": 500,
+        "points.minCentsPerPoint": 0,
+        "points.maxCentsPerPoint": 10000,
+        "points.maxRedemptionNoteLength": 200,
+        "points.maxEntriesRangeDays": 371,
+        "points.maxCorrections": 100,
+        "bonuses.minPoints": 0,
+        "bonuses.maxPoints": 1000,
+        "rewards.minGoalPoints": 0,
+        "rewards.maxGoalPoints": 100000,
+        "rewards.eggCount": 10,
+        "badges.minNameLength": 1,
+        "badges.maxNameLength": 60,
+        "badges.maxDescriptionLength": 200,
+        "badges.maxImageBytes": 262144,
+        "badges.imageTypes": [
+          "image/png",
+          "image/jpeg",
+          "image/webp"
+        ],
+        "badges.maxThreshold": 100000,
+        "badges.maxOnTimeWeeksThreshold": 1000,
+        "badges.maxBadges": 100,
+        "badges.maxRuleTasks": 500,
+        "notifications.maxBrowserTimes": 6,
+        "ai.minTimeoutSeconds": 10,
+        "ai.maxTimeoutSeconds": 900,
+        "ai.constraintsMaxLength": 2000,
+        "ai.promptMaxLength": 8000,
+        "ai.promptTemplateMaxLength": 20000,
+        "audit.defaultPageSize": 50,
+        "audit.maxPageSize": 200,
+        "statistics.defaultCycles": 4,
+        "statistics.maxCycles": 26,
+        "defaults.currencyCode": "EUR",
+        "defaults.aiTimeoutSeconds": 180,
+        "defaults.intervals": [
+          {
+            "key": "daily",
+            "label": "Dagelijks",
+            "perCycle": 28,
+            "periodDays": 1
+          },
+          {
+            "key": "3w",
+            "label": "3x per week",
+            "perCycle": 12,
+            "periodDays": 2
+          },
+          {
+            "key": "2w",
+            "label": "2x per week",
+            "perCycle": 8,
+            "periodDays": 3
+          },
+          {
+            "key": "1w",
+            "label": "1x per week",
+            "perCycle": 4,
+            "periodDays": 7
+          },
+          {
+            "key": "2wk",
+            "label": "1x per 2 weken",
+            "perCycle": 2,
+            "periodDays": 14
+          },
+          {
+            "key": "4wk",
+            "label": "1x per 4 weken",
+            "perCycle": 1,
+            "periodDays": 28
+          },
+          {
+            "key": "quarter",
+            "label": "1x per kwartaal",
+            "perCycle": null,
+            "periodDays": 91
+          }
+        ]
+      }
+    },
+    {
+      "name": "one point per minute",
+      "function": "defaultPointsForDuration",
+      "input": {
+        "minutes": 45
+      },
+      "expected": 45
+    },
+    {
+      "name": "smallest duration",
+      "function": "defaultPointsForDuration",
+      "input": {
+        "minutes": 1
+      },
+      "expected": 1
+    },
+    {
+      "name": "floor of one point",
+      "function": "defaultPointsForDuration",
+      "input": {
+        "minutes": 0
+      },
+      "expected": 1
+    },
+    {
+      "name": "negative duration floors at one",
+      "function": "defaultPointsForDuration",
+      "input": {
+        "minutes": -5
+      },
+      "expected": 1
+    },
+    {
+      "name": "exactly the maximum",
+      "function": "defaultPointsForDuration",
+      "input": {
+        "minutes": 1000
+      },
+      "expected": 1000
+    },
+    {
+      "name": "capped at the maximum",
+      "function": "defaultPointsForDuration",
+      "input": {
+        "minutes": 5000
+      },
+      "expected": 1000
+    }
+  ]
+}
