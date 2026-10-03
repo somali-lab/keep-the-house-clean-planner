@@ -26,7 +26,7 @@ export const auditActionSchema = z.enum([
   'reschedule',
   'assign',
   'activate',
-  'ai-apply',
+  'ai-apply', // legacy: no longer written, but history from before the AI apply endpoint was removed still holds it
   'reset',
   'recompute',
 ]);

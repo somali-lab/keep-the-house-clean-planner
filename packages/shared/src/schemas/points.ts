@@ -5,7 +5,7 @@ import { BONUS_KINDS } from '../bonuses.ts';
 import { MAX_CENTS_PER_POINT, MAX_REDEMPTION_NOTE_LENGTH, MAX_TASK_POINTS, MIN_TASK_POINTS } from '../points.ts';
 import { daysBetween, isDayKey } from '../time.ts';
 
-/** Points value of a task: an integer from 0 to 100; 0 means the task earns no points (ADR-0011). */
+/** Points value of a task: an integer from 0 to 1000; 0 means the task earns no points (ADR-0011). */
 export const taskPointsSchema = z.number().int().min(MIN_TASK_POINTS).max(MAX_TASK_POINTS);
 
 /** `execution` and the four bonus kinds are derived from the occurrences; `redemption` is booked by a person (requirements 4.12). */

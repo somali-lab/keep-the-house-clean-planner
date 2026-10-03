@@ -51,20 +51,20 @@ All documents carry `createdAt` and `updatedAt`.
 ```
 _id, name, color, active, role: 'admin' | 'planner' | 'member',
 unavailableWeekdays: [0..6]              // 0 = Sunday
-dailyBudgetMinutes: { weekday, weekend } // target load
-maxDailyMinutes:    { weekday, weekend } // hard ceiling
+dailyBudgetMinutes: { weekday, weekend } // target per cycle week: Monday to Friday together, Saturday and Sunday together
+maxDailyMinutes:    { weekday, weekend } // ceiling for one single day (weekday = Monday to Friday, weekend = Saturday and Sunday)
 browserNotifications: { enabled, times: ['HH:mm', ...] } // at most 6, unique, sorted, household timezone; absent reads as disabled
 ```
 
-The number of users is configuration, not an assumption in the code. A fresh installation seeds the configured set.
+The number of users is configuration, not an assumption in the code. A fresh installation seeds the configured set; the first profile becomes an administrator and the others members.
 
 ### `rooms`
 
 ```
-_id, name, sortOrder, active
+_id, name, sortOrder, active, virtual
 ```
 
-Includes a room for house-wide work that belongs to no single space.
+A fresh installation includes a `virtual` room for house-wide work that belongs to no single space.
 
 ### `tasks`
 
@@ -80,7 +80,7 @@ lastCompletedAt | null                   // denormalised, maintained on completi
 
 - A duration estimate is mandatory. Workload balancing, budget validation and the AI all depend on it.
 - `points` is what one execution of the task earns (see 4.12). `0` means the task earns no points.
-- Tasks are deactivated, never deleted, so their history stays intact. Deletion is refused while the task is referenced by a plan or an occurrence.
+- A task is normally deactivated, so that it leaves the planning while its history stays intact. A planner can also delete a task for good: it is then removed from every plan (audited as a plan change) and from the badge rules that name it, while its occurrences, points and history stay, because they carry their own snapshot.
 
 ### Intervals
 
@@ -102,10 +102,23 @@ Intervals are data in `settings`, not a hardcoded enum, so a household can add i
 
 ```
 _id, name, active,
-slots: [{ taskId, weekIndex: 0..3, weekday: 0..6, assigneeId | null, sortOrder }]
+slots: [{ taskId, weekIndex: 0..3, weekday: 0..6, assigneeId | null, sortOrder }],
+weekThemes: [string, string, string, string],   // a free-text theme per cycle week
+draft: boolean, source: 'manual' | 'ai',        // an AI proposal is a draft until it is activated
+proposalId | null, rationale: [string x4] | null,   // the AI's explanation per week
+discarded: boolean
 ```
 
-Exactly one plan is active at a time. Inactive plans are kept, so alternatives and AI proposals can be compared against the active one.
+Exactly one plan is active at a time. Inactive plans are kept, so alternatives and AI proposals can be compared against the active one. The oldest plan is the default plan and, like the active plan, cannot be deleted (`409 default_plan`, `409 active_plan`).
+
+### `cycles`
+
+```
+_id, index,                      // 0 is the cycle that starts on the anchor date; negative before it
+startDate, endDate, planId | null, generatedAt, generationRunId
+```
+
+One document per generated cycle. A day in a cycle that has no document is not generated yet (see 4.3). Changing the anchor date realigns the stored start and end dates.
 
 ### `occurrences`
 
@@ -195,9 +208,10 @@ _id, at, actorId,
 entity: 'task' | 'cyclePlan' | 'occurrence' | 'user' | 'room' | 'settings' | 'cycle' | 'import' | 'points' | 'badge' | 'badgeAward',
 entityId,
 action: 'create' | 'update' | 'delete' | 'complete' | 'uncomplete' | 'skip'
-      | 'reschedule' | 'assign' | 'activate' | 'ai-apply' | 'reset' | 'recompute',
+      | 'reschedule' | 'assign' | 'activate' | 'ai-apply' | 'reset' | 'recompute',  // 'ai-apply' only exists in old history
 before, after,                  // changed fields only
-source: 'ui' | 'api' | 'ai' | 'system'
+source: 'ui' | 'api' | 'ai' | 'system',
+meta                            // optional, per action (see 4.9)
 ```
 
 ### `settings`
@@ -228,6 +242,8 @@ rewardGoals: { weekPoints, cyclePoints }  // each an integer 0..100000 or null (
 
 - `occurrences`: `{ date, assigneeId }`, `{ status, date }`, `{ taskId, completedAt }`, `{ completedBy, status }`, `{ assigneeId, status }`, `{ plannedDate }`; unique `{ cycleId, taskId, plannedDate }` for generated occurrences only; unique `{ requestId }` where `requestId` is a string
 - `tasks`: `{ roomId, active }`
+- `cyclePlans`: `{ slots.weekIndex, slots.weekday }`
+- `cycles`: unique `{ index }`
 - `pointEntries`: unique `{ key }`, `{ personId, date }` (date descending), `{ date }`; unique `{ requestId }` where `requestId` is a string
 - `badges`: unique `{ exampleKey }` where `exampleKey` is a string
 - `badgeAwards`: unique `{ key }`, `{ personId }`, `{ badgeId }`
@@ -238,29 +254,31 @@ rewardGoals: { weekPoints, cyclePoints }  // each an integer 0..100000 or null (
 ### 4.1 Rooms and tasks
 
 - Create, update and deactivate rooms; ordering is explicit, not alphabetical.
-- Create, update and deactivate tasks, grouped by room.
+- Create, update, deactivate and delete tasks, grouped by room. The task screen can collapse the room groups, filter on one room and show or hide inactive tasks, shows the history of one task, and downloads the task list as a PDF (see 6.1).
 - A task has a points value, an integer from 0 to 1000. When it is omitted on create, the server sets it to the default for the duration: one point per minute, between 1 and 1000 (`clamp(minutes, 1, 1000)`). A task from before points existed shows the same default. Points are changed through the existing task update and audited as a task update; a value outside 0 to 1000 or a fraction is rejected with a `validation_error` on `points`. The task form has a points field that is filled in from the duration, one point per minute, until it is edited by hand; clearing the field hands it back to the duration.
 - Bulk operations per room: deactivate all, reassign all.
-- A room that still holds tasks cannot be deleted.
+- A room that still holds tasks, active or inactive, cannot be deleted (`409 room_in_use`).
 
 ### 4.2 Template editor
 
-- A grid of four weeks by seven days, Monday first, with one column per user.
-- Drag a task from an unplanned pool onto a day cell, and drag it between cells.
+- The editor shows one cycle week at a time, chosen with the buttons for week 1 to 4. A week has a free-text theme. The week shows seven day cards, Monday first, and each card has one cell per active person plus one for "anyone" (unassigned work).
+- Drag a task from a pool of tasks that still have to be planned onto a day cell, and drag it between cells; a task can also be taken out of the plan again. The pool can be collapsed and filtered on room and interval. Every change is saved by itself shortly afterwards, and the editor shows whether it is saving, saved or failed.
 - Interval validation shows `placed / required` per task and flags any mismatch. This is a warning, not a block: the household may know better than the interval.
-- Workload validation sums the planned minutes per user per day against that user's budget, and marks days over the budget and days over the hard ceiling differently.
-- A drop onto a weekday the assignee is unavailable on is rejected, with an explanation.
+- Workload validation compares, per person and cycle week, the planned minutes from Monday to Friday and from Saturday and Sunday with the person's targets (`dailyBudgetMinutes`), and each single day with the person's daily maximum (`maxDailyMinutes`). Both are warnings, not blocks, and are shown differently: the person's week total and the day cell.
+- A drop onto a weekday the assignee is unavailable on is rejected, with an explanation. So is a second placement of the same task on the same day.
 - Per-week totals per user are visible, so imbalance is apparent before the cycle starts.
-- The editor shows each person's planned minutes and the household total for every cycle week. A task-name search matches a case- and accent-insensitive substring and only changes what is visible in the editor; it never changes saved slots.
-- The same validation rules run on the server for every plan write, so a plan that the editor would refuse cannot arrive through the API either.
+- The editor shows each person's planned minutes and the household total for every cycle week and for the whole cycle. A task-name search matches a case- and accent-insensitive substring and only changes what is visible in the editor; it never changes saved slots. The toolbar filters on person, and the planner's filters (week, search, person, room, interval) are saved per profile and reset by the filter reset button (see 4.4).
+- The same validation rules run on the server for every plan write, so a plan that the editor would refuse cannot arrive through the API either: the hard rules (unknown or inactive task or person, unavailable assignee, the same task twice on one day) are refused with `422 invalid_plan`, and the warnings are returned with the saved plan.
 - The editor identifies an inactive plan as a draft and explains that its slots do not appear in the week overview or My tasks until the plan is activated.
+- "Manage plans" opens a side panel for the plan on display: choose another plan, rename, copy, activate (with the preview of 4.3), empty it, delete it (not the default plan and not the active plan), download a PDF (see 6) and use the AI assistant (see 5).
+- The Distribution page assesses a chosen plan without editing it. One part shows the workload per person for each cycle week and for the whole cycle, split into Monday to Friday and weekend, against the person's targets, and with the unassigned work apart. The other part shows the spread of the tasks that occur more than once per cycle: the wanted distance between two executions, the distance in the plan (also from week 4 to the next cycle), and whether it is even or can be more even; a task that is not placed as often as its interval asks is reported as incomplete. Its plan choice can be restored to the default.
 
 ### 4.3 Generation
 
 - Activating a plan generates occurrences for the cycle's 28 days.
 - Generation is idempotent. Re-running it produces no duplicate generated occurrences, keyed on cycle, task and planned date. Only generated occurrences occupy a slot: an ad-hoc occurrence on a slot day does not suppress the generated one.
 - Generation never creates an occurrence in the past. A cycle activated midway produces the remainder of the cycle only.
-- A nightly job generates the upcoming cycle in advance, so the coming week is always visible.
+- A nightly job generates the current and the next cycle in advance, so the coming week is always visible. When the replaceable future occurrences no longer match the active plan, for example after the anchor date changed, the same run replaces them by those of the plan, the way an activation does, recorded with a system origin.
 - Saving slots in the active plan synchronizes future generated occurrences immediately. The resulting tasks appear on their assigned dates and for their assigned people when those dates are within the selected range in the week overview or My tasks, including after a page reload. Saving slots in an inactive draft does not change those overviews.
 - Vacation ranges suppress generation on those dates. The due engine keeps counting the days.
 - Activating a different plan replaces only future occurrences that are still replaceable — untouched, generated, open ones. Anything completed, skipped, rescheduled, or created ad hoc survives, because it records something that actually happened.
@@ -269,58 +287,61 @@ rewardGoals: { weekPoints, cyclePoints }  // each an integer 0..100000 or null (
 
 ### 4.4 Daily use
 
-- A today view lists the open occurrences for the selected profile, then the other members', then overdue items, and can be filtered per profile.
+- A today view lists the open occurrences of today in groups: those of the selected person, those nobody has picked up yet, those of other members, then the overdue items (open and dated before today, looking back at most eight weeks), and finally what was done or skipped today, so that the undo stays reachable. It can be filtered per profile, everyone or unassigned work; the filter starts on the active profile.
 - When the today view shows everyone, its groups sit in two columns on screens wide enough for two readable columns; narrower screens keep one column.
-- The view can browse forward a day or two without leaving the day-oriented layout, and shows which cycle week the day belongs to.
+- The view can browse forward, with buttons for today, tomorrow and the day after and next and previous arrows, without leaving the day-oriented layout; a day other than today shows only that day's occurrences. It shows which cycle week the day belongs to.
 - No backlog is shown from before the cycle anchor date; there is nothing to be behind on yet.
 - Complete and undo. Undo restores the previous status.
 - Skip with an optional reason. A skipped occurrence does not roll over, but counts as not done for the due engine.
 - When the active profile is not the assignee, completing needs an explicit choice, and the server enforces it: the request carries either `completedBy` (on behalf of the assignee, or of any named active person) or `takeOver` (the actor does it and becomes the assignee). Without either, the server rejects it with `400 validation_error` on `completedBy` (`completion_choice_required`); both together are rejected with `completion_choice_conflict`. Unassigned work and work of the actor itself default to the actor. The choices produce different history, and the person credited receives the points. Today, the week overview and the Due page's "Done now" for work planned today for someone else all ask this choice with the same dialog, which names who receives the points for each option.
   - *Deliberate change:* earlier versions credited the assignee when a request carried neither choice (ADR-0011).
 - An unassigned occurrence can be claimed.
-- Reschedule by dragging to another day. `plannedDate` is preserved. Dragging to a day the assignee is unavailable on is allowed but warned about, because reality outranks the plan.
-- A week overview is the default landing view at every screen width, shows the whole week with drag-to-reschedule, and can collapse past days.
-- The week overview can search by part of a task name and optionally show the cycle-week number on its cards.
-- My tasks groups its sliding 1-, 2-, or 4-week period into seven-day blocks starting today. Each block shows its date range; each task shows its own cycle-week number even when a block crosses a cycle boundary.
-- Filter choices throughout the app survive a hard reload. A single icon button in the top header, directly left of the language switch, resets the filters of the screen the person is on (today, week, my tasks, planner, tasks, statistics, completions and history) to their defaults and leaves the saved filters of every other screen untouched. It is disabled when the current screen has no filters or all of them are at their defaults, it has an accessible name and tooltip, and it announces the reset to assistive technology. One household member's saved choices are not silently applied to another member.
+- Reschedule an open occurrence by dragging it to another day (touch: hold briefly) or with a "move to" control that works from the keyboard. `plannedDate` is preserved. Dragging to a day the assignee is unavailable on is allowed but warned about, because reality outranks the plan. A day outside the generated cycles is refused (`409 cycle_not_generated`), and only open occurrences can be rescheduled or assigned (`409 invalid_transition` otherwise).
+- A week overview is the default landing view at every screen width. It shows a sliding window of twelve days: the three days before the centre day, the centre day (today) and the eight days after it, with previous and next buttons that move it by a week and a button back to today. The earlier days are collapsed by default and can be expanded. It has drag-to-reschedule.
+- The week overview can filter on a person (or unassigned work), search by part of a task name and optionally show the cycle-week number on its cards. It shows how many tasks are open and how many are finished.
+- My tasks shows the active profile's occurrences and the unassigned ones in two lists and groups its sliding 1-, 2-, or 4-week period into seven-day blocks starting today. Each block shows its date range; each task shows its own cycle-week number even when a block crosses a cycle boundary. The rooms can be shown or hidden.
+- The Overdue tab is the due engine's ranked list (see 4.5). Each task has "Schedule", "Done now" and "Extra" actions.
+- Filter choices throughout the app survive a hard reload. A single icon button in the top header, directly left of the language switch, in the overview and in management, resets the filters of the screen the person is on (today, week, my tasks, planner, tasks, statistics, completions and history) to their defaults and leaves the saved filters of every other screen untouched. It is disabled when the current screen has no filters or all of them are at their defaults, it has an accessible name and tooltip, and it announces the reset to assistive technology. One household member's saved choices are not silently applied to another member.
 - An extra execution of an existing task is an ad-hoc occurrence, planned or already done, and only within a cycle that has been generated. Several executions of one task on one day coexist, next to the generated occurrence of that day. Planning or recording a task on a day where it already has an open occurrence is allowed and returns the non-blocking warning `task_already_planned`, also when it is recorded as done; the Extra Task dialog then offers to check off the planned occurrence first.
   - *Deliberate change:* earlier versions allowed at most one ad-hoc occurrence per task per day, and an ad-hoc occurrence on a slot day suppressed that slot's generated occurrence. Both rules are gone (ADR-0009).
 - A one-off task is work that is done once and has no place in the central task list. It is an ad-hoc occurrence with `taskId: null`, created by `POST /api/occurrences/one-off` with a name (trimmed, 1 to 120 characters), an optional active room, a duration in whole minutes (at least 1), a date, an optional assignee (unassigned when omitted, the actor when it is recorded as done), `done`, `requestId` and optional `points` (a whole number from 0 to 1000, see 4.12). No task record is created, so a one-off task never appears in the task list, the due list, the planner or the AI input, and it does not take part in the due engine. The same rules as for an extra execution apply to `done`, the idempotency key and retract. An inactive or unknown room is rejected (`inactive_room`, `unknown_room`).
 - "Done just now" is one request that records an extra execution already done: `done: true` is only allowed for today, completes it for the given person (the actor when omitted; "anyone" is rejected), and refreshes the task's `lastCompletedAt`. If the task is already planned today, the Due page completes that occurrence instead, asking the choice above when it is planned for someone else.
 - Creating an ad-hoc occurrence takes an optional idempotency key (`requestId`). A repeat of the same request with the same key returns `200` with the stored record and writes and audits nothing; the same key for a different request is rejected with `409 idempotency_key_conflict`. The web client creates one key per user action with `crypto.getRandomValues`, keeps it across retries of that action, and does not queue these requests offline.
 - Undoing recorded work is a separate action, `retract`, because there is no planned state to return to. It is an undo of today's work: it is only allowed while the record's date is today in the household timezone (`409 retract_not_today` otherwise), and the clients show the undo of recorded work only on that day. Deleting an older completion stays an administrator's correction. The occurrence is deleted, audited with the reason `retract`, and `lastCompletedAt` falls back to the newest remaining completion. A second retract answers `404`, which clients treat as already undone. Uncomplete on recorded work is rejected with `409 retract_required`; an ad-hoc occurrence that was planned and completed later still uses uncomplete. Today and the week overview mark recorded extra executions with an "Extra" badge (icon and text).
-- Entry points. Today and the Tasks overview ("My Tasks") have an "Extra Task" action that opens one dialog with two clearly separated choices: an extra execution of an existing task (task) and a one-off task that does not appear on the task list (name, optional room, duration, points). The points field of a one-off task is a number field from 0 to 1000, filled in with the default for the entered duration (one point per minute) until it is edited by hand; an empty field hands the choice back to the default, and a value outside the range is refused next to the field. A second choice, "Already Done (Today)" (default) or "Plan", says when: already done is recorded as done today by the chosen person ("Done By"), who defaults to the active profile; plan creates an open ad-hoc occurrence (`done` omitted) on a chosen day, today or later, for a chosen active person or "Anyone" (unassigned). A day outside the generated cycles is refused by the server (`409 cycle_not_generated`), and the dialog shows that, and any other 4xx refusal, as a message under the date field. The hint that the task is still planned today and can be checked off applies to already done only. The dialog creates one request key per intent, ignores a repeated click while the request is pending, shows validation per field, is keyboard accessible, and is usable on mobile and desktop; both choices are shown with an icon, a radio button and text, not by colour alone. After recording, Today shows the record under finished and offers undo, which retracts; after planning, a confirmation "planned for {date}" is shown without undo, because a planned occurrence is ordinary open work, and the occurrence lists (Today, week overview, Tasks) refresh at once. The Due page offers the same dialog per task, opened on "extra" with that task chosen, next to "Schedule" and "Done now".
+- Entry points. Today and the Tasks overview ("My Tasks") have an "Extra Task" action that opens one dialog with two clearly separated choices: an extra execution of an existing task (task) and a one-off task that does not appear on the task list (name, optional room, duration, points). The points field of a one-off task is a number field from 0 to 1000, filled in with the default for the entered duration (one point per minute) until it is edited by hand; an empty field hands the choice back to the default, and a value outside the range is refused next to the field. A second choice, "Already Done (Today)" (default) or "Plan", says when: already done is recorded as done today by the chosen person ("Done By"), who defaults to the active profile; plan creates an open ad-hoc occurrence (`done` false) on a chosen day, today or later, for a chosen active person or "Anyone" (unassigned). A day outside the generated cycles is refused by the server (`409 cycle_not_generated`), and the dialog shows that, and any other 4xx refusal, as a message under the date field. The hint that the task is still planned today and can be checked off applies to already done only. The dialog creates one request key per intent, ignores a repeated click while the request is pending, shows validation per field, is keyboard accessible, and is usable on mobile and desktop; both choices are shown with an icon, a radio button and text, not by colour alone. After recording, Today shows the record under finished and offers undo, which retracts; after planning, a confirmation "planned for {date}" is shown without undo, because a planned occurrence is ordinary open work, and the occurrence lists (Today, week overview, Tasks) refresh at once. The Due page offers the same dialog per task, opened on "extra" with that task chosen, next to "Schedule" and "Done now".
 
 ### 4.5 Due engine
 
 For every active task:
 
 ```
-daysSince = today - (lastCompletedAt ?? first known day)
+daysSince = today - lastCompletedAt
 ratio     = daysSince / intervalPeriodDays
 ```
 
 - `ratio >= 1.0` marks the task due.
 - `ratio >= 1.5` marks it overdue and surfaces it prominently.
 - The result is a ranked list independent of the grid, which is what catches the task that has been quietly skipped for three cycles while the grid kept looking tidy.
-- A task that has never been completed is measured from the start of the first cycle rather than from the moment the task record was created, so importing a task list does not immediately report everything as overdue.
+- Days are counted as local calendar days, vacation days included. A skipped occurrence does not change `lastCompletedAt`, so skipping keeps a task due.
+- A task that has never been completed starts at an initial due date: the first date on which the task was planned in a generated cycle or, when it was never planned, one interval after the task record was created. Before that date its age is zero; on it the ratio is 1.0, and it grows by one day per day from there. So importing a task list does not immediately report everything as overdue.
+- The Overdue tab lists the ranked tasks that are due or overdue, with the days since the last execution (or the date it first becomes due) and the next open occurrence of the task. A task whose interval no longer exists is left out.
 - A recorded extra execution counts as a completion: it refreshes `lastCompletedAt` and restarts the due clock. Retracting it restores the previous value.
 
 ### 4.6 Promote to template
 
-- When the same occurrence is moved the same way repeatedly, the system offers to update the template slot. The threshold is configurable and is at least two.
+- When the same occurrence is moved the same way repeatedly, the system offers to update the template slot. The threshold is a setting of at least two (default two); it can be changed through the settings API. A suggestion is shown as a banner on Today, the week overview and the planner; applying or dismissing it needs the planner role.
 - A suggestion can be applied or dismissed. A dismissed suggestion stays dismissed until newer evidence appears.
 - Applying a suggestion changes the active plan and is audited like any other plan edit.
 
 ### 4.7 Statistics
 
-- A period is selected either as a number of recent cycles or as a range of calendar weeks.
-- Reports: an overview, fairness between users, workload per user over time, completion rate per task, room and user, configured versus actually achieved intervals, deviations between planned and actual days, and points (see 4.12).
+- A period is selected either as the last 1, 2 or 3 calendar weeks or as the last 1, 2, 4, 8 or 13 cycles; a week period includes the current week. The API accepts up to 26 cycles. The choice is saved per profile.
+- Reports, each its own tab: an overview, fairness between users, workload per user over time, completion rate per task, room and user, configured versus actually achieved intervals, deviations between planned and actual days, and points (see 4.12).
 - Under the entries of the chosen person the Points report also shows that person's badges: the earned ones with the day they were earned, and the others with their progress (see 4.13).
 - The Points report shows, of every person, the net points in the selected period, the number of executions, the bonus points, the redeemed points and the balance over the whole ledger (and, when a point is worth money, the value of the net and of the balance), and a table with the ledger entries of one chosen person. A redemption is listed with an icon and the text "Ingewisseld" (Redeemed), its note and, when it was booked while a point was worth money, what the points were worth then, in the currency of that booking. A bonus entry is labelled by its kind and period, for example "Weekbonus: alles op tijd, week 40" or "Cyclusbonus: alles gedaan, 7 sep – 4 okt", with an icon and the text, not by colour alone. It covers the period selected for the other reports: the current week and the weeks before it, or the current cycle and the cycles before it, both ends included. A person who is no longer active is listed when they earned points in the period.
 - Every chart has an equivalent table, so the same numbers are available without interpreting a graphic.
 - One-off tasks count like any other occurrence in workload, fairness, the overview and the completion totals per user. Per task, all one-off tasks share one combined row labelled "One-off Task". Per room they count under the room recorded on the occurrence, and one-off tasks without a room share one row without a room. They are left out of the interval report (they have no configured interval) and out of the deviation report, as are recorded extra executions, because nothing was planned.
-- An administrator can reset statistics completely, or purge only the completion data before a chosen date. Starting over deletes recorded extra executions instead of reopening them, because they have no planned state to return to.
+- An administrator can reset statistics completely, or purge only the completion data before a chosen date, from the statistics screen; the settings (Data) offer the complete reset as well. Starting over deletes recorded extra executions instead of reopening them, because they have no planned state to return to.
 - A reset removes the points that belong to the history it removes (see 4.12). Starting over deletes every derived ledger entry, the executions and the four bonus kinds, and clears the points snapshots of the occurrences it reopens; it also deletes every redemption. Purging before a date deletes the derived entries dated before that date and the redemptions dated before it, and leaves the others (a purge can therefore leave a negative balance when a later redemption spent points that were earned before the boundary); a bonus is dated on the last day of its period, so these are the bonuses of the periods that ended before the boundary, and a period that straddles the boundary keeps its entries until the next reconciliation, which removes them. The reset stores its boundary as `bonusFloor` in the settings, in the same audited reset entry (before and after), moving it forward only; starting over sets it to today. A period that starts before the floor never earns a bonus, so work dragged forward out of a purged period cannot pay that period out from what remains. The number of removed entries is recorded as `removedPointEntries` in the one reset audit entry, with the redemptions among them as `removedRedemptions`; no audit entry is written per removed ledger entry. The badge awards are rebuilt from what remains (see 4.13): a purge revokes the awards that depended on the purged history and starting over revokes every award, with one `badgeAward` summary entry when anything changed. The badge definitions are never touched.
 
 ### 4.8 Completion management
@@ -342,15 +363,15 @@ Every state change is recorded with who, when, which entity, which action, the c
 - A badge (see 4.13) is its own entity: creating one is a `badge` `create` entry with its fields, a change is an `update` with the changed fields only (the rule's fields nested) and deleting one is a `delete` that keeps the removed fields. An image appears in these entries as `{ contentType, size, hash }` and never as bytes, so a changed picture is visible without storing it in the log. A change to an award is its own `badgeAward` entry with `create`, `update` (the moment moved) or `delete` and `meta: { reason, badgeName }`, the reason of the points sync that caused it (`complete`, `recorded`, `uncomplete`, `retract` or `correction`) and the name of the badge at that moment; the history feed reads it as a person earning or losing a badge. A bulk evaluation of the awards (a reconciliation, a change of a rule or of the active flag, a deletion of a badge, adding example badges, a statistics reset) that changes anything records one `badgeAward` summary entry with a fixed id, action `recompute` and `meta: { trigger, created, updated, removed, changes, changesTotal, changesTruncated }`, where `trigger` is `startup`, `nightly`, `import`, `admin`, `badge` or `reset` and `changes` lists at most 100 changes with their key, badge, badge name (so the history still names a deleted badge), person and `created`, `updated` or `removed`. Deleting a task removes it from the badge rules that name it as an audited `badge` `update` with `meta: { reason: 'task_deleted' }`. A run that changes nothing writes and records nothing.
 - A reconciliation of the ledger (see 4.12) that changes anything records one summary entry: entity `points`, a fixed ledger id, action `recompute`, the actor that started it (the system for startup and the scheduled nightly run, the requesting profile for an import, a manual nightly run and the recompute endpoint), and `meta: { trigger, tasksDefaulted, snapshotsSet, created, updated, removed, unattributed, skipped, corrections, correctionsTotal, correctionsTruncated, bonusesCreated, bonusesRemoved, bonusChanges, bonusChangesTotal, bonusChangesTruncated }`. `trigger` is `startup`, `nightly`, `import` or `admin`. `corrections` lists, for the entries that were changed or removed, its key and its old and new person and amount, because such a change means the ledger had drifted from the occurrences; it holds at most 100 items, `correctionsTotal` counts all of them and `correctionsTruncated` says whether it was cut. `skipped` counts occurrences that could not be read and were left as they are. `bonusChanges` lists, for each week or cycle bonus that was created or removed, its key, person and amount and `created` or `removed`, with the same limit of 100 items, `bonusChangesTotal` and `bonusChangesTruncated`, so the history shows who earned or lost which bonus. Entries that are only created are counted. No entry is written per ledger entry, and a run that changes nothing writes and records nothing.
 - A change that changes nothing writes nothing and records nothing.
-- The log is append-only. No interface path edits an entry. An optional retention job removes entries older than a configured age and is the only exception.
-- History is viewable per entity and as a global chronological feed, filterable by actor, entity type, action and date range, with a panel showing the referenced entity.
+- The log is append-only. No interface path edits an entry. The exceptions are an optional retention job, which removes entries older than a configured age, and an administrator's explicit "clear history" (`DELETE /api/audit`), which empties the log and is deliberately not recorded in it.
+- History is viewable per entity (for example the history of one task) and as a global chronological feed, newest first and loaded in pages, filterable by actor (the system included), entity type and date range; the API can also filter on origin. Entries are described in words, with the names of the entities they refer to, and an entry made by the AI is marked as such.
 
 ### 4.10 Notifications and scheduled jobs
 
-- A nightly job generates upcoming occurrences, reconciles the points ledger with the occurrences (see 4.12), which also finalises the week and cycle bonuses of the periods that ended (the run at Monday 03:00 finalises the week that ended at midnight) and then makes the badge awards match (see 4.13), and, when configured, applies audit retention.
-- A morning notification summarises the day: what is planned per person and what is overdue. It is suppressed when there is nothing to report.
+- A nightly job generates upcoming occurrences, reconciles the points ledger with the occurrences (see 4.12), which also finalises the week and cycle bonuses of the periods that ended (the run at Monday 03:00 finalises the week that ended at midnight) and then makes the badge awards match (see 4.13). When audit retention is configured, a separate job applies it shortly afterwards.
+- A morning notification is sent to every active person: how many open tasks are planned for them today, how many are planned for "anyone", and how many tasks the due engine marks as overdue for the household. It is suppressed for a person when there is nothing to report.
 - Supported server channels are none, an ntfy topic, and a Home Assistant webhook. The channel and its credentials come from the environment. These reach the household whether or not a browser is open, and stay a separate setting from browser notifications.
-- Generation, the morning notification and audit retention can each be triggered manually from the settings screen, which is also how an installation is verified after a change.
+- Generation, the morning notification and audit retention can each be triggered manually from the Jobs tab of the settings screen (the endpoints are open to planners), which is also how an installation is verified after a change.
 - The scheduler can be disabled entirely, which is required for reproducible tests.
 
 Browser notifications (ADR-0010) are a second, personal channel:
@@ -364,7 +385,7 @@ Browser notifications (ADR-0010) are a second, personal channel:
 
 ### 4.11 Data management
 
-- Full JSON export of the dataset, and import of such an export. The export carries `schemaVersion: 6`. Version 2 added `recordedDone`, `requestId` and a nullable occurrence `taskId` (extra executions and one-off tasks; ADR-0009); version 3 adds `tasks.points` and `occurrences.pointsSnapshot` (ADR-0011); version 4 adds the bonus schedule `settings.bonusSchedule` (ADR-0012); version 5 adds the redemptions in `collections.pointEntries` and `settings.currencyCode` and `settings.centsPerPoint`; version 6 adds the badge definitions with their images in `collections.badges`, the images as extended-JSON binary (ADR-0014). The derived part of the points ledger is not exported: an import replaces the ledger, puts the redemptions of the file back and rebuilds the executions and bonuses from the imported occurrences, which also fills in the points of an older file with the same defaults as at startup (see 4.12). Import accepts versions 1 to 6; an older file is valid unchanged, has no redemptions (so the redemptions it replaces are dropped like every other replaced collection) and a file without a bonus schedule rebuilds without bonuses. A version 5 file without `collections.pointEntries` and a version 6 file without `collections.badges` are rejected. The badge awards are not exported: an import clears them and rebuilds them from the imported executions, with the same moments. A file older than version 6 has no badges, so the badges and awards it replaces are removed like every other replaced collection. Task ids in a badge rule that the file does not have are dropped (a rule that named tasks and names none is deactivated) and the others are sorted. A badge whose image size or hash does not match its bytes, whose image is not a PNG, JPEG or WebP of the declared type (an SVG included), or that repeats an example key, is rejected before anything is written (`image_size_mismatch`, `image_hash_mismatch`, `unsupported_image_type`, `image_type_mismatch`, `duplicate_example_key`). Importing a file older than version 6 while badges exist needs an explicit acknowledgement as well, `acknowledgeBadges=true`; without it the import is refused with `409 badges_would_be_removed` (with `count`) before anything is written, the number removed is `removedBadges` in the import result and audit entry, and the import screen reads the number from `GET /api/badges` and asks for its own tick. Importing a file older than version 5 while redemptions exist needs an explicit acknowledgement, `acknowledgeRedemptions=true`; without it the import is refused with `409 redemptions_would_be_removed` (with `count`) before anything is written. The number of removed redemptions is `removedRedemptions` in the import result and in the import audit entry. The import screen reads the number from `GET /api/points/redemptions/count`, names it in a warning when the chosen file is older than version 5, and enables the existing confirmation only after the person ticks that they understand those redemptions are lost. A redemption of a person who is not in the file, a duplicate redemption key and a duplicate redemption request key are rejected before anything is written (`unknown_user`, `duplicate_key`, `duplicate_request_id`). A file whose bonus schedule has a row that starts after today, or whose `bonusFloor` lies after today, is rejected with `validation_error` (`bonus_schedule_in_future`, `bonus_floor_in_future`) before anything is written. A later version is rejected.
+- Full JSON export of the dataset, and import of such an export (administrators only), both on the Data tab of the settings. The export carries `schemaVersion: 6`. Version 2 added `recordedDone`, `requestId` and a nullable occurrence `taskId` (extra executions and one-off tasks; ADR-0009); version 3 adds `tasks.points` and `occurrences.pointsSnapshot` (ADR-0011); version 4 adds the bonus schedule `settings.bonusSchedule` (ADR-0012); version 5 adds the redemptions in `collections.pointEntries` and `settings.currencyCode` and `settings.centsPerPoint`; version 6 adds the badge definitions with their images in `collections.badges`, the images as extended-JSON binary (ADR-0014). The derived part of the points ledger is not exported: an import replaces the ledger, puts the redemptions of the file back and rebuilds the executions and bonuses from the imported occurrences, which also fills in the points of an older file with the same defaults as at startup (see 4.12). Import accepts versions 1 to 6; an older file is valid unchanged, has no redemptions (so the redemptions it replaces are dropped like every other replaced collection) and a file without a bonus schedule rebuilds without bonuses. A version 5 file without `collections.pointEntries` and a version 6 file without `collections.badges` are rejected. The badge awards are not exported: an import clears them and rebuilds them from the imported executions, with the same moments. A file older than version 6 has no badges, so the badges and awards it replaces are removed like every other replaced collection. Task ids in a badge rule that the file does not have are dropped (a rule that named tasks and names none is deactivated) and the others are sorted. A badge whose image size or hash does not match its bytes, whose image is not a PNG, JPEG or WebP of the declared type (an SVG included), or that repeats an example key, is rejected before anything is written (`image_size_mismatch`, `image_hash_mismatch`, `unsupported_image_type`, `image_type_mismatch`, `duplicate_example_key`). Importing a file older than version 6 while badges exist needs an explicit acknowledgement as well, `acknowledgeBadges=true`; without it the import is refused with `409 badges_would_be_removed` (with `count`) before anything is written, the number removed is `removedBadges` in the import result and audit entry, and the import screen reads the number from `GET /api/badges` and asks for its own tick. Importing a file older than version 5 while redemptions exist needs an explicit acknowledgement, `acknowledgeRedemptions=true`; without it the import is refused with `409 redemptions_would_be_removed` (with `count`) before anything is written. The number of removed redemptions is `removedRedemptions` in the import result and in the import audit entry. The import screen reads the number from `GET /api/points/redemptions/count`, names it in a warning when the chosen file is older than version 5, and enables the existing confirmation only after the person ticks that they understand those redemptions are lost. A redemption of a person who is not in the file, a duplicate redemption key and a duplicate redemption request key are rejected before anything is written (`unknown_user`, `duplicate_key`, `duplicate_request_id`). A file whose bonus schedule has a row that starts after today, or whose `bonusFloor` lies after today, is rejected with `validation_error` (`bonus_schedule_in_future`, `bonus_floor_in_future`) before anything is written. A later version is rejected.
 - Before anything is deleted, import checks the file for duplicates on the unique indexes: two generated occurrences with the same `(cycleId, taskId, plannedDate)` and two occurrences with the same `requestId`. Such a file is rejected as a whole with `validation_error` (`duplicate_slot`, `duplicate_request_id`) and nothing is written, because the replacement would otherwise fail halfway, after the collections were emptied.
 - Import validates the entire file against both the API shape and the storage shape before writing anything, reports what it will replace, and requires explicit confirmation.
 - A nightly database dump is written to a mounted backup path by a separate container.
@@ -394,7 +415,7 @@ A person redeems points for a payout or a reward by booking a redemption (ADR-00
 - **Idempotent.** A booking can carry a request key. A repeat with the same key, person, points and note answers `200` with the stored booking and writes nothing; the same key for anything else answers `409 idempotency_key_conflict`. The web client says "Deze inwisseling was al geboekt" instead of reporting a new booking when it gets `200`, and keeps an unfinished request key for ten minutes, so a deliberate identical redemption later is a new request.
 - **Undo.** The person a redemption belongs to can undo it on the day it was booked (household timezone); an administrator can undo any redemption at any time. Later the owner gets `403 redemption_locked`, anybody else `403 permission_denied`.
 - **Reading.** `earned` is the points of executions and bonuses in the range, `redeemed` the points redeemed in it, and the balance `points` is earned minus redeemed. When a point is worth money the balances also carry the money of each of the three. A redemption is listed among the entries with its note and the factor it was booked at.
-- **Web.** The Points tab has a "Inwisselen" (Redeem) action for the active profile, where an administrator picks a person. The dialog shows the available balance, the amount with the money it is worth, and a note, refuses more than the balance, and is safe against a double click. Redemptions are listed with an icon and text, with an undo button where the profile may undo.
+- **Web.** The Points tab of the statistics has an "Inwisselen" (Redeem) action for the active profile, where an administrator picks a person. The dialog shows the available balance, the amount with the money it is worth, and a note, refuses more than the balance, and is safe against a double click. Redemptions are listed with an icon and text, with an undo button where the profile may undo.
 
 #### Bonuses
 
@@ -420,7 +441,7 @@ A tab shows how far a person is towards the goal of the current week or cycle. N
 - **Percent and eggs.** `percent` is the earned share of the goal, a whole number rounded down and capped at 100, so it only reaches 100 when the goal is met. The basket holds one egg per full 10% (10 eggs are 100%).
 - **Money.** When a point is worth money the earned points and the goal are also shown as money at the factor in force now.
 - **Completion animation.** When the meter is full, a short animation plays once per person and period: the eggs bounce into the basket. It is remembered in the browser under `khc.rewardCelebrated.<personId>.<period>.<startDayKey>`, so a reload does not play it again and a new period plays it again; a copy is also kept in memory, so a blocked or failing storage cannot make a remount (the week/cycle toggle) play it again. The animation is over when its last egg has landed, so undoing and redoing the last task never replays it. With reduced motion (`prefers-reduced-motion`) it never plays and nothing is remembered; the static text "Doel gehaald!" is shown instead, and also whenever the goal is met.
-- **Web.** The fifth overview tab "Beloning" shows the active profile: a week/cycle toggle (remembered per profile), an inline SVG scene with a chicken that walks to the current percentage with a CSS transform and the basket with its eggs (an image with a text alternative; missing eggs are dashed outlines), a progress bar (`role="progressbar"` with `aria-valuenow`, `aria-valuemin`, `aria-valuemax` and `aria-valuetext`), and always the text "{earned} van {goal} punten ({percent}%)" with the money and the number of eggs. "Doel gehaald!" appears in a live region (`role="status"`) that is in the page all the time, so the change is announced. The open tab reads the progress again on every window focus and every five minutes, and at once when the device's day lies outside the week or cycle that was read (a rollover). The earned badges of the person are shown below it. The layout is simple and accessible and will be fine-tuned later.
+- **Web.** The fifth overview tab "Beloning" shows the active profile: a week/cycle toggle (remembered per profile), an inline SVG scene with a chicken that walks to the current percentage with a CSS transform and the basket with its eggs (an image with a text alternative; missing eggs are dashed outlines), a progress bar (`role="progressbar"` with `aria-valuenow`, `aria-valuemin`, `aria-valuemax` and `aria-valuetext`), and always the text "{earned} van {goal} punten ({percent}%)" with the money and the number of eggs. "Doel gehaald!" appears in a live region (`role="status"`) that is in the page all the time, so the change is announced. The open tab reads the progress again on every window focus and every five minutes, and at once when the device's day lies outside the week or cycle that was read (a rollover). The person's badges are shown below it, as in the Points tab (see 4.13).
 
 ### 4.13 Badges
 
@@ -433,16 +454,18 @@ An administrator creates badges that reward doing a lot or doing it often (ADR-0
 - **Images.** At most 256 KB, PNG, JPEG or WebP. The server decodes the base64 of the request and refuses text that is not base64, bytes over the limit, bytes whose signature is not a PNG, JPEG or WebP (an SVG, which can carry script, is never accepted) and a declared type that differs from the real one, each as `400 validation_error` (`invalid_base64`, `image_too_large`, `unsupported_image_type`, `image_type_mismatch`). `GET /api/badges/:id/image` serves the bytes without a profile with the checked content type, an `ETag` of the hash, `Cache-Control: public, max-age=31536000, immutable`, `X-Content-Type-Options: nosniff` and a restrictive `Content-Security-Policy`, and answers `304` to a matching `If-None-Match`; a badge without an image answers `404`. The long cache applies only to an address whose `v` parameter is a prefix (at least 12 characters) of the hash of the stored bytes, which is the `url` of the badge view; any other address answers `Cache-Control: no-cache` and revalidates. `If-None-Match` is read as a list of entity tags, weak tags and `*` included. A badge without an image shows a standard medal in the interface.
 - **Examples.** An administrator can add example badges: "Alles op tijd" (`onTimeWeeks`, 4), "Toiletjuffrouw" (10 executions of the toilet task) and "Dweilkampioen" (300 minutes of the mopping task), in Dutch or English as chosen. They are created once, by their stable `exampleKey`, only on request and never at startup; adding them again, or after one was renamed, creates nothing. The tasks of an example are found by name; an example that finds no task is created inactive, because an empty task list would count every task. Names, descriptions, thresholds and tasks stay editable.
 - **Who may do what.** Reading badges, awards, progress and images needs no profile. Creating, changing, deleting and adding examples needs an administrator (`403 permission_denied` for others, `400 profile_required` without a profile). A rule that names only unknown tasks is rejected (`validation_error` `unknown_task`), and creating a badge or adding examples beyond 100 badges is rejected with `409 badge_limit`. A change that changes nothing writes and audits nothing.
-- **Web.** Administrators get a Badges page under management, with a list (picture, name, rule, an "inactive" label in words), an editor with name, description, rule, threshold, task choice with search, active flag and picture upload with a preview, a remove button, and the size and type checked before sending (also against the first bytes of the file), delete after a confirmation, and an "add example badges" action that says what it did. A person's badges are shown in the Points tab and in a small "Mijn badges" section on the Today page: the picture has the badge name as its alternative text, an earned badge says when it was earned, and a badge that is not earned yet says so with its progress as "7/10"; no state is shown by colour or dimming alone. Both sections are left out while there are no active badges.
+- **Web.** Administrators get a Badges page under management, with a list (picture, name, rule, an "inactive" label in words), an editor with name, description, rule, threshold, task choice with search, active flag and picture upload with a preview, a remove button, and the size and type checked before sending (also against the first bytes of the file), delete after a confirmation, and an "add example badges" action that says what it did. A person's badges are shown in the Points tab of the statistics, on the Reward tab and in a small "Mijn badges" ("My badges") section on the Today page: the picture has the badge name as its alternative text, an earned badge says when it was earned, and a badge that is not earned yet says so with its progress as "7/10"; no state is shown by colour or dimming alone. These sections are left out while there are no active badges.
 
 ## 5. AI assistance
 
 ### 5.1 Use cases
 
-1. Propose a cycle plan for the selected tasks.
-2. Rebalance an existing plan for fairness, spread and budget overruns.
+1. Propose a cycle plan for the active tasks (the API can also take a selection of tasks).
+2. Rebalance the active plan for fairness, spread and budget overruns.
 3. Suggest tasks that are missing for a given room.
-4. Explain a plan in a short rationale per week.
+4. Explain the active plan in a short rationale per week.
+
+The first, second and fourth are offered in the panel of plan management (see 4.2); the third on the tasks screen, where a suggestion is added to the task list only when the person chooses to.
 
 ### 5.2 Contract
 
@@ -456,9 +479,9 @@ An administrator creates badges that reward doing a lot or doing it often (ADR-0
 
 ### 5.3 Provider
 
-- Pluggable: no provider, a deterministic mock for testing, Anthropic, an OpenAI-compatible endpoint, or a local Ollama instance.
+- Pluggable: no provider, a deterministic mock ("Demo" in the interface), Anthropic, an OpenAI-compatible endpoint, or a local Ollama instance. The settings can test the connection.
 - Endpoint, model and request timeout are settings; the API key is an environment variable only and is never returned by the API.
-- Prompts are editable per use case, with the default text restorable.
+- Prompts are editable per use case (the system and the user part), with the default text restorable.
 - The application remains fully usable with AI disabled. It is an assistant, not a dependency.
 
 ## 6. Print and PDF export
@@ -467,17 +490,18 @@ The fridge is a legitimate output device. The schedule must work without a phone
 
 ### 6.1 Range
 
-- One week, two weeks, or the full four-week cycle, starting from any week in the cycle.
-- Also a single-day sheet, a standalone overdue list, and a task list per room.
+- One week, two weeks, or four weeks (the full cycle), starting from the current week or any of the eleven weeks after it.
+- Also a single-day sheet and a standalone overdue list of the tasks that are due or overdue. Both are offered in the export dialog of plan management (see 4.2). The task list, grouped by room and with inactive tasks marked, is downloaded from the tasks screen.
+- The text of a sheet follows the interface language (Dutch or English).
 
 ### 6.2 Layout
 
 - One week per page; a two-week export is two pages, the full cycle four.
 - Portrait A4, with landscape available only for the two-week side-by-side variant.
-- Days as rows, Monday first, one column per user. Empty days stay visible, because a gap on the sheet is information.
+- Days as rows, Monday first, with one task column in which the tasks of a day are grouped under the person they are planned for ("anyone" included). Empty days stay visible, because a gap on the sheet is information.
 - Each line shows the task name, its room, and a checkbox large enough to tick with a pen.
-- A header per page names the cycle week and the calendar dates it covers; a footer carries the generation date, so nobody works from a sheet that is three cycles old.
-- Per-day totals in minutes per user are available as an option.
+- A header per page names the cycle week, the calendar dates it covers and the ISO week, and the week's theme when the plan has one; a footer carries the generation date, so nobody works from a sheet that is three cycles old.
+- Per-day totals in minutes, per person, are available as an option.
 
 ### 6.3 Content rules
 
@@ -492,10 +516,10 @@ The fridge is a legitimate output device. The schedule must work without a phone
 
 ### 7.1 Structure
 
-- A compact overview is the default at every screen width: the week grid, the day view, the overdue list, the task list and the reward meter, each a tab of the bottom menu. The five tabs keep fitting, each label on one line, and stay keyboard accessible at a width of 320 px.
-- Management screens — planner, tasks, distribution, statistics, history, completions, badges, notifications and settings — live behind a separate management area and are reachable from anywhere. The notifications page is available to every role, because each person sets their own browser notifications.
+- A compact overview is the default at every screen width: the week overview, the day view, the task list, the overdue list and the reward meter, each a tab of the bottom menu. The five tabs keep fitting, each label on one line, and stay keyboard accessible at a width of 320 px.
+- Management screens — planner, tasks, distribution, statistics, history, notifications, completions, badges, settings and About — live behind a separate management area and are reachable from anywhere. Planner and tasks need the planner role; completions, badges and settings need the administrator role; distribution, statistics, history, notifications and About are open to every role. The notifications page is available to every role, because each person sets their own browser notifications. A member who opens management lands on the distribution page, a planner or administrator on the planner.
 - The overview and the management area switch with a button in the same top-right spot: a management button in the overview, and a Home button in management that always returns to the week overview. The management side menu stays available.
-- The settings screen is organised in tabs so that cycle, intervals, AI, scheduled jobs (including the ntfy and Home Assistant morning notification), appearance and maintenance stay separable. The calendar tab holds a "Bonussen" card, visible to administrators only, in which the four bonus amounts (integers from 0 to 1000, 0 turns a bonus off) are set; it says that the amounts apply to the current week and cycle and everything after, since when they apply, and lists the schedule rows, marking a row that has not started yet with an icon and text. Under the bonuses are the "Puntenwaarde" card (currency and what a point is worth) and the "Beloningsdoelen" card (the goal of the reward meter per week and per cycle, an empty field meaning automatic), both visible to administrators only.
+- The settings screen is organised in tabs: calendar (the cycle anchor date and the vacation ranges), people, rooms, controls (the completion control), AI (provider and prompts), jobs (manual runs, including the ntfy and Home Assistant morning notification) and data (export, import and the statistics reset). The intervals and the promote threshold are settings in the API without a screen of their own. The language and the colour mode are chosen in the header. The calendar tab also holds a "Bonussen" card, visible to administrators only, in which the four bonus amounts (integers from 0 to 1000, 0 turns a bonus off) are set; it says that the amounts apply to the current week and cycle and everything after, since when they apply, and lists the schedule rows, marking a row that has not started yet with an icon and text. Under the bonuses are the "Puntenwaarde" card (currency and what a point is worth) and the "Beloningsdoelen" card (the goal of the reward meter per week and per cycle, an empty field meaning automatic), both visible to administrators only.
 - An About page, reachable for every role from the management menu, shows the running version, the date and time of the latest release labelled as such, and links to the license and the changelog that belong to the running build. A local build that is not a release shows no release date.
 
 ### 7.2 Interaction
@@ -509,12 +533,12 @@ The fridge is a legitimate output device. The schedule must work without a phone
 ### 7.3 Offline behaviour
 
 - The application installs as a PWA and keeps working without a connection for reading and for completing occurrences.
-- Actions taken offline are queued and replayed on reconnect, attributed to the profile that was active when the action was taken, not the one active when the queue drains.
+- Completing, undoing a completion and skipping taken offline are queued and replayed on reconnect, attributed to the profile that was active when the action was taken, not the one active when the queue drains. An action that the server refuses on replay, because the occurrence changed in the meantime, is reported as a conflict. Claiming, assigning, retracting recorded work and creating extra or one-off work need a connection.
 - A new application version prompts the user to reload rather than swapping itself out underneath an open screen.
 
 ### 7.4 Language
 
-- The interface is available in Dutch, which is the default, and English. The choice is stored in the browser.
+- The interface is available in Dutch, which is the default, and English, switched in the header. The choice is stored in the browser. The colour mode (light, dark or following the system) is chosen in the header too and stored in the browser.
 - All user-facing text comes from the message catalogues; both languages carry the same keys.
 - Week numbers are ISO week numbers and weeks start on Monday in both languages.
 - The version and build identity of the running instance are visible in the interface.
@@ -540,7 +564,6 @@ POST   /api/cycle-plans                     PATCH /api/cycle-plans/:id
 DELETE /api/cycle-plans/:id                 PUT  /api/cycle-plans/:id/slots
 GET    /api/cycle-plans/:id/activation-preview
 POST   /api/cycle-plans/:id/activate        (body: { previewToken })
-POST   /api/cycle-plans/:id/apply-proposal  POST /api/cycle-plans/:id/discard
 
 GET    /api/occurrences                     POST /api/occurrences
 PATCH  /api/occurrences/:id                 POST /api/occurrences/:id/claim
@@ -551,6 +574,7 @@ GET    /api/due
 GET    /api/points/balances                  GET  /api/points/entries
 GET    /api/points/progress
 POST   /api/points/recompute
+GET    /api/points/redemptions/count
 POST   /api/points/redemptions               DELETE /api/points/redemptions/:id
 
 GET    /api/badges                           POST /api/badges

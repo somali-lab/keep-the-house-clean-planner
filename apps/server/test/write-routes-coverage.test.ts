@@ -230,19 +230,9 @@ const SCENARIOS: Scenario[] = [
     },
   },
   {
-    route: 'POST /api/cycle-plans/:id/discard',
-    audit: { entity: 'cyclePlan', action: 'update' },
-    run: () => call('POST', `/api/cycle-plans/${ids.draftToDiscard}/discard`),
-  },
-  {
     route: 'DELETE /api/cycle-plans/:id',
     audit: { entity: 'cyclePlan', action: 'delete' },
     run: () => call('DELETE', `/api/cycle-plans/${ids.draftToDiscard}`),
-  },
-  {
-    route: 'POST /api/cycle-plans/:id/apply-proposal',
-    audit: { entity: 'cyclePlan', action: 'ai-apply', source: 'ai' },
-    run: () => call('POST', `/api/cycle-plans/${ids.draft}/apply-proposal`),
   },
   {
     route: 'POST /api/cycle-plans/:id/activate',

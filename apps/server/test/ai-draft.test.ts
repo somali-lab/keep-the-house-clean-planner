@@ -2,8 +2,6 @@ import type { LightMyRequestResponse } from 'fastify';
 import { ObjectId } from 'mongodb';
 import { afterEach, describe, expect, it } from 'vitest';
 import { findActivePlan, findPlanById } from '../src/data/cyclePlans.ts';
-import { COLLECTIONS } from '../src/data/db.ts';
-import { countOccurrences } from '../src/data/occurrences.ts';
 import type { UserDoc } from '../src/data/users.ts';
 import { MockProvider } from '../src/domain/ai/providers/mock.ts';
 import { expectAudited } from './helpers/audit.ts';
@@ -161,43 +159,6 @@ describe('GET /api/cycle-plans/:id/diff', () => {
   });
 });
 
-describe('POST /api/cycle-plans/:id/apply-proposal', () => {
-  it('activates the draft via the normal flow, audited as ai-apply with source ai and the proposal id', async () => {
-    const c = await setup();
-    const { result, entries } = await expectAudited(c.t, () => c.call('POST', `/api/cycle-plans/${c.draftId}/apply-proposal`), {
-      entity: 'cyclePlan',
-      action: 'ai-apply',
-      source: 'ai',
-      count: 1,
-    });
-    expect(result.statusCode, result.body).toBe(200);
-    expect(entries[0]!.actorId).toEqual(c.p1._id);
-    expect(entries[0]!.meta).toMatchObject({ proposalId: c.proposalId });
-    expect(entries[0]!.before).toEqual({ active: false, draft: true });
-    expect(entries[0]!.after).toEqual({ active: true, draft: false });
-
-    const active = await findActivePlan(c.t.db);
-    expect(active?._id.toHexString()).toBe(c.draftId);
-    expect(active).toMatchObject({ draft: false, source: 'ai', proposalId: c.proposalId });
-    expect((await findPlanById(c.t.db, new ObjectId(c.activeId)))?.active).toBe(false);
-
-    // generation ran for the new plan, and it is distinguishable from a manual activation
-    expect(await countOccurrences(c.t.db, { planId: new ObjectId(c.draftId) })).toBeGreaterThan(0);
-    expect(await c.t.db.collection(COLLECTIONS.auditLog).countDocuments({ entityId: new ObjectId(c.draftId), action: 'activate' })).toBe(0);
-  });
-
-  it('refuses plans that are not an open draft', async () => {
-    const c = await setup();
-    const manual = await c.call('POST', `/api/cycle-plans/${c.activeId}/apply-proposal`);
-    expect(manual.statusCode).toBe(409);
-    expect(manual.json()).toMatchObject({ code: 'not_a_draft' });
-
-    await c.call('POST', `/api/cycle-plans/${c.draftId}/apply-proposal`);
-    expect((await c.call('POST', `/api/cycle-plans/${c.draftId}/apply-proposal`)).statusCode).toBe(409);
-    expect((await c.call('POST', '/api/cycle-plans/0123456789abcdef01234567/apply-proposal')).statusCode).toBe(404);
-  });
-});
-
 describe('POST /api/cycle-plans/:id/activate for an AI draft', () => {
   it('clears the draft flag, audits it, and keeps the plan a non-draft after another plan is activated', async () => {
     const c = await setup();
@@ -218,31 +179,5 @@ describe('POST /api/cycle-plans/:id/activate for an AI draft', () => {
     const reactivated = await c.call('POST', `/api/cycle-plans/${c.activeId}/activate`, { previewToken: back.json<{ previewToken: string }>().previewToken });
     expect(reactivated.statusCode, reactivated.body).toBe(200);
     expect(await findPlanById(c.t.db, new ObjectId(c.draftId))).toMatchObject({ active: false, draft: false, source: 'ai' });
-  });
-});
-
-describe('POST /api/cycle-plans/:id/discard', () => {
-  it('marks the draft discarded and inactive, audited as update', async () => {
-    const c = await setup();
-    const { result, entries } = await expectAudited(c.t, () => c.call('POST', `/api/cycle-plans/${c.draftId}/discard`), {
-      entity: 'cyclePlan',
-      action: 'update',
-      count: 1,
-    });
-    expect(result.statusCode, result.body).toBe(200);
-    expect(entries[0]!.after).toEqual({ active: false, discarded: true });
-    expect(entries[0]!.meta).toEqual({ proposalId: c.proposalId });
-    expect(await findPlanById(c.t.db, new ObjectId(c.draftId))).toMatchObject({ discarded: true, active: false });
-    expect((await findActivePlan(c.t.db))?._id.toHexString()).toBe(c.activeId);
-
-    // a discarded draft can no longer be applied or discarded again
-    expect((await c.call('POST', `/api/cycle-plans/${c.draftId}/apply-proposal`)).statusCode).toBe(409);
-    expect((await c.call('POST', `/api/cycle-plans/${c.draftId}/discard`)).statusCode).toBe(409);
-  });
-
-  it('refuses to discard a manual plan', async () => {
-    const c = await setup();
-    const res = await c.call('POST', `/api/cycle-plans/${c.activeId}/discard`);
-    expect(res.statusCode).toBe(409);
   });
 });

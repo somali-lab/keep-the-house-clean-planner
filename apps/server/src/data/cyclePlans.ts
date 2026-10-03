@@ -120,12 +120,11 @@ export async function setActivePlan(
   ctx: AuditContext,
   id: ObjectId,
   meta: Record<string, unknown>,
-  options: { action?: 'activate' | 'ai-apply'; changes?: Partial<Pick<CyclePlanDoc, 'draft'>> } = {},
+  options: { changes?: Partial<Pick<CyclePlanDoc, 'draft'>> } = {},
 ): Promise<CyclePlanDoc | null> {
   const plan = await findPlanById(ctx.db, id);
   if (!plan) return null;
   const now = ctx.clock.now();
-  const action = options.action ?? 'activate';
   const changes = options.changes ?? {};
 
   const others = await plansCollection(ctx.db).find({ active: true, _id: { $ne: id } }).toArray();
@@ -156,32 +155,10 @@ export async function setActivePlan(
   await record(ctx, {
     entity: 'cyclePlan',
     entityId: id,
-    action,
+    action: 'activate',
     before: { active: plan.active, ...(changedDraft ? { draft: plan.draft } : {}) },
     after: { active: true, ...(changedDraft ? { draft: changes.draft } : {}) },
     meta,
-  });
-  return after;
-}
-
-/** Marks a draft as discarded (and inactive). Returns null if missing; no write when already discarded. */
-export async function discardPlan(ctx: AuditContext, id: ObjectId): Promise<CyclePlanDoc | null> {
-  const before = await findPlanById(ctx.db, id);
-  if (!before) return null;
-  if (before.discarded && !before.active) return before;
-  const after = await plansCollection(ctx.db).findOneAndUpdate(
-    { _id: id },
-    { $set: { active: false, discarded: true, updatedAt: ctx.clock.now() } },
-    { returnDocument: 'after' },
-  );
-  if (!after) return null;
-  await record(ctx, {
-    entity: 'cyclePlan',
-    entityId: id,
-    action: 'update',
-    before: { active: before.active, discarded: before.discarded },
-    after: { active: false, discarded: true },
-    ...(before.proposalId ? { meta: { proposalId: before.proposalId } } : {}),
   });
   return after;
 }

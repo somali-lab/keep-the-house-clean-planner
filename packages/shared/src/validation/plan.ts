@@ -234,8 +234,8 @@ export function validatePlan({ slots, tasks, users, intervals }: ValidatePlanInp
       const dayUsers = activeUsers.map((user) => {
         const minutes = perUser?.get(user._id) ?? 0;
         const budget = budgetFor(user, weekday);
-        // A day card only flags a day that exceeds the complete period budget by itself.
-        // The aggregate Monday-Friday / weekend check is reported once above.
+        // The day card compares one day with the user's daily maximum (maxDailyMinutes, weekday or weekend).
+        // The aggregate Monday-Friday / weekend budget (dailyBudgetMinutes) is checked once per week above.
         const overBudget = minutes > budget;
         if (overBudget) {
           warnings.push({ code: 'daily_over_budget', userId: user._id, weekIndex, weekday, minutes, budget });
