@@ -21,9 +21,9 @@ namespace Huishoudplanner.Integration.Tests.Api;
 /// <summary>
 /// Ports apps/server/test/tasks.test.ts (create with defaults and audit, validation, references, settings intervals, update and its
 /// audit, assign entries, list filters, bulk deactivate and reassign) and the task side of interval-change.test.ts, and adds the v2
-/// behaviour: planner policy, paging, no-op and rollback, Node-shaped documents. Not ported (deferred): the room snapshot of upcoming
-/// occurrences on a room change (needs occurrences, slice 3.1), the effect of an interval change on occurrences and generation
-/// (3.1) and DELETE (arrives with the plans and badges it cascades into). Real HTTP pipeline and real MongoDB replica set.
+/// behaviour: planner policy, paging, no-op and rollback, Node-shaped documents. Ported in slice 3.1 (see TaskOccurrenceEffectsTests): the room snapshot of upcoming
+/// occurrences on a room change and the effect of an interval change on occurrences and generation. Not ported (deferred):
+/// DELETE (arrives with the plans and badges it cascades into). Real HTTP pipeline and real MongoDB replica set.
 /// </summary>
 public sealed class TaskEndpointTests : IDisposable
 {

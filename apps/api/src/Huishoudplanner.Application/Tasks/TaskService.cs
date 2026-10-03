@@ -1,4 +1,5 @@
 using Huishoudplanner.Domain.Audit;
+using Huishoudplanner.Domain.Calendar;
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Identity;
 using Huishoudplanner.Domain.Limits;
@@ -18,6 +19,7 @@ public sealed class TaskService(
     ForStoringRooms rooms,
     ForStoringUsers users,
     ForStoringSettings settings,
+    ForStoringOccurrences occurrences,
     ForRunningTransactions transactions,
     ForRecordingAudit audit,
     TimeProvider time) : ITaskService
@@ -188,9 +190,51 @@ public sealed class TaskService(
         }
 
         var recorded = await RecordAsync(TaskAudit.ForChange(AuditActor.From(actor), id, changes), ct).ConfigureAwait(false);
-        return recorded.Match(
-            _ => TransactionOutcome.Commit<OneOf<HouseholdTask, NotFound, ValidationErrors, PortError>>(task),
-            error => Abort(error));
+        if (recorded.TryPickT1(out var auditError, out _))
+        {
+            return Abort(auditError);
+        }
+
+        if (before.RoomId != task.RoomId)
+        {
+            var refreshed = await RefreshRoomSnapshotsAsync(task, ct).ConfigureAwait(false);
+            if (refreshed.TryPickT1(out var refreshError, out _))
+            {
+                return Abort(refreshError);
+            }
+        }
+
+        return TransactionOutcome.Commit<OneOf<HouseholdTask, NotFound, ValidationErrors, PortError>>(task);
+    }
+
+    /// <summary>
+    /// A room move follows the future open work of the task while completed history keeps its snapshot (<c>updateUpcomingOccurrenceRoomSnapshots</c>):
+    /// from the start of today in the household timezone on. Not audited and without a new <c>updatedAt</c>, as in the Node server. A room or
+    /// settings document that is missing skips the refresh instead of failing the task update.
+    /// </summary>
+    private async Task<OneOf<Success, PortError>> RefreshRoomSnapshotsAsync(HouseholdTask task, CancellationToken ct)
+    {
+        var room = await rooms.FindAsync(task.RoomId, ct).ConfigureAwait(false);
+        if (room.TryPickT2(out var roomError, out var roomRest))
+        {
+            return roomError;
+        }
+
+        var read = await settings.GetAsync(ct).ConfigureAwait(false);
+        if (read.TryPickT2(out var settingsError, out var settingsRest))
+        {
+            return settingsError;
+        }
+
+        if (!roomRest.TryPickT0(out var found, out _) || !settingsRest.TryPickT0(out var current, out _))
+        {
+            return new Success();
+        }
+
+        var zone = DayKeys.FindZone(current.Timezone);
+        var fromInstant = DayKeys.FromDayKey(DayKeys.Today(zone, time.GetUtcNow()), zone);
+        var updated = await occurrences.UpdateUpcomingRoomSnapshotsAsync(task.Id, fromInstant, found.Id, found.Name, ct).ConfigureAwait(false);
+        return updated.Match<OneOf<Success, PortError>>(_ => new Success(), error => error);
     }
 
     public async Task<OneOf<int, NotFound, ValidationErrors, ConflictError, PortError>> BulkUpdateRoomAsync(Actor actor, string roomId, BulkRoomChange change, CancellationToken cancellationToken)

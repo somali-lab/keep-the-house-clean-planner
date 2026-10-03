@@ -17,6 +17,9 @@ public interface ForStoringRooms
     /// <summary><see cref="NotFound"/> also for an id that is not a valid id.</summary>
     Task<OneOf<Room, NotFound, PortError>> FindAsync(string id, CancellationToken cancellationToken);
 
+    /// <summary>The rooms that exist among these ids (a malformed or unknown id is simply absent), ordered by sort order, name and id; bounded by the ids asked for.</summary>
+    Task<OneOf<IReadOnlyList<Room>, PortError>> FindManyAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken);
+
     /// <summary>The room with the highest sort order, or <see cref="NotFound"/> when there is no room.</summary>
     Task<OneOf<Room, NotFound, PortError>> FindLastAsync(CancellationToken cancellationToken);
 

@@ -106,6 +106,17 @@ internal sealed class FakeRooms : ForStoringRooms
         return Task.FromResult<OneOf<Room, NotFound, PortError>>(room is null ? new NotFound() : room);
     }
 
+    public Task<OneOf<IReadOnlyList<Room>, PortError>> FindManyAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken)
+    {
+        if (Failure is { } failure)
+        {
+            return Task.FromResult<OneOf<IReadOnlyList<Room>, PortError>>(failure);
+        }
+
+        IReadOnlyList<Room> found = [.. Items.Where(r => ids.Contains(r.Id)).OrderBy(r => r.SortOrder).ThenBy(r => r.Name, StringComparer.Ordinal).ThenBy(r => r.Id, StringComparer.Ordinal)];
+        return Task.FromResult<OneOf<IReadOnlyList<Room>, PortError>>(OneOf<IReadOnlyList<Room>, PortError>.FromT0(found));
+    }
+
     public Task<OneOf<Room, NotFound, PortError>> FindLastAsync(CancellationToken cancellationToken)
     {
         if (Failure is { } failure)
