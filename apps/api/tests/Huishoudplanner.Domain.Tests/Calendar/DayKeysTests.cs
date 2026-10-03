@@ -153,4 +153,25 @@ public class DayKeysTests
         var act = () => DayKeys.Parse("2026-02-30");
         act.Should().Throw<FormatException>();
     }
+
+    [Theory]
+    [InlineData("12:30\n")]
+    [InlineData("12:30 ")]
+    public void IsTimeOfDay_rejects_trailing_characters(string value) =>
+        DayKeys.IsTimeOfDay(value).Should().BeFalse();
+
+    [Fact]
+    public void FromDayKeyTime_with_a_trailing_newline_throws_ArgumentOutOfRangeException()
+    {
+        var act = () => DayKeys.FromDayKeyTime(D("2026-09-16"), "12:30\n", Amsterdam);
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Theory]
+    [InlineData("2026-W38\n")]
+    [InlineData("9999-W52")]
+    [InlineData("9999-W53")]
+    [InlineData("0000-W01")]
+    public void MondayOfIsoWeek_returns_null_for_invalid_or_out_of_range_labels(string label) =>
+        DayKeys.MondayOfIsoWeek(label).Should().BeNull();
 }
