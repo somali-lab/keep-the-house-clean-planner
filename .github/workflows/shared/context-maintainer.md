@@ -86,7 +86,12 @@ or `.github/workflows/**`.
      test framework or build) that differ from the root, without a nested `AGENTS.md`;
    - a task that recurs in the history — the same kind of change in at least three commits,
      with a clear sequence of steps — and no skill for it: propose a new skill with `name`
-     and `description` frontmatter, the description saying when to use it.
+     and `description` frontmatter, the description saying when to use it;
+   - a new business domain with invariants an agent can break without noticing — signs are a
+     new collection or derived data, a recomputation or single-writer rule, its own ADR, or
+     review fixes in the history for the same kind of mistake — that no skill or scoped
+     instruction covers: propose a skill that states those invariants and points to the ADR
+     and requirements sections instead of repeating them.
    Only propose a file that tells an agent something it cannot read straight from the code.
    No file is better than a thin one. Each new file cites its evidence (paths, commits) in
    the pull request body.
