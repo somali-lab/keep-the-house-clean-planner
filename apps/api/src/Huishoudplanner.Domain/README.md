@@ -7,17 +7,17 @@ Pure domain code (only `OneOf`). No clock access: pass an instant or a `TimeProv
 Day keys are `DateOnly`; timezones are `TimeZoneInfo` resolved from IANA ids (`DayKeys.FindZone`); instants are `DateTimeOffset`.
 Names map 1:1 to `packages/shared/src/time.ts` and `cycle.ts`.
 
-| TypeScript                                                   | C#                                                                       |
-| ------------------------------------------------------------ | ------------------------------------------------------------------------ |
-| `APP_TIMEZONE`                                               | `DayKeys.AppTimezone`                                                    |
-| `isDayKey`, `isTimeOfDay`, `isMonday`, `isWeekend`           | `DayKeys.IsDayKey`, `IsTimeOfDay`, `IsMonday` (also on `string`), `IsWeekend` |
-| `today(tz, now)`                                             | `DayKeys.Today(tz, TimeProvider)` / `Today(tz, DateTimeOffset)`          |
-| `toDayKey`, `fromDayKey`, `fromDayKeyTime`                   | `DayKeys.ToDayKey`, `FromDayKey`, `FromDayKeyTime`                       |
-| `addDays`, `daysBetween`, `mondayOf`                         | `DayKeys.AddDays`, `DaysBetween`, `MondayOf`                             |
-| `weekdaySun0`, `weekdayMon0`, `sun0ToMon0`, `mon0ToSun0`     | `DayKeys.WeekdaySun0`, `WeekdayMon0`, `Sun0ToMon0`, `Mon0ToSun0`         |
-| `isoWeek`, `isoWeekLabel`, `mondayOfIsoWeek`                 | `DayKeys.IsoWeek` (`IsoWeekNumber`), `IsoWeekLabel`, `MondayOfIsoWeek` (`DateOnly?`) |
-| (day key parsing, implicit in the TS string type)            | `DayKeys.Parse(string)`                                                  |
-| `CYCLE_DAYS`, `CYCLE_WEEKS`                                  | `Cycles.CycleDays`, `Cycles.CycleWeeks`                                  |
+| TypeScript                                                                                 | C#                                                                                                |
+| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| `APP_TIMEZONE`                                                                             | `DayKeys.AppTimezone`                                                                             |
+| `isDayKey`, `isTimeOfDay`, `isMonday`, `isWeekend`                                         | `DayKeys.IsDayKey`, `IsTimeOfDay`, `IsMonday` (also on `string`), `IsWeekend`                     |
+| `today(tz, now)`                                                                           | `DayKeys.Today(tz, TimeProvider)` / `Today(tz, DateTimeOffset)`                                   |
+| `toDayKey`, `fromDayKey`, `fromDayKeyTime`                                                 | `DayKeys.ToDayKey`, `FromDayKey`, `FromDayKeyTime`                                                |
+| `addDays`, `daysBetween`, `mondayOf`                                                       | `DayKeys.AddDays`, `DaysBetween`, `MondayOf`                                                      |
+| `weekdaySun0`, `weekdayMon0`, `sun0ToMon0`, `mon0ToSun0`                                   | `DayKeys.WeekdaySun0`, `WeekdayMon0`, `Sun0ToMon0`, `Mon0ToSun0`                                  |
+| `isoWeek`, `isoWeekLabel`, `mondayOfIsoWeek`                                               | `DayKeys.IsoWeek` (`IsoWeekNumber`), `IsoWeekLabel`, `MondayOfIsoWeek` (`DateOnly?`)              |
+| (day key parsing, implicit in the TS string type)                                          | `DayKeys.Parse(string)`                                                                           |
+| `CYCLE_DAYS`, `CYCLE_WEEKS`                                                                | `Cycles.CycleDays`, `Cycles.CycleWeeks`                                                           |
 | `assertValidAnchor`, `cycleIndexFor`, `cycleStart`, `cycleEnd`, `weekIndexFor`, `slotDate` | `Cycles.AssertValidAnchor`, `CycleIndexFor`, `CycleStart`, `CycleEnd`, `WeekIndexFor`, `SlotDate` |
 
 Error mapping of the TypeScript `RangeError`: unparsable day key is `FormatException`; unknown timezone, invalid time of
@@ -35,16 +35,16 @@ The people of the household (requirements 2 and 3). `UserRules` owns what a vali
 
 Port of `packages/shared/src/due.ts`; the scheduling "hybrid" half. Pure: the caller passes `today` as a day key and the timezone.
 
-| TypeScript                                       | C#                                                                                                |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| `DUE_RATIO`, `OVERDUE_RATIO`                     | `DueCalculator.DueRatio`, `OverdueRatio` (`const double`)                                         |
-| `DEFAULT_INTERVALS`                              | `DueCalculator.DefaultIntervals` (`IReadOnlyList<Interval>`)                                      |
-| `DueState` (`'ok'`, `'due'`, `'overdue'`)        | `enum DueState { Ok, Due, Overdue }`                                                              |
-| `dueState(ratio)`                                | `DueCalculator.DueStateOf(ratio)`                                                                 |
-| `DueTaskInput` (`_id`, `lastCompletedAt: Date`)  | `DueTaskInput(Id, Active, IntervalKey, DateTimeOffset? LastCompletedAt, DateOnly InitialDueDate)` |
-| `Interval`                                       | `Interval(Key, Label, int? PerCycle, PeriodDays)`                                                 |
-| `DueResult`                                      | `DueResult(TaskId, DaysSince, PeriodDays, double Ratio, State)`                                   |
-| `computeDue(tasks, intervals, today, tz)`        | `DueCalculator.ComputeDue(tasks, intervals, DateOnly today, TimeZoneInfo tz)`                     |
+| TypeScript                                      | C#                                                                                                |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `DUE_RATIO`, `OVERDUE_RATIO`                    | `DueCalculator.DueRatio`, `OverdueRatio` (`const double`)                                         |
+| `DEFAULT_INTERVALS`                             | `DueCalculator.DefaultIntervals` (`IReadOnlyList<Interval>`)                                      |
+| `DueState` (`'ok'`, `'due'`, `'overdue'`)       | `enum DueState { Ok, Due, Overdue }`                                                              |
+| `dueState(ratio)`                               | `DueCalculator.DueStateOf(ratio)`                                                                 |
+| `DueTaskInput` (`_id`, `lastCompletedAt: Date`) | `DueTaskInput(Id, Active, IntervalKey, DateTimeOffset? LastCompletedAt, DateOnly InitialDueDate)` |
+| `Interval`                                      | `Interval(Key, Label, int? PerCycle, PeriodDays)`                                                 |
+| `DueResult`                                     | `DueResult(TaskId, DaysSince, PeriodDays, double Ratio, State)`                                   |
+| `computeDue(tasks, intervals, today, tz)`       | `DueCalculator.ComputeDue(tasks, intervals, DateOnly today, TimeZoneInfo tz)`                     |
 
 Differences: the timezone has no default (pass `DayKeys.FindZone(DayKeys.AppTimezone)`); the final tie-break by task id is
 `StringComparer.Ordinal` where TypeScript used `localeCompare`; an interval with `PeriodDays == 0` is skipped like an unknown
@@ -55,15 +55,15 @@ fails earlier, in `DayKeys.Parse` / `FindZone`.
 
 The singleton settings document (id `000000000000000000000001`). `HouseholdSettings` mirrors `apps/server/src/data/settings.ts`: optional values stay `null` when they are not stored and mean their default for the API (`SettingsDefaults`: EUR, 0 cents per point, automatic goals, no bonuses). There is no API key in it: `AI_API_KEY` is configuration only.
 
-| TypeScript                                                  | C#                                                                                                                                      |
-| ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `Settings`, `SettingsDoc`                                   | `HouseholdSettings` (stored), `SettingsView` (what `GET` returns: defaults, `BonusesInForce`, rows with `StartsInFuture`)               |
-| `UpdateSettingsInput`                                       | `SettingsPatch` (what a client may send), `SettingsChanges` (what a write sets)                                                         |
-| `updateSettingsInputSchema` rules                           | `SettingsRules.Validate` (field paths and message codes as zod; the JSON shape is read in the HTTP adapter)                             |
-| `bonusAmountsOn`, `sameBonusAmounts`, `scheduleWithAmounts` | `BonusSchedule.AmountsOn`, `SameAmounts`, `WithAmounts` (golden vectors `bonuses.json`; the period and set rules follow with slice 4.2) |
-| `DEFAULT_AI_PROMPTS`, `DEFAULT_INTERVALS`, seed             | `SettingsDefaults.AiPrompts`, `DueCalculator.DefaultIntervals`, `SettingsDefaults.ForNewInstallation`, `WithThreePerWeek`               |
-| `isTwoDecimalCurrency`, `Intl.supportedValuesOf`            | `Currencies.HasTwoDecimals`, `IsKnown` (from the region data of the platform)                                                           |
-| `diffFields` of a settings update                           | `SettingsAudit.ToAudit` (the audit value tree of a settings document) with `ChangeSet`                                                  |
+| TypeScript                                                  | C#                                                                                                                                                     |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Settings`, `SettingsDoc`                                   | `HouseholdSettings` (stored), `SettingsView` (what `GET` returns: defaults, `BonusesInForce`, rows with `StartsInFuture`)                              |
+| `UpdateSettingsInput`                                       | `SettingsPatch` (what a client may send), `SettingsChanges` (what a write sets)                                                                        |
+| `updateSettingsInputSchema` rules                           | `SettingsRules.Validate` (field paths and message codes as zod; the JSON shape is read in the HTTP adapter)                                            |
+| `bonusAmountsOn`, `sameBonusAmounts`, `scheduleWithAmounts` | `BonusSchedule.AmountsOn`, `SameAmounts`, `WithAmounts` (golden vectors `bonuses.json`; the period, set and entry rules are `Bonuses.BonusCalculator`) |
+| `DEFAULT_AI_PROMPTS`, `DEFAULT_INTERVALS`, seed             | `SettingsDefaults.AiPrompts`, `DueCalculator.DefaultIntervals`, `SettingsDefaults.ForNewInstallation`, `WithThreePerWeek`                              |
+| `isTwoDecimalCurrency`, `Intl.supportedValuesOf`            | `Currencies.HasTwoDecimals`, `IsKnown` (from the region data of the platform)                                                                          |
+| `diffFields` of a settings update                           | `SettingsAudit.ToAudit` (the audit value tree of a settings document) with `ChangeSet`                                                                 |
 
 Driving ports `ISettingsService` (read, patch) and `ISettingsSeedService`; driven ports `ForStoringSettings` (read, set fields, insert once) and `ForStoringTasks` (its `GetIntervalKeysInUseAsync` answers the interval keys tasks use). `IntervalInUse(Keys)` is the `409 interval_in_use` value.
 
@@ -88,3 +88,31 @@ Port of `routes/tasks.ts`, `domain/tasks.ts` and `data/tasks.ts`. Driving port `
 ## Cycle plans (`Huishoudplanner.Domain.CyclePlans`)
 
 Port of `routes/cyclePlans.ts`, `domain/plans.ts`, `domain/slots.ts`, `domain/planDiff.ts` and `data/cyclePlans.ts` without activation (slice 2.4) and without the occurrence synchronisation (slice 3.1). Driving port `ICyclePlanService` (list, get, active, create or copy, update, delete, replace slots, compare with the active plan, validate a stored plan or an unsaved draft; planners write), `ICyclePlanSeedService` (the empty active plan "Standaard" on a first start), driven port `ForStoringCyclePlans`. Slots are saved after `PlanValidator` ran over the tasks, people and intervals read through the existing stores: a hard error is `InvalidPlan(PlanValidation)` (`422 invalid_plan`) and nothing is written. The oldest plan (`createdAt`, then id) is the default plan: `CyclePlanRules.DeleteConflict` gives `409 default_plan` before `409 active_plan`. `CyclePlanSlots` sorts (week, Monday-first weekday, sort order, task) and diffs slots by `taskId:weekIndex:weekday`; `CyclePlanAudit` writes the Node shapes (create records every stored field with `meta.copiedFrom` for a copy, a slot save only the added, removed and changed slots, delete the removed fields). `PlanDiffer` pairs slots per task (identical, same day with another assignee, remaining in cycle order). Every change is one transaction with its entry; a change that changes nothing writes and audits nothing.
+
+## Points, bonuses, rewards, badges (`Domain.Points`, `Bonuses`, `Rewards`, `Badges`)
+
+The pure half of phase 4 (slice 4.0): ports of `packages/shared/src/points.ts`, `bonuses.ts`, `rewards.ts` and `badges.ts`, each pinned by golden vectors (`points.json`, `bonuses.json`, `rewards.json`, `badges.json`, plus the constants and `defaultPointsForDuration` in `limits.json`). Day keys are `DateOnly`, instants `DateTimeOffset`, person and task ids 24-character hex strings. Not here yet (slices 4.1 to 4.5): the ledger, the reconcile, redemptions, the progress endpoint and the badge awards, which read Mongo documents and map them onto these types. Rounding: the only rounding in these modules is `Math.round` in `defaultPointsForDuration` (halves round up, also for negative halves toward +infinity), ported as `TaskPoints.DefaultForDuration(double)` with `Math.Floor` and never `Math.Round` (banker's rounding); every other division is a floor of positive numbers (`rewardPercent`, `eggsForPercent`), done in 64-bit integers or `Math.Floor`.
+
+| TypeScript                                                                                                    | C#                                                                                                                                                            |
+| ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MIN_TASK_POINTS`, `MAX_TASK_POINTS`, `defaultPointsForDuration`                                              | `TaskPoints.Min`, `Max`, `DefaultForDuration(int)` and `(double)` (`Limits`)                                                                                  |
+| `MIN/MAX_CENTS_PER_POINT`, `DEFAULT_CURRENCY_CODE`, `MAX_REDEMPTION_NOTE_LENGTH`                              | `HouseholdLimits.Points`, `Defaults` (`Limits`)                                                                                                               |
+| `pointsToCents`                                                                                               | `PointsMoney.PointsToCents(long, long)` (`long`, checked: an overflow throws)                                                                                 |
+| `isTwoDecimalCurrency`                                                                                        | `Settings.Currencies.HasTwoDecimals`                                                                                                                          |
+| `formatCents`                                                                                                 | not ported: display with `Intl.NumberFormat` stays in the web app (`omitted` in `scripts/vectors.ts`)                                                         |
+| `BONUS_KINDS`, `BonusKind`, `isBonusKind`                                                                     | `enum BonusKind`, `BonusKinds.All`, `ToLedgerKind()` (`bonus_week_done` ...), `TryParse`, `IsBonusKind`                                                       |
+| `BonusAmounts`, `BonusScheduleRow`, `NO_BONUSES`, `bonusAmountsOn`, `sameBonusAmounts`, `scheduleWithAmounts` | stay in `Settings.BonusSchedule` (slice 1.3); `BonusKinds.AmountOf(amounts, kind)` is the `AMOUNT_OF_KIND` lookup                                             |
+| `Period`, `PeriodUnit`, `weekOf`, `cycleOf`, `periodEnded`, `onTimeCutoff`                                    | `Period(Unit, Start, End)`, `Period.WeekOf`, `Period.CycleOf`, `HasEnded(today)`, `OnTimeCutoff(timezone)`                                                    |
+| `BonusOccurrence`                                                                                             | `BonusOccurrence` (`RecordedDone` is a `bool`; `periodOwnerId` undefined/null/value is `Frozen`: `null`, `FrozenOwner(null)`, `FrozenOwner(id)`)              |
+| `periodDayOf`, `periodOwnerOf`, `creditedOf`                                                                  | `BonusOccurrence.PeriodDay`, `PeriodOwnerId`, `CreditedId`                                                                                                    |
+| `placementsOf`, `evaluateSet`, `SetEvaluation`                                                                | `BonusCalculator.PlacementsOf`, `EvaluateSet`, `SetEvaluation`                                                                                                |
+| `bonusKey`, `expectedBonusEntries`, `BonusContext`, `ExpectedBonusEntry`                                      | `BonusCalculator.BonusKey`, `ExpectedEntries`, `BonusContext(Anchor, Timezone: TimeZoneInfo, Today, Schedule, Floor)`, `ExpectedBonusEntry`                   |
+| reward constants, `RewardGoals`, `NO_REWARD_GOALS`, `sameRewardGoals`                                         | `RewardMeter.MinGoalPoints`, `MaxGoalPoints`, `EggCount`; `Settings.RewardGoals` (`Automatic`); `RewardMeter.SameGoals`                                       |
+| `GoalOccurrence`, `AutomaticGoal`, `automaticGoal`                                                            | `GoalOccurrence(Occurrence, Points)`, `AutomaticGoal(Planned, Points)`, `RewardMeter.AutomaticGoalFor(items, personId, period)`                               |
+| `ResolvedRewardGoal`, `resolveRewardGoal`, `rewardPercent`, `eggsForPercent`                                  | `ResolvedRewardGoal`, `RewardMeter.ResolveGoal`, `Percent(long, int?)`, `EggsForPercent(double)`                                                              |
+| `BadgeRule`, `BADGE_RULE_TYPES`, `ruleCovers`, `evaluateBadgeRule`, `BadgeExecution`, `BadgeOutcome`          | `BadgeRule(Type, TaskIds, Threshold)` (`TaskIds` empty for on-time weeks), `BadgeRuleType`, `BadgeRules.Covers`, `Evaluate`, `BadgeExecution`, `BadgeOutcome` |
+| `sniffBadgeImageType`, `BADGE_IMAGE_TYPES`                                                                    | `BadgeImages.Sniff(ReadOnlySpan<byte>)` giving `BadgeImageType?`, `ContentType()`                                                                             |
+| `EXAMPLE_BADGES`, `ExampleBadge`, the task-name pattern                                                       | `ExampleBadges.All`, `ExampleBadge` (`TextFor(language)`, `Matches(taskName)`: `RegexOptions.ECMAScript \| IgnoreCase`, so `\b` stays ASCII as in JavaScript) |
+| the zod schemas of `badges.ts` (`createBadgeInputSchema`, ...), `MAX_BADGE_*`                                 | not in this slice: request validation belongs to the HTTP adapter and the limits to `HouseholdLimits.Badges` (slice 4.5)                                      |
+
+Differences: `OccurrenceStatus` lives in `Domain.Bonuses` until the occurrence model of phase 3 takes it over. `Percent` takes `long` earned points so a large balance cannot overflow; `PointsToCents` is `long`. Instants compare in whole milliseconds like JavaScript `Date`. Ties in the badge order and the bonus entry order use `StringComparer.Ordinal` (JavaScript's `<` on strings). A badge threshold below 1 never awards a count rule (there is no 0th execution) but awards a minutes rule at the first execution, exactly as TypeScript. `Currencies.HasTwoDecimals` is case-sensitive and false for a code the platform does not know, where `isTwoDecimalCurrency` accepts any well-formed code (`eur`, `ABC` give true there); settings validation already requires a known upper-case code, so no vector pins those inputs.

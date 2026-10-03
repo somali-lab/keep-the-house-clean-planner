@@ -1,0 +1,158 @@
+{
+  "module": "points",
+  "cases": [
+    {
+      "name": "whole points times whole cents",
+      "function": "pointsToCents",
+      "input": {
+        "points": 7,
+        "centsPerPoint": 25
+      },
+      "expected": 175
+    },
+    {
+      "name": "zero points",
+      "function": "pointsToCents",
+      "input": {
+        "points": 0,
+        "centsPerPoint": 25
+      },
+      "expected": 0
+    },
+    {
+      "name": "a negative balance gives negative cents",
+      "function": "pointsToCents",
+      "input": {
+        "points": -4,
+        "centsPerPoint": 10
+      },
+      "expected": -40
+    },
+    {
+      "name": "the maximum task points at the maximum factor",
+      "function": "pointsToCents",
+      "input": {
+        "points": 1000,
+        "centsPerPoint": 10000
+      },
+      "expected": 10000000
+    },
+    {
+      "name": "a factor of 0 shows no money",
+      "function": "pointsToCents",
+      "input": {
+        "points": 120,
+        "centsPerPoint": 0
+      },
+      "expected": 0
+    },
+    {
+      "name": "one point at one cent",
+      "function": "pointsToCents",
+      "input": {
+        "points": 1,
+        "centsPerPoint": 1
+      },
+      "expected": 1
+    },
+    {
+      "name": "a large negative balance",
+      "function": "pointsToCents",
+      "input": {
+        "points": -1000,
+        "centsPerPoint": 10000
+      },
+      "expected": -10000000
+    },
+    {
+      "name": "a balance beyond 32 bits of cents",
+      "function": "pointsToCents",
+      "input": {
+        "points": 1000000000,
+        "centsPerPoint": 10000
+      },
+      "expected": 10000000000000
+    },
+    {
+      "name": "zero points at a zero factor",
+      "function": "pointsToCents",
+      "input": {
+        "points": 0,
+        "centsPerPoint": 0
+      },
+      "expected": 0
+    },
+    {
+      "name": "EUR has two fraction digits",
+      "function": "isTwoDecimalCurrency",
+      "input": {
+        "code": "EUR"
+      },
+      "expected": true
+    },
+    {
+      "name": "USD has two fraction digits",
+      "function": "isTwoDecimalCurrency",
+      "input": {
+        "code": "USD"
+      },
+      "expected": true
+    },
+    {
+      "name": "GBP has two fraction digits",
+      "function": "isTwoDecimalCurrency",
+      "input": {
+        "code": "GBP"
+      },
+      "expected": true
+    },
+    {
+      "name": "CHF has two fraction digits",
+      "function": "isTwoDecimalCurrency",
+      "input": {
+        "code": "CHF"
+      },
+      "expected": true
+    },
+    {
+      "name": "JPY does not have two fraction digits",
+      "function": "isTwoDecimalCurrency",
+      "input": {
+        "code": "JPY"
+      },
+      "expected": false
+    },
+    {
+      "name": "KWD does not have two fraction digits",
+      "function": "isTwoDecimalCurrency",
+      "input": {
+        "code": "KWD"
+      },
+      "expected": false
+    },
+    {
+      "name": "BHD does not have two fraction digits",
+      "function": "isTwoDecimalCurrency",
+      "input": {
+        "code": "BHD"
+      },
+      "expected": false
+    },
+    {
+      "name": "text that is not a code",
+      "function": "isTwoDecimalCurrency",
+      "input": {
+        "code": "not a code"
+      },
+      "expected": false
+    },
+    {
+      "name": "empty text",
+      "function": "isTwoDecimalCurrency",
+      "input": {
+        "code": ""
+      },
+      "expected": false
+    }
+  ]
+}

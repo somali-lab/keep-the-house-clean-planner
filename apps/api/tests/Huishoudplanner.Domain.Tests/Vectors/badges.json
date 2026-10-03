@@ -1,0 +1,1428 @@
+{
+  "module": "badges",
+  "cases": [
+    {
+      "name": "no chosen tasks covers every task",
+      "function": "ruleCovers",
+      "input": {
+        "rule": {
+          "type": "executions",
+          "taskIds": [],
+          "threshold": 4
+        },
+        "taskId": "0123456789abcdef01234567"
+      },
+      "expected": true
+    },
+    {
+      "name": "no chosen tasks covers a one-off task",
+      "function": "ruleCovers",
+      "input": {
+        "rule": {
+          "type": "executions",
+          "taskIds": [],
+          "threshold": 4
+        },
+        "taskId": null
+      },
+      "expected": true
+    },
+    {
+      "name": "a chosen task is covered",
+      "function": "ruleCovers",
+      "input": {
+        "rule": {
+          "type": "minutes",
+          "taskIds": [
+            "0123456789abcdef01234567",
+            "89abcdef0123456789abcdef"
+          ],
+          "threshold": 1
+        },
+        "taskId": "89abcdef0123456789abcdef"
+      },
+      "expected": true
+    },
+    {
+      "name": "another task is not covered",
+      "function": "ruleCovers",
+      "input": {
+        "rule": {
+          "type": "minutes",
+          "taskIds": [
+            "0123456789abcdef01234567"
+          ],
+          "threshold": 1
+        },
+        "taskId": "89abcdef0123456789abcdef"
+      },
+      "expected": false
+    },
+    {
+      "name": "a one-off task never counts for chosen tasks",
+      "function": "ruleCovers",
+      "input": {
+        "rule": {
+          "type": "executions",
+          "taskIds": [
+            "0123456789abcdef01234567",
+            "89abcdef0123456789abcdef"
+          ],
+          "threshold": 1
+        },
+        "taskId": null
+      },
+      "expected": false
+    },
+    {
+      "name": "an on-time-weeks rule covers no execution",
+      "function": "ruleCovers",
+      "input": {
+        "rule": {
+          "type": "onTimeWeeks",
+          "threshold": 4
+        },
+        "taskId": "0123456789abcdef01234567"
+      },
+      "expected": false
+    },
+    {
+      "name": "an on-time-weeks rule covers no one-off task",
+      "function": "ruleCovers",
+      "input": {
+        "rule": {
+          "type": "onTimeWeeks",
+          "threshold": 4
+        },
+        "taskId": null
+      },
+      "expected": false
+    },
+    {
+      "name": "executions of the chosen task: awarded at the threshold-th one",
+      "function": "evaluateBadgeRule",
+      "input": {
+        "rule": {
+          "type": "executions",
+          "taskIds": [
+            "0123456789abcdef01234567"
+          ],
+          "threshold": 2
+        },
+        "executions": [
+          {
+            "id": "e3",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 30,
+            "at": "2026-09-18T08:00:00.000Z"
+          },
+          {
+            "id": "e1",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 10,
+            "at": "2026-09-16T08:00:00.000Z"
+          },
+          {
+            "id": "e2",
+            "taskId": "89abcdef0123456789abcdef",
+            "minutes": 20,
+            "at": "2026-09-17T08:00:00.000Z"
+          },
+          {
+            "id": "e4",
+            "taskId": null,
+            "minutes": 40,
+            "at": "2026-09-19T08:00:00.000Z"
+          }
+        ],
+        "onTimeWeekDates": []
+      },
+      "expected": {
+        "current": 2,
+        "awardedAt": "2026-09-18T08:00:00.000Z"
+      }
+    },
+    {
+      "name": "the same, whatever order the executions come in",
+      "function": "evaluateBadgeRule",
+      "input": {
+        "rule": {
+          "type": "executions",
+          "taskIds": [
+            "0123456789abcdef01234567"
+          ],
+          "threshold": 2
+        },
+        "executions": [
+          {
+            "id": "e4",
+            "taskId": null,
+            "minutes": 40,
+            "at": "2026-09-19T08:00:00.000Z"
+          },
+          {
+            "id": "e2",
+            "taskId": "89abcdef0123456789abcdef",
+            "minutes": 20,
+            "at": "2026-09-17T08:00:00.000Z"
+          },
+          {
+            "id": "e1",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 10,
+            "at": "2026-09-16T08:00:00.000Z"
+          },
+          {
+            "id": "e3",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 30,
+            "at": "2026-09-18T08:00:00.000Z"
+          }
+        ],
+        "onTimeWeekDates": []
+      },
+      "expected": {
+        "current": 2,
+        "awardedAt": "2026-09-18T08:00:00.000Z"
+      }
+    },
+    {
+      "name": "a threshold above the count is not reached",
+      "function": "evaluateBadgeRule",
+      "input": {
+        "rule": {
+          "type": "executions",
+          "taskIds": [
+            "0123456789abcdef01234567"
+          ],
+          "threshold": 3
+        },
+        "executions": [
+          {
+            "id": "e3",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 30,
+            "at": "2026-09-18T08:00:00.000Z"
+          },
+          {
+            "id": "e1",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 10,
+            "at": "2026-09-16T08:00:00.000Z"
+          },
+          {
+            "id": "e2",
+            "taskId": "89abcdef0123456789abcdef",
+            "minutes": 20,
+            "at": "2026-09-17T08:00:00.000Z"
+          },
+          {
+            "id": "e4",
+            "taskId": null,
+            "minutes": 40,
+            "at": "2026-09-19T08:00:00.000Z"
+          }
+        ],
+        "onTimeWeekDates": []
+      },
+      "expected": {
+        "current": 2,
+        "awardedAt": null
+      }
+    },
+    {
+      "name": "no chosen task counts every task, a one-off task included",
+      "function": "evaluateBadgeRule",
+      "input": {
+        "rule": {
+          "type": "executions",
+          "taskIds": [],
+          "threshold": 4
+        },
+        "executions": [
+          {
+            "id": "e3",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 30,
+            "at": "2026-09-18T08:00:00.000Z"
+          },
+          {
+            "id": "e1",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 10,
+            "at": "2026-09-16T08:00:00.000Z"
+          },
+          {
+            "id": "e2",
+            "taskId": "89abcdef0123456789abcdef",
+            "minutes": 20,
+            "at": "2026-09-17T08:00:00.000Z"
+          },
+          {
+            "id": "e4",
+            "taskId": null,
+            "minutes": 40,
+            "at": "2026-09-19T08:00:00.000Z"
+          }
+        ],
+        "onTimeWeekDates": []
+      },
+      "expected": {
+        "current": 4,
+        "awardedAt": "2026-09-19T08:00:00.000Z"
+      }
+    },
+    {
+      "name": "a one-off task never counts for chosen tasks",
+      "function": "evaluateBadgeRule",
+      "input": {
+        "rule": {
+          "type": "executions",
+          "taskIds": [
+            "0123456789abcdef01234567",
+            "89abcdef0123456789abcdef"
+          ],
+          "threshold": 1
+        },
+        "executions": [
+          {
+            "id": "e4",
+            "taskId": null,
+            "minutes": 10,
+            "at": "2026-09-19T08:00:00.000Z"
+          }
+        ],
+        "onTimeWeekDates": []
+      },
+      "expected": {
+        "current": 0,
+        "awardedAt": null
+      }
+    },
+    {
+      "name": "a threshold of 1 is awarded at the first execution in time order",
+      "function": "evaluateBadgeRule",
+      "input": {
+        "rule": {
+          "type": "executions",
+          "taskIds": [],
+          "threshold": 1
+        },
+        "executions": [
+          {
+            "id": "e3",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 30,
+            "at": "2026-09-18T08:00:00.000Z"
+          },
+          {
+            "id": "e1",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 10,
+            "at": "2026-09-16T08:00:00.000Z"
+          },
+          {
+            "id": "e2",
+            "taskId": "89abcdef0123456789abcdef",
+            "minutes": 20,
+            "at": "2026-09-17T08:00:00.000Z"
+          },
+          {
+            "id": "e4",
+            "taskId": null,
+            "minutes": 40,
+            "at": "2026-09-19T08:00:00.000Z"
+          }
+        ],
+        "onTimeWeekDates": []
+      },
+      "expected": {
+        "current": 4,
+        "awardedAt": "2026-09-16T08:00:00.000Z"
+      }
+    },
+    {
+      "name": "a threshold of 0 is never awarded by the count",
+      "function": "evaluateBadgeRule",
+      "input": {
+        "rule": {
+          "type": "executions",
+          "taskIds": [],
+          "threshold": 0
+        },
+        "executions": [
+          {
+            "id": "e3",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 30,
+            "at": "2026-09-18T08:00:00.000Z"
+          },
+          {
+            "id": "e1",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 10,
+            "at": "2026-09-16T08:00:00.000Z"
+          },
+          {
+            "id": "e2",
+            "taskId": "89abcdef0123456789abcdef",
+            "minutes": 20,
+            "at": "2026-09-17T08:00:00.000Z"
+          },
+          {
+            "id": "e4",
+            "taskId": null,
+            "minutes": 40,
+            "at": "2026-09-19T08:00:00.000Z"
+          }
+        ],
+        "onTimeWeekDates": []
+      },
+      "expected": {
+        "current": 4,
+        "awardedAt": null
+      }
+    },
+    {
+      "name": "no executions at all",
+      "function": "evaluateBadgeRule",
+      "input": {
+        "rule": {
+          "type": "executions",
+          "taskIds": [],
+          "threshold": 1
+        },
+        "executions": [],
+        "onTimeWeekDates": []
+      },
+      "expected": {
+        "current": 0,
+        "awardedAt": null
+      }
+    },
+    {
+      "name": "minutes: awarded at the execution that reaches the threshold, the total beyond it still reported",
+      "function": "evaluateBadgeRule",
+      "input": {
+        "rule": {
+          "type": "minutes",
+          "taskIds": [],
+          "threshold": 55
+        },
+        "executions": [
+          {
+            "id": "e3",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 30,
+            "at": "2026-09-18T08:00:00.000Z"
+          },
+          {
+            "id": "e1",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 10,
+            "at": "2026-09-16T08:00:00.000Z"
+          },
+          {
+            "id": "e2",
+            "taskId": "89abcdef0123456789abcdef",
+            "minutes": 20,
+            "at": "2026-09-17T08:00:00.000Z"
+          },
+          {
+            "id": "e4",
+            "taskId": null,
+            "minutes": 40,
+            "at": "2026-09-19T08:00:00.000Z"
+          }
+        ],
+        "onTimeWeekDates": []
+      },
+      "expected": {
+        "current": 100,
+        "awardedAt": "2026-09-18T08:00:00.000Z"
+      }
+    },
+    {
+      "name": "minutes: a threshold met exactly by the last execution",
+      "function": "evaluateBadgeRule",
+      "input": {
+        "rule": {
+          "type": "minutes",
+          "taskIds": [],
+          "threshold": 100
+        },
+        "executions": [
+          {
+            "id": "e3",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 30,
+            "at": "2026-09-18T08:00:00.000Z"
+          },
+          {
+            "id": "e1",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 10,
+            "at": "2026-09-16T08:00:00.000Z"
+          },
+          {
+            "id": "e2",
+            "taskId": "89abcdef0123456789abcdef",
+            "minutes": 20,
+            "at": "2026-09-17T08:00:00.000Z"
+          },
+          {
+            "id": "e4",
+            "taskId": null,
+            "minutes": 40,
+            "at": "2026-09-19T08:00:00.000Z"
+          }
+        ],
+        "onTimeWeekDates": []
+      },
+      "expected": {
+        "current": 100,
+        "awardedAt": "2026-09-19T08:00:00.000Z"
+      }
+    },
+    {
+      "name": "minutes: a threshold above the total is not reached",
+      "function": "evaluateBadgeRule",
+      "input": {
+        "rule": {
+          "type": "minutes",
+          "taskIds": [],
+          "threshold": 101
+        },
+        "executions": [
+          {
+            "id": "e3",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 30,
+            "at": "2026-09-18T08:00:00.000Z"
+          },
+          {
+            "id": "e1",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 10,
+            "at": "2026-09-16T08:00:00.000Z"
+          },
+          {
+            "id": "e2",
+            "taskId": "89abcdef0123456789abcdef",
+            "minutes": 20,
+            "at": "2026-09-17T08:00:00.000Z"
+          },
+          {
+            "id": "e4",
+            "taskId": null,
+            "minutes": 40,
+            "at": "2026-09-19T08:00:00.000Z"
+          }
+        ],
+        "onTimeWeekDates": []
+      },
+      "expected": {
+        "current": 100,
+        "awardedAt": null
+      }
+    },
+    {
+      "name": "minutes: a threshold met exactly at the first execution",
+      "function": "evaluateBadgeRule",
+      "input": {
+        "rule": {
+          "type": "minutes",
+          "taskIds": [],
+          "threshold": 10
+        },
+        "executions": [
+          {
+            "id": "e3",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 30,
+            "at": "2026-09-18T08:00:00.000Z"
+          },
+          {
+            "id": "e1",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 10,
+            "at": "2026-09-16T08:00:00.000Z"
+          },
+          {
+            "id": "e2",
+            "taskId": "89abcdef0123456789abcdef",
+            "minutes": 20,
+            "at": "2026-09-17T08:00:00.000Z"
+          },
+          {
+            "id": "e4",
+            "taskId": null,
+            "minutes": 40,
+            "at": "2026-09-19T08:00:00.000Z"
+          }
+        ],
+        "onTimeWeekDates": []
+      },
+      "expected": {
+        "current": 100,
+        "awardedAt": "2026-09-16T08:00:00.000Z"
+      }
+    },
+    {
+      "name": "minutes: a threshold of 0 is awarded at the first execution",
+      "function": "evaluateBadgeRule",
+      "input": {
+        "rule": {
+          "type": "minutes",
+          "taskIds": [],
+          "threshold": 0
+        },
+        "executions": [
+          {
+            "id": "e3",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 30,
+            "at": "2026-09-18T08:00:00.000Z"
+          },
+          {
+            "id": "e1",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 10,
+            "at": "2026-09-16T08:00:00.000Z"
+          },
+          {
+            "id": "e2",
+            "taskId": "89abcdef0123456789abcdef",
+            "minutes": 20,
+            "at": "2026-09-17T08:00:00.000Z"
+          },
+          {
+            "id": "e4",
+            "taskId": null,
+            "minutes": 40,
+            "at": "2026-09-19T08:00:00.000Z"
+          }
+        ],
+        "onTimeWeekDates": []
+      },
+      "expected": {
+        "current": 100,
+        "awardedAt": "2026-09-16T08:00:00.000Z"
+      }
+    },
+    {
+      "name": "minutes: a threshold of 0 without executions is not awarded",
+      "function": "evaluateBadgeRule",
+      "input": {
+        "rule": {
+          "type": "minutes",
+          "taskIds": [],
+          "threshold": 0
+        },
+        "executions": [],
+        "onTimeWeekDates": []
+      },
+      "expected": {
+        "current": 0,
+        "awardedAt": null
+      }
+    },
+    {
+      "name": "minutes of chosen tasks only",
+      "function": "evaluateBadgeRule",
+      "input": {
+        "rule": {
+          "type": "minutes",
+          "taskIds": [
+            "0123456789abcdef01234567"
+          ],
+          "threshold": 40
+        },
+        "executions": [
+          {
+            "id": "e3",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 30,
+            "at": "2026-09-18T08:00:00.000Z"
+          },
+          {
+            "id": "e1",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 10,
+            "at": "2026-09-16T08:00:00.000Z"
+          },
+          {
+            "id": "e2",
+            "taskId": "89abcdef0123456789abcdef",
+            "minutes": 20,
+            "at": "2026-09-17T08:00:00.000Z"
+          },
+          {
+            "id": "e4",
+            "taskId": null,
+            "minutes": 40,
+            "at": "2026-09-19T08:00:00.000Z"
+          }
+        ],
+        "onTimeWeekDates": []
+      },
+      "expected": {
+        "current": 40,
+        "awardedAt": "2026-09-18T08:00:00.000Z"
+      }
+    },
+    {
+      "name": "executions at the same moment are ordered by id (input order a, b)",
+      "function": "evaluateBadgeRule",
+      "input": {
+        "rule": {
+          "type": "minutes",
+          "taskIds": [],
+          "threshold": 40
+        },
+        "executions": [
+          {
+            "id": "a",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 50,
+            "at": "2026-09-16T08:00:00.000Z"
+          },
+          {
+            "id": "b",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 5,
+            "at": "2026-09-16T08:00:00.000Z"
+          }
+        ],
+        "onTimeWeekDates": []
+      },
+      "expected": {
+        "current": 55,
+        "awardedAt": "2026-09-16T08:00:00.000Z"
+      }
+    },
+    {
+      "name": "executions at the same moment are ordered by id (input order b, a)",
+      "function": "evaluateBadgeRule",
+      "input": {
+        "rule": {
+          "type": "minutes",
+          "taskIds": [],
+          "threshold": 40
+        },
+        "executions": [
+          {
+            "id": "b",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 5,
+            "at": "2026-09-16T08:00:00.000Z"
+          },
+          {
+            "id": "a",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 50,
+            "at": "2026-09-16T08:00:00.000Z"
+          }
+        ],
+        "onTimeWeekDates": []
+      },
+      "expected": {
+        "current": 55,
+        "awardedAt": "2026-09-16T08:00:00.000Z"
+      }
+    },
+    {
+      "name": "executions are ordered by their instant to the millisecond, not by id",
+      "function": "evaluateBadgeRule",
+      "input": {
+        "rule": {
+          "type": "executions",
+          "taskIds": [],
+          "threshold": 2
+        },
+        "executions": [
+          {
+            "id": "z",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 10,
+            "at": "2026-09-16T08:00:00.001Z"
+          },
+          {
+            "id": "y",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 10,
+            "at": "2026-09-16T08:00:00.000Z"
+          },
+          {
+            "id": "x",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 10,
+            "at": "2026-09-17T08:00:00.000Z"
+          }
+        ],
+        "onTimeWeekDates": []
+      },
+      "expected": {
+        "current": 3,
+        "awardedAt": "2026-09-16T08:00:00.001Z"
+      }
+    },
+    {
+      "name": "on-time weeks: awarded at the date of the threshold-th week",
+      "function": "evaluateBadgeRule",
+      "input": {
+        "rule": {
+          "type": "onTimeWeeks",
+          "threshold": 2
+        },
+        "executions": [
+          {
+            "id": "e3",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 30,
+            "at": "2026-09-18T08:00:00.000Z"
+          },
+          {
+            "id": "e1",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 10,
+            "at": "2026-09-16T08:00:00.000Z"
+          },
+          {
+            "id": "e2",
+            "taskId": "89abcdef0123456789abcdef",
+            "minutes": 20,
+            "at": "2026-09-17T08:00:00.000Z"
+          },
+          {
+            "id": "e4",
+            "taskId": null,
+            "minutes": 40,
+            "at": "2026-09-19T08:00:00.000Z"
+          }
+        ],
+        "onTimeWeekDates": [
+          "2026-09-27T00:00:00.000Z",
+          "2026-09-20T00:00:00.000Z",
+          "2026-10-04T00:00:00.000Z"
+        ]
+      },
+      "expected": {
+        "current": 3,
+        "awardedAt": "2026-09-27T00:00:00.000Z"
+      }
+    },
+    {
+      "name": "on-time weeks: a threshold above the count is not reached",
+      "function": "evaluateBadgeRule",
+      "input": {
+        "rule": {
+          "type": "onTimeWeeks",
+          "threshold": 4
+        },
+        "executions": [
+          {
+            "id": "e3",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 30,
+            "at": "2026-09-18T08:00:00.000Z"
+          },
+          {
+            "id": "e1",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 10,
+            "at": "2026-09-16T08:00:00.000Z"
+          },
+          {
+            "id": "e2",
+            "taskId": "89abcdef0123456789abcdef",
+            "minutes": 20,
+            "at": "2026-09-17T08:00:00.000Z"
+          },
+          {
+            "id": "e4",
+            "taskId": null,
+            "minutes": 40,
+            "at": "2026-09-19T08:00:00.000Z"
+          }
+        ],
+        "onTimeWeekDates": [
+          "2026-09-27T00:00:00.000Z",
+          "2026-09-20T00:00:00.000Z",
+          "2026-10-04T00:00:00.000Z"
+        ]
+      },
+      "expected": {
+        "current": 3,
+        "awardedAt": null
+      }
+    },
+    {
+      "name": "on-time weeks: none yet",
+      "function": "evaluateBadgeRule",
+      "input": {
+        "rule": {
+          "type": "onTimeWeeks",
+          "threshold": 2
+        },
+        "executions": [
+          {
+            "id": "e3",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 30,
+            "at": "2026-09-18T08:00:00.000Z"
+          },
+          {
+            "id": "e1",
+            "taskId": "0123456789abcdef01234567",
+            "minutes": 10,
+            "at": "2026-09-16T08:00:00.000Z"
+          },
+          {
+            "id": "e2",
+            "taskId": "89abcdef0123456789abcdef",
+            "minutes": 20,
+            "at": "2026-09-17T08:00:00.000Z"
+          },
+          {
+            "id": "e4",
+            "taskId": null,
+            "minutes": 40,
+            "at": "2026-09-19T08:00:00.000Z"
+          }
+        ],
+        "onTimeWeekDates": []
+      },
+      "expected": {
+        "current": 0,
+        "awardedAt": null
+      }
+    },
+    {
+      "name": "on-time weeks: the first week",
+      "function": "evaluateBadgeRule",
+      "input": {
+        "rule": {
+          "type": "onTimeWeeks",
+          "threshold": 1
+        },
+        "executions": [],
+        "onTimeWeekDates": [
+          "2026-09-27T00:00:00.000Z",
+          "2026-09-20T00:00:00.000Z",
+          "2026-10-04T00:00:00.000Z"
+        ]
+      },
+      "expected": {
+        "current": 3,
+        "awardedAt": "2026-09-20T00:00:00.000Z"
+      }
+    },
+    {
+      "name": "on-time weeks: a threshold of 0 is never awarded",
+      "function": "evaluateBadgeRule",
+      "input": {
+        "rule": {
+          "type": "onTimeWeeks",
+          "threshold": 0
+        },
+        "executions": [],
+        "onTimeWeekDates": [
+          "2026-09-27T00:00:00.000Z",
+          "2026-09-20T00:00:00.000Z",
+          "2026-10-04T00:00:00.000Z"
+        ]
+      },
+      "expected": {
+        "current": 3,
+        "awardedAt": null
+      }
+    },
+    {
+      "name": "on-time weeks: the last of three",
+      "function": "evaluateBadgeRule",
+      "input": {
+        "rule": {
+          "type": "onTimeWeeks",
+          "threshold": 3
+        },
+        "executions": [],
+        "onTimeWeekDates": [
+          "2026-09-27T00:00:00.000Z",
+          "2026-09-20T00:00:00.000Z",
+          "2026-10-04T00:00:00.000Z"
+        ]
+      },
+      "expected": {
+        "current": 3,
+        "awardedAt": "2026-10-04T00:00:00.000Z"
+      }
+    },
+    {
+      "name": "a PNG signature with a byte after it",
+      "function": "sniffBadgeImageType",
+      "input": {
+        "bytes": [
+          137,
+          80,
+          78,
+          71,
+          13,
+          10,
+          26,
+          10,
+          0
+        ]
+      },
+      "expected": "image/png"
+    },
+    {
+      "name": "exactly the 8 bytes of a PNG signature",
+      "function": "sniffBadgeImageType",
+      "input": {
+        "bytes": [
+          137,
+          80,
+          78,
+          71,
+          13,
+          10,
+          26,
+          10
+        ]
+      },
+      "expected": "image/png"
+    },
+    {
+      "name": "a PNG signature that is one byte short",
+      "function": "sniffBadgeImageType",
+      "input": {
+        "bytes": [
+          137,
+          80,
+          78,
+          71,
+          13,
+          10,
+          26
+        ]
+      },
+      "expected": null
+    },
+    {
+      "name": "a PNG signature with one wrong byte",
+      "function": "sniffBadgeImageType",
+      "input": {
+        "bytes": [
+          137,
+          80,
+          78,
+          71,
+          13,
+          10,
+          26,
+          11
+        ]
+      },
+      "expected": null
+    },
+    {
+      "name": "a JPEG",
+      "function": "sniffBadgeImageType",
+      "input": {
+        "bytes": [
+          255,
+          216,
+          255,
+          224
+        ]
+      },
+      "expected": "image/jpeg"
+    },
+    {
+      "name": "exactly the 3 bytes of a JPEG signature",
+      "function": "sniffBadgeImageType",
+      "input": {
+        "bytes": [
+          255,
+          216,
+          255
+        ]
+      },
+      "expected": "image/jpeg"
+    },
+    {
+      "name": "two bytes of a JPEG signature",
+      "function": "sniffBadgeImageType",
+      "input": {
+        "bytes": [
+          255,
+          216
+        ]
+      },
+      "expected": null
+    },
+    {
+      "name": "a WebP",
+      "function": "sniffBadgeImageType",
+      "input": {
+        "bytes": [
+          82,
+          73,
+          70,
+          70,
+          1,
+          0,
+          0,
+          0,
+          87,
+          69,
+          66,
+          80,
+          86,
+          80,
+          56,
+          32
+        ]
+      },
+      "expected": "image/webp"
+    },
+    {
+      "name": "exactly the 12 bytes of a WebP header",
+      "function": "sniffBadgeImageType",
+      "input": {
+        "bytes": [
+          82,
+          73,
+          70,
+          70,
+          1,
+          0,
+          0,
+          0,
+          87,
+          69,
+          66,
+          80
+        ]
+      },
+      "expected": "image/webp"
+    },
+    {
+      "name": "a WebP header that is one byte short",
+      "function": "sniffBadgeImageType",
+      "input": {
+        "bytes": [
+          82,
+          73,
+          70,
+          70,
+          1,
+          0,
+          0,
+          0,
+          87,
+          69,
+          66
+        ]
+      },
+      "expected": null
+    },
+    {
+      "name": "a RIFF file that is a WAVE",
+      "function": "sniffBadgeImageType",
+      "input": {
+        "bytes": [
+          82,
+          73,
+          70,
+          70,
+          1,
+          0,
+          0,
+          0,
+          87,
+          65,
+          86,
+          69,
+          102,
+          109,
+          116,
+          32
+        ]
+      },
+      "expected": null
+    },
+    {
+      "name": "an SVG is refused",
+      "function": "sniffBadgeImageType",
+      "input": {
+        "bytes": [
+          60,
+          115,
+          118,
+          103,
+          32,
+          120,
+          109,
+          108,
+          110,
+          115,
+          61,
+          34,
+          104,
+          116,
+          116,
+          112,
+          58,
+          47,
+          47,
+          119,
+          119,
+          119,
+          46,
+          119,
+          51,
+          46,
+          111,
+          114,
+          103,
+          47,
+          50,
+          48,
+          48,
+          48,
+          47,
+          115,
+          118,
+          103,
+          34,
+          47,
+          62
+        ]
+      },
+      "expected": null
+    },
+    {
+      "name": "a GIF is refused",
+      "function": "sniffBadgeImageType",
+      "input": {
+        "bytes": [
+          71,
+          73,
+          70,
+          56,
+          57,
+          97
+        ]
+      },
+      "expected": null
+    },
+    {
+      "name": "two bytes of a PNG signature",
+      "function": "sniffBadgeImageType",
+      "input": {
+        "bytes": [
+          137,
+          80
+        ]
+      },
+      "expected": null
+    },
+    {
+      "name": "an empty file",
+      "function": "sniffBadgeImageType",
+      "input": {
+        "bytes": []
+      },
+      "expected": null
+    },
+    {
+      "name": "the three examples of the \"add example badges\" action",
+      "function": "exampleBadges",
+      "input": {},
+      "expected": [
+        {
+          "key": "example:on_time",
+          "taskNamePattern": null,
+          "rule": {
+            "type": "onTimeWeeks",
+            "threshold": 4
+          },
+          "text": {
+            "nl": {
+              "name": "Alles op tijd",
+              "description": "Vier weken alles op tijd gedaan."
+            },
+            "en": {
+              "name": "Always on time",
+              "description": "Did everything on time for four weeks."
+            }
+          }
+        },
+        {
+          "key": "example:toilet",
+          "taskNamePattern": "toilet|\\bwc\\b",
+          "rule": {
+            "type": "executions",
+            "threshold": 10
+          },
+          "text": {
+            "nl": {
+              "name": "Toiletjuffrouw",
+              "description": "Het toilet 10 keer schoongemaakt."
+            },
+            "en": {
+              "name": "Toilet Champion",
+              "description": "Cleaned the toilet 10 times."
+            }
+          }
+        },
+        {
+          "key": "example:mop",
+          "taskNamePattern": "dweil|zwabber|\\bmop",
+          "rule": {
+            "type": "minutes",
+            "threshold": 300
+          },
+          "text": {
+            "nl": {
+              "name": "Dweilkampioen",
+              "description": "300 minuten gedweild."
+            },
+            "en": {
+              "name": "Mop Champion",
+              "description": "Mopped for 300 minutes."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "toilet matches Toilet schoonmaken",
+      "function": "exampleBadgeMatches",
+      "input": {
+        "key": "example:toilet",
+        "taskName": "Toilet schoonmaken"
+      },
+      "expected": true
+    },
+    {
+      "name": "toilet matches WC poetsen",
+      "function": "exampleBadgeMatches",
+      "input": {
+        "key": "example:toilet",
+        "taskName": "WC poetsen"
+      },
+      "expected": true
+    },
+    {
+      "name": "toilet matches in capitals",
+      "function": "exampleBadgeMatches",
+      "input": {
+        "key": "example:toilet",
+        "taskName": "TOILET"
+      },
+      "expected": true
+    },
+    {
+      "name": "toilet matches the word wc in lower case",
+      "function": "exampleBadgeMatches",
+      "input": {
+        "key": "example:toilet",
+        "taskName": "wc"
+      },
+      "expected": true
+    },
+    {
+      "name": "toilet matches a longer word that starts with toilet",
+      "function": "exampleBadgeMatches",
+      "input": {
+        "key": "example:toilet",
+        "taskName": "Toiletborstel vervangen"
+      },
+      "expected": true
+    },
+    {
+      "name": "toilet does not match wc inside a word",
+      "function": "exampleBadgeMatches",
+      "input": {
+        "key": "example:toilet",
+        "taskName": "Zwcsdf"
+      },
+      "expected": false
+    },
+    {
+      "name": "toilet matches wc next to a non-ASCII letter (\\b is ASCII only)",
+      "function": "exampleBadgeMatches",
+      "input": {
+        "key": "example:toilet",
+        "taskName": "éwc"
+      },
+      "expected": true
+    },
+    {
+      "name": "toilet does not match an unrelated task",
+      "function": "exampleBadgeMatches",
+      "input": {
+        "key": "example:toilet",
+        "taskName": "Stofzuigen"
+      },
+      "expected": false
+    },
+    {
+      "name": "mop matches Vloer dweilen",
+      "function": "exampleBadgeMatches",
+      "input": {
+        "key": "example:mop",
+        "taskName": "Vloer dweilen"
+      },
+      "expected": true
+    },
+    {
+      "name": "mop matches Mop de keuken",
+      "function": "exampleBadgeMatches",
+      "input": {
+        "key": "example:mop",
+        "taskName": "Mop de keuken"
+      },
+      "expected": true
+    },
+    {
+      "name": "mop matches zwabber",
+      "function": "exampleBadgeMatches",
+      "input": {
+        "key": "example:mop",
+        "taskName": "Terras zwabberen"
+      },
+      "expected": true
+    },
+    {
+      "name": "mop matches a word that starts with mop",
+      "function": "exampleBadgeMatches",
+      "input": {
+        "key": "example:mop",
+        "taskName": "Mopje wassen"
+      },
+      "expected": true
+    },
+    {
+      "name": "mop does not match an unrelated task",
+      "function": "exampleBadgeMatches",
+      "input": {
+        "key": "example:mop",
+        "taskName": "Stofzuigen"
+      },
+      "expected": false
+    },
+    {
+      "name": "mop does not match mop inside a word",
+      "function": "exampleBadgeMatches",
+      "input": {
+        "key": "example:mop",
+        "taskName": "Slimop"
+      },
+      "expected": false
+    }
+  ]
+}

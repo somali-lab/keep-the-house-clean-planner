@@ -1,0 +1,931 @@
+{
+  "module": "rewards",
+  "cases": [
+    {
+      "name": "sums the points of the work planned for the person in the period, and counts it",
+      "function": "automaticGoal",
+      "input": {
+        "items": [
+          {
+            "status": "open",
+            "plannedDate": "2026-09-15",
+            "date": "2026-09-15",
+            "assigneeId": "anna",
+            "completedBy": null,
+            "completedAt": null,
+            "points": 3
+          },
+          {
+            "status": "open",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "assigneeId": "anna",
+            "completedBy": null,
+            "completedAt": null,
+            "points": 2
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-09-20",
+            "date": "2026-09-20",
+            "assigneeId": "anna",
+            "completedBy": "anna",
+            "completedAt": "2026-09-20T10:00:00.000Z",
+            "points": 1
+          }
+        ],
+        "personId": "anna",
+        "period": {
+          "start": "2026-09-14",
+          "end": "2026-09-20"
+        }
+      },
+      "expected": {
+        "planned": 3,
+        "points": 6
+      }
+    },
+    {
+      "name": "puts work in a period by the day it was planned, and includes both ends",
+      "function": "automaticGoal",
+      "input": {
+        "items": [
+          {
+            "status": "open",
+            "plannedDate": "2026-09-10",
+            "date": "2026-09-16",
+            "assigneeId": "anna",
+            "completedBy": null,
+            "completedAt": null,
+            "points": 5
+          },
+          {
+            "status": "open",
+            "plannedDate": "2026-09-21",
+            "date": "2026-09-18",
+            "assigneeId": "anna",
+            "completedBy": null,
+            "completedAt": null,
+            "points": 7
+          },
+          {
+            "status": "open",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "assigneeId": "anna",
+            "completedBy": null,
+            "completedAt": null,
+            "points": 1
+          },
+          {
+            "status": "open",
+            "plannedDate": "2026-09-20",
+            "date": "2026-09-20",
+            "assigneeId": "anna",
+            "completedBy": null,
+            "completedAt": null,
+            "points": 2
+          }
+        ],
+        "personId": "anna",
+        "period": {
+          "start": "2026-09-14",
+          "end": "2026-09-20"
+        }
+      },
+      "expected": {
+        "planned": 2,
+        "points": 3
+      }
+    },
+    {
+      "name": "leaves out skipped work, recorded work and work of other people or nobody",
+      "function": "automaticGoal",
+      "input": {
+        "items": [
+          {
+            "status": "skipped",
+            "plannedDate": "2026-09-15",
+            "date": "2026-09-15",
+            "assigneeId": "anna",
+            "completedBy": null,
+            "completedAt": null,
+            "points": 4
+          },
+          {
+            "status": "done",
+            "plannedDate": "2026-09-15",
+            "date": "2026-09-15",
+            "assigneeId": "anna",
+            "completedBy": "anna",
+            "completedAt": null,
+            "points": 4,
+            "recordedDone": true
+          },
+          {
+            "status": "open",
+            "plannedDate": "2026-09-15",
+            "date": "2026-09-15",
+            "assigneeId": "bram",
+            "completedBy": null,
+            "completedAt": null,
+            "points": 4
+          },
+          {
+            "status": "open",
+            "plannedDate": "2026-09-15",
+            "date": "2026-09-15",
+            "assigneeId": null,
+            "completedBy": null,
+            "completedAt": null,
+            "points": 4
+          },
+          {
+            "status": "open",
+            "plannedDate": "2026-09-15",
+            "date": "2026-09-15",
+            "assigneeId": "anna",
+            "completedBy": null,
+            "completedAt": null,
+            "points": 1
+          }
+        ],
+        "personId": "anna",
+        "period": {
+          "start": "2026-09-14",
+          "end": "2026-09-20"
+        }
+      },
+      "expected": {
+        "planned": 1,
+        "points": 1
+      }
+    },
+    {
+      "name": "follows the period owner: the frozen owner keeps work somebody else did (anna)",
+      "function": "automaticGoal",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-15",
+            "date": "2026-09-15",
+            "assigneeId": "bram",
+            "completedBy": "bram",
+            "completedAt": null,
+            "points": 3,
+            "periodOwnerId": "anna"
+          },
+          {
+            "status": "open",
+            "plannedDate": "2026-09-15",
+            "date": "2026-09-15",
+            "assigneeId": "bram",
+            "completedBy": null,
+            "completedAt": null,
+            "points": 2
+          },
+          {
+            "status": "open",
+            "plannedDate": "2026-09-15",
+            "date": "2026-09-15",
+            "assigneeId": "anna",
+            "completedBy": null,
+            "completedAt": null,
+            "points": 8,
+            "periodOwnerId": null
+          }
+        ],
+        "personId": "anna",
+        "period": {
+          "start": "2026-09-14",
+          "end": "2026-09-20"
+        }
+      },
+      "expected": {
+        "planned": 1,
+        "points": 3
+      }
+    },
+    {
+      "name": "follows the period owner: no frozen owner means the assignee (bram)",
+      "function": "automaticGoal",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-15",
+            "date": "2026-09-15",
+            "assigneeId": "bram",
+            "completedBy": "bram",
+            "completedAt": null,
+            "points": 3,
+            "periodOwnerId": "anna"
+          },
+          {
+            "status": "open",
+            "plannedDate": "2026-09-15",
+            "date": "2026-09-15",
+            "assigneeId": "bram",
+            "completedBy": null,
+            "completedAt": null,
+            "points": 2
+          },
+          {
+            "status": "open",
+            "plannedDate": "2026-09-15",
+            "date": "2026-09-15",
+            "assigneeId": "anna",
+            "completedBy": null,
+            "completedAt": null,
+            "points": 8,
+            "periodOwnerId": null
+          }
+        ],
+        "personId": "bram",
+        "period": {
+          "start": "2026-09-14",
+          "end": "2026-09-20"
+        }
+      },
+      "expected": {
+        "planned": 1,
+        "points": 2
+      }
+    },
+    {
+      "name": "is empty without work",
+      "function": "automaticGoal",
+      "input": {
+        "items": [],
+        "personId": "anna",
+        "period": {
+          "start": "2026-09-14",
+          "end": "2026-09-20"
+        }
+      },
+      "expected": {
+        "planned": 0,
+        "points": 0
+      }
+    },
+    {
+      "name": "counts planned work that is worth 0 points",
+      "function": "automaticGoal",
+      "input": {
+        "items": [
+          {
+            "status": "open",
+            "plannedDate": "2026-09-15",
+            "date": "2026-09-15",
+            "assigneeId": "anna",
+            "completedBy": null,
+            "completedAt": null,
+            "points": 0
+          }
+        ],
+        "personId": "anna",
+        "period": {
+          "start": "2026-09-14",
+          "end": "2026-09-20"
+        }
+      },
+      "expected": {
+        "planned": 1,
+        "points": 0
+      }
+    },
+    {
+      "name": "done work counts like open work",
+      "function": "automaticGoal",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-15",
+            "date": "2026-09-15",
+            "assigneeId": "anna",
+            "completedBy": "anna",
+            "completedAt": "2026-09-15T08:00:00.000Z",
+            "points": 4
+          },
+          {
+            "status": "open",
+            "plannedDate": "2026-09-15",
+            "date": "2026-09-15",
+            "assigneeId": "anna",
+            "completedBy": null,
+            "completedAt": null,
+            "points": 6
+          }
+        ],
+        "personId": "anna",
+        "period": {
+          "start": "2026-09-14",
+          "end": "2026-09-20"
+        }
+      },
+      "expected": {
+        "planned": 2,
+        "points": 10
+      }
+    },
+    {
+      "name": "a cycle period counts four weeks of work",
+      "function": "automaticGoal",
+      "input": {
+        "items": [
+          {
+            "status": "open",
+            "plannedDate": "2026-09-14",
+            "date": "2026-09-14",
+            "assigneeId": "anna",
+            "completedBy": null,
+            "completedAt": null,
+            "points": 2
+          },
+          {
+            "status": "open",
+            "plannedDate": "2026-10-11",
+            "date": "2026-10-11",
+            "assigneeId": "anna",
+            "completedBy": null,
+            "completedAt": null,
+            "points": 3
+          },
+          {
+            "status": "open",
+            "plannedDate": "2026-10-12",
+            "date": "2026-10-12",
+            "assigneeId": "anna",
+            "completedBy": null,
+            "completedAt": null,
+            "points": 9
+          }
+        ],
+        "personId": "anna",
+        "period": {
+          "start": "2026-09-14",
+          "end": "2026-10-11"
+        }
+      },
+      "expected": {
+        "planned": 2,
+        "points": 5
+      }
+    },
+    {
+      "name": "recorded work is left out also when it is the only work",
+      "function": "automaticGoal",
+      "input": {
+        "items": [
+          {
+            "status": "done",
+            "plannedDate": "2026-09-15",
+            "date": "2026-09-15",
+            "assigneeId": "anna",
+            "completedBy": "anna",
+            "completedAt": null,
+            "points": 4,
+            "recordedDone": true
+          }
+        ],
+        "personId": "anna",
+        "period": {
+          "start": "2026-09-14",
+          "end": "2026-09-20"
+        }
+      },
+      "expected": {
+        "planned": 0,
+        "points": 0
+      }
+    },
+    {
+      "name": "an explicit goal wins over the planned work",
+      "function": "resolveRewardGoal",
+      "input": {
+        "explicit": 12,
+        "automatic": {
+          "planned": 2,
+          "points": 6
+        }
+      },
+      "expected": {
+        "goalPoints": 12,
+        "source": "explicit"
+      }
+    },
+    {
+      "name": "an explicit goal also without planned work",
+      "function": "resolveRewardGoal",
+      "input": {
+        "explicit": 12,
+        "automatic": {
+          "planned": 0,
+          "points": 0
+        }
+      },
+      "expected": {
+        "goalPoints": 12,
+        "source": "explicit"
+      }
+    },
+    {
+      "name": "an explicit 0 is no goal",
+      "function": "resolveRewardGoal",
+      "input": {
+        "explicit": 0,
+        "automatic": {
+          "planned": 2,
+          "points": 6
+        }
+      },
+      "expected": {
+        "goalPoints": null,
+        "source": "explicit"
+      }
+    },
+    {
+      "name": "the automatic goal is the planned points",
+      "function": "resolveRewardGoal",
+      "input": {
+        "explicit": null,
+        "automatic": {
+          "planned": 2,
+          "points": 6
+        }
+      },
+      "expected": {
+        "goalPoints": 6,
+        "source": "automatic"
+      }
+    },
+    {
+      "name": "a missing explicit goal is automatic",
+      "function": "resolveRewardGoal",
+      "input": {
+        "automatic": {
+          "planned": 1,
+          "points": 0
+        }
+      },
+      "expected": {
+        "goalPoints": 1,
+        "source": "automatic"
+      }
+    },
+    {
+      "name": "planned work worth 0 points gives a goal of at least 1",
+      "function": "resolveRewardGoal",
+      "input": {
+        "explicit": null,
+        "automatic": {
+          "planned": 3,
+          "points": 0
+        }
+      },
+      "expected": {
+        "goalPoints": 1,
+        "source": "automatic"
+      }
+    },
+    {
+      "name": "nothing planned gives no goal",
+      "function": "resolveRewardGoal",
+      "input": {
+        "explicit": null,
+        "automatic": {
+          "planned": 0,
+          "points": 0
+        }
+      },
+      "expected": {
+        "goalPoints": null,
+        "source": "automatic"
+      }
+    },
+    {
+      "name": "nothing planned gives no goal, also with points",
+      "function": "resolveRewardGoal",
+      "input": {
+        "explicit": null,
+        "automatic": {
+          "planned": 0,
+          "points": 5
+        }
+      },
+      "expected": {
+        "goalPoints": null,
+        "source": "automatic"
+      }
+    },
+    {
+      "name": "the largest explicit goal",
+      "function": "resolveRewardGoal",
+      "input": {
+        "explicit": 100000,
+        "automatic": {
+          "planned": 1,
+          "points": 1
+        }
+      },
+      "expected": {
+        "goalPoints": 100000,
+        "source": "explicit"
+      }
+    },
+    {
+      "name": "nothing earned",
+      "function": "rewardPercent",
+      "input": {
+        "earnedPoints": 0,
+        "goalPoints": 10
+      },
+      "expected": 0
+    },
+    {
+      "name": "a tenth",
+      "function": "rewardPercent",
+      "input": {
+        "earnedPoints": 1,
+        "goalPoints": 10
+      },
+      "expected": 10
+    },
+    {
+      "name": "three quarters",
+      "function": "rewardPercent",
+      "input": {
+        "earnedPoints": 3,
+        "goalPoints": 4
+      },
+      "expected": 75
+    },
+    {
+      "name": "a third rounds down",
+      "function": "rewardPercent",
+      "input": {
+        "earnedPoints": 1,
+        "goalPoints": 3
+      },
+      "expected": 33
+    },
+    {
+      "name": "two thirds rounds down (66, not 67)",
+      "function": "rewardPercent",
+      "input": {
+        "earnedPoints": 2,
+        "goalPoints": 3
+      },
+      "expected": 66
+    },
+    {
+      "name": "ninety percent",
+      "function": "rewardPercent",
+      "input": {
+        "earnedPoints": 9,
+        "goalPoints": 10
+      },
+      "expected": 90
+    },
+    {
+      "name": "99 of 100",
+      "function": "rewardPercent",
+      "input": {
+        "earnedPoints": 99,
+        "goalPoints": 100
+      },
+      "expected": 99
+    },
+    {
+      "name": "the goal exactly met",
+      "function": "rewardPercent",
+      "input": {
+        "earnedPoints": 10,
+        "goalPoints": 10
+      },
+      "expected": 100
+    },
+    {
+      "name": "more than the goal is capped at 100",
+      "function": "rewardPercent",
+      "input": {
+        "earnedPoints": 25,
+        "goalPoints": 10
+      },
+      "expected": 100
+    },
+    {
+      "name": "a negative balance is 0",
+      "function": "rewardPercent",
+      "input": {
+        "earnedPoints": -5,
+        "goalPoints": 10
+      },
+      "expected": 0
+    },
+    {
+      "name": "999 of 1000 only reaches 99",
+      "function": "rewardPercent",
+      "input": {
+        "earnedPoints": 999,
+        "goalPoints": 1000
+      },
+      "expected": 99
+    },
+    {
+      "name": "no goal is 0",
+      "function": "rewardPercent",
+      "input": {
+        "earnedPoints": 5,
+        "goalPoints": null
+      },
+      "expected": 0
+    },
+    {
+      "name": "a goal of 0 is 0",
+      "function": "rewardPercent",
+      "input": {
+        "earnedPoints": 5,
+        "goalPoints": 0
+      },
+      "expected": 0
+    },
+    {
+      "name": "a negative goal is 0",
+      "function": "rewardPercent",
+      "input": {
+        "earnedPoints": 5,
+        "goalPoints": -3
+      },
+      "expected": 0
+    },
+    {
+      "name": "half a percent rounds down",
+      "function": "rewardPercent",
+      "input": {
+        "earnedPoints": 1,
+        "goalPoints": 200
+      },
+      "expected": 0
+    },
+    {
+      "name": "a half is 50",
+      "function": "rewardPercent",
+      "input": {
+        "earnedPoints": 5,
+        "goalPoints": 10
+      },
+      "expected": 50
+    },
+    {
+      "name": "the largest goal, one point short",
+      "function": "rewardPercent",
+      "input": {
+        "earnedPoints": 99999,
+        "goalPoints": 100000
+      },
+      "expected": 99
+    },
+    {
+      "name": "a balance beyond 32 bits of hundredths",
+      "function": "rewardPercent",
+      "input": {
+        "earnedPoints": 2000000000,
+        "goalPoints": 3
+      },
+      "expected": 100
+    },
+    {
+      "name": "a goal of 1 is met by 1 point",
+      "function": "rewardPercent",
+      "input": {
+        "earnedPoints": 1,
+        "goalPoints": 1
+      },
+      "expected": 100
+    },
+    {
+      "name": "1 of 7 is 14 (14.28 rounds down)",
+      "function": "rewardPercent",
+      "input": {
+        "earnedPoints": 1,
+        "goalPoints": 7
+      },
+      "expected": 14
+    },
+    {
+      "name": "6 of 7 is 85 (85.71 rounds down, not 86)",
+      "function": "rewardPercent",
+      "input": {
+        "earnedPoints": 6,
+        "goalPoints": 7
+      },
+      "expected": 85
+    },
+    {
+      "name": "0%",
+      "function": "eggsForPercent",
+      "input": {
+        "percent": 0
+      },
+      "expected": 0
+    },
+    {
+      "name": "9%",
+      "function": "eggsForPercent",
+      "input": {
+        "percent": 9
+      },
+      "expected": 0
+    },
+    {
+      "name": "10%",
+      "function": "eggsForPercent",
+      "input": {
+        "percent": 10
+      },
+      "expected": 1
+    },
+    {
+      "name": "19%",
+      "function": "eggsForPercent",
+      "input": {
+        "percent": 19
+      },
+      "expected": 1
+    },
+    {
+      "name": "20%",
+      "function": "eggsForPercent",
+      "input": {
+        "percent": 20
+      },
+      "expected": 2
+    },
+    {
+      "name": "55%",
+      "function": "eggsForPercent",
+      "input": {
+        "percent": 55
+      },
+      "expected": 5
+    },
+    {
+      "name": "90%",
+      "function": "eggsForPercent",
+      "input": {
+        "percent": 90
+      },
+      "expected": 9
+    },
+    {
+      "name": "99%",
+      "function": "eggsForPercent",
+      "input": {
+        "percent": 99
+      },
+      "expected": 9
+    },
+    {
+      "name": "100%",
+      "function": "eggsForPercent",
+      "input": {
+        "percent": 100
+      },
+      "expected": 10
+    },
+    {
+      "name": "a negative percentage clamps to 0",
+      "function": "eggsForPercent",
+      "input": {
+        "percent": -20
+      },
+      "expected": 0
+    },
+    {
+      "name": "a percentage above 100 clamps to 10 eggs",
+      "function": "eggsForPercent",
+      "input": {
+        "percent": 250
+      },
+      "expected": 10
+    },
+    {
+      "name": "a fraction below 10 is no egg",
+      "function": "eggsForPercent",
+      "input": {
+        "percent": 9.99
+      },
+      "expected": 0
+    },
+    {
+      "name": "a fraction above 10 is one egg",
+      "function": "eggsForPercent",
+      "input": {
+        "percent": 10.5
+      },
+      "expected": 1
+    },
+    {
+      "name": "just below 100 is 9 eggs",
+      "function": "eggsForPercent",
+      "input": {
+        "percent": 99.9
+      },
+      "expected": 9
+    },
+    {
+      "name": "just above 100 is 10 eggs",
+      "function": "eggsForPercent",
+      "input": {
+        "percent": 100.1
+      },
+      "expected": 10
+    },
+    {
+      "name": "a small negative fraction is 0",
+      "function": "eggsForPercent",
+      "input": {
+        "percent": -0.5
+      },
+      "expected": 0
+    },
+    {
+      "name": "two automatic goals are the same",
+      "function": "sameRewardGoals",
+      "input": {
+        "a": {
+          "weekPoints": null,
+          "cyclePoints": null
+        },
+        "b": {
+          "weekPoints": null,
+          "cyclePoints": null
+        }
+      },
+      "expected": true
+    },
+    {
+      "name": "an explicit 0 differs from automatic",
+      "function": "sameRewardGoals",
+      "input": {
+        "a": {
+          "weekPoints": null,
+          "cyclePoints": null
+        },
+        "b": {
+          "weekPoints": 0,
+          "cyclePoints": null
+        }
+      },
+      "expected": false
+    },
+    {
+      "name": "a different cycle goal differs",
+      "function": "sameRewardGoals",
+      "input": {
+        "a": {
+          "weekPoints": 1,
+          "cyclePoints": 2
+        },
+        "b": {
+          "weekPoints": 1,
+          "cyclePoints": 3
+        }
+      },
+      "expected": false
+    },
+    {
+      "name": "equal explicit goals are the same",
+      "function": "sameRewardGoals",
+      "input": {
+        "a": {
+          "weekPoints": 5,
+          "cyclePoints": 20
+        },
+        "b": {
+          "weekPoints": 5,
+          "cyclePoints": 20
+        }
+      },
+      "expected": true
+    },
+    {
+      "name": "a different week goal differs",
+      "function": "sameRewardGoals",
+      "input": {
+        "a": {
+          "weekPoints": 5,
+          "cyclePoints": null
+        },
+        "b": {
+          "weekPoints": 6,
+          "cyclePoints": null
+        }
+      },
+      "expected": false
+    }
+  ]
+}

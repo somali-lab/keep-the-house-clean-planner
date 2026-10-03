@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Huishoudplanner.Domain\Huishoudplanner.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Huishoudplanner.Adapters.Pdf\Huishoudplanner.Adapters.Pdf.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Test-only: reads the rendered PDF back as text (the PDF extractor of plan section 3.10). -->
+    <PackageReference Include="PdfPig" />
+  </ItemGroup>
+
+</Project>
