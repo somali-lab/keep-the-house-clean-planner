@@ -211,6 +211,18 @@ describe('describeEntry for the points ledger', () => {
     ]);
   });
 
+  it('labels the goals of the reward meter', () => {
+    expect(
+      describeEntry(
+        entry({ entity: 'settings', entityId: 's1', before: { rewardGoals: { cyclePoints: 40 } }, after: { rewardGoals: { weekPoints: 12, cyclePoints: null } } }),
+        names,
+      ),
+    ).toEqual([
+      'Anna wijzigde cyclusdoel van de beloningsmeter van de instellingen: 40 → —',
+      'Anna wijzigde weekdoel van de beloningsmeter van de instellingen: — → 12',
+    ]);
+  });
+
   it('describes a recomputation of the ledger', () => {
     expect(describeEntry(entry({ entity: 'points', action: 'recompute', actorId: SYSTEM_ACTOR_ID }), names)).toEqual([
       'Systeem berekende de punten opnieuw',

@@ -1,4 +1,4 @@
-import type { Badge, User } from '@huishoudplanner/shared';
+import type { Badge, PointsProgressResponse, User } from '@huishoudplanner/shared';
 import { QueryClient } from '@tanstack/react-query';
 import { vi } from 'vitest';
 
@@ -69,4 +69,22 @@ export function makeBadge(overrides: Partial<Badge> & Pick<Badge, '_id' | 'name'
 /** Image details of a stored badge picture. */
 export function makeBadgeImage(id: string): NonNullable<Badge['image']> {
   return { contentType: 'image/png', size: 70, hash: 'a'.repeat(64), url: `/api/badges/${id}/image?v=aaaaaaaaaaaa` };
+}
+
+/** The progress of the reward meter as the API returns it (ADR-0015): a week with 3 of 4 points earned. */
+export function makeProgress(overrides: Partial<PointsProgressResponse> = {}): PointsProgressResponse {
+  return {
+    personId: ANNA._id,
+    period: 'week',
+    start: '2026-09-14',
+    end: '2026-09-20',
+    earnedPoints: 3,
+    goalPoints: 4,
+    goalSource: 'automatic',
+    percent: 75,
+    currencyCode: 'EUR',
+    centsPerPoint: 0,
+    money: null,
+    ...overrides,
+  };
 }

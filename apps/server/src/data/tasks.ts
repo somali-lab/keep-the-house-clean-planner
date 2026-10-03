@@ -37,6 +37,11 @@ export function findTaskById(db: Db, id: ObjectId): Promise<TaskDoc | null> {
   return tasksCollection(db).findOne({ _id: id });
 }
 
+/** The tasks with these ids; an id that does not exist is simply absent. */
+export function findTasksByIds(db: Db, ids: ObjectId[]): Promise<TaskDoc[]> {
+  return ids.length === 0 ? Promise.resolve([]) : tasksCollection(db).find({ _id: { $in: ids } }).toArray();
+}
+
 export function listTasks(db: Db, filter: { roomId?: ObjectId; active?: boolean } = {}): Promise<TaskDoc[]> {
   return tasksCollection(db)
     .find({

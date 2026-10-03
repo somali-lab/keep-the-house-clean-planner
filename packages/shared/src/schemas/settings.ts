@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { MAX_BONUS_POINTS, MIN_BONUS_POINTS } from '../bonuses.ts';
 import { isTwoDecimalCurrency, MAX_CENTS_PER_POINT, MIN_CENTS_PER_POINT } from '../points.ts';
+import { MAX_REWARD_GOAL_POINTS, MIN_REWARD_GOAL_POINTS } from '../rewards.ts';
 import { isMonday } from '../time.ts';
 import { dayKeySchema, objectIdSchema, timestampsSchema, weekdaySchema } from './common.ts';
 import { intervalSchema } from './intervals.ts';
@@ -124,6 +125,14 @@ function isKnownCurrency(code: string): boolean {
 /** Cents of currency one point is worth: an integer from 0 to 10000; 0 shows no money (ADR-0013). */
 export const centsPerPointSchema = z.number().int().min(MIN_CENTS_PER_POINT).max(MAX_CENTS_PER_POINT);
 
+/** One goal of the reward meter: an integer from 0 to 100000 points, or null for the automatic goal (ADR-0015). */
+export const rewardGoalPointsSchema = z.number().int().min(MIN_REWARD_GOAL_POINTS).max(MAX_REWARD_GOAL_POINTS).nullable();
+
+export const rewardGoalsSchema = z.object({
+  weekPoints: rewardGoalPointsSchema,
+  cyclePoints: rewardGoalPointsSchema,
+});
+
 export const settingsSchema = z
   .object({
     cycleAnchorDate: anchorDateSchema,
@@ -145,6 +154,8 @@ export const settingsSchema = z
     currencyCode: currencyCodeSchema.optional(),
     /** Cents one point is worth (ADR-0013); a missing value means 0, no money shown. The API always returns it. */
     centsPerPoint: centsPerPointSchema.optional(),
+    /** Goals of the reward meter (ADR-0015); a missing value means both are automatic. The API always returns it. */
+    rewardGoals: rewardGoalsSchema.optional(),
   })
   .extend(timestampsSchema.shape);
 export type Settings = z.infer<typeof settingsSchema>;
@@ -164,6 +175,8 @@ export const updateSettingsInputSchema = z
     /** The conversion from points to currency (administrators only, ADR-0013). */
     currencyCode: currencyCodeSchema,
     centsPerPoint: centsPerPointSchema,
+    /** The goals of the reward meter, both at once (administrators only, ADR-0015). */
+    rewardGoals: rewardGoalsSchema,
   })
   .partial();
 export type UpdateSettingsInput = z.infer<typeof updateSettingsInputSchema>;

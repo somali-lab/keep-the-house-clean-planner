@@ -226,6 +226,20 @@ export function sumPointEntries(db: Db, range: { from?: Date; to?: Date }): Prom
 }
 
 /**
+ * The points a person earned in `[from, to)`: executions and bonuses, never a redemption, so spending points
+ * does not lower the progress of the reward meter (ADR-0015).
+ */
+export async function sumEarnedPoints(db: Db, personId: ObjectId, from: Date, to: Date): Promise<number> {
+  const [total] = await pointEntriesCollection(db)
+    .aggregate<{ points: number }>([
+      { $match: { personId, kind: { $in: DERIVED_KINDS }, date: { $gte: from, $lt: to } } },
+      { $group: { _id: null, points: { $sum: '$amount' } } },
+    ])
+    .toArray();
+  return total?.points ?? 0;
+}
+
+/**
  * Removes the derived entries (executions and bonuses, never another kind), or only those dated
  * before `before`. A bonus is dated on the last day of its period, so a purge removes the bonuses
  * of the periods that ended before the boundary. Returns the number removed.

@@ -159,9 +159,10 @@ export function useOccurrenceAction(
     // is never queued, so its list is refetched, and so is everything the deleted work fed: the due list
     // (it restarted the due clock), the tasks (lastCompletedAt) and the statistics.
     onSettled: (updated, error, action) => {
-      // A check-off, an undo and a retract change who has earned which badge (ADR-0014).
+      // A check-off, an undo and a retract change who has earned which badge (ADR-0014) and the progress of the reward meter (ADR-0015).
       if (action.kind === 'complete' || action.kind === 'uncomplete' || action.kind === 'retract') {
         void queryClient.invalidateQueries({ queryKey: ['badges'] });
+        void queryClient.invalidateQueries({ queryKey: ['points'] });
       }
       if (action.kind === 'retract') {
         for (const key of ['due', 'tasks', 'stats']) void queryClient.invalidateQueries({ queryKey: [key] });

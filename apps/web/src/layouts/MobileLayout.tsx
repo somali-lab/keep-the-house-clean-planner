@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react';
-import { CalendarRange, Hourglass, ListChecks, Settings, Sun, type LucideIcon } from 'lucide-react';
+import { CalendarRange, Egg, Hourglass, ListChecks, Settings, Sun, type LucideIcon } from 'lucide-react';
 import { NavLink, Navigate, Route, Routes } from 'react-router';
 import { Button } from '@/components/ui/button';
 import { AppVersion } from '@/components/AppVersion';
@@ -9,6 +9,7 @@ import { ThemeSwitcher } from '@/components/ThemeSwitcher';
 import { cn } from '@/lib/utils';
 import { DuePage } from '../features/due/DuePage.tsx';
 import { MobileTasksPage } from '../features/mobile-tasks/MobileTasksPage.tsx';
+import { RewardPage } from '../features/reward/RewardPage.tsx';
 import { TodayPage } from '../features/today/TodayPage.tsx';
 import { WeekPage } from '../features/week/WeekPage.tsx';
 import { t, type MessageKey } from '../i18n/nl.ts';
@@ -21,6 +22,7 @@ const PAGES: Partial<Record<string, ReactElement>> = {
   '/': <WeekPage />,
   '/due': <DuePage />,
   '/tasks': <MobileTasksPage />,
+  '/reward': <RewardPage />,
 };
 
 const TABS: { path: string; label: MessageKey; icon: LucideIcon }[] = [
@@ -28,6 +30,7 @@ const TABS: { path: string; label: MessageKey; icon: LucideIcon }[] = [
   { path: '/today', label: 'nav.today', icon: Sun },
   { path: '/tasks', label: 'nav.tasks', icon: ListChecks },
   { path: '/due', label: 'nav.due', icon: Hourglass },
+  { path: '/reward', label: 'nav.reward', icon: Egg },
 ];
 
 export function MobileLayout({ onOpenManagement }: { onOpenManagement: () => void }) {
@@ -69,16 +72,16 @@ export function MobileLayout({ onOpenManagement }: { onOpenManagement: () => voi
       </main>
       <nav
         aria-label={t('nav.main')}
-        className="fixed inset-x-0 bottom-0 z-20 border-t bg-card/95 px-4 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur"
+        className="fixed inset-x-0 bottom-0 z-20 border-t bg-card/95 px-0 pt-2 min-[360px]:px-1 sm:px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur"
       >
-        <div className="mx-auto grid max-w-xl grid-cols-4 gap-1 sm:gap-2">
+        <div className="mx-auto grid max-w-xl grid-cols-5 gap-0 min-[360px]:gap-0.5 sm:gap-2">
           {TABS.map(({ path, label, icon: Icon }) => (
             <NavLink
               key={path}
               to={path}
               className={({ isActive }) =>
                 cn(
-                  'flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl text-xs font-bold text-muted-foreground transition-colors',
+                  'flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-0 text-center text-[0.6875rem] leading-tight font-bold whitespace-nowrap text-muted-foreground transition-colors max-[359px]:text-[0.625rem] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:text-xs',
                   isActive && 'bg-primary/10 text-primary',
                 )
               }

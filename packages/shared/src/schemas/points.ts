@@ -179,3 +179,32 @@ export const createRedemptionInputSchema = z.object({
   requestId: requestKeySchema.optional(),
 });
 export type CreateRedemptionInput = z.infer<typeof createRedemptionInputSchema>;
+
+/** The periods of the reward meter: the calendar week or the four-week cycle of today (ADR-0015). */
+export const rewardPeriodSchema = z.enum(['week', 'cycle']);
+export type RewardPeriod = z.infer<typeof rewardPeriodSchema>;
+
+export const pointsProgressQuerySchema = z.object({ personId: objectIdSchema, period: rewardPeriodSchema });
+export type PointsProgressQuery = z.infer<typeof pointsProgressQuerySchema>;
+
+/** Progress of one person towards the goal of the current week or cycle (ADR-0015). */
+export const pointsProgressResponseSchema = z.object({
+  personId: objectIdSchema,
+  period: rewardPeriodSchema,
+  /** First and last day of the period, both included. */
+  start: dayKeySchema,
+  end: dayKeySchema,
+  /** Points of executions and bonuses dated in the period; redemptions do not reduce it. */
+  earnedPoints: z.number().int().min(0),
+  /** Null when there is no goal: nothing planned for the person and no goal set, or a goal of 0. */
+  goalPoints: z.number().int().min(1).nullable(),
+  goalSource: z.enum(['explicit', 'automatic']),
+  /** 0 to 100, capped; 0 without a goal. */
+  percent: z.number().int().min(0).max(100),
+  currencyCode: z.string(),
+  /** Cents one point is worth now; 0 means no money is shown. */
+  centsPerPoint: z.number().int().min(0).max(MAX_CENTS_PER_POINT),
+  /** Earned points and the goal in cents at the factor in force now; null while a point is worth nothing. */
+  money: z.object({ earned: z.number().int().min(0), goal: z.number().int().min(1).nullable() }).nullable(),
+});
+export type PointsProgressResponse = z.infer<typeof pointsProgressResponseSchema>;

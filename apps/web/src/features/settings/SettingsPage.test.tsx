@@ -206,4 +206,12 @@ describe('SettingsPage — bonuses', () => {
     expect(screen.getByLabelText('Valuta')).toHaveValue('EUR');
     expect(screen.getByLabelText('Waarde van één punt (in centen)')).toHaveValue(0);
   });
+
+  it('has the reward goals card under the points value for an administrator', async () => {
+    setup();
+    renderWithProviders(<SettingsPage initialTab="calendar" />);
+    expect(await screen.findByRole('form', { name: 'Beloningsdoelen' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Doel per week (punten)')).toHaveValue(null);
+    expect(screen.getByLabelText('Doel per cyclus (punten)')).toHaveValue(null);
+  });
 });

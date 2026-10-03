@@ -1,10 +1,16 @@
-import { createRedemptionInputSchema, pointsBalancesQuerySchema, pointsEntriesQuerySchema } from '@huishoudplanner/shared';
+import {
+  createRedemptionInputSchema,
+  pointsBalancesQuerySchema,
+  pointsEntriesQuerySchema,
+  pointsProgressQuerySchema,
+} from '@huishoudplanner/shared';
 import type { FastifyPluginAsync } from 'fastify';
 import { ObjectId } from 'mongodb';
 import { countRedemptions } from '../data/points.ts';
 import { getSettings } from '../data/settings.ts';
 import { pointEntriesOfPerson, pointsBalances, reconcilePoints, toPointEntryView } from '../domain/points.ts';
 import { bookRedemption, undoRedemption } from '../domain/redemptions.ts';
+import { pointsProgress } from '../domain/rewardProgress.ts';
 import { HttpError, notFound, parseOrThrow } from '../http/errors.ts';
 import { parseIdParam } from '../http/params.ts';
 import { auditContext, requireActor, requireAdmin } from '../identity/index.ts';
@@ -17,6 +23,11 @@ export const pointsRoutes: FastifyPluginAsync = async (app) => {
 
   app.get('/points/entries', async (request) => {
     return pointEntriesOfPerson(app.deps.db, parseOrThrow(pointsEntriesQuerySchema, request.query));
+  });
+
+  /** Progress of one person towards the goal of this week or cycle, for the reward meter (ADR-0015). Needs no profile. */
+  app.get('/points/progress', async (request) => {
+    return pointsProgress(app.deps.db, app.deps.clock, parseOrThrow(pointsProgressQuerySchema, request.query));
   });
 
   /** Reconciles the ledger with the occurrences now; one summary audit entry when anything changed. */
