@@ -1,6 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <ItemGroup>
+    <PackageReference Include="OpenTelemetry" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Huishoudplanner.Domain\Huishoudplanner.Domain.csproj" />
     <ProjectReference Include="..\..\src\Huishoudplanner.Application\Huishoudplanner.Application.csproj" />
     <ProjectReference Include="..\..\src\Huishoudplanner.Adapters.Mongo\Huishoudplanner.Adapters.Mongo.csproj" />
