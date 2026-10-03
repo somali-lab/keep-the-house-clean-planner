@@ -36,7 +36,8 @@ internal sealed class MongoPromotionEvidenceReader : ForReadingPromotionEvidence
         try
         {
             var query = MongoTransactionContext.Session is { } session ? occurrences.Find(session, filter) : occurrences.Find(filter);
-            var rows = await query.Project(projection).ToListAsync(cancellationToken).ConfigureAwait(false);
+            // Node sorts {date, taskNameSnapshot, _id}: when duplicate generated occurrences share a planned day the later one wins (byPlannedDay is last-wins).
+            var rows = await query.Project(projection).Sort(Builders<BsonDocument>.Sort.Ascending("date").Ascending("taskNameSnapshot").Ascending("_id")).ToListAsync(cancellationToken).ConfigureAwait(false);
             var result = new List<PromotionOccurrence>(rows.Count);
             foreach (var row in rows)
             {
