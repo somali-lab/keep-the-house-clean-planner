@@ -4,7 +4,7 @@ import { eggsForPercent, REWARD_EGG_COUNT } from '@huishoudplanner/shared/reward
 export type { RewardPeriod };
 export const REWARD_PERIODS: RewardPeriod[] = ['week', 'cycle'];
 
-/** Number of eggs of the meter and how many are in the basket for a percentage: one per full 10% (ADR-0015). */
+/** Number of eggs of the meter and how many are in the basket for a percentage: one per full 10% (requirements 4.12). */
 export const EGG_COUNT = REWARD_EGG_COUNT;
 export const eggsInBasket = eggsForPercent;
 
@@ -18,7 +18,7 @@ export function chickenOffset(percent: number): number {
   return Number.isFinite(percent) ? Math.min(100, Math.max(0, percent)) : 0;
 }
 
-/** The localStorage key that remembers the completion animation of one person for one period (ADR-0015). */
+/** The localStorage key that remembers the completion animation of one person for one period (requirements 4.12). */
 export function celebrationKey(personId: string, period: RewardPeriod, startDayKey: string): string {
   return `khc.rewardCelebrated.${personId}.${period}.${startDayKey}`;
 }
@@ -74,7 +74,7 @@ export function periodRolledOver(progress: Pick<PointsProgressResponse, 'start' 
 }
 
 /**
- * What to show when the meter is full (ADR-0015): `animate` plays the completion animation, once, the first time a
+ * What to show when the meter is full (requirements 4.12): `animate` plays the completion animation, once, the first time a
  * person sees the full meter in a period; `static` is the text "Doel gehaald!" without any motion, for people who
  * asked for reduced motion and after the animation played; `none` while the goal is not met.
  */

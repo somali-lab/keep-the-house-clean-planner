@@ -103,7 +103,7 @@ export type SyncOutcome = 'created' | 'updated' | 'deleted' | 'unchanged';
  * case any entry is removed. Run it after every successful write that can change an execution.
  *
  * It runs in the same per-database queue as the reconciliation and the redemption bookings, so the
- * read-compare-write of one sync never interleaves with a reconciliation or a booking (ADR-0013). It reads
+ * read-compare-write of one sync never interleaves with a reconciliation or a booking (requirements 4.12). It reads
  * the occurrence inside the queue, so it always writes what is true at that moment. The reconciliation and
  * the booking never call it from inside the queue, which would wait for itself; keep it that way.
  */
@@ -305,7 +305,7 @@ async function reconcileBonuses(
 /** Reconciliations never overlap in this process: a second run waits for the first one (ADR-0005: one process). */
 const reconcileQueues = new Map<string, Promise<unknown>>();
 
-/** Also serialises the redemption bookings, so the balance check and the insert of two bookings never interleave (ADR-0013). */
+/** Also serialises the redemption bookings, so the balance check and the insert of two bookings never interleave (requirements 4.12). */
 export function exclusively<T>(db: Db, run: () => Promise<T>): Promise<T> {
   const queue = reconcileQueues.get(db.databaseName) ?? Promise.resolve();
   const next = queue.then(run, run);
@@ -508,7 +508,7 @@ export async function pointsBalances(db: Db, query: PointsBalancesQuery): Promis
         points,
         earned,
         redeemed,
-        // Money at the factor in force now, so earned minus redeemed is always the balance in money (ADR-0013).
+        // Money at the factor in force now, so earned minus redeemed is always the balance in money (requirements 4.12).
         money:
           centsPerPoint > 0
             ? {
@@ -530,7 +530,7 @@ export async function pointsBalances(db: Db, query: PointsBalancesQuery): Promis
   };
 }
 
-/** The API view of a ledger entry: day keys instead of instants, and no request key (ADR-0002, ADR-0013). */
+/** The API view of a ledger entry: day keys instead of instants, and no request key (ADR-0002, requirements 4.12). */
 export function toPointEntryView(doc: PointEntryDoc, timezone: string): PointEntryView {
   const { requestId: _requestId, ...rest } = doc;
   return toApi({

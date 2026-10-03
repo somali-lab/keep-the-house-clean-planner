@@ -197,7 +197,7 @@
 }
 
 /*
- * Reward meter (ADR-0015): the chicken walks with a transform and the eggs bounce into the basket once. All motion is
+ * Reward meter (requirements 4.12): the chicken walks with a transform and the eggs bounce into the basket once. All motion is
  * switched off for people who asked for reduced motion; the progress is written out as text next to the picture.
  */
 .reward-chicken {

@@ -261,7 +261,7 @@ export function describeEntry(entry: AuditEntry, names: NameLookup): string[] {
 
   if (entry.entity === 'badgeAward') return describeBadgeAward(entry, names, actor);
 
-  // A redemption reads as points that were exchanged, with the note and who booked it (ADR-0013).
+  // A redemption reads as points that were exchanged, with the note and who booked it (requirements 4.12).
   if (entry.entity === 'points' && (entry.action === 'create' || entry.action === 'delete')) {
     const values = entry.action === 'create' ? after : before;
     if (values.kind === 'redemption') {

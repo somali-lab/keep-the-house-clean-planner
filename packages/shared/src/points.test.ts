@@ -30,7 +30,7 @@ describe('defaultPointsForDuration', () => {
   });
 });
 
-describe('points to money (ADR-0013)', () => {
+describe('points to money (requirements 4.12)', () => {
   it('multiplies whole points with whole cents, never rounding', () => {
     expect(pointsToCents(7, 25)).toBe(175);
     expect(pointsToCents(0, 25)).toBe(0);

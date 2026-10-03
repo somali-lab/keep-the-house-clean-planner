@@ -54,7 +54,7 @@ export function DataSection() {
   const [acknowledged, setAcknowledged] = useState(false);
   const [acknowledgedBadges, setAcknowledgedBadges] = useState(false);
 
-  // A file older than version 5 has no redemptions, so importing it removes the ones that exist (ADR-0013).
+  // A file older than version 5 has no redemptions, so importing it removes the ones that exist (requirements 4.12).
   const olderFile = pending !== null && pending.version !== null && pending.version < 5;
   const redemptions = useQuery({
     queryKey: ['points', 'redemptions', 'count'],

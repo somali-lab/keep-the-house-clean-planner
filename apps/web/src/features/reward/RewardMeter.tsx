@@ -17,7 +17,7 @@ function eggCentre(index: number): { x: number; y: number } {
 }
 
 /**
- * The picture of the reward meter (ADR-0015): a chicken that walks along the track to the current percentage, and a
+ * The picture of the reward meter (requirements 4.12): a chicken that walks along the track to the current percentage, and a
  * basket that holds one egg per full 10%. It is one inline image with a text alternative; the progress itself is also
  * written out as text and as a progress bar next to it, so nothing depends on the picture. The chicken moves with a CSS
  * transform; with reduced motion it stands in place at once and nothing animates. `celebrating` plays the completion

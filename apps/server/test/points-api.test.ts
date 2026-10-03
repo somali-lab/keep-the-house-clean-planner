@@ -20,7 +20,7 @@ const ids: ObjectId[] = [];
 
 const get = (url: string) => t.app.inject({ method: 'GET', url });
 
-/** A balance without redemptions or money: everything earned, nothing redeemed, no factor set (ADR-0013). */
+/** A balance without redemptions or money: everything earned, nothing redeemed, no factor set (requirements 4.12). */
 const balance = (personId: string, points: number, executions: number) => ({
   personId,
   points,

@@ -103,7 +103,7 @@ export const bonusScheduleSchema = z
   .refine((rows) => rows.every((row, i) => i === 0 || rows[i - 1]!.from < row.from), 'bonus_schedule_not_sorted');
 
 /**
- * ISO 4217 code of the currency points are converted to (ADR-0013): three capitals that the runtime knows as a
+ * ISO 4217 code of the currency points are converted to (requirements 4.12): three capitals that the runtime knows as a
  * currency and that has exactly two fraction digits, because money is whole cents. A currency with another number
  * of digits (JPY, KWD) is refused with its own message.
  */
@@ -122,10 +122,10 @@ function isKnownCurrency(code: string): boolean {
   return supported ? supported('currency').includes(code) : true;
 }
 
-/** Cents of currency one point is worth: an integer from 0 to 10000; 0 shows no money (ADR-0013). */
+/** Cents of currency one point is worth: an integer from 0 to 10000; 0 shows no money (requirements 4.12). */
 export const centsPerPointSchema = z.number().int().min(MIN_CENTS_PER_POINT).max(MAX_CENTS_PER_POINT);
 
-/** One goal of the reward meter: an integer from 0 to 100000 points, or null for the automatic goal (ADR-0015). */
+/** One goal of the reward meter: an integer from 0 to 100000 points, or null for the automatic goal (requirements 4.12). */
 export const rewardGoalPointsSchema = z.number().int().min(MIN_REWARD_GOAL_POINTS).max(MAX_REWARD_GOAL_POINTS).nullable();
 
 export const rewardGoalsSchema = z.object({
@@ -150,11 +150,11 @@ export const settingsSchema = z
     bonusSchedule: bonusScheduleSchema.optional(),
     /** Boundary of the last statistics reset: periods that start before this day earn no bonus (ADR-0012). */
     bonusFloor: dayKeySchema.optional(),
-    /** Currency of the conversion (ADR-0013); a missing value means EUR. The API always returns it. */
+    /** Currency of the conversion (requirements 4.12); a missing value means EUR. The API always returns it. */
     currencyCode: currencyCodeSchema.optional(),
-    /** Cents one point is worth (ADR-0013); a missing value means 0, no money shown. The API always returns it. */
+    /** Cents one point is worth (requirements 4.12); a missing value means 0, no money shown. The API always returns it. */
     centsPerPoint: centsPerPointSchema.optional(),
-    /** Goals of the reward meter (ADR-0015); a missing value means both are automatic. The API always returns it. */
+    /** Goals of the reward meter (requirements 4.12); a missing value means both are automatic. The API always returns it. */
     rewardGoals: rewardGoalsSchema.optional(),
   })
   .extend(timestampsSchema.shape);
@@ -172,10 +172,10 @@ export const updateSettingsInputSchema = z
     promoteThreshold: z.number().int().min(2),
     /** The amounts that apply from today on; the server writes the schedule row (administrators only). */
     periodBonuses: bonusAmountsSchema,
-    /** The conversion from points to currency (administrators only, ADR-0013). */
+    /** The conversion from points to currency (administrators only, requirements 4.12). */
     currencyCode: currencyCodeSchema,
     centsPerPoint: centsPerPointSchema,
-    /** The goals of the reward meter, both at once (administrators only, ADR-0015). */
+    /** The goals of the reward meter, both at once (administrators only, requirements 4.12). */
     rewardGoals: rewardGoalsSchema,
   })
   .partial();

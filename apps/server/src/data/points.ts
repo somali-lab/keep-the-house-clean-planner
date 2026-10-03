@@ -30,13 +30,13 @@ export interface PointEntryDoc {
   titleSnapshot: string;
   /** The path that wrote the current value. */
   source: PointEntrySource;
-  /** Redemptions only: free text, null when none (ADR-0013). */
+  /** Redemptions only: free text, null when none (requirements 4.12). */
   note?: string | null;
-  /** Redemptions only: cents one point was worth when it was booked (ADR-0013). */
+  /** Redemptions only: cents one point was worth when it was booked (requirements 4.12). */
   centsPerPointSnapshot?: number | null;
-  /** Redemptions only: the household currency when it was booked (ADR-0013); missing on a booking from before it was kept. */
+  /** Redemptions only: the household currency when it was booked (requirements 4.12); missing on a booking from before it was kept. */
   currencyCodeSnapshot?: string | null;
-  /** Redemptions only: idempotency key of the booking request (ADR-0013). */
+  /** Redemptions only: idempotency key of the booking request (requirements 4.12). */
   requestId?: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -51,14 +51,14 @@ export type PointEntryFields = Pick<
 /** Fixed id of the ledger as a whole, the audit entityId of a reconciliation summary (like SETTINGS_ID). */
 export const POINTS_LEDGER_ID = new ObjectId('000000000000000000000002');
 
-// The request key is bookkeeping for retries, not history: it never shows in an audit entry (ADR-0013).
+// The request key is bookkeeping for retries, not history: it never shows in an audit entry (requirements 4.12).
 const AUDIT_IGNORE = ['_id', 'createdAt', 'updatedAt', 'requestId'];
 
 export const pointEntriesCollection = (db: Db) => db.collection<PointEntryDoc>(COLLECTIONS.pointEntries);
 
 export const executionKey = (occurrenceId: ObjectId): string => `execution:${occurrenceId.toHexString()}`;
 
-/** Kinds that are derived from the occurrences; a reconciliation manages these and never a booked kind (ADR-0013). */
+/** Kinds that are derived from the occurrences; a reconciliation manages these and never a booked kind (ADR-0011). */
 const DERIVED_KINDS: PointEntryKind[] = ['execution', ...BONUS_KINDS];
 
 export function findPointEntryByKey(db: Db, key: string): Promise<PointEntryDoc | null> {
@@ -227,7 +227,7 @@ export function sumPointEntries(db: Db, range: { from?: Date; to?: Date }): Prom
 
 /**
  * The points a person earned in `[from, to)`: executions and bonuses, never a redemption, so spending points
- * does not lower the progress of the reward meter (ADR-0015).
+ * does not lower the progress of the reward meter (requirements 4.12).
  */
 export async function sumEarnedPoints(db: Db, personId: ObjectId, from: Date, to: Date): Promise<number> {
   const [total] = await pointEntriesCollection(db)
@@ -325,7 +325,7 @@ export async function applyBonusEntryChanges(ctx: AuditContext, changes: BonusEn
   };
 }
 
-/** A redemption: a booked ledger entry of a person giving up points (ADR-0013). Never derived, never touched by a reconciliation. */
+/** A redemption: a booked ledger entry of a person giving up points (ADR-0011). Never derived, never touched by a reconciliation. */
 export type RedemptionDoc = PointEntryDoc & {
   kind: 'redemption';
   occurrenceId: null;
@@ -336,7 +336,7 @@ export type RedemptionDoc = PointEntryDoc & {
   requestId: string | null;
 };
 
-/** The number of redemptions in the ledger; an import of an older file removes them (ADR-0013). */
+/** The number of redemptions in the ledger; an import of an older file removes them (requirements 4.12). */
 export function countRedemptions(db: Db): Promise<number> {
   return pointEntriesCollection(db).countDocuments({ kind: 'redemption' });
 }
@@ -389,7 +389,7 @@ export async function deleteRedemption(ctx: AuditContext, id: ObjectId): Promise
 }
 
 /**
- * Removes the redemptions, or only those dated before `before` (the statistics reset, ADR-0013). The
+ * Removes the redemptions, or only those dated before `before` (the statistics reset, requirements 4.12). The
  * caller records them in its single reset audit entry. Returns the number removed.
  */
 export async function deleteRedemptions(db: Db, before?: Date): Promise<number> {

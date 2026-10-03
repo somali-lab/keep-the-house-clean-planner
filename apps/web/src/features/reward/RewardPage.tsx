@@ -30,7 +30,7 @@ import {
 } from './rewardModel.ts';
 
 /**
- * The reward tab (ADR-0015): progress of the active profile towards the goal of this week or cycle as earned points,
+ * The reward tab (requirements 4.12): progress of the active profile towards the goal of this week or cycle as earned points,
  * their worth in money, eggs in a basket and a walking chicken, with the earned badges below it. The layout is
  * deliberately simple and accessible; the maintainer will fine-tune it.
  */

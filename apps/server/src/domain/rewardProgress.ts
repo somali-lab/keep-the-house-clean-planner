@@ -25,7 +25,7 @@ import { HttpError } from '../http/errors.ts';
 import { taskPoints, toBonusOccurrence } from './points.ts';
 
 /**
- * Progress of one person towards the goal of the current week or cycle (ADR-0015). The period is the one of
+ * Progress of one person towards the goal of the current week or cycle (requirements 4.12). The period is the one of
  * today in the household timezone, built with the shared day-key and cycle helpers. Earned points are the
  * ledger entries of executions and bonuses dated in it, so a redemption never lowers them; the goal is the
  * explicit goal of the settings, else the points of the work planned for the person as its owner.

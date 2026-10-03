@@ -41,7 +41,7 @@ function replayOrConflict(existing: RedemptionDoc, input: BookRedemptionInput): 
 }
 
 /**
- * Books a redemption (ADR-0013): a ledger entry of kind `redemption` with a negative amount, dated
+ * Books a redemption (requirements 4.12): a ledger entry of kind `redemption` with a negative amount, dated
  * today, that keeps the factor in force. The booking is refused when it would make the balance of the
  * person negative. It runs inside the same per-database queue as the reconciliation, so within the one
  * process (ADR-0005) the balance check and the insert of two bookings never interleave. The caller has
@@ -102,7 +102,7 @@ export function bookRedemption(ctx: AuditContext, input: BookRedemptionInput): P
 }
 
 /**
- * Takes a redemption back (ADR-0013). An administrator can do that at any time; the person it belongs
+ * Takes a redemption back (requirements 4.12). An administrator can do that at any time; the person it belongs
  * to only on the day it was booked, so a settled payout is not undone silently later. Audited as a delete.
  */
 export async function undoRedemption(ctx: AuditContext, id: ObjectId, role: UserRole): Promise<RedemptionDoc> {

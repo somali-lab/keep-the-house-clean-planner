@@ -213,7 +213,7 @@ describe('one-off task schemas', () => {
     expect(pointsEntriesQuerySchema.safeParse({ from: '2026-09-14', to: '2026-09-20' }).success).toBe(false);
   });
 
-  it('accepts ISO 4217 currency codes the runtime knows and nothing else (ADR-0013)', () => {
+  it('accepts ISO 4217 currency codes the runtime knows and nothing else (requirements 4.12)', () => {
     for (const code of ['EUR', 'USD', 'GBP', 'SEK', 'CHF']) expect(currencyCodeSchema.safeParse(code).success).toBe(true);
     for (const code of ['eur', 'EURO', 'EU', '', 'E1R', 'ZZZ', ' EUR']) expect(currencyCodeSchema.safeParse(code).success).toBe(false);
     // Money is whole cents, so only currencies with exactly two fraction digits qualify.

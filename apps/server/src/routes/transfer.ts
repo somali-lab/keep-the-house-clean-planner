@@ -12,7 +12,7 @@ const IMPORT_BODY_LIMIT = 200 * 1024 * 1024;
 const importQuerySchema = z.object({
   mode: z.literal('replace'),
   confirm: z.string().optional(),
-  /** Needed to import a file of version 4 or older while redemptions exist: they are removed (ADR-0013). */
+  /** Needed to import a file of version 4 or older while redemptions exist: they are removed (requirements 4.12). */
   acknowledgeRedemptions: z.string().optional(),
   /** Needed to import a file of version 5 or older while badges exist: they are removed (ADR-0014). */
   acknowledgeBadges: z.string().optional(),

@@ -64,7 +64,7 @@ export function usePointsBalances(range: { from: string; to: string } | null) {
   });
 }
 
-/** Balances over the whole ledger, without a range: what a person can redeem right now (ADR-0013). */
+/** Balances over the whole ledger, without a range: what a person can redeem right now (requirements 4.12). */
 export function useAllTimeBalances(enabled = true) {
   return useQuery({
     queryKey: ['points', 'balances', 'all'],
@@ -109,7 +109,7 @@ export interface RedeemInput {
 }
 
 /**
- * Books a redemption (ADR-0013). The request key belongs to the intent (person, points and note): a repeated
+ * Books a redemption (requirements 4.12). The request key belongs to the intent (person, points and note): a repeated
  * click, a retry after a failure, or a closed and reopened dialog with the same values reuses it, so the
  * server books it once; it is dropped once the request succeeded. Not queued offline: the server decides
  * whether the balance is enough.

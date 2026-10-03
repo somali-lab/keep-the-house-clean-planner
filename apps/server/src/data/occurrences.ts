@@ -133,12 +133,12 @@ export function findBonusOccurrences(db: Db): Promise<BonusOccurrenceDoc[]> {
     .toArray() as Promise<BonusOccurrenceDoc[]>;
 }
 
-/** What the automatic goal of the reward meter needs of an occurrence (ADR-0015). */
+/** What the automatic goal of the reward meter needs of an occurrence (requirements 4.12). */
 export type GoalOccurrenceDoc = BonusOccurrenceDoc & Pick<OccurrenceDoc, 'taskId' | 'durationMinutesSnapshot' | 'pointsSnapshot'>;
 
 /**
  * The occurrences that were planned for a day in `[from, to)`: everything that was not recorded as done, by the
- * day it was planned for (it survives a reschedule). The reward meter turns them into the automatic goal (ADR-0015).
+ * day it was planned for (it survives a reschedule). The reward meter turns them into the automatic goal (requirements 4.12).
  */
 export function findPlannedOccurrences(db: Db, from: Date, to: Date): Promise<GoalOccurrenceDoc[]> {
   return occurrencesCollection(db)

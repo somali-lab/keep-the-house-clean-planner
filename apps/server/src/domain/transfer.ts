@@ -49,7 +49,7 @@ import { toApi } from '../http/serialize.ts';
  * to the settings (ADR-0012); a file without it rebuilds without bonuses. An import also accepts
  * versions 1 to 3, which are valid unchanged because the new fields are optional; the rebuild fills them in.
  * Version 5 adds the redemptions, in `collections.pointEntries`: they are booked, so unlike the derived
- * entries they cannot be rebuilt (ADR-0013). Settings gain `currencyCode` and `centsPerPoint`. Files of
+ * entries they cannot be rebuilt (requirements 4.12). Settings gain `currencyCode` and `centsPerPoint`. Files of
  * versions 1 to 4 have no redemptions and import without any.
  * Version 6 adds the badge definitions with their images, in `collections.badges`; the awards are derived and
  * rebuilt on import (ADR-0014). A file of versions 1 to 5 has no badges and imports without any, like every other
@@ -99,7 +99,7 @@ const envelopeSchema = z
     }
   });
 
-/** A redemption in API form (ADR-0013): the only kind of ledger entry that travels in an export. */
+/** A redemption in API form (requirements 4.12): the only kind of ledger entry that travels in an export. */
 const redemptionDocSchema = z.object({
   _id: objectIdSchema,
   key: z.string().regex(/^redemption:[0-9a-f]{24}$/, 'invalid_redemption_key'),
@@ -395,7 +395,7 @@ export type ImportResult = ReplaceResult;
 
 /**
  * The redemptions an import would remove without bringing any back: a file of version 4 or older has none
- * (ADR-0013). Zero for a version 5 file, which carries its own redemptions and replaces them like any other collection.
+ * (requirements 4.12). Zero for a version 5 file, which carries its own redemptions and replaces them like any other collection.
  */
 export async function redemptionsLostByImport(db: Db, parsed: ParsedImport): Promise<number> {
   return parsed.schemaVersion < 5 ? countRedemptions(db) : 0;
@@ -412,7 +412,7 @@ export async function badgesLostByImport(db: Db, parsed: ParsedImport): Promise<
 /**
  * Replaces all data (audit log merged), records a single `import` audit entry and rebuilds the
  * derived points ledger from the imported occurrences (ADR-0011), which also fills in the points of an
- * older file; the imported redemptions are kept (ADR-0013). The rebuild writes its own summary entry
+ * older file; the imported redemptions are kept (requirements 4.12). The rebuild writes its own summary entry
  * when it changed anything.
  */
 export async function importData(
