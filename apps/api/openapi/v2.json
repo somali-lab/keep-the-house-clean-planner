@@ -659,6 +659,146 @@
         }
       }
     },
+    "/api/v2/audit": {
+      "get": {
+        "tags": [
+          "Audit"
+        ],
+        "summary": "Lists the history of changes, newest first.",
+        "description": "Filters: entity, entityId, actorId, source (ui, api, ai or system), and from and to (ISO instants, both inclusive). The list is paged: pass the nextCursor of a page as cursor for the next one (limit 1 to 200, default 50); nextCursor is null on the last page. A malformed cursor is a validation_error with invalid_cursor on cursor. Old entries of occurrences carry the task, room and date of their occurrence in meta.occurrence.",
+        "operationId": "listAuditEntries",
+        "parameters": [
+          {
+            "name": "entity",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "entityId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "actorId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Audit"
+        ],
+        "summary": "Clears the complete history (administrators).",
+        "description": "Deletes every audit entry and answers the number removed. The log is append-only except for this explicit clear and the retention job; clearing is deliberately not recorded in the log, because the entry would make the emptied history non-empty again.",
+        "operationId": "clearAuditLog",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditClearedResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/meta/limits": {
       "get": {
         "tags": [
@@ -995,6 +1135,73 @@
           }
         }
       },
+      "AuditClearedResponse": {
+        "required": [
+          "deleted"
+        ],
+        "type": "object",
+        "properties": {
+          "deleted": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "AuditEntryResponse": {
+        "required": [
+          "id",
+          "at",
+          "actorId",
+          "entity",
+          "entityId",
+          "action",
+          "before",
+          "after",
+          "source",
+          "meta"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actorId": {
+            "type": "string"
+          },
+          "entity": {
+            "type": "string"
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "before": {
+            "type": "object"
+          },
+          "after": {
+            "type": "object"
+          },
+          "source": {
+            "type": "string"
+          },
+          "meta": {
+            "type": [
+              "null",
+              "object"
+            ]
+          }
+        }
+      },
       "AuditLimits": {
         "type": "object",
         "properties": {
@@ -1013,6 +1220,27 @@
               "string"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "AuditListResponse": {
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuditEntryResponse"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -2554,6 +2782,10 @@
     {
       "name": "Rooms",
       "description": "The rooms of the house: everyone reads them, administrators create, change and delete them."
+    },
+    {
+      "name": "Audit",
+      "description": "The history of changes: everyone reads it, administrators clear it."
     },
     {
       "name": "Users",
