@@ -67,10 +67,17 @@ public sealed class TransferWorld : IAsyncLifetime
         await Ok(h.SendAsync(HttpMethod.Post, "/api/v2/points/redemptions", new { points = 3, note = "Pizza", requestId = "transfer-redemption-key-0001" }, h.P1));
         await InsertBadgesAsync(h.Database, h.Weekly, h.P1.Id);
 
-        var response = await h.Client.GetAsync("/api/v2/export/json", Ct);
+        var response = await h.Client.SendAsync(AsAdmin(h.Admin), Ct);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         Export = JsonNode.Parse(await response.Content.ReadAsStringAsync(Ct))!.AsObject();
         Snapshot = await SnapshotOfAsync(h.Database);
+    }
+
+    private static HttpRequestMessage AsAdmin(UserIdentity admin)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, "/api/v2/export/json");
+        request.Headers.Add("X-Profile-Id", admin.Id);
+        return request;
     }
 
     public async ValueTask DisposeAsync() => await Source.DisposeAsync();
@@ -250,7 +257,9 @@ public sealed class TransferTarget : IDisposable
 
     public async Task<JsonObject> ExportAsync()
     {
-        var response = await Client.GetAsync("/api/v2/export/json", TestContext.Current.CancellationToken);
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v2/export/json");
+        request.Headers.Add("X-Profile-Id", Admin.Id);
+        var response = await Client.SendAsync(request, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         return JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
     }

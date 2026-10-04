@@ -76,7 +76,17 @@ public sealed record StatisticsResetResult(
     int ResetTasks,
     int DeletedPastCycles,
     int RemovedPointEntries,
-    int RemovedRedemptions);
+    int RemovedRedemptions)
+{
+    /// <summary>
+    /// Whether the reset removed and reopened nothing at all. Such a reset is a no-op: it is rolled back (the bonus floor stays where it was),
+    /// writes no audit entry and starts no rebuild of the awards, and the answer still carries the zero counts. A method, so it is not part of
+    /// the serialized answer.
+    /// </summary>
+    public bool RemovedNothing() =>
+        DeletedOccurrences == 0 && DeletedRecorded == 0 && ResetOccurrences == 0 && ResetTasks == 0
+        && DeletedPastCycles == 0 && RemovedPointEntries == 0 && RemovedRedemptions == 0;
+}
 
 /// <summary>The one audit entry of a reset, as the Node server writes it: on the settings, action <c>reset</c>, the counts in <c>meta</c>.</summary>
 public static class StatisticsResetAudit

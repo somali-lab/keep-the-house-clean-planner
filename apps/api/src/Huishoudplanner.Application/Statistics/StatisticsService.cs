@@ -188,9 +188,10 @@ public sealed class StatisticsService(
     {
         ArgumentNullException.ThrowIfNull(actor);
         var ran = await transactions.RunAsync(ct => ResetInTransactionAsync(actor, before, ct), cancellationToken).ConfigureAwait(false);
-        if (ran.IsT0 && ran.AsT0.IsT0)
+        if (ran.IsT0 && ran.AsT0.IsT0 && !ran.AsT0.AsT0.RemovedNothing())
         {
             // The awards follow the history they are derived from (ADR-0014): they are rebuilt from what remains, after the reset has committed.
+            // A reset that removed nothing left the history as it was, so the awards need no rebuild.
             // A failure there is logged and never fails the reset; the next reconciliation repairs the awards.
             await badges.ReconcileSafelyAsync(AuditActor.From(actor), BadgeEvalTrigger.Reset, null, cancellationToken).ConfigureAwait(false);
         }
@@ -228,6 +229,12 @@ public sealed class StatisticsService(
         if (reset.TryPickT1(out var resetError, out var result))
         {
             return Abort(resetError);
+        }
+
+        if (result.RemovedNothing())
+        {
+            // A no-op writes and audits nothing: aborting rolls back whatever the store wrote, such as the bonus floor, and the answer keeps the zero counts.
+            return TransactionOutcome.Abort<OneOf<StatisticsResetResult, BeforeInFuture, SettingsMissing, PortError>>(result);
         }
 
         var entry = StatisticsResetAudit.ForReset(AuditActor.From(actor), plan, result, Guid.NewGuid().ToString("D"));

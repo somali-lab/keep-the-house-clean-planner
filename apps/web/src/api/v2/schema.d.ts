@@ -384,8 +384,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Downloads the whole dataset as one JSON file.
-         * @description Needs no profile, like the Node route. The file has schemaVersion 6, the exportedAt instant and, per collection, the documents as MongoDB relaxed Extended JSON ($oid, $date, $binary), so ids, dates and the badge images survive the round trip: settings, users, rooms, tasks, cyclePlans, cycles, occurrences, pointEntries (the redemptions only, the rest of the ledger is rebuilt on import), badges (with their images) and auditLog. The file is named huishoudplanner-YYYYMMDD.json after today in the household timezone.
+         * Downloads the whole dataset as one JSON file (administrators).
+         * @description For administrators, like the import (400 profile_required without a profile, 403 permission_denied for the other roles); the Node route was open. The file has schemaVersion 6, the exportedAt instant and, per collection, the documents as MongoDB relaxed Extended JSON ($oid, $date, $binary), so ids, dates and the badge images survive the round trip: settings, users, rooms, tasks, cyclePlans, cycles, occurrences, pointEntries (the redemptions only, the rest of the ledger is rebuilt on import), badges (with their images) and auditLog. The file is named huishoudplanner-YYYYMMDD.json after today in the household timezone.
          */
         get: operations["exportJson"];
         put?: never;
@@ -1364,7 +1364,7 @@ export interface paths {
         post?: never;
         /**
          * Starts the statistics over, or purges the history before a day (administrators).
-         * @description Without before every occurrence resets to open and recorded extra work is deleted; with before (a day key, not after today) only occurrences, cycles, ledger entries and redemptions strictly older than that day are purged. People, rooms, tasks and cycle plans are never touched. One audit entry records the counts, which the response repeats. A before after today is 400 before_in_future.
+         * @description Without before every occurrence resets to open and recorded extra work is deleted; with before (a day key, not after today) only occurrences, cycles, ledger entries and redemptions strictly older than that day are purged. People, rooms, tasks and cycle plans are never touched. One audit entry records the counts, which the response repeats; a reset that removes nothing at all (every count zero) changes nothing, not even the bonus floor, and writes no audit entry, but the response still shows the zero counts. A before after today is 400 before_in_future.
          */
         delete: operations["resetStatistics"];
         options?: never;
@@ -4585,6 +4585,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": string;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Internal Server Error */

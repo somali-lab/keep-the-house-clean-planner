@@ -265,6 +265,7 @@ Each phase ends in something demonstrable. Slices are small enough for one pull 
 - [x] 6.6 Delete a task (`DELETE /api/v2/tasks/{id}`) with the cascade into plans and badge rules. Port the delete scenario of `tasks.test.ts` and the `task_deleted` scenario of `badges.test.ts` that was deferred in phase 4.
 - [x] 6.7a ETag and If-Match on entity writes (API). Every PATCH, PUT and DELETE of an entity of API v2 is conditional on the `version` the client read (ADR-0022): the single read and every entity answer the ETag `"<version>"`, the write needs `If-Match` (428 missing, 400 malformed, 412 stale with the current ETag) and answers the new ETag; the check is a conditional write inside the transaction, a no-op keeps the version, the bonus schedule compare-and-set stays as the second defence. A structural audit test fails when an entity write lacks the requirement.
 - [ ] 6.7b The web sends `If-Match` on every save: the generated client carries the ETag (or the `version` of the list item) of the entity it edits, a `412` re-reads and keeps the unsaved edit, a `428` is a programming error; the tasks page that already writes to v2 is the first to adapt.
+- [x] 6.8 Two maintainer decisions: `GET /api/v2/export/json` is for administrators only (like the import), and a statistics reset that removes nothing at all (every count zero) changes nothing, writes no audit entry and rebuilds no badge awards, while still answering the zero counts.
 
 ### Phase 7 — Web app to v2 (D4)
 

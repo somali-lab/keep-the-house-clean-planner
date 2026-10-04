@@ -69,7 +69,7 @@ public static class StatisticsEndpoints
             .WithName("resetStatistics")
             .WithTags(StatisticsTag)
             .WithSummary("Starts the statistics over, or purges the history before a day (administrators).")
-            .WithDescription("Without before every occurrence resets to open and recorded extra work is deleted; with before (a day key, not after today) only occurrences, cycles, ledger entries and redemptions strictly older than that day are purged. People, rooms, tasks and cycle plans are never touched. One audit entry records the counts, which the response repeats. A before after today is 400 before_in_future.")
+            .WithDescription("Without before every occurrence resets to open and recorded extra work is deleted; with before (a day key, not after today) only occurrences, cycles, ledger entries and redemptions strictly older than that day are purged. People, rooms, tasks and cycle plans are never touched. One audit entry records the counts, which the response repeats; a reset that removes nothing at all (every count zero) changes nothing, not even the bonus floor, and writes no audit entry, but the response still shows the zero counts. A before after today is 400 before_in_future.")
             .Produces<StatisticsResetResult>(StatusCodes.Status200OK)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status400BadRequest)

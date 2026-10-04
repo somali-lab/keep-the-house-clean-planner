@@ -166,19 +166,34 @@ public sealed class StatisticsResetTests(MongoContainerFixture mongo)
     }
 
     [Fact]
-    public async Task Reset_movesTheBonusFloorOnlyForward_andStillRecordsTheReset()
+    public async Task Reset_movesTheBonusFloorOnlyForward_andRecordsOnlyTheResetThatRemovedSomething()
     {
         using var w = await ArrangeAsync("2026-10-14T08:00:00Z");
         await w.H.SendAsync(HttpMethod.Delete, "/api/v2/stats?before=2026-10-12", w.H.Admin);
 
-        var (status, _) = await w.H.SendAsync(HttpMethod.Delete, "/api/v2/stats?before=2026-10-01", w.H.Admin);
+        var (status, body) = await w.H.SendAsync(HttpMethod.Delete, "/api/v2/stats?before=2026-10-01", w.H.Admin);
 
         status.Should().Be(HttpStatusCode.OK);
+        body.EnumerateObject().Should().OnlyContain(p => p.Value.GetInt32() == 0, "the first purge already removed everything older");
         (await w.H.Settings.Find(All).SingleAsync(Ct))["bonusFloor"].AsString.Should().Be("2026-10-12");
-        var entries = await w.H.AuditAsync("settings", "reset");
-        entries.Should().HaveCount(2);
-        entries[1]["before"]["bonusFloor"].AsString.Should().Be("2026-10-12");
-        entries[1]["after"]["bonusFloor"].AsString.Should().Be("2026-10-12");
+        (await w.H.AuditAsync("settings", "reset")).Should().ContainSingle("the second reset removed nothing");
+    }
+
+    [Fact]
+    public async Task Reset_thatRemovesNothing_changesNothing_notEvenTheBonusFloor_andWritesNoAuditEntry()
+    {
+        using var w = await ArrangeAsync();
+        var settingsBefore = (await w.H.Settings.Find(All).SingleAsync(Ct)).ToJson();
+        var auditBefore = await Count(w.H.AuditLog);
+
+        var (status, body) = await w.H.SendAsync(HttpMethod.Delete, "/api/v2/stats?before=2026-09-01", w.H.Admin);
+
+        status.Should().Be(HttpStatusCode.OK);
+        body.EnumerateObject().Select(p => p.Name).Should().Equal("deletedOccurrences", "deletedRecorded", "resetOccurrences", "resetTasks", "deletedPastCycles", "removedPointEntries", "removedRedemptions");
+        body.EnumerateObject().Should().OnlyContain(p => p.Value.GetInt32() == 0);
+        (await w.H.Settings.Find(All).SingleAsync(Ct)).ToJson().Should().Be(settingsBefore, "the bonus floor and updatedAt stay as they were");
+        (await Count(w.H.AuditLog)).Should().Be(auditBefore);
+        (await w.H.AuditAsync("settings", "reset")).Should().BeEmpty();
     }
 
     [Fact]
@@ -242,16 +257,17 @@ public sealed class StatisticsResetTests(MongoContainerFixture mongo)
     }
 
     [Fact]
-    public async Task Reset_onAnEmptyHistory_stillAnswersTheCountsAndRecordsTheReset()
+    public async Task Reset_onAnEmptyHistory_answersTheZeroCounts_andWritesNoAuditEntry()
     {
         using var w = await ArrangeAsync();
+        await w.H.Cycles.DeleteManyAsync(All, Ct);
 
         var (status, body) = await w.H.SendAsync(HttpMethod.Delete, "/api/v2/stats", w.H.Admin);
 
         status.Should().Be(HttpStatusCode.OK);
-        body.EnumerateObject().Select(p => p.Name).Should().Equal("deletedOccurrences", "deletedRecorded", "resetOccurrences", "resetTasks", "deletedPastCycles", "removedPointEntries", "removedRedemptions");
         body.EnumerateObject().Should().OnlyContain(p => p.Value.GetInt32() == 0);
-        (await w.H.AuditAsync("settings", "reset")).Should().ContainSingle();
+        (await w.H.AuditAsync("settings", "reset")).Should().BeEmpty();
+        (await w.H.Settings.Find(All).SingleAsync(Ct)).Contains("bonusFloor").Should().BeFalse();
     }
 
     // ---- the Mongo adapter: transaction behaviour
