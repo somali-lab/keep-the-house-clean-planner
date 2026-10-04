@@ -287,7 +287,7 @@ The generated TypeScript client (`openapi-typescript` + `openapi-fetch`) replace
 
 ### Phase 8 — Parallel run and switch (§10)
 
-- [ ] 8.1 Compose `parallel` profile, database copy script, parity script.
+- [x] 8.1 Compose `parallel` profile, database copy script, parity script. Done: `docker-compose.yml` has the profile `parallel` with `app-next` (the .NET image, `huishoudplanner_next`, port `APP_NEXT_PORT`, notifications `none` and no AI key unless the `NEXT_*` variables opt in, scheduler on, service name `app-next`; `mongo` already runs as the single-node replica set); `scripts/parallel-copy-db.ts` copies the database with safety rails; `scripts/parallel-parity.ts` compares API v1 and v2 read-only (checks, normalisations and tests in `scripts/lib`); `docs/PARALLEL-RUN.md` holds the commands of steps 1 to 6, the verification checklist, the rollback and the compatibility finding: the Node server reads and edits documents written by the .NET application, so the rollback of step 6 holds without a change in `apps/server` (regression test `apps/server/test/dotnet-written-documents.test.ts`).
 - [ ] 8.2 Parallel run of a few days (D17); findings resolved; the maintainer signs off the checklist.
 - [ ] 8.3 Switch release: Dockerfile replaced, Node server and its CI jobs removed, configuration renames final, `BREAKING CHANGE` footer, README and requirements §9–§10 updated, ADR-0001 superseded in full.
 - [ ] 8.4 Post-switch: `apps/server` deleted, this plan emptied to a pointer in the ADR index.

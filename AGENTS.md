@@ -71,6 +71,7 @@ Empty these documents as part of finishing the work, and report anything left in
 - `apps/web/src/i18n`: Dutch and English message catalogs and language runtime.
 - `apps/web/e2e`: isolated Playwright journeys against the real .NET host (published by `globalSetup`, one process per test, fixed clock through `APP_FAKE_NOW`) on a throwaway Docker MongoDB replica set, seeded through `/api/v2`.
 - `docker`, `docker-compose.yml`, `scripts/smoke.mjs`, `scripts/smoke-dotnet.mjs`: production image, the .NET image (`docker/Dockerfile.dotnet`, until the switch) and their isolated container smoke tests.
+- `scripts/parallel-copy-db.ts`, `scripts/parallel-parity.ts` (pure parts and their tests in `scripts/lib`), the compose profile `parallel` and `docs/PARALLEL-RUN.md`: the side-by-side run of the Node and .NET applications until the switch. Both scripts are run by the maintainer; an agent never runs them against a real installation.
 - `docs/adr`: architecture decision records.
 - `AGENTS.md`, `.github/instructions`, `.cursor/rules`, `.agents/skills`, `.github/copilot-instructions.md`, `CLAUDE.md`: the agent-context layer, maintained by the `context-maintainer` agentic workflow.
 - `docs/huishoudplanner-requirements.md` and the **What it does** section of `README.md`: kept aligned with the code by the `docs-maintainer` agentic workflow, which proposes changes in a `[docs]` pull request.
