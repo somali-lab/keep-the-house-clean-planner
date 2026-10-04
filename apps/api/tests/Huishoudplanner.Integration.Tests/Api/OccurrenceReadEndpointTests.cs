@@ -64,6 +64,9 @@ public sealed class OccurrenceReadEndpointTests(OccurrenceHarness h) : IClassFix
     [InlineData("from=2026-09-14&to=2026-09-20&limit=abc", "limit")]
     [InlineData("from=2026-09-14&to=2026-09-20&limit=501", "limit")]
     [InlineData("from=2026-09-14&to=2026-09-20&cursor=garbage", "cursor")]
+    [InlineData("from=2026-09-14&to=2026-09-20&order=sideways", "order")]
+    [InlineData("from=2026-09-14&to=2026-09-20&order=ASC", "order")]
+    [InlineData("from=2026-09-14&to=2026-09-20&order=", "order")]
     public async Task List_aBadQueryIsAFieldKeyedValidationError(string query, string field)
     {
         var response = await h.SendAsync(HttpMethod.Get, $"/api/v2/occurrences?{query}", null, null);
@@ -85,6 +88,66 @@ public sealed class OccurrenceReadEndpointTests(OccurrenceHarness h) : IClassFix
         Items(second.Body).Should().ContainSingle();
         second.Body.GetProperty("nextCursor").ValueKind.Should().Be(JsonValueKind.Null);
         Items(first.Body).Concat(Items(second.Body)).Select(o => o.GetProperty("id").GetString()).Should().OnlyHaveUniqueItems();
+    }
+
+    private static List<string?> Ids(JsonElement body) => [.. Items(body).Select(o => o.GetProperty("id").GetString())];
+
+    [Fact]
+    public async Task List_withoutOrderIsAscendingAndAscExplicitlyIsTheSame()
+    {
+        var plain = await h.SendAsync(HttpMethod.Get, "/api/v2/occurrences?from=2026-09-14&to=2026-09-20", null, null);
+        var asc = await h.SendAsync(HttpMethod.Get, "/api/v2/occurrences?from=2026-09-14&to=2026-09-20&order=asc", null, null);
+
+        Ids(asc.Body).Should().Equal(Ids(plain.Body));
+        Items(plain.Body).First().GetProperty("date").GetString().Should().Be("2026-09-14");
+    }
+
+    [Fact]
+    public async Task List_descIsTheReverseOfAscAcrossPagesAndKeepsTheOrderInItsCursor()
+    {
+        var asc = await h.SendAsync(HttpMethod.Get, "/api/v2/occurrences?from=2026-09-14&to=2026-09-20&order=asc", null, null);
+        var seen = new List<string?>();
+        string? cursor = null;
+        do
+        {
+            var url = "/api/v2/occurrences?from=2026-09-14&to=2026-09-20&order=desc&limit=1" + (cursor is null ? "" : "&cursor=" + Uri.EscapeDataString(cursor));
+            var page = await h.SendAsync(HttpMethod.Get, url, null, null);
+            page.Status.Should().Be(HttpStatusCode.OK, page.Body.ToString());
+            seen.AddRange(Ids(page.Body));
+            cursor = page.Body.GetProperty("nextCursor").GetString();
+        }
+        while (cursor is not null);
+
+        seen.Should().Equal(Ids(asc.Body).AsEnumerable().Reverse());
+    }
+
+    [Fact]
+    public async Task List_aCursorOfTheOtherOrderIsRefusedOnTheCursorField()
+    {
+        var asc = await h.SendAsync(HttpMethod.Get, "/api/v2/occurrences?from=2026-09-14&to=2026-09-20&limit=2", null, null);
+        var desc = await h.SendAsync(HttpMethod.Get, "/api/v2/occurrences?from=2026-09-14&to=2026-09-20&limit=2&order=desc", null, null);
+        var ascCursor = Uri.EscapeDataString(asc.Body.GetProperty("nextCursor").GetString()!);
+        var descCursor = Uri.EscapeDataString(desc.Body.GetProperty("nextCursor").GetString()!);
+
+        var ascOnDesc = await h.SendAsync(HttpMethod.Get, $"/api/v2/occurrences?from=2026-09-14&to=2026-09-20&order=desc&cursor={ascCursor}", null, null);
+        var descOnAsc = await h.SendAsync(HttpMethod.Get, $"/api/v2/occurrences?from=2026-09-14&to=2026-09-20&cursor={descCursor}", null, null);
+
+        foreach (var refused in new[] { ascOnDesc, descOnAsc })
+        {
+            refused.Status.Should().Be(HttpStatusCode.BadRequest);
+            Type(refused.Body).Should().Be("urn:huishoudplanner:problem:validation_error");
+            refused.Body.GetProperty("errors").GetProperty("cursor")[0].GetString().Should().Be("cursor_order_mismatch");
+        }
+    }
+
+    [Fact]
+    public async Task List_descCombinesWithTheFilters()
+    {
+        var mine = await h.SendAsync(HttpMethod.Get, $"/api/v2/occurrences?from=2026-09-14&to=2026-09-20&assigneeId={h.P1.Id}&status=open&order=desc", null, null);
+        var narrow = await h.SendAsync(HttpMethod.Get, "/api/v2/occurrences?from=2026-09-16&to=2026-09-16&order=desc", null, null);
+
+        Items(mine.Body).Select(o => o.GetProperty("date").GetString()).Should().Equal("2026-09-16", "2026-09-14");
+        Items(narrow.Body).Select(o => o.GetProperty("taskNameSnapshot").GetString()).Should().Equal("Wastafel", "Badkamer schoonmaken");
     }
 
     [Fact]

@@ -756,8 +756,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Lists the occurrences on the days from to to, in display order.
-         * @description Needs no profile. from and to are required day keys (YYYY-MM-DD), both included, and from must not be after to (from_after_to). assigneeId and status (open, done, skipped) filter the list. Every occurrence carries isOverdue, movedFrom and where its day falls in the cycles (cycleIndex, weekIndex). The list is paged: pass the nextCursor of a page as cursor for the next one (limit 1 to 500, default 100).
+         * Lists the occurrences on the days from to to, in display order (oldest or newest day first).
+         * @description Needs no profile. from and to are required day keys (YYYY-MM-DD), both included, and from must not be after to (from_after_to). assigneeId and status (open, done, skipped) filter the list. Every occurrence carries isOverdue, movedFrom and where its day falls in the cycles (cycleIndex, weekIndex). The list is paged: pass the nextCursor of a page as cursor for the next one (limit 1 to 500, default 100). order is asc (oldest day first, the default) or desc (newest day first); both sort by day, task name and id, and a cursor only continues the order it came from (a cursor of the other order is a validation_error on cursor, cursor_order_mismatch).
          */
         get: operations["listOccurrences"];
         put?: never;
@@ -5972,6 +5972,7 @@ export interface operations {
                 status?: string;
                 limit?: string;
                 cursor?: string;
+                order?: string;
             };
             header?: never;
             path?: never;

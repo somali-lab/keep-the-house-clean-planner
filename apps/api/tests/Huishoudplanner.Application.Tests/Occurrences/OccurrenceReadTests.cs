@@ -129,6 +129,56 @@ public sealed class OccurrenceReadTests
     }
 
     [Fact]
+    public async Task List_descendingIsTheExactReverseOfAscending()
+    {
+        var w = Arranged();
+
+        var ascending = (await w.Service.ListAsync(Week(), Ct)).AsT0;
+        var descending = (await w.Service.ListAsync(Week() with { Order = OccurrenceOrder.Descending }, Ct)).AsT0;
+
+        descending.Items.Select(v => v.Occurrence.Id).Should().Equal(ascending.Items.Select(v => v.Occurrence.Id).Reverse());
+        descending.Items.Select(v => v.Date).First().Should().Be(new DateOnly(2026, 9, 17));
+    }
+
+    [Fact]
+    public async Task List_descendingPagesAndTheCursorKeepsItsOrder()
+    {
+        var w = Arranged();
+
+        var first = (await w.Service.ListAsync(Week() with { Limit = 3, Order = OccurrenceOrder.Descending }, Ct)).AsT0;
+        var second = (await w.Service.ListAsync(Week() with { Limit = 3, Order = OccurrenceOrder.Descending, Cursor = first.NextCursor }, Ct)).AsT0;
+
+        OccurrenceCursor.TryDecode(first.NextCursor, out var cursor).Should().BeTrue();
+        cursor.Order.Should().Be(OccurrenceOrder.Descending);
+        second.NextCursor.Should().BeNull();
+        var all = (await w.Service.ListAsync(Week() with { Order = OccurrenceOrder.Descending }, Ct)).AsT0;
+        first.Items.Concat(second.Items).Select(v => v.Occurrence.Id).Should().Equal(all.Items.Select(v => v.Occurrence.Id));
+    }
+
+    [Theory]
+    [InlineData(OccurrenceOrder.Ascending, OccurrenceOrder.Descending)]
+    [InlineData(OccurrenceOrder.Descending, OccurrenceOrder.Ascending)]
+    public async Task List_aCursorOfTheOtherOrderIsAValidationErrorOnTheCursor(OccurrenceOrder produced, OccurrenceOrder used)
+    {
+        var w = Arranged();
+        var first = (await w.Service.ListAsync(Week() with { Limit = 2, Order = produced }, Ct)).AsT0;
+
+        var result = await w.Service.ListAsync(Week() with { Limit = 2, Order = used, Cursor = first.NextCursor }, Ct);
+
+        result.AsT1.Errors["cursor"].Should().Equal("cursor_order_mismatch");
+    }
+
+    [Fact]
+    public async Task List_descendingCombinesWithTheFilters()
+    {
+        var w = Arranged();
+
+        var mine = (await w.Service.ListAsync(Week() with { AssigneeId = w.P1.Id, Order = OccurrenceOrder.Descending }, Ct)).AsT0;
+
+        mine.Items.Select(v => v.Date).Should().Equal(new DateOnly(2026, 9, 16), new DateOnly(2026, 9, 14));
+    }
+
+    [Fact]
     public async Task List_withoutSettingsIsSettingsMissing()
     {
         var w = Arranged();

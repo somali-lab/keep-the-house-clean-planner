@@ -307,4 +307,34 @@ public sealed class OccurrenceActionsTests
         OccurrenceCursor.TryDecode(null, out _).Should().BeFalse();
         OccurrenceCursor.TryDecode(new OccurrenceCursor(Now, "x", "not-an-id").Encode(), out _).Should().BeFalse();
     }
+
+    [Fact]
+    public void Cursor_carriesTheOrderItWasProducedForAndAnOldCursorIsAscending()
+    {
+        var descending = new OccurrenceCursor(Now, "Wastafel", Anna, OccurrenceOrder.Descending);
+
+        OccurrenceCursor.TryDecode(descending.Encode(), out var decoded).Should().BeTrue();
+        decoded.Should().Be(descending);
+        decoded.Order.Should().Be(OccurrenceOrder.Descending);
+        new OccurrenceCursor(Now, "Wastafel", Anna).Order.Should().Be(OccurrenceOrder.Ascending);
+        descending.Encode().Should().NotBe(new OccurrenceCursor(Now, "Wastafel", Anna).Encode());
+
+        var legacy = System.Buffers.Text.Base64Url.EncodeToString(
+            System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new object[] { Now.ToUnixTimeMilliseconds(), "Wastafel", Anna }));
+        OccurrenceCursor.TryDecode(legacy, out var old).Should().BeTrue();
+        old.Order.Should().Be(OccurrenceOrder.Ascending);
+
+        var unknown = System.Buffers.Text.Base64Url.EncodeToString(
+            System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new object[] { Now.ToUnixTimeMilliseconds(), "Wastafel", Anna, "sideways" }));
+        OccurrenceCursor.TryDecode(unknown, out _).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Cursor_afterAnOccurrenceTakesTheRequestedOrder()
+    {
+        var occurrence = Open();
+
+        OccurrenceCursor.After(occurrence).Order.Should().Be(OccurrenceOrder.Ascending);
+        OccurrenceCursor.After(occurrence, OccurrenceOrder.Descending).Order.Should().Be(OccurrenceOrder.Descending);
+    }
 }

@@ -52,35 +52,53 @@ public static class OccurrenceListQuery
     public const int MaxLimit = 500;
 }
 
-/// <summary>What <c>GET /occurrences</c> asks for: the days <see cref="From"/> to <see cref="To"/> (both included) and optional filters.</summary>
+/// <summary>The direction of the list: oldest day first (the default) or newest day first. Both walk the same sort key (day, task name, id).</summary>
+public enum OccurrenceOrder
+{
+    Ascending,
+    Descending,
+}
+
+/// <summary>What <c>GET /occurrences</c> asks for: the days <see cref="From"/> to <see cref="To"/> (both included), optional filters and the <see cref="Order"/>.</summary>
 public sealed record OccurrenceListRequest(
     DateOnly From,
     DateOnly To,
     string? AssigneeId = null,
     OccurrenceStatus? Status = null,
     int? Limit = null,
-    string? Cursor = null);
+    string? Cursor = null,
+    OccurrenceOrder Order = OccurrenceOrder.Ascending);
 
-/// <summary>The query the store answers: the instants [<see cref="From"/>, <see cref="ToExclusive"/>) in the display order (day, task name, id).</summary>
+/// <summary>
+/// The query the store answers: the instants [<see cref="From"/>, <see cref="ToExclusive"/>) in the display order (day, task name, id), all three
+/// reversed for <see cref="OccurrenceOrder.Descending"/>; <see cref="After"/> is the position in that same order.
+/// </summary>
 public sealed record OccurrenceQuery(
     DateTimeOffset From,
     DateTimeOffset ToExclusive,
     string? AssigneeId,
     OccurrenceStatus? Status,
     OccurrenceCursor? After,
-    int Take);
+    int Take,
+    OccurrenceOrder Order = OccurrenceOrder.Ascending);
 
-/// <summary>The position after an occurrence in the list order (day instant, task name, id). Opaque to clients.</summary>
-public sealed record OccurrenceCursor(DateTimeOffset Date, string TaskName, string Id)
+/// <summary>
+/// The position after an occurrence in the list order (day instant, task name, id) of its <see cref="Order"/>. Opaque to clients. A cursor only
+/// continues the list it came from: the use case refuses one whose <see cref="Order"/> differs from the request.
+/// </summary>
+public sealed record OccurrenceCursor(DateTimeOffset Date, string TaskName, string Id, OccurrenceOrder Order = OccurrenceOrder.Ascending)
 {
-    public static OccurrenceCursor After(Occurrence occurrence)
+    public static OccurrenceCursor After(Occurrence occurrence, OccurrenceOrder order = OccurrenceOrder.Ascending)
     {
         ArgumentNullException.ThrowIfNull(occurrence);
-        return new(occurrence.Date, occurrence.TaskNameSnapshot, occurrence.Id);
+        return new(occurrence.Date, occurrence.TaskNameSnapshot, occurrence.Id, order);
     }
 
+    /// <summary>An ascending cursor keeps the three-part shape it always had; a descending one adds a fourth part.</summary>
     public string Encode() =>
-        Base64Url.EncodeToString(JsonSerializer.SerializeToUtf8Bytes(new object[] { Date.ToUnixTimeMilliseconds(), TaskName, Id }));
+        Base64Url.EncodeToString(JsonSerializer.SerializeToUtf8Bytes(Order == OccurrenceOrder.Ascending
+            ? new object[] { Date.ToUnixTimeMilliseconds(), TaskName, Id }
+            : new object[] { Date.ToUnixTimeMilliseconds(), TaskName, Id, "desc" }));
 
     /// <summary>False for anything this application did not produce.</summary>
     public static bool TryDecode(string? value, out OccurrenceCursor cursor)
@@ -95,11 +113,22 @@ public sealed record OccurrenceCursor(DateTimeOffset Date, string TaskName, stri
         {
             using var document = JsonDocument.Parse(Base64Url.DecodeFromChars(value));
             var root = document.RootElement;
-            if (root.ValueKind != JsonValueKind.Array || root.GetArrayLength() != 3 ||
+            if (root.ValueKind != JsonValueKind.Array || root.GetArrayLength() is not (3 or 4) ||
                 root[0].ValueKind != JsonValueKind.Number || !root[0].TryGetInt64(out var millis) ||
                 root[1].ValueKind != JsonValueKind.String || root[2].ValueKind != JsonValueKind.String)
             {
                 return false;
+            }
+
+            var order = OccurrenceOrder.Ascending;
+            if (root.GetArrayLength() == 4)
+            {
+                if (root[3].ValueKind != JsonValueKind.String || root[3].GetString() != "desc")
+                {
+                    return false;
+                }
+
+                order = OccurrenceOrder.Descending;
             }
 
             var id = root[2].GetString()!;
@@ -108,7 +137,7 @@ public sealed record OccurrenceCursor(DateTimeOffset Date, string TaskName, stri
                 return false;
             }
 
-            cursor = new OccurrenceCursor(DateTimeOffset.FromUnixTimeMilliseconds(millis), root[1].GetString()!, id);
+            cursor = new OccurrenceCursor(DateTimeOffset.FromUnixTimeMilliseconds(millis), root[1].GetString()!, id, order);
             return true;
         }
         catch (Exception e) when (e is FormatException or JsonException or ArgumentException or InvalidOperationException)
