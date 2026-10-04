@@ -1,7 +1,7 @@
-import type { OccurrenceView } from '@huishoudplanner/shared';
+import type { Occurrence } from '../../api/index.ts';
 import { getLocale } from '../../i18n/runtime.ts';
 import { mondayOfDay } from '../export/exportModel.ts';
-import { addDaysKey } from '../today/todayModel.ts';
+import { addDays } from '@/lib/dayKey';
 
 function dayDate(dayKey: string): Date {
   return new Date(`${dayKey}T12:00:00Z`);
@@ -65,20 +65,20 @@ export function weekdayName(weekday: number): string {
 /** Monday..Sunday of the week containing the day. */
 export function weekDays(anyDay: string): string[] {
   const monday = mondayOfDay(anyDay);
-  return Array.from({ length: 7 }, (_, i) => addDaysKey(monday, i));
+  return Array.from({ length: 7 }, (_, i) => addDays(monday, i));
 }
 
 /** Three days before the center day, the center day, and eight days after it. */
 export function overviewDays(centerDay: string): string[] {
-  return Array.from({ length: 12 }, (_, index) => addDaysKey(centerDay, index - 3));
+  return Array.from({ length: 12 }, (_, index) => addDays(centerDay, index - 3));
 }
 
 export interface WeekDay {
   dayKey: string;
-  items: OccurrenceView[];
+  items: Occurrence[];
 }
 
-export function groupByDay(occurrences: OccurrenceView[], days: string[]): WeekDay[] {
+export function groupByDay(occurrences: Occurrence[], days: string[]): WeekDay[] {
   return days.map((dayKey) => ({
     dayKey,
     items: occurrences
@@ -94,7 +94,7 @@ export function matchesTaskName(taskName: string, search: string): boolean {
 }
 
 /** Local view of a move, as the server will store it. */
-export function movedTo(occ: OccurrenceView, date: string): OccurrenceView {
+export function movedTo(occ: Occurrence, date: string): Occurrence {
   return { ...occ, date, movedFrom: date === occ.plannedDate ? null : occ.plannedDate };
 }
 

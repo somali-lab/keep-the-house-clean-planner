@@ -266,12 +266,12 @@ Each phase ends in something demonstrable. Slices are small enough for one pull 
 
 The generated TypeScript client (`openapi-typescript` + `openapi-fetch`) replaces `apps/web/src/api/client.ts`; the profile header middleware stays. One feature per slice; each slice deletes the shared imports the feature used and moves their tests.
 
-- [ ] 7.1 Client generation, `dayKey.ts`, limits and calendar queries; the `today` and `week` features.
+- [x] 7.1 Client generation, `dayKey.ts`, limits and calendar queries; the `today` and `week` features. (The generated client and its CI drift check, `src/lib/dayKey.ts`, `useLimits`, `useCalendar`, and `today`, `week`, the extra-task dialog and the offline queue on v2. `users`, `rooms`, `tasks` and `settings` stay on the Node client until their slices, so the app runs against the .NET host only from 7.5 on; the Playwright journeys stay red until 7.6.)
 - [ ] 7.2 `mobile-tasks`, `due`, `tasks` (default points from the server).
 - [ ] 7.3 `planner` with server-side validation, `promote`, `ai`, `ai-prompts`.
 - [ ] 7.4 `reward`, `stats`, `completions`, `badges`.
 - [ ] 7.5 `settings` (bonuses in force from the server), `notifications`, `distribution`, `history`, `export`, `about`.
-- [ ] 7.6 PWA cache rule for `/api/v2/`, offline queue against the intent endpoints; e2e journeys green against the .NET host.
+- [ ] 7.6 PWA cache rule for `/api/v2/`, offline queue against the intent endpoints; e2e journeys green against the .NET host. Remove `continue-on-error` from the e2e job in `.github/workflows/ci.yml` (made non-blocking during phase 7 by decision of the maintainer).
 - [ ] 7.7 `packages/shared` deleted; workspace, lint and typecheck configuration updated.
 
 ### Phase 8 — Parallel run and switch (§10)

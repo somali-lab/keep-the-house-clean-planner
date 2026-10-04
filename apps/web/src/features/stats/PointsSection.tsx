@@ -10,7 +10,7 @@ import { format, t } from '../../i18n/nl.ts';
 import { getLocale } from '../../i18n/runtime.ts';
 import { useProfile } from '../../identity/index.ts';
 import { PersonBadges } from '../badges/PersonBadges.tsx';
-import { dayKeyInZone } from '../today/todayModel.ts';
+import { dayKeyInZone } from '@/lib/dayKey';
 import { useAllTimeBalances, usePointsBalances, usePointsEntries, useUndoRedemption, type StatsPeriod } from './api.ts';
 import { statsTableClass } from './ChartFrame.tsx';
 import { bonusText } from './bonusText.ts';

@@ -1,5 +1,3 @@
-import type { OccurrenceView } from '@huishoudplanner/shared';
-import { weekIndexFor } from '@huishoudplanner/shared/cycle';
 import { ChevronLeft, ChevronRight, Plus, Sun, TriangleAlert, Undo2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { EmptyState } from '@/components/EmptyState';
@@ -9,7 +7,10 @@ import { PageHeader } from '@/components/PageHeader';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import type { Occurrence } from '../../api/index.ts';
 import { useRooms, useSettings, useTasks } from '../../api/queries.ts';
+import { useCalendar } from '../../api/v2/queries.ts';
+import { addDays, dayKeyInZone } from '@/lib/dayKey';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
 import { getActiveProfileId } from '../../identity/profileStore.ts';
@@ -27,8 +28,6 @@ import { OccurrenceItem, shortDate } from './OccurrenceItem.tsx';
 import { RecordWorkDialog } from './RecordWorkDialog.tsx';
 import { longDay } from '../week/weekModel.ts';
 import {
-  addDaysKey,
-  dayKeyInZone,
   groupToday,
   OVERDUE_LOOKBACK_DAYS,
   type TodayGroups,
@@ -57,16 +56,17 @@ export function TodayPage({ now }: { now?: Date }) {
     'today.person', profile?._id ?? null, defaultPersonFilter,
   );
   useFilterReset(resetPersonFilter, personFilter !== defaultPersonFilter);
-  const selectedDay = addDaysKey(todayKey, dayOffset);
-  const from = addDaysKey(todayKey, -OVERDUE_LOOKBACK_DAYS);
+  const selectedDay = addDays(todayKey, dayOffset);
+  const from = addDays(todayKey, -OVERDUE_LOOKBACK_DAYS);
   const occurrences = useOccurrences(from, selectedDay, settings.isSuccess);
+  const calendar = useCalendar(selectedDay, selectedDay);
   const profileId = profile?._id ?? '';
   const action = useOccurrenceAction(occurrenceKeys.range(from, selectedDay), { profileId, todayKey });
 
   const [snackbar, setSnackbar] = useState<{ id: string; task: string; recorded?: true; plannedFor?: string } | null>(null);
   const [recordOpen, setRecordOpen] = useState(false);
   const [failed, setFailed] = useState(false);
-  const [completionChoice, setCompletionChoice] = useState<OccurrenceView | null>(null);
+  const [completionChoice, setCompletionChoice] = useState<Occurrence | null>(null);
   const choiceAssignee = useAssigneeChoice(completionChoice?.assigneeId ?? null);
 
   useEffect(() => {
@@ -94,9 +94,9 @@ export function TodayPage({ now }: { now?: Date }) {
       </p>
     );
 
-  const run = (next: OccurrenceAction, occ?: OccurrenceView) => {
+  const run = (next: OccurrenceAction, occ?: Occurrence) => {
     setFailed(false);
-    if (next.kind === 'complete' && occ) setSnackbar({ id: occ._id, task: occ.taskNameSnapshot });
+    if (next.kind === 'complete' && occ) setSnackbar({ id: occ.id, task: occ.taskNameSnapshot });
     if (next.kind === 'uncomplete' || next.kind === 'retract') setSnackbar(null);
     action.mutate(next, {
       onError: () => {
@@ -106,12 +106,12 @@ export function TodayPage({ now }: { now?: Date }) {
     });
   };
 
-  const requestComplete = (occ: OccurrenceView) => {
+  const requestComplete = (occ: Occurrence) => {
     if (occ.assigneeId && occ.assigneeId !== profileId) {
       setCompletionChoice(occ);
       return;
     }
-    run({ id: occ._id, kind: 'complete' }, occ);
+    run({ id: occ.id, kind: 'complete' }, occ);
   };
 
   const filteredOccurrences = occurrences.data.filter((occurrence) =>
@@ -134,10 +134,13 @@ export function TodayPage({ now }: { now?: Date }) {
     settings.data.cycleAnchorDate,
   );
   const selectedPerson = activeUsers.find((user) => user._id === personFilter);
-  const cycleWeek = weekIndexFor(selectedDay, settings.data.cycleAnchorDate) + 1;
-  const cycleLabel = selectedDay < settings.data.cycleAnchorDate
-    ? format('cycle.startsOn', { date: shortDate(settings.data.cycleAnchorDate) })
-    : format('cycle.week', { week: cycleWeek });
+  // Which cycle week the day is comes from the server; a day before the anchor belongs to no cycle yet.
+  const calendarDay = calendar.data?.get(selectedDay);
+  const cycleLabel = !calendarDay
+    ? ''
+    : calendarDay.cycleIndex < 0
+      ? format('cycle.startsOn', { date: shortDate(settings.data.cycleAnchorDate) })
+      : format('cycle.week', { week: calendarDay.weekIndex + 1 });
   const nothingOpen =
     groups.mine.length + groups.unclaimed.length + groups.others.length + groups.overdue.length ===
     0;
@@ -146,7 +149,7 @@ export function TodayPage({ now }: { now?: Date }) {
     <section className="flex flex-col gap-6">
       <PageHeader
         title={t('nav.today')}
-        description={`${longDay(selectedDay)} · ${cycleLabel}`}
+        description={cycleLabel ? `${longDay(selectedDay)} · ${cycleLabel}` : longDay(selectedDay)}
         className="mb-0"
         actions={
           <Button type="button" className="h-11 rounded-full" onClick={() => setRecordOpen(true)}>
@@ -267,18 +270,18 @@ export function TodayPage({ now }: { now?: Date }) {
               <ul className="grid gap-3">
                 {groups[key].map((occ) => (
                   <OccurrenceItem
-                    key={occ._id}
+                    key={occ.id}
                     occurrence={occ}
                     todayKey={todayKey}
                     roomName={occ.roomNameSnapshot ?? (occ.taskId ? roomByTask.get(occ.taskId) : undefined)}
                     users={activeUsers}
                     completionControl={settings.data.completionControl ?? 'circle'}
                     onComplete={() => requestComplete(occ)}
-                    onUncomplete={() => run({ id: occ._id, kind: 'uncomplete' }, occ)}
-                    onRetract={() => run({ id: occ._id, kind: 'retract' }, occ)}
-                    onSkip={(reason) => run({ id: occ._id, kind: 'skip', reason }, occ)}
-                    onClaim={() => run({ id: occ._id, kind: 'claim' }, occ)}
-                    onAssign={(assigneeId) => run({ id: occ._id, kind: 'assign', assigneeId }, occ)}
+                    onUncomplete={() => run({ id: occ.id, kind: 'uncomplete' }, occ)}
+                    onRetract={() => run({ id: occ.id, kind: 'retract' }, occ)}
+                    onSkip={(reason) => run({ id: occ.id, kind: 'skip', reason }, occ)}
+                    onClaim={() => run({ id: occ.id, kind: 'claim' }, occ)}
+                    onAssign={(assigneeId) => run({ id: occ.id, kind: 'assign', assigneeId }, occ)}
                   />
                 ))}
               </ul>
@@ -299,7 +302,7 @@ export function TodayPage({ now }: { now?: Date }) {
           onCompleteForAssignee={() => {
             run(
               {
-                id: completionChoice._id,
+                id: completionChoice.id,
                 kind: 'complete',
                 completedBy: completionChoice.assigneeId ?? undefined,
               },
@@ -308,7 +311,7 @@ export function TodayPage({ now }: { now?: Date }) {
             setCompletionChoice(null);
           }}
           onTakeOver={() => {
-            run({ id: completionChoice._id, kind: 'complete', takeOver: true }, completionChoice);
+            run({ id: completionChoice.id, kind: 'complete', takeOver: true }, completionChoice);
             setCompletionChoice(null);
           }}
         />
@@ -328,10 +331,10 @@ export function TodayPage({ now }: { now?: Date }) {
           // Planned work is an open occurrence like any other: it has no undo here.
           setSnackbar(
             how === 'planned'
-              ? { id: recorded._id, task: recorded.taskNameSnapshot, plannedFor: recorded.date }
+              ? { id: recorded.id, task: recorded.taskNameSnapshot, plannedFor: recorded.date }
               : how === 'recorded'
-                ? { id: recorded._id, task: recorded.taskNameSnapshot, recorded: true }
-                : { id: recorded._id, task: recorded.taskNameSnapshot },
+                ? { id: recorded.id, task: recorded.taskNameSnapshot, recorded: true }
+                : { id: recorded.id, task: recorded.taskNameSnapshot },
           );
         }}
       />
@@ -357,8 +360,8 @@ export function TodayPage({ now }: { now?: Date }) {
                 run({ id: snackbar.id, kind: 'retract' });
                 return;
               }
-              const occ = occurrences.data.find((o) => o._id === snackbar.id);
-              if (occ) run({ id: occ._id, kind: 'uncomplete' }, occ);
+              const occ = occurrences.data.find((o) => o.id === snackbar.id);
+              if (occ) run({ id: occ.id, kind: 'uncomplete' }, occ);
             }}
           >
             <Undo2 aria-hidden="true" />

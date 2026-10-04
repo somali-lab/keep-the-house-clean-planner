@@ -113,9 +113,13 @@ jobs:
         run: node scripts/smoke-dotnet.mjs
 
   # Runs in parallel with every other job; nothing depends on it and it depends on nothing.
+  # Non-blocking while phase 7 of docs/plans/dotnet-rewrite.md moves the web app to /api/v2 feature by feature
+  # (decided by the maintainer): the journeys run against the Node server, which does not serve v2. Slice 7.6 must
+  # remove continue-on-error and make the journeys green against the .NET host.
   e2e:
     name: End-to-end tests
     runs-on: ubuntu-latest
+    continue-on-error: true
     timeout-minutes: 15
     steps:
       - name: Check out repository
@@ -222,3 +226,28 @@ jobs:
 
       - name: Fail when the document changed
         run: git diff --exit-code -- openapi/v2.json
+
+  # The TypeScript client of /api/v2 is generated from apps/api/openapi/v2.json (openapi-typescript) and checked in.
+  # Regenerating it must change nothing; otherwise run `npm run generate:api -w apps/web` locally and commit the result.
+  web-client-drift:
+    name: Web API client is up to date
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Regenerate the client
+        run: npm run generate:api -w apps/web
+
+      - name: Fail when the client changed
+        run: git diff --exit-code -- apps/web/src/api/v2/schema.d.ts

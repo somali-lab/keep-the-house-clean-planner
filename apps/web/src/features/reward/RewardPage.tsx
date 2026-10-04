@@ -13,7 +13,7 @@ import { getLocale } from '../../i18n/runtime.ts';
 import { useProfile } from '../../identity/index.ts';
 import { PersonBadges } from '../badges/PersonBadges.tsx';
 import { compactDate } from '../mobile-tasks/taskOverviewModel.ts';
-import { dayKeyInZone } from '../today/todayModel.ts';
+import { dayKeyInZone } from '@/lib/dayKey';
 import { usePointsProgress } from './api.ts';
 import { RewardMeter } from './RewardMeter.tsx';
 import {

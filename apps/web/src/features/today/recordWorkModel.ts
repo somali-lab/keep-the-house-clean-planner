@@ -1,4 +1,3 @@
-import { defaultPointsForDuration, MAX_TASK_POINTS, MIN_TASK_POINTS } from '@huishoudplanner/shared/points';
 import type { MessageKey } from '../../i18n/nl.ts';
 import type { RecordWorkInput } from './api.ts';
 
@@ -15,8 +14,8 @@ export interface RecordWorkForm {
   name: string;
   roomId: string;
   duration: string;
-  /** Points of a one-off task as typed; null until edited by hand, so the default for the duration shows. */
-  points: string | null;
+  /** Points of a one-off task as typed; empty leaves the default for the duration to the server. */
+  points: string;
   /** Who did it (mode `done`). */
   doneBy: string;
   /** The day to plan on (mode `plan`). */
@@ -43,22 +42,16 @@ export type RecordWorkResult =
   | { ok: true; body: RecordWorkBody }
   | { ok: false; errors: Partial<Record<RecordWorkField, MessageKey>> };
 
-/** The default points for a duration as form text; '' while the duration is not a whole number of at least 1. */
-export function defaultPointsText(duration: string): string {
-  const text = duration.trim();
-  if (!/^\d+$/.test(text) || Number(text) < 1) return '';
-  return String(defaultPointsForDuration(Number(text)));
-}
-
-/** What the points field shows: the typed value, or the default for the duration until it is edited by hand. */
-export function pointsFieldValue(form: Pick<RecordWorkForm, 'points' | 'duration'>): string {
-  return form.points ?? defaultPointsText(form.duration);
+/** The range the server accepts for points (`GET /api/v2/meta/limits`, tasks). */
+export interface PointsLimits {
+  minPoints: number;
+  maxPoints: number;
 }
 
 const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Validates the form like the server does and builds the request body without its idempotency key. */
-export function buildRecordWork(form: RecordWorkForm, todayKey: string): RecordWorkResult {
+export function buildRecordWork(form: RecordWorkForm, todayKey: string, limits?: PointsLimits): RecordWorkResult {
   const errors: Partial<Record<RecordWorkField, MessageKey>> = {};
   const planning = form.mode === 'plan';
   if (!planning && !form.doneBy) errors.doneBy = RECORD_WORK_ERRORS.doneBy;
@@ -71,8 +64,9 @@ export function buildRecordWork(form: RecordWorkForm, todayKey: string): RecordW
   } else {
     if (form.name.trim().length === 0) errors.name = RECORD_WORK_ERRORS.name;
     if (!/^\d+$/.test(form.duration.trim()) || Number(form.duration) < 1) errors.duration = RECORD_WORK_ERRORS.duration;
-    const points = form.points?.trim() ?? '';
-    if (points && (!/^\d+$/.test(points) || Number(points) < MIN_TASK_POINTS || Number(points) > MAX_TASK_POINTS)) {
+    const points = form.points.trim();
+    // Without the limits only the shape is checked; the server answers for the range.
+    if (points && (!/^\d+$/.test(points) || (limits && (Number(points) < limits.minPoints || Number(points) > limits.maxPoints)))) {
       errors.points = RECORD_WORK_ERRORS.points;
     }
   }
@@ -83,8 +77,8 @@ export function buildRecordWork(form: RecordWorkForm, todayKey: string): RecordW
   if (form.kind === 'extra') {
     return { ok: true, body: { kind: 'extra', taskId: form.taskId, date, assigneeId, done } };
   }
-  // An empty or untouched field leaves the default to the server, which applies the same rule.
-  const points = form.points?.trim() ?? '';
+  // An empty field leaves the default to the server.
+  const points = form.points.trim();
   return {
     ok: true,
     body: {

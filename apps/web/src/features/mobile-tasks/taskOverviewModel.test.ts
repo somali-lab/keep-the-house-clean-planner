@@ -1,15 +1,15 @@
-import type { OccurrenceView } from '@huishoudplanner/shared';
+import type { Occurrence } from '../../api/index.ts';
 import { describe, expect, it } from 'vitest';
-import { makeOccurrence, makeRoom, makeTask } from '../../test/render.tsx';
+import { makeOccurrenceV2, makeRoom, makeTask } from '../../test/render.tsx';
 import { taskOverviewRows } from './taskOverviewModel.ts';
 
 const LIVING = makeRoom({ _id: 'r1', name: 'Woonkamer', sortOrder: 1 });
 const VACUUM = makeTask({ _id: 't1', name: 'Stofzuigen', roomId: LIVING._id });
 
 describe('taskOverviewRows with one-off tasks (taskId null)', () => {
-  const oneOff = (id: string, date: string, overrides: Partial<OccurrenceView> = {}) =>
-    makeOccurrence({
-      _id: id,
+  const oneOff = (id: string, date: string, overrides: Partial<Occurrence> = {}) =>
+    makeOccurrenceV2({
+      id: id,
       taskId: null,
       taskNameSnapshot: 'Gordijnen ophangen',
       roomIdSnapshot: LIVING._id,
@@ -22,7 +22,7 @@ describe('taskOverviewRows with one-off tasks (taskId null)', () => {
   it('gives each one-off task its own row keyed oneoff:<occurrenceId>, from its snapshots', () => {
     const rows = taskOverviewRows(
       [
-        makeOccurrence({ _id: 'o1', taskId: VACUUM._id, taskNameSnapshot: VACUUM.name, date: '2026-09-16' }),
+        makeOccurrenceV2({ id: 'o1', taskId: VACUUM._id, taskNameSnapshot: VACUUM.name, date: '2026-09-16' }),
         oneOff('x1', '2026-09-17'),
         oneOff('x2', '2026-09-17'),
       ],

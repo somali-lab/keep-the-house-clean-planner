@@ -1,10 +1,10 @@
-import type { OccurrenceView } from '@huishoudplanner/shared';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Occurrence } from '../api/index.ts';
 import { applyOptimistic } from '../features/today/api.ts';
 import { TodayPage } from '../features/today/TodayPage.tsx';
-import { ANNA, BRAM, storeProfile } from '../test/fixtures.ts';
-import { makeOccurrence, makeSettings, renderWithProviders } from '../test/render.tsx';
+import { ANNA, BRAM, describeRequest, LIMITS, calendarRoute, page, problem, storeProfile } from '../test/fixtures.ts';
+import { makeOccurrenceV2, makeSettings, renderWithProviders } from '../test/render.tsx';
 import { OfflineSyncProvider } from './OfflineSyncProvider.tsx';
 import { memoryStore, type QueueStore } from './queue.ts';
 
@@ -14,7 +14,7 @@ const PENDING_ONE = '1 wijziging is offline bewaard en wordt verstuurd zodra er 
 
 type Mode = 'online' | 'offline' | 'conflict' | 'down';
 
-let db: OccurrenceView[];
+let db: Occurrence[];
 let mode: Mode;
 let store: QueueStore;
 
@@ -24,8 +24,9 @@ const json = (body: unknown, status = 200) =>
 /** A small server that can lose its connection, answer 404, or fail with 500. */
 function stubServer() {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = String(input);
-    const method = init?.method ?? 'GET';
+    const described = await describeRequest(input, init);
+    const url = described.url;
+    const method = described.init?.method ?? 'GET';
     if (mode === 'offline') throw new TypeError('Failed to fetch');
 
     if (method === 'GET') {
@@ -35,20 +36,21 @@ function stubServer() {
         '/api/settings': makeSettings(),
         '/api/rooms': [],
         '/api/tasks': [],
-        '/api/occurrences': db,
+        '/api/v2/occurrences': page(db),
+        '/api/v2/meta/limits': LIMITS,
+        '/api/v2/calendar': calendarRoute()(undefined, url),
       };
       return path in routes ? json(routes[path]) : json({ code: 'not_found' }, 404);
     }
 
-    if (mode === 'conflict') return json({ code: 'not_found' }, 404);
-    if (mode === 'down') return json({ code: 'internal_error' }, 500);
-    const match = /^\/api\/occurrences\/([^/]+)$/.exec(url);
-    if (method === 'PATCH' && match) {
-      const body = JSON.parse(String(init!.body)) as { action: 'complete' | 'uncomplete' | 'skip' };
-      const current = db.find((o) => o._id === match[1])!;
-      const profileId = (init!.headers as Record<string, string>)['X-Profile-Id']!;
-      const next = applyOptimistic(current, { id: current._id, kind: body.action }, { profileId, todayKey: TODAY, now: NOW });
-      db = db.map((o) => (o._id === next._id ? next : o));
+    if (mode === 'conflict') return problem(404, 'not_found');
+    if (mode === 'down') return problem(500, 'internal_error');
+    const match = /^\/api\/v2\/occurrences\/([^/]+)\/(complete|uncomplete|skip)$/.exec(url);
+    if (method === 'POST' && match) {
+      const current = db.find((o) => o.id === match[1])!;
+      const profileId = (described.init!.headers as Record<string, string>)['x-profile-id']!;
+      const next = applyOptimistic(current, { id: current.id, kind: match[2] as 'complete' }, { profileId, todayKey: TODAY, now: NOW });
+      db = db.map((o) => (o.id === next.id ? next : o));
       return json(next);
     }
     return json({ code: 'not_found' }, 404);
@@ -57,8 +59,14 @@ function stubServer() {
   return fetchMock;
 }
 
-const patchCalls = (fetchMock: ReturnType<typeof stubServer>) =>
-  fetchMock.mock.calls.filter(([, init]) => init?.method === 'PATCH');
+const patchCalls = async (fetchMock: ReturnType<typeof stubServer>) => {
+  const sent = [];
+  for (const [input, init] of fetchMock.mock.calls) {
+    const described = await describeRequest(input, init);
+    if (described.init?.method === 'POST' && /\/(complete|uncomplete|skip)$/.test(described.url)) sent.push(described);
+  }
+  return sent;
+};
 
 function renderToday() {
   return renderWithProviders(
@@ -84,8 +92,8 @@ describe('offline check-off', () => {
     mode = 'online';
     store = memoryStore();
     db = [
-      makeOccurrence({ _id: 'o-mine', taskId: 't2', taskNameSnapshot: 'Badkamer', date: TODAY, assigneeId: ANNA._id }),
-      makeOccurrence({ _id: 'o-free', taskId: 't4', taskNameSnapshot: 'Wastafel', date: TODAY, assigneeId: null }),
+      makeOccurrenceV2({ id: 'o-mine', taskId: 't2', taskNameSnapshot: 'Badkamer', date: TODAY, assigneeId: ANNA._id }),
+      makeOccurrenceV2({ id: 'o-free', taskId: 't4', taskNameSnapshot: 'Wastafel', date: TODAY, assigneeId: null }),
     ];
   });
 
@@ -100,7 +108,7 @@ describe('offline check-off', () => {
     expect(await screen.findByText(PENDING_ONE)).toBeInTheDocument();
     expect(screen.queryByText('Dat lukte niet. De wijziging is teruggedraaid.')).not.toBeInTheDocument();
     expect(await store.all()).toMatchObject([{ action: { id: 'o-mine', kind: 'complete' }, profileId: ANNA._id, taskName: 'Badkamer' }]);
-    expect(db.find((o) => o._id === 'o-mine')?.status).toBe('open');
+    expect(db.find((o) => o.id === 'o-mine')?.status).toBe('open');
 
     // Someone else picks up the phone before the connection returns.
     storeProfile(BRAM._id);
@@ -109,10 +117,12 @@ describe('offline check-off', () => {
       window.dispatchEvent(new Event('online'));
     });
 
-    await waitFor(() => expect(db.find((o) => o._id === 'o-mine')?.status).toBe('done'));
-    const sent = patchCalls(fetchMock).at(-1)!;
-    expect((sent[1]!.headers as Record<string, string>)['X-Profile-Id']).toBe(ANNA._id);
-    expect(db.find((o) => o._id === 'o-mine')?.completedBy).toBe(ANNA._id);
+    await waitFor(() => expect(db.find((o) => o.id === 'o-mine')?.status).toBe('done'));
+    const sent = (await patchCalls(fetchMock)).at(-1)!;
+    expect((sent.init!.headers as Record<string, string>)['x-profile-id']).toBe(ANNA._id);
+    // Optional fields are left out, not sent as null: the server refuses an explicit null.
+    expect(sent.init!.body).toBe('{}');
+    expect(db.find((o) => o.id === 'o-mine')?.completedBy).toBe(ANNA._id);
     await waitFor(() => expect(screen.queryByText(PENDING_ONE)).not.toBeInTheDocument());
     expect(await store.all()).toEqual([]);
   });
@@ -135,7 +145,7 @@ describe('offline check-off', () => {
     const fetchMock = stubServer();
     renderToday();
 
-    await waitFor(() => expect(patchCalls(fetchMock)).toHaveLength(1));
+    await waitFor(async () => expect(await patchCalls(fetchMock)).toHaveLength(1));
     expect(await screen.findByText(PENDING_ONE)).toBeInTheDocument();
     expect(await store.all()).toHaveLength(1);
   });

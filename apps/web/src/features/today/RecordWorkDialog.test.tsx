@@ -1,9 +1,9 @@
-import type { OccurrenceView } from '@huishoudplanner/shared';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { Occurrence } from '../../api/index.ts';
 import { resetRequestKeys } from '../../api/requestKey.ts';
-import { ANNA, BRAM, mockApi, storeProfile } from '../../test/fixtures.ts';
-import { makeOccurrence, makeRoom, makeTask, renderWithProviders } from '../../test/render.tsx';
+import { ANNA, BRAM, describeRequest, LIMITS, mockApi, page, problem, storeProfile, v2Basics } from '../../test/fixtures.ts';
+import { makeOccurrenceV2, makeRoom, makeTask, renderWithProviders } from '../../test/render.tsx';
 import { RecordWorkDialog } from './RecordWorkDialog.tsx';
 
 const TODAY = '2026-09-16';
@@ -23,7 +23,8 @@ function setup(routes: Record<string, unknown> = {}, props: { initialTaskId?: st
   storeProfile(ANNA._id);
   const fetchMock = mockApi({
     '/api/users': [ANNA, BRAM],
-    '/api/occurrences': [],
+    ...v2Basics(),
+    '/api/v2/occurrences': page([]),
     '/api/rooms': [makeRoom({ _id: 'r1', name: 'Keuken' }), makeRoom({ _id: 'r2', name: 'Zolder', active: false })],
     '/api/tasks': [
       makeTask({ _id: 't1', name: 'Stofzuigen', roomId: 'r1' }),
@@ -83,7 +84,7 @@ describe('RecordWorkDialog', () => {
 
   it('records an extra execution of an active task as done today by the chosen person', async () => {
     const { fetchMock, onRecorded, onOpenChange } = setup({
-      'POST /api/occurrences': makeOccurrence({ _id: 'new1', taskId: 't1', origin: 'adhoc', recordedDone: true }),
+      'POST /api/v2/occurrences': makeOccurrenceV2({ id: 'new1', taskId: 't1', origin: 'adhoc', recordedDone: true }),
     });
     const task = await screen.findByLabelText('Taak');
     // Inactive tasks are not offered, and the room helps to tell tasks apart.
@@ -96,10 +97,10 @@ describe('RecordWorkDialog', () => {
     fireEvent.click(submit());
 
     await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
-    expect(posts(fetchMock, '/api/occurrences')).toEqual([
+    expect(posts(fetchMock, '/api/v2/occurrences')).toEqual([
       { taskId: 't1', date: TODAY, assigneeId: BRAM._id, done: true, requestId: expect.stringMatching(KEY) },
     ]);
-    expect(onRecorded.mock.calls[0]![0]).toMatchObject({ _id: 'new1' });
+    expect(onRecorded.mock.calls[0]![0]).toMatchObject({ id: 'new1' });
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
@@ -111,7 +112,7 @@ describe('RecordWorkDialog', () => {
 
   it('records a one-off task with its name, optional room and duration', async () => {
     const { fetchMock, onRecorded } = setup({
-      'POST /api/occurrences/one-off': makeOccurrence({ _id: 'new2', taskId: null, origin: 'adhoc', recordedDone: true }),
+      'POST /api/v2/occurrences/one-off': makeOccurrenceV2({ id: 'new2', taskId: null, origin: 'adhoc', recordedDone: true }),
     });
     await screen.findByLabelText('Taak');
     choose(oneOffChoice);
@@ -125,7 +126,7 @@ describe('RecordWorkDialog', () => {
     fireEvent.click(submit());
 
     await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
-    expect(posts(fetchMock, '/api/occurrences/one-off')).toEqual([
+    expect(posts(fetchMock, '/api/v2/occurrences/one-off')).toEqual([
       {
         name: 'Gordijnen ophangen',
         roomId: 'r1',
@@ -133,29 +134,30 @@ describe('RecordWorkDialog', () => {
         date: TODAY,
         assigneeId: ANNA._id,
         done: true,
+       
         requestId: expect.stringMatching(KEY),
       },
     ]);
-    expect(posts(fetchMock, '/api/occurrences')).toEqual([]);
+    expect(posts(fetchMock, '/api/v2/occurrences')).toEqual([]);
   });
 
-  it('prefills the points of a one-off task with one per minute until they are edited by hand', async () => {
+  it('leaves the default points to the server: the field starts empty and says what the server accepts', async () => {
     const { fetchMock, onRecorded } = setup({
-      'POST /api/occurrences/one-off': makeOccurrence({ _id: 'new2', taskId: null, origin: 'adhoc', recordedDone: true }),
+      'POST /api/v2/occurrences/one-off': makeOccurrenceV2({ id: 'new2', taskId: null, origin: 'adhoc', recordedDone: true }),
     });
     await screen.findByLabelText('Taak');
     expect(screen.queryByLabelText('Punten')).not.toBeInTheDocument();
     choose(oneOffChoice);
     await waitFor(() => expect(screen.getByLabelText('Gedaan door')).toHaveValue(ANNA._id));
     const points = screen.getByLabelText('Punten');
-    expect(points).toHaveAccessibleDescription(/Standaard één punt per minuut/);
+    // The range comes from GET /api/v2/meta/limits.
+    await waitFor(() => expect(points).toHaveAccessibleDescription(/Van 0 tot 1000. Standaard één punt per minuut/));
+    expect(points).toHaveAttribute('min', '0');
+    expect(points).toHaveAttribute('max', '1000');
     expect(points).toHaveValue(null);
     fireEvent.change(screen.getByLabelText('Duur (minuten)'), { target: { value: '40' } });
-    expect(points).toHaveValue(40);
-    fireEvent.change(screen.getByLabelText('Duur (minuten)'), { target: { value: '25' } });
-    expect(points).toHaveValue(25);
+    expect(points).toHaveValue(null);
 
-    // Once edited by hand the value stays, also when the duration changes.
     fireEvent.change(points, { target: { value: '8' } });
     fireEvent.change(screen.getByLabelText('Duur (minuten)'), { target: { value: '90' } });
     expect(points).toHaveValue(8);
@@ -163,14 +165,35 @@ describe('RecordWorkDialog', () => {
     fireEvent.click(submit());
 
     await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
-    expect(posts(fetchMock, '/api/occurrences/one-off')).toEqual([
+    expect(posts(fetchMock, '/api/v2/occurrences/one-off')).toEqual([
       expect.objectContaining({ name: 'Kast ophalen', durationMinutes: 90, points: 8, done: true }),
     ]);
   });
 
+  it('reads the limits once for the session', async () => {
+    const { fetchMock } = setup();
+    await screen.findByLabelText('Taak');
+    choose(oneOffChoice);
+    await screen.findByLabelText('Punten');
+    expect(fetchMock.mock.calls.filter(([url]) => url === '/api/v2/meta/limits')).toHaveLength(1);
+  });
+
+  it('uses the range of the server in the points message', async () => {
+    setup({ '/api/v2/meta/limits': { ...LIMITS, tasks: { ...LIMITS.tasks, maxPoints: 500 } } });
+    await screen.findByLabelText('Taak');
+    choose(oneOffChoice);
+    await waitFor(() => expect(screen.getByLabelText('Gedaan door')).toHaveValue(ANNA._id));
+    fireEvent.change(screen.getByLabelText('Naam van de klus'), { target: { value: 'Kast ophalen' } });
+    fireEvent.change(screen.getByLabelText('Duur (minuten)'), { target: { value: '15' } });
+    await waitFor(() => expect(screen.getByLabelText('Punten')).toHaveAttribute('max', '500'));
+    fireEvent.change(screen.getByLabelText('Punten'), { target: { value: '501' } });
+    fireEvent.click(submit());
+    expect(await screen.findByText('Vul de punten in als heel getal van 0 tot 500.')).toBeInTheDocument();
+  });
+
   it('leaves the points out when they were not edited, so the server applies the default', async () => {
     const { fetchMock, onRecorded } = setup({
-      'POST /api/occurrences/one-off': makeOccurrence({ _id: 'new2', taskId: null, origin: 'adhoc', recordedDone: true }),
+      'POST /api/v2/occurrences/one-off': makeOccurrenceV2({ id: 'new2', taskId: null, origin: 'adhoc', recordedDone: true }),
     });
     await screen.findByLabelText('Taak');
     choose(oneOffChoice);
@@ -179,12 +202,12 @@ describe('RecordWorkDialog', () => {
     fireEvent.change(screen.getByLabelText('Duur (minuten)'), { target: { value: '15' } });
     fireEvent.click(submit());
     await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
-    expect(posts(fetchMock, '/api/occurrences/one-off')[0]).not.toHaveProperty('points');
+    expect(posts(fetchMock, '/api/v2/occurrences/one-off')[0]).not.toHaveProperty('points');
   });
 
   it('sends 0 points and rejects points above 1000 without a request', async () => {
     const { fetchMock, onRecorded } = setup({
-      'POST /api/occurrences/one-off': makeOccurrence({ _id: 'new2', taskId: null, origin: 'adhoc', recordedDone: true }),
+      'POST /api/v2/occurrences/one-off': makeOccurrenceV2({ id: 'new2', taskId: null, origin: 'adhoc', recordedDone: true }),
     });
     await screen.findByLabelText('Taak');
     choose(oneOffChoice);
@@ -202,12 +225,12 @@ describe('RecordWorkDialog', () => {
     fireEvent.change(points, { target: { value: '0' } });
     fireEvent.click(submit());
     await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
-    expect(posts(fetchMock, '/api/occurrences/one-off')).toEqual([expect.objectContaining({ points: 0 })]);
+    expect(posts(fetchMock, '/api/v2/occurrences/one-off')).toEqual([expect.objectContaining({ points: 0 })]);
   });
 
   it('sends a one-off task without a room as roomId null', async () => {
     const { fetchMock, onRecorded } = setup({
-      'POST /api/occurrences/one-off': makeOccurrence({ _id: 'new2', taskId: null, origin: 'adhoc', recordedDone: true }),
+      'POST /api/v2/occurrences/one-off': makeOccurrenceV2({ id: 'new2', taskId: null, origin: 'adhoc', recordedDone: true }),
     });
     await screen.findByLabelText('Taak');
     choose(oneOffChoice);
@@ -216,12 +239,12 @@ describe('RecordWorkDialog', () => {
     fireEvent.change(screen.getByLabelText('Duur (minuten)'), { target: { value: '15' } });
     fireEvent.click(submit());
     await waitFor(() => expect(onRecorded).toHaveBeenCalled());
-    expect(posts(fetchMock, '/api/occurrences/one-off')[0]).toMatchObject({ roomId: null });
+    expect(posts(fetchMock, '/api/v2/occurrences/one-off')[0]).toMatchObject({ roomId: null });
   });
 
   it('a double click creates one record: the second click is ignored while the first is pending', async () => {
-    const reply = deferred<OccurrenceView>();
-    const { fetchMock, onRecorded } = setup({ 'POST /api/occurrences': () => reply.promise });
+    const reply = deferred<Occurrence>();
+    const { fetchMock, onRecorded } = setup({ 'POST /api/v2/occurrences': () => reply.promise });
     const task = await screen.findByLabelText('Taak');
     await waitFor(() => expect(within(task).getAllByRole('option')).toHaveLength(3));
     fireEvent.change(task, { target: { value: 't2' } });
@@ -230,20 +253,20 @@ describe('RecordWorkDialog', () => {
     fireEvent.click(button);
     fireEvent.click(button);
     expect(await screen.findByRole('button', { name: 'Bezig met vastleggen…' })).toBeDisabled();
-    expect(posts(fetchMock, '/api/occurrences')).toHaveLength(1);
+    expect(posts(fetchMock, '/api/v2/occurrences')).toHaveLength(1);
 
-    reply.resolve(makeOccurrence({ _id: 'new1', taskId: 't2', origin: 'adhoc', recordedDone: true }));
+    reply.resolve(makeOccurrenceV2({ id: 'new1', taskId: 't2', origin: 'adhoc', recordedDone: true }));
     await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
-    expect(posts(fetchMock, '/api/occurrences')).toHaveLength(1);
+    expect(posts(fetchMock, '/api/v2/occurrences')).toHaveLength(1);
   });
 
   it('reuses the request key when the same values are retried after a failure, and takes a new one when they change', async () => {
     let attempts = 0;
     const { fetchMock, onRecorded } = setup({
-      'POST /api/occurrences': () => {
+      'POST /api/v2/occurrences': () => {
         attempts += 1;
         if (attempts <= 2) throw new TypeError('network down');
-        return makeOccurrence({ _id: 'new1', taskId: 't1', origin: 'adhoc', recordedDone: true });
+        return makeOccurrenceV2({ id: 'new1', taskId: 't1', origin: 'adhoc', recordedDone: true });
       },
     });
     const task = await screen.findByLabelText('Taak');
@@ -253,14 +276,14 @@ describe('RecordWorkDialog', () => {
     expect(await screen.findByText('Vastleggen is niet gelukt. Probeer het opnieuw.')).toBeInTheDocument();
     await waitFor(() => expect(submit()).toBeEnabled());
     fireEvent.click(submit());
-    await waitFor(() => expect(posts(fetchMock, '/api/occurrences')).toHaveLength(2));
+    await waitFor(() => expect(posts(fetchMock, '/api/v2/occurrences')).toHaveLength(2));
 
     await waitFor(() => expect(submit()).toBeEnabled());
     fireEvent.change(screen.getByLabelText('Taak'), { target: { value: 't2' } });
     fireEvent.click(submit());
     await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
 
-    const [first, second, third] = posts(fetchMock, '/api/occurrences') as { requestId: string; taskId: string }[];
+    const [first, second, third] = posts(fetchMock, '/api/v2/occurrences') as { requestId: string; taskId: string }[];
     expect(second!.requestId).toBe(first!.requestId);
     expect(third!.taskId).toBe('t2');
     expect(third!.requestId).not.toBe(first!.requestId);
@@ -269,10 +292,10 @@ describe('RecordWorkDialog', () => {
   it('keeps the request key of a failed request when the dialog is closed and reopened with the same values', async () => {
     let attempts = 0;
     const { fetchMock, reopen, onRecorded } = setup({
-      'POST /api/occurrences': () => {
+      'POST /api/v2/occurrences': () => {
         attempts += 1;
         if (attempts === 1) throw new TypeError('network down');
-        return makeOccurrence({ _id: 'new1', taskId: 't1', origin: 'adhoc', recordedDone: true });
+        return makeOccurrenceV2({ id: 'new1', taskId: 't1', origin: 'adhoc', recordedDone: true });
       },
     });
     const fill = async () => {
@@ -289,7 +312,7 @@ describe('RecordWorkDialog', () => {
     await fill();
     fireEvent.click(submit());
     await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
-    const [first, second] = posts(fetchMock, '/api/occurrences') as { requestId: string }[];
+    const [first, second] = posts(fetchMock, '/api/v2/occurrences') as { requestId: string }[];
     expect(second!.requestId).toBe(first!.requestId);
   });
 
@@ -330,7 +353,7 @@ describe('RecordWorkDialog', () => {
   });
 
   describe('when the chosen task is still planned today', () => {
-    const PLANNED = makeOccurrence({ _id: 'o-planned', taskId: 't1', taskNameSnapshot: 'Stofzuigen', date: TODAY, assigneeId: ANNA._id });
+    const PLANNED = makeOccurrenceV2({ id: 'o-planned', taskId: 't1', taskNameSnapshot: 'Stofzuigen', date: TODAY, assigneeId: ANNA._id });
 
     async function chooseStofzuigen() {
       const task = await screen.findByLabelText('Taak', { selector: 'select' });
@@ -341,8 +364,8 @@ describe('RecordWorkDialog', () => {
 
     it('says so and checks off the planned occurrence by default, for the chosen person', async () => {
       const { fetchMock, onRecorded } = setup({
-        '/api/occurrences': [PLANNED, makeOccurrence({ _id: 'o-other', taskId: 't2', date: TODAY }), makeOccurrence({ _id: 'o-tomorrow', taskId: 't2', date: '2026-09-17' })],
-        'PATCH /api/occurrences/o-planned': { ...PLANNED, status: 'done', completedBy: BRAM._id },
+        '/api/v2/occurrences': page([PLANNED, makeOccurrenceV2({ id: 'o-other', taskId: 't2', date: TODAY }), makeOccurrenceV2({ id: 'o-tomorrow', taskId: 't2', date: '2026-09-17' })]),
+        'POST /api/v2/occurrences/o-planned/complete': { ...PLANNED, status: 'done', completedBy: BRAM._id },
       });
       await chooseStofzuigen();
       const choices = await screen.findByRole('group', { name: '"Stofzuigen" staat vandaag nog open in het plan.' });
@@ -353,15 +376,15 @@ describe('RecordWorkDialog', () => {
       fireEvent.click(within(dialog()).getByRole('button', { name: 'Afvinken' }));
       await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
       expect(onRecorded.mock.calls[0]![1]).toBe('checkedOff');
-      const patches = fetchMock.mock.calls.filter(([u, init]) => u === '/api/occurrences/o-planned' && (init as RequestInit | undefined)?.method === 'PATCH');
-      expect(patches.map(([, init]) => JSON.parse(String((init as RequestInit).body)))).toEqual([{ action: 'complete', completedBy: BRAM._id }]);
-      expect(anyPost(fetchMock)).toEqual([]);
+      const completions = fetchMock.mock.calls.filter(([u, init]) => u === '/api/v2/occurrences/o-planned/complete' && init?.method === 'POST');
+      expect(completions.map(([, init]) => JSON.parse(String(init!.body)))).toEqual([{ completedBy: BRAM._id }]);
+      expect(posts(fetchMock, '/api/v2/occurrences')).toEqual([]);
     });
 
     it('records an extra execution anyway when that is chosen, and leaves the planned task open', async () => {
       const { fetchMock, onRecorded } = setup({
-        '/api/occurrences': [PLANNED],
-        'POST /api/occurrences': makeOccurrence({ _id: 'new1', taskId: 't1', origin: 'adhoc', recordedDone: true }),
+        '/api/v2/occurrences': page([PLANNED]),
+        'POST /api/v2/occurrences': makeOccurrenceV2({ id: 'new1', taskId: 't1', origin: 'adhoc', recordedDone: true }),
       });
       await chooseStofzuigen();
       fireEvent.click(await screen.findByRole('radio', { name: 'Toch een extra keer registreren' }));
@@ -369,12 +392,12 @@ describe('RecordWorkDialog', () => {
       fireEvent.click(submit());
       await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
       expect(onRecorded.mock.calls[0]![1]).toBe('recorded');
-      expect(posts(fetchMock, '/api/occurrences')).toHaveLength(1);
-      expect(fetchMock.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === 'PATCH')).toEqual([]);
+      expect(posts(fetchMock, '/api/v2/occurrences')).toHaveLength(1);
+      expect(fetchMock.mock.calls.filter(([u]) => /\/complete$/.test(String(u)))).toEqual([]);
     });
 
     it('does not mention it for a task that is not planned today or only planned later', async () => {
-      setup({ '/api/occurrences': [{ ...PLANNED, date: '2026-09-17' }, { ...PLANNED, _id: 'o-done', status: 'done' }] });
+      setup({ '/api/v2/occurrences': page([{ ...PLANNED, date: '2026-09-17' }, { ...PLANNED, id: 'o-done', status: 'done' }]) });
       await chooseStofzuigen();
       expect(screen.queryByRole('group', { name: /staat vandaag nog open/ })).not.toBeInTheDocument();
       expect(submit()).toBeInTheDocument();
@@ -392,15 +415,12 @@ describe('RecordWorkDialog', () => {
     }
     /** Lets the server answer the planning request with an error status. */
     function refusePlanning(fetchMock: ReturnType<typeof mockApi>, code: string, status: number) {
-      const inner = fetchMock.getMockImplementation()!;
-      vi.stubGlobal(
-        'fetch',
-        vi.fn(async (input: RequestInfo | URL, init?: RequestInit) =>
-          String(input) === '/api/occurrences' && init?.method === 'POST'
-            ? new Response(JSON.stringify({ code, message: 'refused' }), { status })
-            : inner(input, init),
-        ),
-      );
+      vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+        const described = await describeRequest(input, init);
+        return described.url === '/api/v2/occurrences' && described.init?.method === 'POST'
+          ? problem(status, code, 'refused')
+          : fetchMock(described.url, described.init);
+      });
     }
 
     it('offers the mode as a radio group with a legend, defaults to already done, and swaps the person and date fields', async () => {
@@ -434,7 +454,7 @@ describe('RecordWorkDialog', () => {
 
     it('plans an extra execution for another person on a later day as an open occurrence', async () => {
       const { fetchMock, onRecorded, onOpenChange } = setup({
-        'POST /api/occurrences': makeOccurrence({ _id: 'new1', taskId: 't1', origin: 'adhoc', date: '2026-09-18', assigneeId: BRAM._id }),
+        'POST /api/v2/occurrences': makeOccurrenceV2({ id: 'new1', taskId: 't1', origin: 'adhoc', date: '2026-09-18', assigneeId: BRAM._id }),
       });
       await chooseTask('t1');
       planMode();
@@ -443,7 +463,7 @@ describe('RecordWorkDialog', () => {
       fireEvent.click(planSubmit());
 
       await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
-      expect(posts(fetchMock, '/api/occurrences')).toEqual([
+      expect(posts(fetchMock, '/api/v2/occurrences')).toEqual([
         { taskId: 't1', date: '2026-09-18', assigneeId: BRAM._id, requestId: expect.stringMatching(KEY) },
       ]);
       expect(onRecorded.mock.calls[0]![1]).toBe('planned');
@@ -452,7 +472,7 @@ describe('RecordWorkDialog', () => {
 
     it('plans a one-off task for anyone', async () => {
       const { fetchMock, onRecorded } = setup({
-        'POST /api/occurrences/one-off': makeOccurrence({ _id: 'new2', taskId: null, origin: 'adhoc', date: '2026-09-20', assigneeId: null }),
+        'POST /api/v2/occurrences/one-off': makeOccurrenceV2({ id: 'new2', taskId: null, origin: 'adhoc', date: '2026-09-20', assigneeId: null }),
       });
       await screen.findByLabelText('Taak');
       choose(oneOffChoice);
@@ -465,15 +485,15 @@ describe('RecordWorkDialog', () => {
       fireEvent.click(planSubmit());
 
       await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
-      expect(posts(fetchMock, '/api/occurrences/one-off')).toEqual([
+      expect(posts(fetchMock, '/api/v2/occurrences/one-off')).toEqual([
         { name: 'Zolder opruimen', roomId: 'r1', durationMinutes: 90, date: '2026-09-20', assigneeId: null, requestId: expect.stringMatching(KEY) },
       ]);
-      expect(posts(fetchMock, '/api/occurrences')).toEqual([]);
+      expect(posts(fetchMock, '/api/v2/occurrences')).toEqual([]);
     });
 
     it('plans a one-off task with the chosen points', async () => {
       const { fetchMock, onRecorded } = setup({
-        'POST /api/occurrences/one-off': makeOccurrence({ _id: 'new2', taskId: null, origin: 'adhoc', date: '2026-09-20', assigneeId: null }),
+        'POST /api/v2/occurrences/one-off': makeOccurrenceV2({ id: 'new2', taskId: null, origin: 'adhoc', date: '2026-09-20', assigneeId: null }),
       });
       await screen.findByLabelText('Taak');
       choose(oneOffChoice);
@@ -481,13 +501,13 @@ describe('RecordWorkDialog', () => {
       planMode();
       fireEvent.change(screen.getByLabelText('Naam van de klus'), { target: { value: 'Zolder opruimen' } });
       fireEvent.change(screen.getByLabelText('Duur (minuten)'), { target: { value: '90' } });
-      expect(screen.getByLabelText('Punten')).toHaveValue(90);
+      expect(screen.getByLabelText('Punten')).toHaveValue(null);
       fireEvent.change(screen.getByLabelText('Punten'), { target: { value: '45' } });
       fireEvent.change(dateField(), { target: { value: '2026-09-20' } });
       fireEvent.click(planSubmit());
 
       await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
-      expect(posts(fetchMock, '/api/occurrences/one-off')).toEqual([
+      expect(posts(fetchMock, '/api/v2/occurrences/one-off')).toEqual([
         expect.objectContaining({ name: 'Zolder opruimen', durationMinutes: 90, points: 45, date: '2026-09-20', assigneeId: null }),
       ]);
     });
@@ -542,23 +562,23 @@ describe('RecordWorkDialog', () => {
     });
 
     it('a double click creates one planned record', async () => {
-      const reply = deferred<OccurrenceView>();
-      const { fetchMock, onRecorded } = setup({ 'POST /api/occurrences': () => reply.promise });
+      const reply = deferred<Occurrence>();
+      const { fetchMock, onRecorded } = setup({ 'POST /api/v2/occurrences': () => reply.promise });
       await chooseTask('t2');
       planMode();
       const button = planSubmit();
       fireEvent.click(button);
       fireEvent.click(button);
       expect(await screen.findByRole('button', { name: 'Bezig met inplannen…' })).toBeDisabled();
-      expect(posts(fetchMock, '/api/occurrences')).toHaveLength(1);
-      reply.resolve(makeOccurrence({ _id: 'new1', taskId: 't2', origin: 'adhoc' }));
+      expect(posts(fetchMock, '/api/v2/occurrences')).toHaveLength(1);
+      reply.resolve(makeOccurrenceV2({ id: 'new1', taskId: 't2', origin: 'adhoc' }));
       await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
-      expect(posts(fetchMock, '/api/occurrences')).toHaveLength(1);
+      expect(posts(fetchMock, '/api/v2/occurrences')).toHaveLength(1);
     });
 
     it('only mentions a task that is still planned today when recording as done', async () => {
-      const PLANNED = makeOccurrence({ _id: 'o-planned', taskId: 't1', taskNameSnapshot: 'Stofzuigen', date: TODAY, assigneeId: ANNA._id });
-      setup({ '/api/occurrences': [PLANNED] });
+      const PLANNED = makeOccurrenceV2({ id: 'o-planned', taskId: 't1', taskNameSnapshot: 'Stofzuigen', date: TODAY, assigneeId: ANNA._id });
+      setup({ '/api/v2/occurrences': page([PLANNED]) });
       await chooseTask('t1');
       expect(await screen.findByRole('group', { name: /staat vandaag nog open/ })).toBeInTheDocument();
       planMode();

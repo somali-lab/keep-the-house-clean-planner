@@ -21,7 +21,7 @@ import { format, t } from '../../i18n/nl.ts';
 import { getLocale } from '../../i18n/runtime.ts';
 import { useProfile } from '../../identity/index.ts';
 import { usePersistedFilter } from '../../hooks/usePersistedFilter.ts';
-import { addDaysKey, dayKeyInZone } from '../today/todayModel.ts';
+import { addDays, dayKeyInZone } from '@/lib/dayKey';
 import { useCompletionRecords, useDeleteCompletion, useEditCompletion } from './api.ts';
 
 interface EditState {
@@ -44,7 +44,7 @@ export function CompletionManagementPage({ now }: { now?: Date }) {
   const timezone = settings.data?.timezone ?? 'Europe/Amsterdam';
   const today = dayKeyInZone(now ?? new Date(), timezone);
   const { profile } = useProfile();
-  const defaultFrom = addDaysKey(today, -90);
+  const defaultFrom = addDays(today, -90);
   const [from, setFrom, resetFrom] = usePersistedFilter('completions.from', profile?._id ?? null, defaultFrom);
   const [to, setTo, resetTo] = usePersistedFilter('completions.to', profile?._id ?? null, today);
   useFilterReset(() => { resetFrom(); resetTo(); }, from !== defaultFrom || to !== today);

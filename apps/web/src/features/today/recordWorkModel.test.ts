@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { buildRecordWork, defaultPointsText, pointsFieldValue, type RecordWorkForm } from './recordWorkModel.ts';
+import { buildRecordWork, type PointsLimits, type RecordWorkForm } from './recordWorkModel.ts';
 
 const TODAY = '2026-09-16';
+const LIMITS: PointsLimits = { minPoints: 0, maxPoints: 1000 };
 const FORM: RecordWorkForm = {
   kind: 'extra',
   mode: 'done',
@@ -9,7 +10,7 @@ const FORM: RecordWorkForm = {
   name: '',
   roomId: '',
   duration: '',
-  points: null,
+  points: '',
   doneBy: 'u1',
   date: TODAY,
   planFor: '',
@@ -48,18 +49,8 @@ describe('buildRecordWork', () => {
   describe('points of a one-off task', () => {
     const ONE_OFF: RecordWorkForm = { ...FORM, kind: 'oneOff', taskId: '', name: 'Kast', duration: '25' };
 
-    it('shows the default for the duration until the field is edited by hand', () => {
-      expect(defaultPointsText('25')).toBe('25');
-      expect(defaultPointsText('1500')).toBe('1000');
-      expect(defaultPointsText('')).toBe('');
-      expect(defaultPointsText('0')).toBe('');
-      expect(pointsFieldValue({ points: null, duration: '40' })).toBe('40');
-      expect(pointsFieldValue({ points: '5', duration: '40' })).toBe('5');
-      expect(pointsFieldValue({ points: '', duration: '40' })).toBe('');
-    });
-
-    it('omits the points while they were not edited, or cleared, so the server applies the default', () => {
-      for (const points of [null, '', '  ']) {
+    it('omits the points while the field is empty, so the server applies the default for the duration', () => {
+      for (const points of ['', '  ']) {
         const result = buildRecordWork({ ...ONE_OFF, points }, TODAY);
         expect(result.ok && 'points' in result.body).toBe(false);
       }
@@ -79,10 +70,19 @@ describe('buildRecordWork', () => {
       }
     });
 
-    it('rejects points that are not a whole number from 0 to 1000', () => {
+    it('rejects points that are not a whole number within the limits of the server', () => {
       for (const points of ['-1', '1001', '2.5', 'abc']) {
-        expect(buildRecordWork({ ...ONE_OFF, points }, TODAY)).toEqual({ ok: false, errors: { points: 'recordWork.error.points' } });
+        expect(buildRecordWork({ ...ONE_OFF, points }, TODAY, LIMITS)).toEqual({ ok: false, errors: { points: 'recordWork.error.points' } });
       }
+      expect(buildRecordWork({ ...ONE_OFF, points: '60' }, TODAY, { minPoints: 0, maxPoints: 50 })).toEqual({
+        ok: false,
+        errors: { points: 'recordWork.error.points' },
+      });
+    });
+
+    it('leaves the range to the server while the limits are not known yet', () => {
+      expect(buildRecordWork({ ...ONE_OFF, points: '5000' }, TODAY)).toMatchObject({ ok: true, body: { points: 5000 } });
+      expect(buildRecordWork({ ...ONE_OFF, points: 'abc' }, TODAY)).toEqual({ ok: false, errors: { points: 'recordWork.error.points' } });
     });
 
     it('ignores the points of an extra execution', () => {

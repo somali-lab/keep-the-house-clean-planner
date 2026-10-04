@@ -10,6 +10,7 @@ import { render } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { MemoryRouter } from 'react-router';
 import { FilterResetButton, FilterResetProvider } from '@/components/FilterReset';
+import type { Occurrence } from '../api/index.ts';
 import { ProfileProvider } from '../identity/index.ts';
 import { testQueryClient } from './fixtures.ts';
 
@@ -55,6 +56,39 @@ export function makeOccurrence(overrides: Partial<OccurrenceView> & Pick<Occurre
     updatedAt: STAMP,
     isOverdue: false,
     movedFrom: null,
+    ...overrides,
+  };
+}
+
+/** An occurrence as `GET /api/v2/occurrences` returns it (field `id`, with the cycle position the server computes). */
+export function makeOccurrenceV2(overrides: Partial<Occurrence> & Pick<Occurrence, 'id'>): Occurrence {
+  const date = overrides.date ?? '2026-09-16';
+  return {
+    taskId: 't1',
+    cycleId: 'c00000000000000000000001',
+    planId: null,
+    date,
+    plannedDate: overrides.plannedDate ?? date,
+    assigneeId: null,
+    status: 'open',
+    statusBeforeCompletion: null,
+    completedAt: null,
+    completedBy: null,
+    skipReason: null,
+    durationMinutesSnapshot: 15,
+    taskNameSnapshot: 'Taak',
+    roomIdSnapshot: null,
+    roomNameSnapshot: null,
+    origin: 'generated',
+    recordedDone: false,
+    pointsSnapshot: null,
+    pointsOverride: null,
+    createdAt: STAMP,
+    updatedAt: STAMP,
+    isOverdue: false,
+    movedFrom: null,
+    cycleIndex: date >= '2026-09-14' ? 0 : -1,
+    weekIndex: 0,
     ...overrides,
   };
 }

@@ -16,6 +16,7 @@ export default defineConfig([
     '**/playwright-report/**',
     '**/test-results/**',
     'backups/**',
+    'apps/web/src/api/v2/schema.d.ts',
   ]),
   js.configs.recommended,
   tseslint.configs.recommended,

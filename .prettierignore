@@ -7,3 +7,4 @@ test-results
 backups
 package-lock.json
 docs/*.md
+apps/web/src/api/v2/schema.d.ts
