@@ -37,7 +37,7 @@ const sent = (fetchMock: ReturnType<typeof mockApi>, method: string) =>
 describe('CompletionManagementPage', () => {
   it('lists the done occurrences of the range from the v2 list and shows who did what when', async () => {
     storeProfile(ANNA.id);
-    const fetchMock = mockApi({ '/api/v2/users': page([ANNA, BRAM]), '/api/v2/settings': makeSettings(), '/api/v2/occurrences': page(makeRecords().reverse()) });
+    const fetchMock = mockApi({ '/api/v2/users': page([ANNA, BRAM]), '/api/v2/settings': makeSettings(), '/api/v2/occurrences': page(makeRecords()) });
     renderWithProviders(<CompletionManagementPage now={new Date('2026-09-27T12:00:00.000Z')} />, { headerReset: true });
 
     const row = (await screen.findByText('Kattenmandjes')).closest('li')!;
@@ -46,8 +46,8 @@ describe('CompletionManagementPage', () => {
     expect(row).toHaveTextContent('27 september 2026');
     const list = fetchMock.mock.calls.map(([url]) => String(url)).find((url) => url.startsWith('/api/v2/occurrences'))!;
     const query = new URL(list, 'http://localhost').searchParams;
-    expect(Object.fromEntries(query)).toEqual({ from: '2026-08-30', to: '2026-09-27', status: 'done', limit: '100' });
-    // The server lists by day, oldest first; the page shows the newest completion first.
+    expect(Object.fromEntries(query)).toEqual({ from: '2026-08-30', to: '2026-09-27', status: 'done', limit: '100', order: 'desc' });
+    // The server answers newest day first (order=desc) and the page shows the rows as received.
     expect(screen.getAllByRole('listitem').map((li) => li.querySelector('p')?.textContent)).toEqual(['Kattenmandjes', 'Badkamer']);
   });
 
@@ -66,15 +66,17 @@ describe('CompletionManagementPage', () => {
     renderWithProviders(<CompletionManagementPage now={new Date('2026-09-27T12:00:00.000Z')} />);
     expect(await screen.findByText('Kattenmandjes')).toBeInTheDocument();
     expect(screen.queryByText('Badkamer')).not.toBeInTheDocument();
-    expect(occurrenceUrls(fetchMock)).toEqual(['/api/v2/occurrences?from=2026-08-30&to=2026-09-27&status=done&limit=100']);
+    expect(occurrenceUrls(fetchMock)).toEqual(['/api/v2/occurrences?from=2026-08-30&to=2026-09-27&status=done&limit=100&order=desc']);
     expect(screen.getByText('1 getoond')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Meer laden' }));
     expect(await screen.findByText('Badkamer')).toBeInTheDocument();
     expect(occurrenceUrls(fetchMock)).toEqual([
-      '/api/v2/occurrences?from=2026-08-30&to=2026-09-27&status=done&limit=100',
-      '/api/v2/occurrences?from=2026-08-30&to=2026-09-27&status=done&limit=100&cursor=more',
+      '/api/v2/occurrences?from=2026-08-30&to=2026-09-27&status=done&limit=100&order=desc',
+      '/api/v2/occurrences?from=2026-08-30&to=2026-09-27&status=done&limit=100&order=desc&cursor=more',
     ]);
+    // Load more appends older rows at the bottom.
+    expect(screen.getAllByRole('listitem').map((li) => li.querySelector('p')?.textContent)).toEqual(['Kattenmandjes', 'Badkamer']);
     expect(screen.queryByRole('button', { name: 'Meer laden' })).not.toBeInTheDocument();
     expect(screen.getByText('Alles geladen (2)')).toBeInTheDocument();
     // The status is announced politely.
@@ -98,7 +100,7 @@ describe('CompletionManagementPage', () => {
     fireEvent.change(screen.getByLabelText('Vanaf'), { target: { value: '2026-09-01' } });
     await waitFor(() => expect(screen.queryByText('Badkamer')).not.toBeInTheDocument());
     expect(await screen.findByText('Kattenmandjes')).toBeInTheDocument();
-    expect(occurrenceUrls(fetchMock).at(-1)).toBe('/api/v2/occurrences?from=2026-09-01&to=2026-09-27&status=done&limit=100');
+    expect(occurrenceUrls(fetchMock).at(-1)).toBe('/api/v2/occurrences?from=2026-09-01&to=2026-09-27&status=done&limit=100&order=desc');
     expect(screen.getByRole('button', { name: 'Meer laden' })).toBeInTheDocument();
   });
 
@@ -129,7 +131,7 @@ describe('CompletionManagementPage', () => {
     await waitFor(() => expect(screen.queryByText('Kattenmandjes')).not.toBeInTheDocument());
     expect(screen.getByText('Badkamer')).toBeInTheDocument();
     expect(screen.getByText('Alles geladen (1)')).toBeInTheDocument();
-    expect(occurrenceUrls(fetchMock).at(-1)).toBe('/api/v2/occurrences?from=2026-08-30&to=2026-09-27&status=done&limit=100');
+    expect(occurrenceUrls(fetchMock).at(-1)).toBe('/api/v2/occurrences?from=2026-08-30&to=2026-09-27&status=done&limit=100&order=desc');
   });
 
   it('edits through the completion endpoint and permanently deletes after confirmation, both without If-Match', async () => {

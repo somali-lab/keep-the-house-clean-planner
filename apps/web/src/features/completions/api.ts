@@ -11,7 +11,7 @@ export interface CompletionEdit {
 /** One page of done occurrences: the list can grow for years, so it is loaded page by page (a Load more button). */
 export const COMPLETIONS_PAGE_SIZE = 100;
 
-/** The done occurrences of the days from `from` to `to`, oldest day first, one page at a time. */
+/** The done occurrences of the days from `from` to `to`, newest day first (`order=desc`, kept on every page), one page at a time. */
 export function useCompletionRecords(from: string, to: string) {
   return useInfiniteQuery({
     queryKey: ['occurrences', 'completed', from, to],
@@ -19,7 +19,7 @@ export function useCompletionRecords(from: string, to: string) {
     queryFn: async ({ pageParam }) => {
       const { data } = await unwrap(
         apiV2.GET('/api/v2/occurrences', {
-          params: { query: { from, to, status: 'done', limit: String(COMPLETIONS_PAGE_SIZE), ...(pageParam ? { cursor: pageParam } : {}) } },
+          params: { query: { from, to, status: 'done', limit: String(COMPLETIONS_PAGE_SIZE), order: 'desc', ...(pageParam ? { cursor: pageParam } : {}) } },
         }),
       );
       return { items: data.items.map(toOccurrence), nextCursor: data.nextCursor };

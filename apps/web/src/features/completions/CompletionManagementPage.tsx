@@ -59,7 +59,7 @@ export function CompletionManagementPage({ now }: { now?: Date }) {
   const [remove, setRemove] = useState<Occurrence | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  const records = useMemo(() => (completions.data?.pages.flatMap((loaded) => loaded.items) ?? []).reverse(), [completions.data]);
+  const records = useMemo(() => completions.data?.pages.flatMap((loaded) => loaded.items) ?? [], [completions.data]);
   const userNames = useMemo(() => new Map((users.data ?? []).map((user) => [user.id, user.name])), [users.data]);
   const dayFormatter = new Intl.DateTimeFormat(getLocale(), { dateStyle: 'long', timeZone: 'UTC' });
   const dateTimeFormatter = new Intl.DateTimeFormat(getLocale(), {
