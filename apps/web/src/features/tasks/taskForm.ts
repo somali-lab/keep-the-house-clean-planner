@@ -68,10 +68,8 @@ export function validateTaskForm(
   if (!duration) errors.durationMinutes = 'tasks.error.durationRequired';
   else if (!/^\d+$/.test(duration) || Number(duration) < 1) errors.durationMinutes = 'tasks.error.durationInvalid';
   const points = values.points.trim();
-  if (points === '') {
-    // Only a new task can leave the points to the server's default; an update cannot ask for it.
-    if (options.mode === 'edit') errors.points = 'tasks.error.pointsRequired';
-  } else {
+  // An empty field leaves the points to the default of the server, also on an edit (it sends null then).
+  if (points !== '') {
     const { limits } = options;
     const outOfRange = limits !== undefined && (Number(points) < limits.minPoints || Number(points) > limits.maxPoints);
     if (!/^\d+$/.test(points) || outOfRange) errors.points = 'tasks.error.pointsInvalid';
@@ -85,7 +83,8 @@ export interface TaskBody {
   roomId: string;
   intervalKey: string;
   durationMinutes: number;
-  points?: number;
+  /** Omitted on create when empty; `null` on an edit that empties the field: the points go back to the default for the duration. */
+  points?: number | null;
   /** An explicit null means "anyone"; the API documents it. */
   defaultAssigneeId: string | null;
   notes: string;
@@ -93,18 +92,19 @@ export interface TaskBody {
 }
 
 /**
- * The request body. An empty points field is left out of the body: a new task then gets the default for its
- * duration from the server (ADR-0011), and the form does not let an update go out without points. Optional
- * fields are omitted, never sent as null: the server refuses an explicit null for them.
+ * The request body. An empty points field is left out of the body of a new task, which then gets the default for its
+ * duration from the server (ADR-0011); an edit that empties it sends an explicit `points: null`, the one place where the
+ * API documents null as meaningful (the points go back to the default for the duration). Other optional fields are
+ * omitted, never sent as null: the server refuses an explicit null for them.
  */
-export function toTaskInput(values: TaskFormValues): TaskBody {
+export function toTaskInput(values: TaskFormValues, mode: 'create' | 'edit' = 'create'): TaskBody {
   const points = values.points.trim();
   return {
     name: values.name.trim(),
     roomId: values.roomId,
     intervalKey: values.intervalKey,
     durationMinutes: Number(values.durationMinutes.trim()),
-    ...(points === '' ? {} : { points: Number(points) }),
+    ...(points === '' ? (mode === 'edit' ? { points: null } : {}) : { points: Number(points) }),
     defaultAssigneeId: values.defaultAssigneeId || null,
     notes: values.notes,
     tags: values.tags

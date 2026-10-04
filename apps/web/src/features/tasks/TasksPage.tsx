@@ -230,7 +230,7 @@ export function TasksPage() {
   const submit = (values: TaskFormValues) => {
     saveTask.mutate({
       task: editing?.mode === 'edit' ? editing.task : undefined,
-      input: toTaskInput(values),
+      input: toTaskInput(values, editing?.mode === 'edit' ? 'edit' : 'create'),
     });
   };
 

@@ -192,16 +192,27 @@ describe('TasksPage — form validation', () => {
     );
   });
 
-  it('refuses to save an existing task with an empty points field instead of sending nothing', async () => {
-    const fetchMock = setup({ 'PATCH /api/v2/tasks/t3': makeTaskV2({ id: 't3', name: 'Douche', roomId: 'r2' }) });
+  it('hands the points of an existing task back to the duration: an emptied field sends an explicit null', async () => {
+    const fetchMock = setup({ 'PATCH /api/v2/tasks/t3': makeTaskV2({ id: 't3', name: 'Douche', roomId: 'r2', durationMinutes: 30, points: 30, version: 6 }) });
     renderWithProviders(<TasksPage />);
     await expandAllRooms();
     fireEvent.click(await screen.findByRole('button', { name: 'Douche bewerken' }));
     const form = screen.getByRole('form', { name: 'Douche bewerken' });
     fireEvent.change(within(form).getByLabelText('Punten'), { target: { value: '' } });
     fireEvent.click(within(form).getByRole('button', { name: 'Opslaan' }));
-    expect(await within(form).findByRole('alert')).toHaveTextContent('Vul de punten in.');
-    expect(fetchMock.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === 'PATCH')).toBe(false);
+    await waitFor(() =>
+      expect(bodyOf(fetchMock, 'PATCH', '/api/v2/tasks/t3')).toEqual({
+        name: 'Douche',
+        roomId: 'r2',
+        intervalKey: '2wk',
+        durationMinutes: 30,
+        points: null,
+        defaultAssigneeId: null,
+        notes: '',
+        tags: [],
+      }),
+    );
+    expect(headerOf(fetchMock, 'PATCH', '/api/v2/tasks/t3', 'if-match')).toBe('"5"');
   });
 
   it('sends the points typed for a new task and leaves the field out otherwise, so the server computes the default', async () => {
