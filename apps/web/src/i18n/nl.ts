@@ -170,6 +170,7 @@ export const nl = {
   'tasks.deleteConfirmBody':
     'De taak verdwijnt ook uit alle plannen. Bestaande geschiedenis blijft bewaard.',
   'tasks.deleteError': 'De taak kon niet worden verwijderd.',
+  'tasks.gone': 'Deze taak bestaat niet meer.',
   'tasks.bulk.label': 'Acties voor alle taken in {room}',
   'tasks.bulk.deactivate': 'Alle taken deactiveren',
   'tasks.bulk.confirmDeactivate':
