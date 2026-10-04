@@ -11,7 +11,7 @@ test('a task added to the active planner appears in week overview and mobile tas
   await generateCycles(app, anna);
 
   await openAs(page, app, anna, '/manage/planner');
-  await mouseDrag(page, page.getByTestId(`pool-${task._id}`), page.getByTestId(`cell:0:4:${anna._id}`));
+  await mouseDrag(page, page.getByTestId(`pool-${task.id}`), page.getByTestId(`cell:0:4:${anna.id}`));
   await expect(page.getByText('Opgeslagen', { exact: true })).toBeVisible();
 
   await page.goto(`${app.baseURL}/`);

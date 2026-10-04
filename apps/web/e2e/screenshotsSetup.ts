@@ -4,8 +4,8 @@ import globalSetup from './globalSetup.ts';
 
 /**
  * Builds the web app as a release build first, so the version badge in the
- * published screenshots carries no local build timestamp, then starts the
- * MongoDB the capture run needs.
+ * published screenshots carries no local build timestamp, then publishes the
+ * .NET host and starts the MongoDB the capture run needs.
  */
 export default async function screenshotsSetup() {
   const build = spawnSync('npm', ['run', 'build'], {

@@ -7,9 +7,9 @@ const WEEK = 'from=2026-09-14&to=2026-09-20';
 async function pointsOf(app: AppServer, person: ApiUser): Promise<number | undefined> {
   const { balances } = await app.api<{ balances: { personId: string; points: number }[] }>(
     'GET',
-    `/api/points/balances?${WEEK}`,
+    `/api/v2/points/balances?${WEEK}`,
   );
-  return balances.find((balance) => balance.personId === person._id)?.points;
+  return balances.find((balance) => balance.personId === person.id)?.points;
 }
 
 test('points follow the person who did the work: on behalf, undo and take over', async ({ page, app }) => {

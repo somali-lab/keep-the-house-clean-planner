@@ -12,7 +12,7 @@ const NOW = new Date('2026-09-16T08:00:00Z');
 const TODAY = '2026-09-16';
 const PENDING_ONE = '1 wijziging is offline bewaard en wordt verstuurd zodra er weer verbinding is.';
 
-type Mode = 'online' | 'offline' | 'conflict' | 'down';
+type Mode = 'online' | 'offline' | 'conflict' | 'down' | 'busy' | 'refused' | 'applied';
 
 let db: Occurrence[];
 let mode: Mode;
@@ -31,6 +31,11 @@ function stubServer() {
 
     if (method === 'GET') {
       const path = url.split('?')[0]!;
+      const one = /^\/api\/v2\/occurrences\/([^/]+)$/.exec(path);
+      if (one) {
+        const found = db.find((o) => o.id === one[1]);
+        return found ? json(found) : problem(404, 'not_found');
+      }
       const routes: Record<string, unknown> = {
         '/api/v2/users': page([ANNA, BRAM]),
         '/api/v2/settings': makeSettings(),
@@ -43,6 +48,9 @@ function stubServer() {
 
     if (mode === 'conflict') return problem(404, 'not_found');
     if (mode === 'down') return problem(500, 'internal_error');
+    if (mode === 'busy') return problem(429, 'rate_limited');
+    if (mode === 'refused') return problem(400, 'validation_error');
+    if (mode === 'applied') return problem(409, 'invalid_transition');
     const match = /^\/api\/v2\/occurrences\/([^/]+)\/(complete|uncomplete|skip)$/.exec(url);
     if (method === 'POST' && match) {
       const current = db.find((o) => o.id === match[1])!;
@@ -146,6 +154,94 @@ describe('offline check-off', () => {
     await waitFor(async () => expect(await patchCalls(fetchMock)).toHaveLength(1));
     expect(await screen.findByText(PENDING_ONE)).toBeInTheDocument();
     expect(await store.all()).toHaveLength(1);
+  });
+
+  it('keeps a queued change that got a transient 4xx answer (429) and sends it again', async () => {
+    await store.add(queuedBadkamer());
+    mode = 'busy';
+    const fetchMock = stubServer();
+    renderToday();
+
+    await waitFor(async () => expect(await patchCalls(fetchMock)).toHaveLength(1));
+    expect(await screen.findByText(PENDING_ONE)).toBeInTheDocument();
+    expect(screen.queryByText(/kon niet worden bijgewerkt/)).not.toBeInTheDocument();
+    expect(await store.all()).toHaveLength(1);
+
+    mode = 'online';
+    await act(async () => {
+      window.dispatchEvent(new Event('online'));
+    });
+    await waitFor(() => expect(db.find((o) => o.id === 'o-mine')?.status).toBe('done'));
+    expect(await store.all()).toEqual([]);
+  });
+
+  it.each([
+    ['a refused request (400)', 'refused'],
+    ['an occurrence that is gone (404)', 'conflict'],
+  ] as const)('drops a change after %s once and tells the person, without trying again', async (_label, answer) => {
+    await store.add(queuedBadkamer());
+    mode = answer;
+    const fetchMock = stubServer();
+    renderToday();
+
+    expect(await screen.findByText(/"Badkamer" kon niet worden bijgewerkt/)).toBeInTheDocument();
+    expect(await store.all()).toEqual([]);
+    await act(async () => {
+      window.dispatchEvent(new Event('online'));
+    });
+    expect(await patchCalls(fetchMock)).toHaveLength(1);
+  });
+
+  it('treats a replay that finds the occurrence already in the wanted state as done, without a conflict', async () => {
+    // The first request reached the server but its answer was lost: the occurrence is done already.
+    db = db.map((o) => (o.id === 'o-mine' ? { ...o, status: 'done' as const, completedBy: ANNA.id } : o));
+    await store.add(queuedBadkamer());
+    mode = 'applied';
+    const fetchMock = stubServer();
+    renderToday();
+
+    await waitFor(async () => expect(await store.all()).toEqual([]));
+    expect(await patchCalls(fetchMock)).toHaveLength(1);
+    expect(screen.queryByText(/kon niet worden bijgewerkt/)).not.toBeInTheDocument();
+  });
+
+  it('reports a replay as a conflict when someone else completed the occurrence meanwhile', async () => {
+    db = db.map((o) => (o.id === 'o-mine' ? { ...o, status: 'done' as const, completedBy: BRAM.id } : o));
+    await store.add(queuedBadkamer());
+    mode = 'applied';
+    stubServer();
+    renderToday();
+
+    expect(await screen.findByText(/"Badkamer" kon niet worden bijgewerkt/)).toBeInTheDocument();
+    expect(await store.all()).toEqual([]);
+  });
+
+  it('reads the occurrence fresh for that check, past the service worker cache', async () => {
+    db = db.map((o) => (o.id === 'o-mine' ? { ...o, status: 'done' as const, completedBy: ANNA.id } : o));
+    await store.add(queuedBadkamer());
+    mode = 'applied';
+    const fetchMock = stubServer();
+    renderToday();
+
+    await waitFor(async () => expect(await store.all()).toEqual([]));
+    const checks = [];
+    for (const [input, init] of fetchMock.mock.calls) {
+      const described = await describeRequest(input, init);
+      if (described.url.endsWith('/api/v2/occurrences/o-mine') && (described.init?.method ?? 'GET') === 'GET') checks.push(init?.cache);
+    }
+    expect(checks).toEqual(['no-store']);
+  });
+
+  it('reports a replay that finds the occurrence in another state (409) as a conflict', async () => {
+    // The occurrence was skipped by someone else meanwhile, so a queued check-off no longer applies.
+    db = db.map((o) => (o.id === 'o-mine' ? { ...o, status: 'skipped' as const } : o));
+    await store.add(queuedBadkamer());
+    mode = 'applied';
+    stubServer();
+    renderToday();
+
+    expect(await screen.findByText(/"Badkamer" kon niet worden bijgewerkt/)).toBeInTheDocument();
+    expect(await store.all()).toEqual([]);
   });
 
   it('still needs a connection to claim, and rolls that back', async () => {

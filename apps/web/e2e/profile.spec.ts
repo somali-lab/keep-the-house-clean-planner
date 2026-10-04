@@ -16,5 +16,5 @@ test('first visit asks for a profile, the header shows it, and switching works',
   await expect(page.getByRole('button', { name: 'Wissel naar Bram' })).toHaveAttribute('aria-pressed', 'true');
 
   const bram = await app.user('Bram');
-  expect(await page.evaluate(() => window.localStorage.getItem('huishoudplanner.profileId'))).toBe(bram._id);
+  expect(await page.evaluate(() => window.localStorage.getItem('huishoudplanner.profileId'))).toBe(bram.id);
 });

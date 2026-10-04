@@ -1,9 +1,9 @@
-import { createTask, expect, generateCycles, openAs, planOn, test, TODAY } from './fixtures.ts';
+import { actOn, createTask, expect, generateCycles, occurrencesOn, openAs, planOn, test, TODAY } from './fixtures.ts';
 import type { ApiUser, AppServer } from './server.ts';
 
 /** The browser remembers the animation of a person, a period and its first day: Monday 14 September 2026 for the week. */
 const celebrated = (page: import('@playwright/test').Page, person: ApiUser) =>
-  page.evaluate((id) => window.localStorage.getItem(`khc.rewardCelebrated.${id}.week.2026-09-14`), person._id);
+  page.evaluate((id) => window.localStorage.getItem(`khc.rewardCelebrated.${id}.week.2026-09-14`), person.id);
 
 /** Anna has three tasks of 3 points today (3 minutes each); the goal she has without an explicit one is 9 points. */
 async function planThree(app: AppServer) {
@@ -19,7 +19,7 @@ async function planThree(app: AppServer) {
 /** The same, with an explicit goal of 6 points for the week. */
 async function setup(app: AppServer) {
   const anna = await planThree(app);
-  await app.api('PATCH', '/api/settings', { as: anna, body: { rewardGoals: { weekPoints: 6, cyclePoints: null } } });
+  await app.edit('/api/v2/settings', { rewardGoals: { weekPoints: 6, cyclePoints: null } }, { as: anna });
   return anna;
 }
 
@@ -38,7 +38,7 @@ test('an administrator sets a goal, completing tasks fills the meter, the celebr
   await card.getByLabel('Doel per week (punten)').fill('6');
   await card.getByRole('button', { name: 'Doelen opslaan' }).click();
   await expect(card.getByRole('status')).toHaveText('Opgeslagen.');
-  const settings = await app.api<{ rewardGoals: unknown }>('GET', '/api/settings');
+  const settings = await app.api<{ rewardGoals: unknown }>('GET', '/api/v2/settings');
   expect(settings.rewardGoals).toEqual({ weekPoints: 6, cyclePoints: null });
 
   // Completing the first task fills half of the meter: 3 of 6 points, five eggs and a progress bar at 50%.
@@ -87,8 +87,8 @@ test('an administrator sets a goal, completing tasks fills the meter, the celebr
 
 test('with reduced motion the meter plays no animation and says the goal was met as text', async ({ page, app }) => {
   const anna = await setup(app);
-  for (const occurrence of (await app.api<{ _id: string }[]>('GET', `/api/occurrences?from=${TODAY}&to=${TODAY}`)).slice(0, 2)) {
-    await app.api('PATCH', `/api/occurrences/${occurrence._id}`, { as: anna, body: { action: 'complete' } });
+  for (const occurrence of (await occurrencesOn(app, TODAY)).slice(0, 2)) {
+    await actOn(app, anna, occurrence, 'complete');
   }
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await openAs(page, app, anna, '/reward');
@@ -106,9 +106,9 @@ test('with reduced motion the meter plays no animation and says the goal was met
 
 test('the badges of the person are shown on the tab', async ({ page, app }) => {
   const anna = await setup(app);
-  await app.api('POST', '/api/badges', { as: anna, body: { name: 'Stofzuigkoning', rule: { type: 'executions', taskIds: [], threshold: 1 } } });
-  const occurrences = await app.api<{ _id: string }[]>('GET', `/api/occurrences?from=${TODAY}&to=${TODAY}`);
-  await app.api('PATCH', `/api/occurrences/${occurrences[0]!._id}`, { as: anna, body: { action: 'complete' } });
+  await app.api('POST', '/api/v2/badges', { as: anna, body: { name: 'Stofzuigkoning', rule: { type: 'executions', taskIds: [], threshold: 1 } } });
+  const occurrences = await occurrencesOn(app, TODAY);
+  await actOn(app, anna, occurrences[0]!, 'complete');
   await openAs(page, app, anna, '/reward');
   const badges = page.getByRole('region', { name: 'Mijn badges' });
   await expect(badges).toContainText('Stofzuigkoning');

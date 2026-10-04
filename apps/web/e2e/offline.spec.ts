@@ -20,5 +20,5 @@ test('check off while offline; the change reaches the server once back online (T
 
   await context.setOffline(false);
   await expect(banner).toBeHidden();
-  await expect.poll(async () => (await occurrencesOn(app, TODAY))[0]).toMatchObject({ status: 'done', completedBy: anna._id });
+  await expect.poll(async () => (await occurrencesOn(app, TODAY))[0]).toMatchObject({ status: 'done', completedBy: anna.id });
 });

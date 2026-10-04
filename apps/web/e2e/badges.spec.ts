@@ -1,4 +1,4 @@
-import { createTask, expect, generateCycles, openAs, planOn, test, TODAY } from './fixtures.ts';
+import { actOn, createTask, expect, generateCycles, occurrencesOn, openAs, planOn, test, TODAY } from './fixtures.ts';
 
 /** A real 1x1 PNG, so the browser can actually decode what the server serves. */
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
@@ -37,7 +37,7 @@ test('an administrator adds the example badges and sets the toilet badge to two 
   await expect(toiletRow).toContainText('2 uitvoeringen van Toilet schoonmaken');
   // The uploaded picture is served by the server and decodes in the browser; its alternative text is the name of the badge.
   const picture = toiletRow.getByRole('img', { name: 'Toiletjuffrouw' });
-  await expect(picture).toHaveAttribute('src', /^\/api\/badges\/[0-9a-f]{24}\/image\?v=[0-9a-f]{12}$/);
+  await expect(picture).toHaveAttribute('src', /^\/api\/v2\/badges\/[0-9a-f]{24}\/image\?v=[0-9a-f]{12}$/);
   await expect.poll(() => picture.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth)).toBe(1);
 
   // Bram has the task twice today and checks both off.
@@ -62,10 +62,10 @@ test('an administrator adds the example badges and sets the toilet badge to two 
   await expect(earned.getByRole('img', { name: 'Toiletjuffrouw' })).toBeVisible();
 
   // The server agrees, and the award is one entry of the audited history.
-  const { awards } = await app.api<{ awards: { personId: string; awardedAt: string }[] }>('GET', `/api/badges/awards?personId=${bram._id}`);
+  const awards = await app.list<{ personId: string; awardedAt: string }>(`/api/v2/badges/awards?personId=${bram.id}`);
   expect(awards).toHaveLength(1);
-  expect(awards[0]!.awardedAt).toBe(app.now);
-  expect((await app.api<{ awards: unknown[] }>('GET', `/api/badges/awards?personId=${anna._id}`)).awards).toEqual([]);
+  expect(new Date(awards[0]!.awardedAt).toISOString()).toBe(app.now);
+  expect(await app.list(`/api/v2/badges/awards?personId=${anna.id}`)).toEqual([]);
 
   // The Points tab shows the badges of the chosen person too.
   await openAs(page, app, bram, '/manage/statistics');
@@ -75,8 +75,8 @@ test('an administrator adds the example badges and sets the toilet badge to two 
   await expect(ofBram).toContainText('Behaald op 16 september 2026');
 
   // Undoing one check-off takes the badge away again: it follows the data.
-  const occurrences = await app.api<{ _id: string; taskId: string; status: string }[]>('GET', `/api/occurrences?from=${TODAY}&to=${TODAY}`);
-  const done = occurrences.find((o) => o.taskId === toilet._id && o.status === 'done')!;
-  await app.api('PATCH', `/api/occurrences/${done._id}`, { as: bram, body: { action: 'uncomplete' } });
-  expect((await app.api<{ awards: unknown[] }>('GET', `/api/badges/awards?personId=${bram._id}`)).awards).toEqual([]);
+  const occurrences = await occurrencesOn(app, TODAY);
+  const done = occurrences.find((o) => o.taskId === toilet.id && o.status === 'done')!;
+  await actOn(app, bram, done, 'uncomplete');
+  expect(await app.list(`/api/v2/badges/awards?personId=${bram.id}`)).toEqual([]);
 });
