@@ -315,6 +315,10 @@ public sealed class ActivationTests(MongoContainerFixture mongo)
         await a.H.PutSlotsAsync(second, (task, 0, 2, null));
         var tokenFirst = (await PreviewOkAsync(a.H, first)).GetProperty("previewToken").GetString();
         var tokenSecond = (await PreviewOkAsync(a.H, second)).GetProperty("previewToken").GetString();
+        var plans = a.H.Database.GetCollection<BsonDocument>("cyclePlans");
+        var previousBefore = await plans.VersionAsync(ObjectId.Parse(a.PlanId));
+        var firstBefore = await plans.VersionAsync(ObjectId.Parse(first));
+        var secondBefore = await plans.VersionAsync(ObjectId.Parse(second));
 
         // Different plans, so neither token covers the other plan's result: only the guard document makes the two activations conflict.
         var results = await Task.WhenAll(
@@ -327,6 +331,9 @@ public sealed class ActivationTests(MongoContainerFixture mongo)
         loser.Body.GetProperty("type").GetString().Should().Be("urn:huishoudplanner:problem:stale_activation_preview");
         var active = await a.H.Database.GetCollection<BsonDocument>("cyclePlans").Find(new BsonDocument("active", true)).ToListAsync(Ct);
         active.Should().ContainSingle();
+        var (winner, winnerBefore) = active[0]["_id"].AsObjectId.ToString() == first ? (first, firstBefore) : (second, secondBefore);
+        (await plans.VersionAsync(ObjectId.Parse(winner))).Should().BeGreaterThan(winnerBefore, "activating a plan changes it");
+        (await plans.VersionAsync(ObjectId.Parse(a.PlanId))).Should().BeGreaterThan(previousBefore, "deactivating the previously active plan changes it");
         (await a.H.AuditAsync("cyclePlan", "activate")).Should().ContainSingle();
         var guard = await a.H.Database.GetCollection<BsonDocument>("settings").Find(FilterDefinition<BsonDocument>.Empty).SingleAsync(Ct);
         guard["activationVersion"].ToInt32().Should().Be(1, "only the committed activation wrote the guard; the loser's write rolled back with its transaction");

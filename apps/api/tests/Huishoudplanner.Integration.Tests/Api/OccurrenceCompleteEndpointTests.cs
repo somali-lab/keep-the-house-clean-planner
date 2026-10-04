@@ -31,6 +31,7 @@ public sealed class OccurrenceCompleteEndpointTests(OccurrenceHarness h) : IClas
         // A moment later than any other test of this class uses, so the task's lastCompletedAt really changes whatever the test order is.
         h.Clock.Set("2026-09-16T09:00:00.000Z");
         var id = await h.IdOfAsync(h.Weekly, "2026-09-21");
+        var versionBefore = await h.Tasks.VersionAsync(ObjectId.Parse(h.Weekly));
 
         var response = await CompleteAs(h.P2, id, new { completedBy = h.P1.Id });
 
@@ -49,6 +50,7 @@ public sealed class OccurrenceCompleteEndpointTests(OccurrenceHarness h) : IClas
         meta["occurrence"]["roomNameSnapshot"].AsString.Should().Be("Badkamer");
         meta["occurrence"]["date"].IsValidDateTime.Should().BeTrue();
         (await h.LastCompletedAtAsync(h.Weekly)).ToUniversalTime().Should().Be(new DateTime(2026, 9, 16, 9, 0, 0, DateTimeKind.Utc));
+        (await h.Tasks.VersionAsync(ObjectId.Parse(h.Weekly))).Should().BeGreaterThan(versionBefore, "the completion changed the task, so a stale ETag of the task is refused afterwards");
         (await h.AuditOfAsync("task", h.Weekly, "update")).Should().Contain(e => e.Contains("meta") && e["meta"]["occurrenceId"] == Oid(id));
         h.Clock.Set(OccurrenceHarness.Wednesday);
     }

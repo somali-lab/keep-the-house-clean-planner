@@ -56,6 +56,7 @@ public sealed class PointsReconcileEndpointTests(MongoContainerFixture mongo)
         var orphanTask = await h.InsertDoneOccurrenceAsync("2026-09-14", missingTask, h.P1, duration: 25, name: "Oud");
         var oneOff = await h.InsertDoneOccurrenceAsync("2026-09-14", null, null, h.P2, duration: 95, name: "Zolder vegen");
 
+        var taskVersionBefore = await h.Tasks.VersionAsync(task);
         var result = await Recompute(h);
 
         (result.GetProperty("trigger").GetString(), Count(result, "tasksDefaulted"), Count(result, "snapshotsSet"), Count(result, "created")).Should().Be(("admin", 1, 5, 4));
@@ -76,6 +77,7 @@ public sealed class PointsReconcileEndpointTests(MongoContainerFixture mongo)
         (oneOffEntry["personId"], oneOffEntry["amount"].AsInt32, oneOffEntry["taskId"], oneOffEntry["titleSnapshot"].AsString).Should().Be((h.P2, 95, BsonNull.Value, "Zolder vegen"));
         (await h.StoredOccurrenceAsync(wednesday))["pointsSnapshot"].AsInt32.Should().Be(30);
         (await h.StoredTaskAsync(task))["points"].AsInt32.Should().Be(30);
+        (await h.Tasks.VersionAsync(task)).Should().BeGreaterThan(taskVersionBefore, "the backfill gave the task its default points");
 
         var summary = (await Summaries(h)).Should().ContainSingle().Subject;
         summary["entityId"].Should().Be(LedgerId);

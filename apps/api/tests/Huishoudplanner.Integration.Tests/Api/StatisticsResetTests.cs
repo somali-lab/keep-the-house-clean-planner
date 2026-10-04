@@ -54,6 +54,8 @@ public sealed class StatisticsResetTests(MongoContainerFixture mongo)
         await h.InsertPointEntryAsync("execution", w.Person, "2026-09-16", 15);
         await h.InsertPointEntryAsync("bonus_week_done", w.Person, "2026-09-20", 10);
         await h.InsertPointEntryAsync("redemption", w.Person, "2026-09-15", -5);
+        var taskVersionBefore = await h.Tasks.VersionAsync(ObjectId.Parse(w.Task));
+        var settingsVersionBefore = await h.Settings.VersionAsync(All);
         var before = (await Count(h.Users), await Count(h.Rooms), await Count(h.Tasks), await Count(h.Database.GetCollection<BsonDocument>("cyclePlans")));
 
         var (status, body) = await h.SendAsync(HttpMethod.Delete, "/api/v2/stats", h.Admin);
@@ -79,6 +81,8 @@ public sealed class StatisticsResetTests(MongoContainerFixture mongo)
         (await Count(h.PointEntries)).Should().Be(0);
         (await h.GetAsync("/api/v2/stats/completion?cycles=4&groupBy=task")).GetProperty("rows").GetArrayLength().Should().Be(0);
         (await h.Settings.Find(All).SingleAsync(Ct))["bonusFloor"].AsString.Should().Be("2026-09-16");
+        (await h.Tasks.VersionAsync(ObjectId.Parse(w.Task))).Should().BeGreaterThan(taskVersionBefore, "the reset cleared lastCompletedAt of the task");
+        (await h.Settings.VersionAsync(All)).Should().BeGreaterThan(settingsVersionBefore, "the reset moved the bonus floor of the settings");
     }
 
     [Fact]
