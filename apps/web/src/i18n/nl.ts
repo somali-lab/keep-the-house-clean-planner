@@ -1134,6 +1134,8 @@ export const nl = {
   'badges.error.imageSize': 'De afbeelding is groter dan 256 KB.',
   'badges.error.imageRead': 'De afbeelding kon niet worden gelezen.',
   'badges.error.save': 'De badge kon niet worden opgeslagen.',
+  'badges.error.limit': 'Er kunnen niet meer dan {limit} badges bestaan.',
+  'badges.error.limitUnknown': 'Er kunnen niet meer badges bestaan.',
   'badges.saved': 'Badge opgeslagen.',
   'badges.deleteConfirmTitle': '{name} verwijderen?',
   'badges.deleteConfirmBody': 'De badge verdwijnt voor iedereen, samen met de keren dat hij is behaald. Dit kan niet ongedaan worden gemaakt.',

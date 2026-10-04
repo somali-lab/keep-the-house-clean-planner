@@ -1,6 +1,5 @@
-import type { Badge, Task } from '@huishoudplanner/shared';
-import { BADGE_RULE_TYPES } from '@huishoudplanner/shared/badges';
 import { ImagePlus, Medal, Pencil, Plus, Save, Sparkles, Trash2, X } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useId, useMemo, useRef, useState, type FormEvent } from 'react';
 import { EmptyState } from '@/components/EmptyState';
 import { NativeSelect } from '@/components/NativeSelect';
@@ -10,12 +9,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
-import { ApiRequestError } from '../../api/index.ts';
-import { useTasks } from '../../api/queries.ts';
+import { ApiRequestError, isStaleEntity } from '../../api/index.ts';
+import { useLimits, useTasks, type Task } from '../../api/v2/queries.ts';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
 import { getLanguage } from '../../i18n/runtime.ts';
 import { checkboxClass, Field, FormActions, FormMessage, listRowClass } from '../settings/SettingsCard.tsx';
-import { useAddExampleBadges, useBadges, useDeleteBadge, useSaveBadge } from './api.ts';
+import { BADGE_RULE_TYPES, badgeKeys, useAddExampleBadges, useBadges, useDeleteBadge, useSaveBadge, type Badge } from './api.ts';
 import { BadgeImage } from './BadgeImage.tsx';
 import {
   buildBadgeSave,
@@ -26,6 +25,7 @@ import {
   ruleText,
   type BadgeForm,
   type BadgeFormErrors,
+  type BadgeLimits,
 } from './badgeModel.ts';
 
 const RULE_TYPE_LABEL = {
@@ -40,15 +40,30 @@ const THRESHOLD_LABEL = {
   onTimeWeeks: 'badges.threshold.onTimeWeeks',
 } as const satisfies Record<(typeof BADGE_RULE_TYPES)[number], MessageKey>;
 
-/** A server answer about the image or the tasks, in words of the person. */
-function saveError(error: unknown): MessageKey {
-  if (error instanceof ApiRequestError && error.code === 'validation_error' && Array.isArray(error.details)) {
-    for (const issue of error.details as { message?: string }[]) {
-      if (issue.message === 'image_too_large') return 'badges.error.imageSize';
-      if (issue.message === 'unsupported_image_type' || issue.message === 'image_type_mismatch' || issue.message === 'invalid_base64') return 'badges.error.imageType';
+/** The reasons of a refused request: the problem lists them as `errors: { field: [reason] }`. */
+function refusedReasons(error: ApiRequestError): string[] {
+  const details = error.details;
+  if (typeof details !== 'object' || details === null || Array.isArray(details)) return [];
+  return Object.values(details).flatMap((reasons) => (Array.isArray(reasons) ? reasons.filter((reason): reason is string => typeof reason === 'string') : []));
+}
+
+/** A server answer about the image, the limit or a changed badge, in words of the person. */
+function saveError(error: unknown): string {
+  if (isStaleEntity(error)) return t('app.staleEntity');
+  if (error instanceof ApiRequestError) {
+    if (error.code === 'validation_error') {
+      const reasons = refusedReasons(error);
+      if (reasons.includes('image_too_large')) return t('badges.error.imageSize');
+      if (reasons.some((reason) => reason === 'unsupported_image_type' || reason === 'image_type_mismatch' || reason === 'invalid_base64')) {
+        return t('badges.error.imageType');
+      }
+    }
+    if (error.code === 'badge_limit') {
+      const limit = typeof error.details === 'object' && error.details !== null && 'limit' in error.details ? Number(error.details.limit) : NaN;
+      return Number.isFinite(limit) ? format('badges.error.limit', { limit }) : t('badges.error.limitUnknown');
     }
   }
-  return 'badges.error.save';
+  return t('badges.error.save');
 }
 
 /**
@@ -56,15 +71,22 @@ function saveError(error: unknown): MessageKey {
  * picture of each, and add the example badges.
  */
 export function BadgesPage() {
+  const queryClient = useQueryClient();
   const badges = useBadges();
   const tasks = useTasks();
+  const limits = useLimits();
   const [editing, setEditing] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<Badge | null>(null);
   const [message, setMessage] = useState<{ kind: 'status' | 'alert'; text: string } | null>(null);
   const addExamples = useAddExampleBadges();
   const remove = useDeleteBadge();
 
-  const taskNames = useMemo(() => new Map((tasks.data ?? []).map((task) => [task._id, task.name])), [tasks.data]);
+  const taskNames = useMemo(() => new Map((tasks.data ?? []).map((task) => [task.id, task.name])), [tasks.data]);
+
+  const closeDelete = () => {
+    remove.reset();
+    setDeleting(null);
+  };
 
   const open = (id: string | null) => {
     setMessage(null);
@@ -111,9 +133,10 @@ export function BadgesPage() {
         }
       />
       {message && <FormMessage kind={message.kind}>{message.text}</FormMessage>}
-      {editing === 'new' && (
+      {editing === 'new' && limits.data && (
         <BadgeEditor
           tasks={tasks.data ?? []}
+          limits={limits.data.badges}
           onSaved={() => {
             setEditing(null);
             setMessage({ kind: 'status', text: t('badges.saved') });
@@ -121,22 +144,23 @@ export function BadgesPage() {
           onCancel={() => open(null)}
         />
       )}
-      {badges.isPending ? (
+      {badges.isPending || limits.isPending ? (
         <p role="status" className="text-muted-foreground">
           {t('app.loading')}
         </p>
-      ) : badges.isError ? (
+      ) : badges.isError || limits.isError ? (
         <FormMessage kind="alert">{t('badges.loadError')}</FormMessage>
       ) : badges.data.length === 0 && editing !== 'new' ? (
         <EmptyState icon={<Medal className="size-6" aria-hidden="true" />}>{t('badges.empty')}</EmptyState>
       ) : (
         <ul className="flex flex-col gap-3" aria-label={t('badges.list')}>
           {badges.data.map((badge) => (
-            <li key={badge._id}>
-              {editing === badge._id ? (
+            <li key={badge.id}>
+              {editing === badge.id ? (
                 <BadgeEditor
                   badge={badge}
                   tasks={tasks.data ?? []}
+                  limits={limits.data.badges}
                   onSaved={() => {
                     setEditing(null);
                     setMessage({ kind: 'status', text: t('badges.saved') });
@@ -144,22 +168,22 @@ export function BadgesPage() {
                   onCancel={() => open(null)}
                 />
               ) : (
-                <BadgeRow badge={badge} taskNames={taskNames} onEdit={() => open(badge._id)} onDelete={() => setDeleting(badge)} />
+                <BadgeRow badge={badge} taskNames={taskNames} onEdit={() => open(badge.id)} onDelete={() => { remove.reset(); setDeleting(badge); }} />
               )}
             </li>
           ))}
         </ul>
       )}
-      <Dialog open={deleting !== null} onOpenChange={(next) => !next && !remove.isPending && setDeleting(null)}>
+      <Dialog open={deleting !== null} onOpenChange={(next) => !next && !remove.isPending && closeDelete()}>
         {deleting && (
           <DialogContent>
             <DialogHeader>
               <DialogTitle>{format('badges.deleteConfirmTitle', { name: deleting.name })}</DialogTitle>
               <DialogDescription>{t('badges.deleteConfirmBody')}</DialogDescription>
             </DialogHeader>
-            {remove.isError && <FormMessage kind="alert">{t('badges.deleteError')}</FormMessage>}
+            {remove.isError && <FormMessage kind="alert">{isStaleEntity(remove.error) ? t('app.staleEntity') : t('badges.deleteError')}</FormMessage>}
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setDeleting(null)}>
+              <Button type="button" variant="outline" onClick={closeDelete}>
                 {t('common.cancel')}
               </Button>
               <Button
@@ -167,10 +191,17 @@ export function BadgesPage() {
                 variant="destructive"
                 disabled={remove.isPending}
                 onClick={() =>
-                  remove.mutate(deleting._id, {
+                  remove.mutate(deleting, {
                     onSuccess: () => {
                       setDeleting(null);
                       setMessage(null);
+                    },
+                    // A stale delete wrote nothing and the list was read again: the dialog asks for the badge as it is now, and a
+                    // badge that is gone needs no delete.
+                    onError: (error) => {
+                      if (!isStaleEntity(error)) return;
+                      const fresh = queryClient.getQueryData<Badge[]>(badgeKeys.list)?.find((badge) => badge.id === deleting.id);
+                      setDeleting((current) => (current?.id === deleting.id ? (fresh ?? null) : current));
                     },
                   })
                 }
@@ -240,12 +271,24 @@ function BadgeRow({
 }
 
 /** The editor of one badge: name, description, rule, tasks, the picture and whether it is active. */
-export function BadgeEditor({ badge, tasks, onSaved, onCancel }: { badge?: Badge; tasks: Task[]; onSaved(): void; onCancel(): void }) {
+export function BadgeEditor({
+  badge,
+  tasks,
+  limits,
+  onSaved,
+  onCancel,
+}: {
+  badge?: Badge;
+  tasks: Task[];
+  limits: BadgeLimits;
+  onSaved(): void;
+  onCancel(): void;
+}) {
   const idPrefix = useId();
   const fileInput = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<BadgeForm>(() => (badge ? formFromBadge(badge) : EMPTY_BADGE_FORM));
   const [errors, setErrors] = useState<BadgeFormErrors>({});
-  const [failure, setFailure] = useState<MessageKey | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const save = useSaveBadge();
 
@@ -253,7 +296,7 @@ export function BadgeEditor({ badge, tasks, onSaved, onCancel }: { badge?: Badge
 
   const visibleTasks = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return tasks.filter((task) => task.active || form.taskIds.includes(task._id)).filter((task) => !query || task.name.toLowerCase().includes(query));
+    return tasks.filter((task) => task.active || form.taskIds.includes(task.id)).filter((task) => !query || task.name.toLowerCase().includes(query));
   }, [tasks, search, form.taskIds]);
 
   const toggleTask = (id: string) =>
@@ -261,7 +304,7 @@ export function BadgeEditor({ badge, tasks, onSaved, onCancel }: { badge?: Badge
 
   const chooseImage = async (file: File | undefined) => {
     if (!file) return;
-    const result = await readImageFile(file);
+    const result = await readImageFile(file, limits);
     if (!result.ok) {
       setErrors((current) => ({ ...current, image: result.error }));
       if (fileInput.current) fileInput.current.value = '';
@@ -279,7 +322,7 @@ export function BadgeEditor({ badge, tasks, onSaved, onCancel }: { badge?: Badge
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    const built = buildBadgeSave(form);
+    const built = buildBadgeSave(form, limits);
     if (!built.ok) {
       setErrors({ ...errors, ...built.errors });
       return;
@@ -287,7 +330,7 @@ export function BadgeEditor({ badge, tasks, onSaved, onCancel }: { badge?: Badge
     if (errors.image) return;
     setErrors({});
     setFailure(null);
-    save.mutate({ id: badge?._id ?? null, create: built.create, patch: built.patch }, { onSuccess: onSaved, onError: (error) => setFailure(saveError(error)) });
+    save.mutate({ ...(badge ? { badge } : {}), create: built.create, patch: built.patch }, { onSuccess: onSaved, onError: (error) => setFailure(saveError(error)) });
   };
 
   const current = badge && form.image.kind === 'keep' ? badge : null;
@@ -309,7 +352,7 @@ export function BadgeEditor({ badge, tasks, onSaved, onCancel }: { badge?: Badge
             id={`${idPrefix}-name`}
             className="h-10 bg-card"
             value={form.name}
-            maxLength={60}
+            maxLength={limits.maxNameLength}
             aria-invalid={errors.name ? true : undefined}
             aria-describedby={errors.name ? errorId('name') : undefined}
             onChange={(e) => update({ name: e.target.value })}
@@ -326,7 +369,7 @@ export function BadgeEditor({ badge, tasks, onSaved, onCancel }: { badge?: Badge
             id={`${idPrefix}-description`}
             className="h-10 bg-card"
             value={form.description}
-            maxLength={200}
+            maxLength={limits.maxDescriptionLength}
             aria-invalid={errors.description ? true : undefined}
             aria-describedby={errors.description ? errorId('description') : undefined}
             onChange={(e) => update({ description: e.target.value })}
@@ -390,9 +433,9 @@ export function BadgeEditor({ badge, tasks, onSaved, onCancel }: { badge?: Badge
           ) : (
             <ul className="grid max-h-60 gap-1 overflow-y-auto rounded-xl border bg-card p-2 sm:grid-cols-2 lg:grid-cols-3">
               {visibleTasks.map((task) => (
-                <li key={task._id}>
+                <li key={task.id}>
                   <label className="flex min-h-9 cursor-pointer items-center gap-2 rounded-lg px-2 text-sm hover:bg-secondary/60">
-                    <input type="checkbox" className={checkboxClass} checked={form.taskIds.includes(task._id)} onChange={() => toggleTask(task._id)} />
+                    <input type="checkbox" className={checkboxClass} checked={form.taskIds.includes(task.id)} onChange={() => toggleTask(task.id)} />
                     <span className="min-w-0 [overflow-wrap:anywhere]">{task.name}</span>
                   </label>
                 </li>
@@ -428,7 +471,7 @@ export function BadgeEditor({ badge, tasks, onSaved, onCancel }: { badge?: Badge
               ref={fileInput}
               id={`${idPrefix}-image`}
               type="file"
-              accept="image/png,image/jpeg,image/webp"
+              accept={limits.imageTypes.join(',')}
               className="visually-hidden"
               tabIndex={-1}
               aria-label={t('badges.imageChoose')}
@@ -449,7 +492,7 @@ export function BadgeEditor({ badge, tasks, onSaved, onCancel }: { badge?: Badge
         {t('badges.active')}
       </label>
 
-      {failure && <FormMessage kind="alert">{t(failure)}</FormMessage>}
+      {failure && <FormMessage kind="alert">{failure}</FormMessage>}
       <FormActions>
         <Button type="button" variant="ghost" onClick={onCancel}>
           {t('common.cancel')}

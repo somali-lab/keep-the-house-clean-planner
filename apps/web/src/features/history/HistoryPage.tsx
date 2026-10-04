@@ -99,7 +99,7 @@ export function HistoryPage() {
       plans: new Map((plans.data ?? []).map((p) => [p._id, p.name])),
       intervals: new Map((settings.data?.intervals ?? []).map((i) => [i.key, i.label])),
       occurrences: collectOccurrenceNames(entries),
-      badges: new Map((badges.data ?? []).map((badge) => [badge._id, badge.name])),
+      badges: new Map((badges.data ?? []).map((badge) => [badge.id, badge.name])),
       timezone: settings.data?.timezone ?? 'Europe/Amsterdam',
     }),
     [users.data, tasks.data, rooms.data, plans.data, settings.data, badges.data, entries],

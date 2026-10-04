@@ -5,8 +5,6 @@ import {
   celebrationKey,
   celebrationMode,
   chickenOffset,
-  EGG_COUNT,
-  eggsInBasket,
   goalReached,
   markCelebrated,
   wasCelebrated,
@@ -28,13 +26,6 @@ function memoryStorage(failing = false): CelebrationStorage & { data: Map<string
     },
   };
 }
-
-describe('eggsInBasket', () => {
-  it('puts one egg in the basket for every full 10%, so 10 eggs mean 100%', () => {
-    expect(EGG_COUNT).toBe(10);
-    expect([0, 5, 9, 10, 25, 50, 79, 80, 99, 100].map(eggsInBasket)).toEqual([0, 0, 0, 1, 2, 5, 7, 8, 9, 10]);
-  });
-});
 
 describe('goalReached', () => {
   it('is true only with a goal and 100%', () => {

@@ -1030,6 +1030,8 @@ export const en = {
   "badges.error.imageSize": "The image is larger than 256 KB.",
   "badges.error.imageRead": "The image could not be read.",
   "badges.error.save": "The badge could not be saved.",
+  "badges.error.limit": "At most {limit} badges can exist.",
+  "badges.error.limitUnknown": "No more badges can exist.",
   "badges.saved": "Badge saved.",
   "badges.deleteConfirmTitle": "Delete {name}?",
   "badges.deleteConfirmBody": "The badge disappears for everyone, together with the times it was earned. This cannot be undone.",
