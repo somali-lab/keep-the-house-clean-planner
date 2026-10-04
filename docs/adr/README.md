@@ -29,3 +29,4 @@ Records are never rewritten to hide history. When a decision is replaced, the ol
 | [0019](0019-opentelemetry-over-otlp-to-an-edot-collector.md)                        | OpenTelemetry over OTLP to an EDOT Collector                                | Accepted                       |
 | [0020](0020-questpdf-for-pdf-sheets.md)                                             | QuestPDF for the PDF sheets                                                 | Accepted                       |
 | [0021](0021-mongodb-replica-set-and-transactional-writes.md)                        | MongoDB replica set and transactional writes (amends ADR-0004 and ADR-0008) | Accepted                       |
+| [0022](0022-optimistic-concurrency-with-etag-and-if-match.md)                       | Optimistic concurrency with ETag and If-Match on every entity write         | Accepted                       |
