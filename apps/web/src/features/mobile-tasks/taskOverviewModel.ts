@@ -1,7 +1,6 @@
-import type { Room, Task } from '@huishoudplanner/shared';
+import { addDays, daysBetween } from '@/lib/dayKey';
 import type { Occurrence } from '../../api/index.ts';
-import { weekIndexFor } from '@huishoudplanner/shared/cycle';
-import { addDays, daysBetween } from '@huishoudplanner/shared/time';
+import type { Room, Task } from '../../api/v2/queries.ts';
 import { getLocale } from '../../i18n/runtime.ts';
 
 export interface TaskOverviewRow {
@@ -24,10 +23,9 @@ export function taskOverviewRows(
   rooms: Room[],
   unknownRoom: string,
   periodStart: string,
-  cycleAnchorDate: string,
 ): TaskOverviewRow[] {
-  const taskById = new Map(tasks.map((task) => [task._id, task]));
-  const roomById = new Map(rooms.map((room) => [room._id, room]));
+  const taskById = new Map(tasks.map((task) => [task.id, task]));
+  const roomById = new Map(rooms.map((room) => [room.id, room]));
   const grouped = new Map<string, TaskOverviewRow>();
 
   for (const occurrence of [...occurrences].sort((a, b) => a.date.localeCompare(b.date))) {
@@ -38,7 +36,8 @@ export function taskOverviewRows(
       (roomId ? (roomById.get(roomId)?.name ?? unknownRoom) : unknownRoom);
     const block = Math.floor(daysBetween(periodStart, occurrence.date) / 7);
     const blockStart = addDays(periodStart, block * 7);
-    const cycleWeek = weekIndexFor(occurrence.date, cycleAnchorDate) + 1;
+    // The server says where the day falls in the cycle; the web app does not count weeks itself.
+    const cycleWeek = occurrence.weekIndex + 1;
     // A one-off task never merges with another record: each gets its own row.
     const groupKey = occurrence.taskId === null ? `oneoff:${occurrence.id}` : `${occurrence.taskId}:${roomId ?? ''}:${roomName}:${blockStart}:${cycleWeek}`;
     const row = grouped.get(groupKey) ?? {
