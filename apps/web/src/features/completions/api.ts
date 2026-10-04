@@ -1,6 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiV2, toOccurrence, unwrap, type Occurrence } from '../../api/index.ts';
-import { collectPages } from '../../api/v2/paging.ts';
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiV2, toOccurrence, unwrap } from '../../api/index.ts';
 
 export interface CompletionEdit {
   id: string;
@@ -9,19 +8,24 @@ export interface CompletionEdit {
   completedBy: string;
 }
 
-/** The most the server returns in one page of occurrences (`limit` 1 to 500). */
-const PAGE_SIZE = 500;
+/** One page of done occurrences: the list can grow for years, so it is loaded page by page (a Load more button). */
+export const COMPLETIONS_PAGE_SIZE = 100;
 
-/** The done occurrences of the days from `from` to `to`, oldest day first, all pages. */
-export async function fetchCompletionRecords(from: string, to: string): Promise<Occurrence[]> {
-  const items = await collectPages(async (cursor) =>
-    (await unwrap(apiV2.GET('/api/v2/occurrences', { params: { query: { from, to, status: 'done', limit: String(PAGE_SIZE), cursor } } }))).data,
-  );
-  return items.map(toOccurrence);
-}
-
+/** The done occurrences of the days from `from` to `to`, oldest day first, one page at a time. */
 export function useCompletionRecords(from: string, to: string) {
-  return useQuery({ queryKey: ['occurrences', 'completed', from, to], queryFn: () => fetchCompletionRecords(from, to) });
+  return useInfiniteQuery({
+    queryKey: ['occurrences', 'completed', from, to],
+    initialPageParam: undefined as string | undefined,
+    queryFn: async ({ pageParam }) => {
+      const { data } = await unwrap(
+        apiV2.GET('/api/v2/occurrences', {
+          params: { query: { from, to, status: 'done', limit: String(COMPLETIONS_PAGE_SIZE), ...(pageParam ? { cursor: pageParam } : {}) } },
+        }),
+      );
+      return { items: data.items.map(toOccurrence), nextCursor: data.nextCursor };
+    },
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+  });
 }
 
 function useRefreshCompletionData() {

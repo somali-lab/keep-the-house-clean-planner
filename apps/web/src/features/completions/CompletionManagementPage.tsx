@@ -1,6 +1,7 @@
 import { CheckCircle2, Filter, Pencil, Trash2 } from 'lucide-react';
 import { useId, useMemo, useState } from 'react';
 import { EmptyState } from '@/components/EmptyState';
+import { LoadMore } from '@/components/LoadMore';
 import { useFilterReset } from '@/components/FilterReset';
 import { NativeSelect } from '@/components/NativeSelect';
 import { PageHeader } from '@/components/PageHeader';
@@ -37,6 +38,9 @@ function localDateTimeInput(iso: string): string {
   return local.toISOString().slice(0, 16);
 }
 
+/** The list opens on the last four weeks; the person can widen it. */
+const DEFAULT_RANGE_DAYS = 28;
+
 export function CompletionManagementPage({ now }: { now?: Date }) {
   const idPrefix = useId();
   const settings = useSettings();
@@ -44,7 +48,7 @@ export function CompletionManagementPage({ now }: { now?: Date }) {
   const timezone = settings.data?.timezone ?? 'Europe/Amsterdam';
   const today = dayKeyInZone(now ?? new Date(), timezone);
   const { profile } = useProfile();
-  const defaultFrom = addDays(today, -90);
+  const defaultFrom = addDays(today, -DEFAULT_RANGE_DAYS);
   const [from, setFrom, resetFrom] = usePersistedFilter('completions.from', profile?.id ?? null, defaultFrom);
   const [to, setTo, resetTo] = usePersistedFilter('completions.to', profile?.id ?? null, today);
   useFilterReset(() => { resetFrom(); resetTo(); }, from !== defaultFrom || to !== today);
@@ -55,7 +59,7 @@ export function CompletionManagementPage({ now }: { now?: Date }) {
   const [remove, setRemove] = useState<Occurrence | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  const records = useMemo(() => [...(completions.data ?? [])].reverse(), [completions.data]);
+  const records = useMemo(() => (completions.data?.pages.flatMap((loaded) => loaded.items) ?? []).reverse(), [completions.data]);
   const userNames = useMemo(() => new Map((users.data ?? []).map((user) => [user.id, user.name])), [users.data]);
   const dayFormatter = new Intl.DateTimeFormat(getLocale(), { dateStyle: 'long', timeZone: 'UTC' });
   const dateTimeFormatter = new Intl.DateTimeFormat(getLocale(), {
@@ -133,6 +137,14 @@ export function CompletionManagementPage({ now }: { now?: Date }) {
             </li>
           ))}
         </ul>
+      )}
+      {completions.isSuccess && (
+        <LoadMore
+          count={records.length}
+          hasNextPage={completions.hasNextPage}
+          isFetchingNextPage={completions.isFetchingNextPage}
+          onLoadMore={() => void completions.fetchNextPage()}
+        />
       )}
 
       <Dialog open={edit !== null} onOpenChange={(open) => { if (!open) setEdit(null); }}>

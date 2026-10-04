@@ -112,17 +112,35 @@ describe('HistoryPage', () => {
     expect(screen.getByLabelText('Wie')).toHaveValue('');
   });
 
-  it('loads more entries with the cursor', async () => {
+  it('loads more entries with the cursor, one page at a time, and says how much is loaded', async () => {
     const fetchMock = setup((_init, url) =>
       url.includes('cursor=c1') ? { items: PAGE_2, nextCursor: null } : { items: PAGE_1, nextCursor: 'c1' },
     );
     renderWithProviders(<HistoryPage />, { route: '/manage/history' });
     expect(await screen.findAllByRole('listitem')).toHaveLength(4);
+    expect(auditUrls(fetchMock)).toEqual(['/api/v2/audit?limit=50']);
+    expect(screen.getByText('4 getoond')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Meer laden' }));
     await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(5));
-    expect(auditUrls(fetchMock).at(-1)).toContain('cursor=c1');
+    expect(auditUrls(fetchMock)).toEqual(['/api/v2/audit?limit=50', '/api/v2/audit?limit=50&cursor=c1']);
     expect(screen.queryByRole('button', { name: 'Meer laden' })).not.toBeInTheDocument();
+    expect(screen.getByText('Alles geladen (5)').closest('[aria-live]')).toHaveAttribute('aria-live', 'polite');
+  });
+
+  it('starts over on the first page when a filter changes', async () => {
+    const fetchMock = setup((_init, url) =>
+      url.includes('cursor=c1') ? { items: PAGE_2, nextCursor: null } : { items: PAGE_1, nextCursor: 'c1' },
+    );
+    renderWithProviders(<HistoryPage />, { route: '/manage/history' });
+    await screen.findAllByRole('listitem');
+    fireEvent.click(screen.getByRole('button', { name: 'Meer laden' }));
+    await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(5));
+
+    fireEvent.change(screen.getByLabelText('Wie'), { target: { value: BRAM.id } });
+    await waitFor(() => expect(auditUrls(fetchMock).at(-1)).toBe(`/api/v2/audit?actorId=${BRAM.id}&limit=50`));
+    await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(4));
+    expect(screen.getByRole('button', { name: 'Meer laden' })).toBeInTheDocument();
   });
 
   it('says when there is nothing to show', async () => {

@@ -1,5 +1,6 @@
 import { Award, Gift, HandCoins, Undo2 } from 'lucide-react';
 import { useId, useState } from 'react';
+import { LoadMore } from '@/components/LoadMore';
 import { NativeSelect } from '@/components/NativeSelect';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -62,6 +63,7 @@ export function PointsSection({ period, now }: { period: StatsPeriod; now?: Date
       ? chosen
       : ((rows.find((row) => row.personId === profile?.id) ?? rows[0])?.personId ?? null);
   const entries = usePointsEntries(personId, range);
+  const loadedEntries = entries.data?.pages.flatMap((loaded) => loaded.items);
 
   if (settings.isError || today.isError || limits.isError || windowCalendar.isError || balances.isError) {
     return (
@@ -84,7 +86,7 @@ export function PointsSection({ period, now }: { period: StatsPeriod; now?: Date
   const money = (cents: number, currency: string = currencyCode) => formatMoney(cents, currency, getLocale());
   /** The balance over the whole ledger, the number the redeem dialog works with; a dash until it is known. */
   const allTimeOf = (id: string) => allTime.data?.balances.find((balance) => balance.personId === id);
-  const hasRedemptions = entries.data?.some((entry) => entry.kind === 'redemption') ?? false;
+  const hasRedemptions = loadedEntries?.some((entry) => entry.kind === 'redemption') ?? false;
   const weekOf = (dayKey: string) => isoWeekNumber(windowCalendar.data?.get(dayKey)?.isoWeek) ?? 0;
 
   const undoRedemption = (id: string) => {
@@ -202,8 +204,9 @@ export function PointsSection({ period, now }: { period: StatsPeriod; now?: Date
             <p role="alert" className="rounded-xl bg-destructive/10 p-4 text-destructive">
               {t('stats.points.error')}
             </p>
-          ) : entries.data && windowCalendar.data && !entries.isPlaceholderData && entries.data.length > 0 ? (
-            <div className="overflow-x-auto">
+          ) : loadedEntries && windowCalendar.data && !entries.isPlaceholderData && loadedEntries.length > 0 ? (
+            <div>
+              <div className="overflow-x-auto">
               <table className={statsTableClass}>
                 <caption>{format('stats.points.entries', { name: nameOf(personId) })}</caption>
                 <thead>
@@ -215,7 +218,7 @@ export function PointsSection({ period, now }: { period: StatsPeriod; now?: Date
                   </tr>
                 </thead>
                 <tbody>
-                  {entries.data.map((entry) => {
+                  {loadedEntries.map((entry) => {
                     const bonus = entry.periodStart === null ? null : bonusLabel(entry, weekOf(entry.periodStart));
                     const redemption = entry.kind === 'redemption';
                     return (
@@ -270,6 +273,13 @@ export function PointsSection({ period, now }: { period: StatsPeriod; now?: Date
                   })}
                 </tbody>
               </table>
+              </div>
+              <LoadMore
+                count={loadedEntries.length}
+                hasNextPage={entries.hasNextPage}
+                isFetchingNextPage={entries.isFetchingNextPage}
+                onLoadMore={() => void entries.fetchNextPage()}
+              />
             </div>
           ) : (
             <p className={noneClass}>
