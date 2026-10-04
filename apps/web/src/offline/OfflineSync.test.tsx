@@ -34,8 +34,6 @@ function stubServer() {
       const routes: Record<string, unknown> = {
         '/api/v2/users': page([ANNA, BRAM]),
         '/api/v2/settings': makeSettings(),
-        '/api/rooms': [],
-        '/api/tasks': [],
         '/api/v2/occurrences': page(db),
         '/api/v2/meta/limits': LIMITS,
         '/api/v2/calendar': calendarRoute()(undefined, url),

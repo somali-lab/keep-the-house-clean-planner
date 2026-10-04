@@ -14,8 +14,6 @@ describe('app shell', () => {
       '/api/v2/tasks': page([]),
       '/api/v2/rooms': page([]),
       '/api/v2/settings': makeSettings(),
-      '/api/cycle-plans': [],
-      '/api/occurrences': [],
       ...v2Basics(),
       '/api/v2/occurrences': page([]),
     });
@@ -76,8 +74,6 @@ describe('app shell', () => {
       '/api/v2/tasks': page([]),
       '/api/v2/rooms': page([]),
       '/api/v2/settings': makeSettings(),
-      '/api/cycle-plans': [],
-      '/api/occurrences': [],
       ...v2Basics(),
       '/api/v2/occurrences': page([]),
       '/api/v2/points/progress': makeProgress({ personId: ANNA.id }),
@@ -141,8 +137,6 @@ describe('app shell', () => {
       '/api/v2/tasks': page([]),
       '/api/v2/rooms': page([]),
       '/api/v2/settings': makeSettings(),
-      '/api/cycle-plans': [],
-      '/api/occurrences': [],
       ...v2Basics(),
       '/api/v2/occurrences': page([]),
     });

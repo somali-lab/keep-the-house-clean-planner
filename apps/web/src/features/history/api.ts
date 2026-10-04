@@ -2,7 +2,7 @@ import { useInfiniteQuery, useMutation, useQueries, useQueryClient } from '@tans
 import { useMemo } from 'react';
 import { apiV2, unwrap } from '../../api/index.ts';
 import { toInt } from '../../api/occurrence.ts';
-import { calendarKey, fetchCalendar, useLimits } from '../../api/v2/queries.ts';
+import { calendarKey, fetchCalendar, useLimits, type CalendarDay } from '../../api/v2/queries.ts';
 import { isoWeekNumber } from '../stats/pointsModel.ts';
 import {
   auditQuery,
@@ -38,6 +38,9 @@ export function useClearAudit() {
   });
 }
 
+// Module level, so the combined value only changes when a result does and the memos downstream keep holding.
+const combineCalendars = (results: { data: Map<string, CalendarDay> | undefined }[]) => results.map((result) => result.data);
+
 /** The week numbers of the week bonuses that the loaded entries name come from the server calendar, one request per stretch of days. */
 export function useBonusKeyContext(entries: readonly AuditEntry[]): BonusKeyContext {
   const limits = useLimits();
@@ -48,7 +51,7 @@ export function useBonusKeyContext(entries: readonly AuditEntry[]): BonusKeyCont
   );
   const weeks = useQueries({
     queries: ranges.map(({ from, to }) => ({ queryKey: calendarKey(from, to), queryFn: () => fetchCalendar(from, to) })),
-    combine: (results) => results.map((result) => result.data),
+    combine: combineCalendars,
   });
   return useMemo(() => {
     const byDay = new Map<string, number>();
