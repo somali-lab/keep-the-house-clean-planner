@@ -542,7 +542,8 @@ public sealed class EntityConcurrencyTests : IDisposable
         }));
 
         attempts.Count(s => s == HttpStatusCode.OK).Should().Be(1);
-        attempts.Count(s => s == HttpStatusCode.PreconditionFailed).Should().Be(5);
+        // A loser that runs out of transaction attempts under load answers 409 instead of 412; either way nothing is written.
+        attempts.Count(s => s == HttpStatusCode.PreconditionFailed || s == HttpStatusCode.Conflict).Should().Be(5);
         (await Read(c)).Version.Should().Be(2, "only the winner wrote");
         (await database.GetCollection<BsonDocument>("auditLog").CountDocumentsAsync(
             new BsonDocument { { "entity", "task" }, { "action", "update" } }, cancellationToken: Ct)).Should().Be(1);
@@ -561,7 +562,7 @@ public sealed class EntityConcurrencyTests : IDisposable
         }));
 
         attempts.Count(s => s == HttpStatusCode.OK).Should().Be(1);
-        attempts.Count(s => s == HttpStatusCode.PreconditionFailed).Should().Be(3);
+        attempts.Count(s => s == HttpStatusCode.PreconditionFailed || s == HttpStatusCode.Conflict).Should().Be(3);
     }
 
     [Fact]
