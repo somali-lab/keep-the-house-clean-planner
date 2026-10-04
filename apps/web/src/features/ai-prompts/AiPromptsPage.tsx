@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
-import { api, ApiRequestError } from '../../api/index.ts';
+import { api, apiV2, ApiRequestError, unwrap } from '../../api/index.ts';
 import { queryKeys, useSettings } from '../../api/queries.ts';
 import { t, type MessageKey } from '../../i18n/nl.ts';
 
@@ -37,7 +37,7 @@ export function AiPromptsPage({ embedded = false }: { embedded?: boolean }) {
   const settings = useSettings();
   const promptInfo = useQuery({
     queryKey: ['ai-prompt-info'],
-    queryFn: async () => (await api.get<PromptInfo>('/api/ai/prompt-info')).data,
+    queryFn: async (): Promise<PromptInfo> => (await unwrap(apiV2.GET('/api/v2/ai/prompt-info'))).data,
   });
 
   if (settings.isPending || promptInfo.isPending) {
@@ -73,6 +73,7 @@ function PromptEditor({ initial, defaults, info, embedded }: { initial: AiPrompt
   const [message, setMessage] = useState<{ kind: 'status' | 'alert'; text: string } | null>(null);
 
   const save = useMutation({
+    // The settings are still the Node server's (slice 7.5); only the prompt information is read from /api/v2.
     mutationFn: async () => api.patch('/api/settings', { aiPromptTemplates: prompts }),
     onSuccess: async () => {
       setMessage({ kind: 'status', text: t('aiPrompts.saved') });

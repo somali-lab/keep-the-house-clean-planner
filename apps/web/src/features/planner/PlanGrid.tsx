@@ -1,13 +1,14 @@
 import { useDraggable, useDroppable } from '@dnd-kit/core';
-import type { Room, Slot, Task, User } from '@huishoudplanner/shared';
-import { WEEKDAYS_MONDAY_FIRST, type PlanSummary } from '@huishoudplanner/shared/validation/plan';
+import type { User } from '@huishoudplanner/shared';
+import type { Room, Task } from '../../api/v2/queries.ts';
+import type { PlanSlot as Slot, PlanSummary } from './api.ts';
 import { CalendarDays, GripVertical, TriangleAlert, Users, UserX, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
 import { Avatar } from '../../identity/Avatar.tsx';
-import { cellId, dragId, matchesTaskName } from './editorModel.ts';
+import { cellId, dragId, matchesTaskName, WEEKDAYS_MONDAY_FIRST } from './editorModel.ts';
 
 interface WeekTableProps {
   weekIndex: number;
@@ -39,8 +40,8 @@ export function WeekTable({
   searchTerm,
   onRemoveSlot,
 }: WeekTableProps) {
-  const taskById = new Map(tasks.map((task) => [task._id, task]));
-  const roomById = new Map(rooms.map((room) => [room._id, room.name]));
+  const taskById = new Map(tasks.map((task) => [task.id, task]));
+  const roomById = new Map(rooms.map((room) => [room.id, room.name]));
   const weekNumber = weekIndex + 1;
   const weekTotals = summary.weeks[weekIndex];
   const weekDays = summary.days.filter((day) => day.weekIndex === weekIndex);

@@ -8,21 +8,31 @@ import {
   useSensors,
   type DragEndEvent,
 } from '@dnd-kit/core';
-import type { CyclePlan, Interval, Room, Slot, Task, User } from '@huishoudplanner/shared';
-// Subpath import keeps Luxon and Zod out of the web bundle.
-import { validatePlan } from '@huishoudplanner/shared/validation/plan';
+import type { Interval, User } from '@huishoudplanner/shared';
 import { Ban, Menu, X } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useFilterReset } from '@/components/FilterReset';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/NativeSelect';
 import { cn } from '@/lib/utils';
+import { isStaleEntity } from '../../api/index.ts';
+import type { Room, Task } from '../../api/v2/queries.ts';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
 import { usePersistedFilter } from '../../hooks/usePersistedFilter.ts';
-import { useUpdatePlan, usePutSlots } from './api.ts';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
+import {
+  EMPTY_SUMMARY,
+  slotsBody,
+  usePlanValidation,
+  usePutSlots,
+  useUpdatePlan,
+  type CyclePlan,
+  type PlanSlot as Slot,
+} from './api.ts';
 import {
   applyDrop,
+  describePlanIssue,
   parseDragId,
   parseDropId,
   type DragSource,
@@ -34,16 +44,24 @@ import { Pool } from './Pool.tsx';
 
 export interface PlanEditorProps {
   plan: CyclePlan;
+  /** The active tasks the pool offers. */
   tasks: Task[];
+  /** Every task, to name the ones a validation error is about; defaults to `tasks`. */
+  allTasks?: Task[];
   rooms: Room[];
   users: User[];
   profileId: string | null;
   intervals: Interval[];
+  /** How long the editor waits after the last drop before it saves. */
   debounceMs?: number;
+  /** How long it waits before the server validates the unsaved slots. */
+  validationDebounceMs?: number;
   onManagePlans?(): void;
+  /** Raised when the page replaces the slots (a reset starts): a drop still waiting for its debounce is dropped, not saved over it. */
+  discardPendingToken?: number;
 }
 
-type SaveState = 'idle' | 'saving' | 'saved' | 'error';
+type SaveState = 'idle' | 'saving' | 'saved' | 'error' | 'stale';
 
 export function rejectionText(rejection: DropRejection): string {
   if (rejection.reason === 'assignee_unavailable') {
@@ -56,15 +74,20 @@ export function rejectionText(rejection: DropRejection): string {
   return format('planner.reject.duplicate', { task: rejection.taskName });
 }
 
+const sameSlots = (a: readonly Slot[], b: readonly Slot[]) => JSON.stringify(slotsBody(a)) === JSON.stringify(slotsBody(b));
+
 export function PlanEditor({
   plan,
   tasks,
+  allTasks = tasks,
   rooms,
   users,
   intervals,
   profileId,
   debounceMs = 800,
+  validationDebounceMs = 300,
   onManagePlans,
+  discardPendingToken = 0,
 }: PlanEditorProps) {
   const [slots, setSlots] = useState<Slot[]>(plan.slots);
   const [themes, setThemes] = useState<string[]>(plan.weekThemes);
@@ -110,8 +133,33 @@ export function PlanEditor({
   const [poolCollapsed, setPoolCollapsed] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>('idle');
+  // A save that came back stale (412) wrote nothing: the person's edit stays here until they save it again.
+  const staleSlots = useRef(false);
+  const staleThemes = useRef(false);
+  const [staleShown, setStaleShown] = useState(false);
+  const markStale = (kind: 'slots' | 'themes', on: boolean) => {
+    (kind === 'slots' ? staleSlots : staleThemes).current = on;
+    setStaleShown(staleSlots.current || staleThemes.current);
+  };
   const putSlots = usePutSlots();
   const updatePlan = useUpdatePlan();
+
+  // Every write of the editor changes the plan and raises its version, so the writes go one at a time, each with the version the
+  // one before answered (or, after a stale answer, the version of the plans read again).
+  const versionRef = useRef(plan.version);
+  useEffect(() => {
+    versionRef.current = plan.version;
+  }, [plan.version]);
+  const queue = useRef<Promise<void>>(Promise.resolve());
+  // Saves that are queued or in flight: while there are any, the plan the editor gets back is older than what the person sees.
+  const inFlight = useRef(0);
+  const enqueue = (job: () => Promise<void>) => {
+    inFlight.current += 1;
+    const run = () => job().finally(() => {
+      inFlight.current -= 1;
+    });
+    queue.current = queue.current.then(run, run);
+  };
 
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pending = useRef<Slot[] | null>(null);
@@ -119,20 +167,56 @@ export function PlanEditor({
   saveRef.current = (next: Slot[]) => {
     pending.current = null;
     setSaveState('saving');
-    putSlots.mutate(
-      { planId: plan._id, slots: next },
-      { onSuccess: () => setSaveState('saved'), onError: () => setSaveState('error') },
-    );
+    enqueue(async () => {
+      try {
+        const result = await putSlots.mutateAsync({ planId: plan.id, version: versionRef.current, slots: next });
+        versionRef.current = result.plan.version;
+        markStale('slots', false);
+        setSaveState('saved');
+      } catch (error) {
+        if (isStaleEntity(error)) {
+          markStale('slots', true);
+          setSaveState('stale');
+        } else {
+          setSaveState('error');
+        }
+      }
+    });
   };
 
-  // Keep the editor in sync when another planner action replaces all slots
-  // (for example the reset button in the page toolbar).
+  const saveThemes = (next: string[]) => {
+    setSaveState('saving');
+    enqueue(async () => {
+      try {
+        const saved = await updatePlan.mutateAsync({ planId: plan.id, version: versionRef.current, patch: { weekThemes: next } });
+        versionRef.current = saved.version;
+        markStale('themes', false);
+        setSaveState('saved');
+      } catch (error) {
+        if (isStaleEntity(error)) {
+          markStale('themes', true);
+          setSaveState('stale');
+        } else {
+          setSaveState('error');
+        }
+      }
+    });
+  };
+
+  // Keep the editor in sync when another planner action replaces all slots (the page remounts the editor after a reset); an edit that is
+  // waiting to be saved, or that came back stale, is the person's and is not replaced.
+  useEffect(() => {
+    if (staleSlots.current || pending.current || inFlight.current > 0) return;
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+    setSlots(plan.slots);
+  }, [plan.slots]);
+
   useEffect(() => {
     if (timer.current) clearTimeout(timer.current);
     timer.current = null;
     pending.current = null;
-    setSlots(plan.slots);
-  }, [plan.slots]);
+  }, [discardPendingToken]);
 
   // Flush a pending save when the editor goes away (e.g. switching plans).
   useEffect(
@@ -152,21 +236,21 @@ export function PlanEditor({
     }, debounceMs);
   };
 
-  const validation = useMemo(
-    () => validatePlan({ slots, tasks, users, intervals }),
-    [slots, tasks, users, intervals],
-  );
-  const hasTasksToDistribute = validation.summary.tasks.some(
+  // The server validates what the editor shows, as the save would: the stored plan while nothing is changed, the draft otherwise.
+  const validatedSlots = useDebouncedValue(slots, validationDebounceMs);
+  const validation = usePlanValidation(plan.id, validatedSlots, sameSlots(validatedSlots, plan.slots));
+  const summary = validation.data?.summary ?? EMPTY_SUMMARY;
+  const hasTasksToDistribute = summary.tasks.some(
     (task) => task.required !== null && task.placed !== task.required,
   );
   const cycleUsers = users.map((user) => ({
     user,
-    minutes: validation.summary.weeks.reduce(
+    minutes: summary.weeks.reduce(
       (sum, week) => sum + (week.users.find((entry) => entry.userId === user._id)?.minutes ?? 0),
       0,
     ),
   }));
-  const cycleTotal = validation.summary.weeks.reduce(
+  const cycleTotal = summary.weeks.reduce(
     (sum, week) =>
       sum +
       week.users.reduce((weekSum, user) => weekSum + user.minutes, 0) +
@@ -175,8 +259,8 @@ export function PlanEditor({
   );
 
   useEffect(() => {
-    if (!hasTasksToDistribute) setPoolCollapsed(true);
-  }, [hasTasksToDistribute]);
+    if (validation.data && !hasTasksToDistribute) setPoolCollapsed(true);
+  }, [validation.data, hasTasksToDistribute]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -205,8 +289,28 @@ export function PlanEditor({
 
   const saveTheme = (weekIndex: number) => {
     if (themes[weekIndex] === plan.weekThemes[weekIndex]) return;
-    updatePlan.mutate({ planId: plan._id, patch: { weekThemes: themes } });
+    saveThemes(themes);
   };
+
+  const saveAgain = () => {
+    if (staleSlots.current) saveRef.current(slots);
+    if (staleThemes.current) saveThemes(themes);
+  };
+
+  const issueNames = {
+    task: (id: string) => allTasks.find((task) => task.id === id)?.name ?? id,
+    user: (id: string) => users.find((user) => user._id === id)?.name ?? id,
+  };
+
+  // Nothing to show before the server has answered once: the pool and the totals come from its summary.
+  if (validation.isPending) {
+    return (
+      <p role="status" className="text-muted-foreground">
+        {t('planner.validating')}
+      </p>
+    );
+  }
+
 
   return (
     <DndContext
@@ -234,6 +338,38 @@ export function PlanEditor({
             {t('common.close')}
           </Button>
         </div>
+      )}
+      {staleShown && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm font-semibold text-destructive"
+        >
+          <span>{t('app.staleEntity')}</span>
+          <Button type="button" variant="outline" size="sm" onClick={saveAgain}>
+            {t('planner.saveAgain')}
+          </Button>
+        </div>
+      )}
+      {validation.isError && (
+        <p role="alert" className="rounded-xl bg-destructive/10 px-4 py-3 text-sm font-semibold text-destructive">
+          {t('planner.validationError')}
+        </p>
+      )}
+      {validation.data && validation.data.issues.length > 0 && (
+        <section
+          role="alert"
+          aria-labelledby="plan-issues-title"
+          className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+        >
+          <h2 id="plan-issues-title" className="text-sm font-bold">
+            {t('planner.issues.title')}
+          </h2>
+          <ul className="mt-1 list-disc pl-5">
+            {validation.data.issues.map((issue, index) => (
+              <li key={`${issue.code}-${issue.slotIndex ?? index}-${index}`}>{describePlanIssue(issue, issueNames)}</li>
+            ))}
+          </ul>
+        </section>
       )}
       <div className="grid gap-4">
         <div
@@ -330,7 +466,7 @@ export function PlanEditor({
             tasks={tasks}
             rooms={rooms}
             intervals={intervals}
-            summary={validation.summary.tasks}
+            summary={summary.tasks}
             collapsed={poolCollapsed}
             onCollapsedChange={setPoolCollapsed}
             searchTerm={searchTerm}
@@ -356,7 +492,7 @@ export function PlanEditor({
                   : users.filter((user) => user._id === assigneeFilter)
               }
               showUnassigned={assigneeFilter === 'all' || assigneeFilter === 'unassigned'}
-              summary={validation.summary}
+              summary={summary}
               searchTerm={searchTerm}
               onRemoveSlot={(index) => handleDrop({ kind: 'slot', index }, { kind: 'pool' })}
             />

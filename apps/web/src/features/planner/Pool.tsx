@@ -1,5 +1,7 @@
 import { useDraggable, useDroppable } from '@dnd-kit/core';
-import type { Interval, Room, Task, TaskSummary } from '@huishoudplanner/shared';
+import type { Interval } from '@huishoudplanner/shared';
+import type { Room, Task } from '../../api/v2/queries.ts';
+import type { TaskSummary } from './api.ts';
 import {
   GripVertical,
   House,
@@ -45,11 +47,11 @@ export function Pool({
 }: PoolProps) {
   const { setNodeRef, isOver } = useDroppable({ id: POOL_ID });
   const byTask = new Map(summary.map((s) => [s.taskId, s]));
-  const roomById = new Map(rooms.map((room) => [room._id, room]));
+  const roomById = new Map(rooms.map((room) => [room.id, room]));
   const remaining = tasks
     .map((task) => ({
       task,
-      stats: byTask.get(task._id) ?? { taskId: task._id, placed: 0, required: null },
+      stats: byTask.get(task.id) ?? { taskId: task.id, placed: 0, required: null },
     }))
     .filter(({ stats }) => stats.required === null || stats.placed !== stats.required);
   const open = remaining
@@ -64,7 +66,7 @@ export function Pool({
       return roomCompare || a.task.name.localeCompare(b.task.name, getLocale());
     });
   const usedRooms = rooms
-    .filter((room) => tasks.some((task) => task.roomId === room._id))
+    .filter((room) => tasks.some((task) => task.roomId === room.id))
     .sort((a, b) => a.sortOrder - b.sortOrder);
   const usedIntervals = intervals.filter((interval) =>
     tasks.some((task) => task.intervalKey === interval.key),
@@ -127,7 +129,7 @@ export function Pool({
           >
             <option value="all">{t('planner.allRooms')}</option>
             {usedRooms.map((room) => (
-              <option key={room._id} value={room._id}>
+              <option key={room.id} value={room.id}>
                 {room.name}
               </option>
             ))}
@@ -151,7 +153,7 @@ export function Pool({
         <ul className="planner-pool-scroll grid min-h-0 min-w-0 flex-1 auto-rows-max content-start gap-2 overflow-x-hidden overflow-y-auto pr-1">
           {open.map(({ task, stats }) => (
             <PoolItem
-              key={task._id}
+              key={task.id}
               task={task}
               roomName={roomById.get(task.roomId)?.name ?? t('tasks.unknownRoom')}
               placed={stats.placed}
@@ -176,7 +178,7 @@ function PoolItem({
   required: number | null;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: dragId({ kind: 'pool', taskId: task._id }),
+    id: dragId({ kind: 'pool', taskId: task.id }),
   });
   const style = transform
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
@@ -197,7 +199,7 @@ function PoolItem({
         'flex min-h-14 min-w-0 max-w-full cursor-grab items-center gap-2 overflow-hidden rounded-lg border bg-background px-2 py-2 text-sm shadow-xs transition-shadow outline-none hover:border-primary/40 hover:shadow-sm focus-visible:ring-[3px] focus-visible:ring-ring/50 active:cursor-grabbing',
         isDragging && 'relative z-20 opacity-60 shadow-md',
       )}
-      data-testid={`pool-${task._id}`}
+      data-testid={`pool-${task.id}`}
       {...listeners}
       {...attributes}
     >
