@@ -1,7 +1,7 @@
 using Huishoudplanner.Domain.Errors;
 using OneOf;
 
-namespace Huishoudplanner.Application.Occurrences;
+namespace Huishoudplanner.Application.Common;
 
 /// <summary>Why a step of an occurrence use case stopped. Never leaves the use case: the public methods turn it into the variants of their port.</summary>
 internal readonly record struct Refusal(OneOf<NotFound, ValidationErrors, ConflictError, SettingsMissing, PortError> Value)
@@ -19,7 +19,7 @@ internal readonly record struct Refusal(OneOf<NotFound, ValidationErrors, Confli
 
 /// <summary>
 /// A step result that is either a value or a <see cref="Refusal"/>, so that a use case reads top to bottom instead of nesting a
-/// <c>TryPickT</c> per port call. A private convenience of the occurrence service; the ports keep returning <c>OneOf</c> values.
+/// <c>TryPickT</c> per port call. A convenience shared by the application services; the ports keep returning <c>OneOf</c> values.
 /// </summary>
 internal readonly struct Step<T>
 {

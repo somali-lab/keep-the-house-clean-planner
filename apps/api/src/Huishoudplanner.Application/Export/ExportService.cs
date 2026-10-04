@@ -1,4 +1,4 @@
-using Huishoudplanner.Application.Occurrences;
+using Huishoudplanner.Application.Common;
 using Huishoudplanner.Domain.Calendar;
 using Huishoudplanner.Domain.Due;
 using Huishoudplanner.Domain.Errors;
