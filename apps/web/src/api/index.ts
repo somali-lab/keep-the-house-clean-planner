@@ -14,3 +14,12 @@ export const apiV2 = createV2Client({ getProfileId: getActiveProfileId });
 export { ApiRequestError, type ApiClient, type ApiResult } from './client.ts';
 export { createV2Client, unwrap, type ApiV2Client, type ApiWarning, type V2Result } from './v2/client.ts';
 export { toOccurrence, type Occurrence, type OccurrenceStatus } from './occurrence.ts';
+export {
+  etagOf,
+  ifMatch,
+  isStaleEntity,
+  removeFromList,
+  replaceInList,
+  StaleEntityError,
+  type Versioned,
+} from './v2/concurrency.ts';

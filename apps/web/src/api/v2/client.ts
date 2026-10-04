@@ -1,5 +1,6 @@
 import createClient, { type Middleware } from 'openapi-fetch';
 import { ApiRequestError } from '../client.ts';
+import { StaleEntityError, PRECONDITION_FAILED, versionOfEtag } from './concurrency.ts';
 import type { components, paths } from './schema';
 
 export type ApiWarning = components['schemas']['OccurrenceWarningResponse'];
@@ -11,6 +12,8 @@ export interface V2Result<T> {
   /** The HTTP status; 200 where 201 was expected means the server replayed an earlier request. */
   status: number;
   warnings: ApiWarning[];
+  /** The `ETag` header of the answer (the strong validator of the entity version), or null. */
+  etag: string | null;
 }
 
 export interface V2ClientOptions {
@@ -57,7 +60,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /** An RFC 9457 problem (`type` is `urn:huishoudplanner:problem:<code>`) as the error the app already handles. */
-function problemToError(status: number, statusText: string, problem: unknown): ApiRequestError {
+function problemToError(status: number, statusText: string, problem: unknown, response?: Response): ApiRequestError {
   if (!isRecord(problem)) return new ApiRequestError(status, 'http_error', statusText);
   const type = typeof problem.type === 'string' ? problem.type : '';
   const code = type.startsWith(PROBLEM_TYPE_PREFIX) ? type.slice(PROBLEM_TYPE_PREFIX.length) : 'http_error';
@@ -70,6 +73,9 @@ function problemToError(status: number, statusText: string, problem: unknown): A
   const { type: _type, title: _title, status: _status, detail: _detail, instance: _instance, traceId: _traceId, ...extensions } =
     problem;
   const details = 'errors' in extensions ? extensions.errors : Object.keys(extensions).length > 0 ? extensions : undefined;
+  if (status === 412 && code === PRECONDITION_FAILED) {
+    return new StaleEntityError(message, versionOfEtag(response?.headers.get('ETag')), details);
+  }
   return new ApiRequestError(status, code, message, details);
 }
 
@@ -81,7 +87,7 @@ type Settled<T> = { data?: T; error?: unknown; response: Response };
  */
 export async function unwrap<T>(pending: Promise<Settled<T>>): Promise<V2Result<T>> {
   const { data, error, response } = await pending;
-  if (!response.ok) throw problemToError(response.status, response.statusText, error);
+  if (!response.ok) throw problemToError(response.status, response.statusText, error, response);
   const warnings = isRecord(data) && Array.isArray(data.warnings) ? (data.warnings as ApiWarning[]) : [];
-  return { data: data as T, status: response.status, warnings };
+  return { data: data as T, status: response.status, warnings, etag: response.headers.get('ETag') };
 }

@@ -38,7 +38,7 @@ export function makeTask(overrides: Partial<Task> & Pick<Task, '_id' | 'name' | 
 
 /** A room as `GET /api/v2/rooms` returns it (field `id`). */
 export function makeRoomV2(overrides: Partial<RoomV2> & Pick<RoomV2, 'id' | 'name'>): RoomV2 {
-  return { sortOrder: 10, active: true, virtual: false, createdAt: STAMP, updatedAt: STAMP, ...overrides };
+  return { sortOrder: 10, active: true, virtual: false, createdAt: STAMP, updatedAt: STAMP, version: 1, ...overrides };
 }
 
 /** A task as `GET /api/v2/tasks` returns it (field `id`, points always set). */
@@ -54,6 +54,7 @@ export function makeTaskV2(overrides: Partial<TaskV2> & Pick<TaskV2, 'id' | 'nam
     lastCompletedAt: null,
     createdAt: STAMP,
     updatedAt: STAMP,
+    version: 1,
     ...overrides,
   };
 }
