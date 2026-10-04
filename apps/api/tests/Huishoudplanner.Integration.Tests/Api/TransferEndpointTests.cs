@@ -35,7 +35,7 @@ public sealed class TransferEndpointTests(TransferWorld world) : IClassFixture<T
 
     /// <summary>The import entries and the ledger rebuild entry are the only new audit entries (ADR-0011).</summary>
     private static IEnumerable<BsonDocument> WithoutImports(IEnumerable<BsonDocument> entries) =>
-        entries.Where(e => e["entity"].AsString != "import" && !(e["entity"].AsString == "points" && e["action"].AsString == "recompute"));
+        entries.Where(e => e["entity"].AsString != "import" && !(e["entity"].AsString is "points" or "badgeAward" && e["action"].AsString == "recompute"));
 
     private static async Task<List<BsonDocument>> AuditAsync(IMongoDatabase database) =>
         await database.GetCollection<BsonDocument>("auditLog").Find(All).Sort(Builders<BsonDocument>.Sort.Ascending("_id")).ToListAsync(Ct);
@@ -180,14 +180,13 @@ public sealed class TransferEndpointTests(TransferWorld world) : IClassFixture<T
     {
         using var target = new TransferTarget(world.Mongo);
         (await target.ImportAsync(world.Export)).Status.Should().Be(HttpStatusCode.OK);
-        await InsertAwardAsync(target.Database, (await Of(target.Database, "badges").Find(All).FirstAsync(Ct))["_id"].AsObjectId, world.Source.P1.Id);
 
         var (status, body) = await target.ImportAsync(world.AsVersion5(), "&acknowledgeBadges=true");
 
         status.Should().Be(HttpStatusCode.OK, Details(body));
         body.GetProperty("replaced").GetProperty("badges").GetInt32().Should().Be(0);
         body.GetProperty("removedBadges").GetInt32().Should().Be(2);
-        body.GetProperty("removedBadgeAwards").GetInt32().Should().Be(1);
+        body.GetProperty("removedBadgeAwards").GetInt32().Should().Be(1, "the first import rebuilt the award of the done occurrence");
         (await CountAsync(target.Database, "badges")).Should().Be(0);
         (await CountAsync(target.Database, "badgeAwards")).Should().Be(0);
     }
@@ -348,8 +347,8 @@ public sealed class TransferEndpointTests(TransferWorld world) : IClassFixture<T
         var after = await SnapshotOfAsync(target.Database);
         Canonical(after["users"]).Should().Be(Canonical(world.Snapshot["users"]));
         Canonical(after["occurrences"]).Should().Be(Canonical(world.Snapshot["occurrences"]));
-        // The import entry and one summary of the ledger rebuild (the derived ledger is not part of the file).
-        after["auditLog"].Count.Should().Be((int)auditBefore + world.Snapshot["auditLog"].Count + 2);
+        // The import entry and one summary of the ledger rebuild and one of the award rebuild (the derived ledger is not part of the file).
+        after["auditLog"].Count.Should().Be((int)auditBefore + world.Snapshot["auditLog"].Count + 3);
         after["auditLog"].Count(e => e["entity"].AsString == "points" && e["action"].AsString == "recompute").Should().Be(1);
         var import = after["auditLog"].Single(e => e["entity"].AsString == "import");
         import["action"].AsString.Should().Be("create");
@@ -621,7 +620,23 @@ public sealed class TransferEndpointTests(TransferWorld world) : IClassFixture<T
         (await Of(target.Database, "auditLog").CountDocumentsAsync(new BsonDocument("entity", "import"), cancellationToken: Ct)).Should().Be(2);
     }
 
-    // Deferred to the badges slice (PR #140), which owns the awards: the rebuild of the badge awards after an import with their original moments,
-    // and the badgeAward recompute summary entry with trigger 'import'. The import clears the awards today (removedBadgeAwards) and runs the
-    // points reconciliation with the import trigger, which that slice extends with the badge step.
+    [Fact]
+    public async Task Import_rebuildsTheBadgeAwardsFromTheImportedData_withTheMomentTheyWereEarned_andSummarisesIt()
+    {
+        using var target = new TransferTarget(world.Mongo);
+
+        (await target.ImportAsync(world.Export)).Status.Should().Be(HttpStatusCode.OK);
+
+        var awards = await Of(target.Database, "badgeAwards").Find(All).ToListAsync(Ct);
+        awards.Should().ContainSingle();
+        awards[0]["personId"].AsObjectId.ToString().Should().Be(world.Source.P1.Id);
+        var done = world.Snapshot["occurrences"].First(o => o["status"].AsString == "done" && o["completedBy"].AsObjectId.ToString() == world.Source.P1.Id);
+        awards[0]["awardedAt"].ToUniversalTime().Should().BeOnOrAfter(done["completedAt"].ToUniversalTime().AddDays(-1));
+        (await Of(target.Database, "auditLog").CountDocumentsAsync(new BsonDocument { { "entity", "badgeAward" }, { "action", "recompute" }, { "meta.trigger", "import" } }, cancellationToken: Ct)).Should().Be(1);
+
+        // A second import of the same file brings the same awards back with the same moments.
+        var moment = awards[0]["awardedAt"];
+        (await target.ImportAsync(world.Export)).Status.Should().Be(HttpStatusCode.OK);
+        (await Of(target.Database, "badgeAwards").Find(All).ToListAsync(Ct)).Should().ContainSingle().Which["awardedAt"].Should().Be(moment);
+    }
 }
