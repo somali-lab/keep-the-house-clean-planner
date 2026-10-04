@@ -140,6 +140,7 @@ export const en = {
   "tasks.deleteConfirmTitle": "Permanently delete {name}?",
   "tasks.deleteConfirmBody": "The task will also be removed from all schedules. Existing history will be kept.",
   "tasks.deleteError": "The task could not be deleted.",
+  "tasks.gone": "This task no longer exists.",
   "tasks.bulk.label": "Actions for all tasks in {room}",
   "tasks.bulk.deactivate": "Deactivate all tasks",
   "tasks.bulk.confirmDeactivate": "Deactivate all active tasks in {room}? Their history will be kept.",
