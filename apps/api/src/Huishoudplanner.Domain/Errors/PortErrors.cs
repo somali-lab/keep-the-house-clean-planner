@@ -29,3 +29,10 @@ public sealed record PortError(string Message);
 
 /// <summary>The installation has no settings document yet (requirements section 8). Maps to <c>500 settings_missing</c>.</summary>
 public readonly record struct SettingsMissing;
+
+/// <summary>
+/// The version the caller expected (<c>If-Match</c>, ADR-0022) is not the stored one: somebody changed the entity in between. Nothing is
+/// written. <paramref name="CurrentVersion"/> is the stored version, which the HTTP adapter returns as the current <c>ETag</c>. Maps to
+/// <c>412 precondition_failed</c>.
+/// </summary>
+public readonly record struct PreconditionFailed(int CurrentVersion);
