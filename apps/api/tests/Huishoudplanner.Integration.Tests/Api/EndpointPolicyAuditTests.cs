@@ -67,6 +67,7 @@ public sealed class EndpointPolicyAuditTests
         ["POST /api/v2/ai/suggest-tasks"] = AuthorizationPolicies.PlannerPolicy,
         ["POST /api/v2/ai/explain"] = AuthorizationPolicies.PlannerPolicy,
         ["DELETE /api/v2/stats"] = AuthorizationPolicies.AdminPolicy,
+        ["POST /api/v2/import/json"] = AuthorizationPolicies.AdminPolicy,
         ["POST /api/v2/jobs/generation"] = AuthorizationPolicies.PlannerPolicy,
         ["POST /api/v2/jobs/audit-retention"] = AuthorizationPolicies.PlannerPolicy,
         ["POST /api/v2/jobs/morning-notify"] = AuthorizationPolicies.PlannerPolicy,
@@ -188,6 +189,16 @@ public sealed class EndpointPolicyAuditTests
         exports.Select(e => e.RoutePattern.RawText).Should().BeEquivalentTo(
             "/api/v2/export/pdf/schedule", "/api/v2/export/pdf/day", "/api/v2/export/pdf/due", "/api/v2/export/pdf/tasks");
         exports.SelectMany(e => e.Metadata.GetOrderedMetadata<IAuthorizeData>()).Should().BeEmpty("routes/export.ts has no guard");
+    }
+
+    [Fact]
+    public void TheJsonExport_staysOpenLikeTheNodeRoute()
+    {
+        using var factory = ApiFactory.WithoutDatabase();
+
+        var export = EndpointsOf(factory).Single(e => e.RoutePattern.RawText == "/api/v2/export/json");
+
+        export.Metadata.GetOrderedMetadata<IAuthorizeData>().Should().BeEmpty("the GET of routes/transfer.ts has no guard");
     }
 
     [Fact]

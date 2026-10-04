@@ -1502,6 +1502,149 @@
         }
       }
     },
+    "/api/v2/export/json": {
+      "get": {
+        "tags": [
+          "Transfer"
+        ],
+        "summary": "Downloads the whole dataset as one JSON file.",
+        "description": "Needs no profile, like the Node route. The file has schemaVersion 6, the exportedAt instant and, per collection, the documents as MongoDB relaxed Extended JSON ($oid, $date, $binary), so ids, dates and the badge images survive the round trip: settings, users, rooms, tasks, cyclePlans, cycles, occurrences, pointEntries (the redemptions only, the rest of the ledger is rebuilt on import), badges (with their images) and auditLog. The file is named huishoudplanner-YYYYMMDD.json after today in the household timezone.",
+        "operationId": "exportJson",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/import/json": {
+      "post": {
+        "tags": [
+          "Transfer"
+        ],
+        "summary": "Replaces all data with an export file (administrators).",
+        "description": "The body is the export file; versions 1 to 6 are accepted. The query needs mode=replace (400 validation_error on mode otherwise) and confirm=true (400 confirmation_required). A file older than version 5 while redemptions exist needs acknowledgeRedemptions=true and one older than version 6 while badges exist needs acknowledgeBadges=true; without them the import is 409 redemptions_would_be_removed or badges_would_be_removed with the count, before anything is written. The whole file is validated before anything is touched: every problem is a 400 validation_error whose errors are keyed by the path in the file (collections.users.0.color), at most 200 of them. The replacement is one transaction with its audit entry (entity import, create): all or nothing. The audit log is merged, not replaced. The points ledger is dropped except for the redemptions of the file and rebuilt from the imported occurrences afterwards. The body limit is 200 MB.",
+        "operationId": "importJson",
+        "parameters": [
+          {
+            "name": "mode",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "acknowledgeRedemptions",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "acknowledgeBadges",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/cycle-plans": {
       "get": {
         "tags": [
@@ -8648,6 +8791,62 @@
           }
         }
       },
+      "ImportResult": {
+        "required": [
+          "replaced",
+          "auditAdded",
+          "removedPointEntries",
+          "removedRedemptions",
+          "removedBadges",
+          "removedBadgeAwards"
+        ],
+        "type": "object",
+        "properties": {
+          "replaced": {
+            "$ref": "#/components/schemas/ReplacedCounts"
+          },
+          "auditAdded": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "removedPointEntries": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "removedRedemptions": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "removedBadges": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "removedBadgeAwards": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "Interval": {
         "required": [
           "key",
@@ -10321,6 +10520,94 @@
               "string"
             ],
             "format": "int64"
+          }
+        }
+      },
+      "ReplacedCounts": {
+        "required": [
+          "settings",
+          "users",
+          "rooms",
+          "tasks",
+          "cyclePlans",
+          "cycles",
+          "occurrences",
+          "pointEntries",
+          "badges"
+        ],
+        "type": "object",
+        "properties": {
+          "settings": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "users": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "rooms": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "tasks": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "cyclePlans": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "cycles": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "occurrences": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "pointEntries": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "badges": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },

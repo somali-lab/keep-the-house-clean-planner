@@ -222,6 +222,14 @@ public sealed class WriteRouteCoverageTests(AuditCoverageHarness h) : IClassFixt
 
         new("DELETE /api/v2/stats", Kind.Audited, Fixed(h => new(HttpMethod.Delete, "/api/v2/stats", null, h.Admin)), "settings", "reset", Covers: [MongoCollections.Occurrences, MongoCollections.Tasks, MongoCollections.Cycles]), // one summary entry stands for every document the reset touches // not idempotent by design (as in Node): a reset that finds nothing to reset still records its counts as one audit entry
 
+        new("POST /api/v2/import/json", Kind.Audited, async h =>
+        {
+            // Importing the export of the household itself: every collection is replaced by the same documents, the audit log is merged without duplicates.
+            var (status, file) = await h.SendAsync(HttpMethod.Get, "/api/v2/export/json", null, null);
+            status.Should().Be(HttpStatusCode.OK);
+            return new(HttpMethod.Post, "/api/v2/import/json?mode=replace&confirm=true", file.GetRawText(), h.Admin);
+        }, "import", "create", Covers: [MongoCollections.Settings, MongoCollections.Users, MongoCollections.Rooms, MongoCollections.Tasks, MongoCollections.CyclePlans, MongoCollections.Cycles, MongoCollections.Occurrences, MongoCollections.Badges, MongoCollections.BadgeAwards]), // one summary entry stands for the replacement of every collection; not idempotent by design (as in Node): the import is recorded every time
+
         // The only deliberately unaudited writes. Both only ever delete audit entries; neither may touch other state.
         new("POST /api/v2/jobs/audit-retention", Kind.Unaudited, Fixed(h => new(HttpMethod.Post, "/api/v2/jobs/audit-retention", null, h.Planner)),
             Reason: "Prunes the audit log itself; Node writes no entry for it either (an entry about the pruning would be part of what is pruned). Disabled without AUDIT_RETENTION_DAYS."),

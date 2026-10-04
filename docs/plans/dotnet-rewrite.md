@@ -260,7 +260,7 @@ Each phase ends in something demonstrable. Slices are small enough for one pull 
 - [x] 6.2 Notifications: ntfy and Home Assistant adapters, morning message. Port `notify.test.ts`. (Done in two parts: the adapters and the morning text in 6.2, the morning use case, job and endpoint in 6.3b.)
 - [x] 6.3 Scheduler and the manual job endpoints. Port the nightly and manual-run cases of `generation.test.ts`, `points-reconcile.test.ts`, `points-bonuses.test.ts` and `badges.test.ts` that were deferred in phases 3 and 4. (Done in two parts: 6.3a the scheduler, the generation and retention jobs and their endpoints, 6.3b the morning message job and endpoint, the `due` summary of the generation answer and the nightly and manual-run cases of the points tests; the badge step is part of the reconciliation since 4.5.)
 - [x] 6.4 PDF sheets with QuestPDF (§3.10). Port `pdf-export.test.ts`.
-- [ ] 6.5 JSON export and import with the confirmation and acknowledgement rules. Port `transfer.test.ts`.
+- [x] 6.5 JSON export and import with the confirmation and acknowledgement rules. Port `transfer.test.ts`.
 
 ### Phase 7 — Web app to v2 (D4)
 
