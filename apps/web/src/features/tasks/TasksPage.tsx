@@ -1,4 +1,4 @@
-import type { CreateTaskInput, Task, User } from '@huishoudplanner/shared';
+import type { User } from '@huishoudplanner/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
@@ -32,8 +32,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import { api, ApiRequestError } from '../../api/index.ts';
-import { queryKeys, useRooms, useSettings, useTasks } from '../../api/queries.ts';
+import type { components } from '../../api/v2/schema';
+import { api, apiV2, ApiRequestError, unwrap } from '../../api/index.ts';
+import { queryKeys, useSettings } from '../../api/queries.ts';
+import { useLimits, useRooms, useTasks, type Task } from '../../api/v2/queries.ts';
 import { format, t } from '../../i18n/nl.ts';
 import { getLanguage } from '../../i18n/runtime.ts';
 import { Avatar } from '../../identity/Avatar.tsx';
@@ -46,9 +48,17 @@ import {
   emptyTaskForm,
   taskToForm,
   toTaskInput,
+  type TaskBody,
   type TaskFormErrors,
   type TaskFormValues,
 } from './taskForm.ts';
+
+type Schemas = components['schemas'];
+type CreateTaskRequest = Schemas['CreateTaskRequest'];
+type UpdateTaskRequest = Schemas['UpdateTaskRequest'];
+type BulkRoomTasksRequest = Schemas['BulkRoomTasksRequest'];
+/** `defaultAssigneeId` is only sent with `reassign`, where null means anyone. */
+type BulkBody = { op: 'deactivate' } | { op: 'reassign'; defaultAssigneeId: string | null };
 
 type Editing = { mode: 'new'; roomId?: string } | { mode: 'edit'; task: Task } | null;
 
@@ -62,17 +72,19 @@ const FORM_FIELDS = new Set<keyof TaskFormValues>([
 ]);
 
 function serverFieldErrors(error: unknown): TaskFormErrors {
+  // The problem lists the refused fields as `errors: { field: [reasons] }`.
   if (
     !(error instanceof ApiRequestError) ||
     error.code !== 'validation_error' ||
-    !Array.isArray(error.details)
+    typeof error.details !== 'object' ||
+    error.details === null ||
+    Array.isArray(error.details)
   ) {
     return {};
   }
   const errors: TaskFormErrors = {};
-  for (const issue of error.details as { field?: string }[]) {
-    const field = issue.field as keyof TaskFormValues | undefined;
-    if (field && FORM_FIELDS.has(field)) errors[field] = 'tasks.error.server';
+  for (const field of Object.keys(error.details)) {
+    if (FORM_FIELDS.has(field as keyof TaskFormValues)) errors[field as keyof TaskFormValues] = 'tasks.error.server';
   }
   return errors;
 }
@@ -82,6 +94,7 @@ export function TasksPage() {
   const rooms = useRooms();
   const tasks = useTasks();
   const settings = useSettings();
+  const limits = useLimits().data?.tasks;
   const { activeUsers, profile } = useProfile();
   const [showInactive, setShowInactive, resetInactive] = usePersistedFilter('tasks.showInactive', profile?._id ?? null, false);
   const [roomFilter, setRoomFilter, resetRoom] = usePersistedFilter('tasks.room', profile?._id ?? null, 'all');
@@ -90,13 +103,20 @@ export function TasksPage() {
   const [deleting, setDeleting] = useState<Task | null>(null);
   const [collapsedRooms, setCollapsedRooms] = useState<Set<string> | null>(null);
 
-  const invalidateTasks = () => queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
+  // The tasks key is the prefix of the v2 query too; a changed task also changes the due list and the plan of the days.
+  const invalidateTasks = () =>
+    Promise.all(
+      [queryKeys.tasks, ['due'], ['occurrences']].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+    );
 
   const saveTask = useMutation({
-    mutationFn: async ({ id, input }: { id?: string; input: CreateTaskInput }) =>
-      id
-        ? (await api.patch<Task>(`/api/tasks/${id}`, input)).data
-        : (await api.post<Task>('/api/tasks', input)).data,
+    mutationFn: async ({ id, input }: { id?: string; input: TaskBody }) => {
+      // The body is complete as the API documents it; `points` is left out when the server should default it.
+      const body = input as unknown as UpdateTaskRequest;
+      return id
+        ? (await unwrap(apiV2.PATCH('/api/v2/tasks/{id}', { params: { path: { id } }, body }))).data
+        : (await unwrap(apiV2.POST('/api/v2/tasks', { body: body as unknown as CreateTaskRequest }))).data;
+    },
     onSuccess: async () => {
       setEditing(null);
       await invalidateTasks();
@@ -105,16 +125,24 @@ export function TasksPage() {
 
   const setActive = useMutation({
     mutationFn: async ({ id, active }: { id: string; active: boolean }) =>
-      (await api.patch<Task>(`/api/tasks/${id}`, { active })).data,
+      (await unwrap(apiV2.PATCH('/api/v2/tasks/{id}', { params: { path: { id } }, body: { active } as unknown as UpdateTaskRequest }))).data,
     onSuccess: invalidateTasks,
   });
 
   const bulk = useMutation({
-    mutationFn: async ({ roomId, body }: { roomId: string; body: Record<string, unknown> }) =>
-      (await api.post<{ updated: number }>(`/api/rooms/${roomId}/tasks/bulk`, body)).data,
+    mutationFn: async ({ roomId, body }: { roomId: string; body: BulkBody }) =>
+      (
+        await unwrap(
+          apiV2.POST('/api/v2/rooms/{id}/tasks/bulk', {
+            params: { path: { id: roomId } },
+            body: body as unknown as BulkRoomTasksRequest,
+          }),
+        )
+      ).data,
     onSuccess: invalidateTasks,
   });
 
+  // The v2 API deactivates tasks but cannot delete them yet (the delete needs the plans and badges), so this stays on the Node client.
   const removeTask = useMutation({
     mutationFn: async (id: string) => (await api.delete<{ deleted: boolean }>(`/api/tasks/${id}`)).data,
     onSuccess: async () => {
@@ -150,7 +178,7 @@ export function TasksPage() {
   const visible = tasks.data.filter(
     (task) => (showInactive || task.active) && (roomFilter === 'all' || task.roomId === roomFilter),
   );
-  const filteredRooms = roomFilter === 'all' ? rooms.data : rooms.data.filter((room) => room._id === roomFilter);
+  const filteredRooms = roomFilter === 'all' ? rooms.data : rooms.data.filter((room) => room.id === roomFilter);
   const groups = groupTasksByRoom(visible, filteredRooms);
   const activeRooms = rooms.data.filter((r) => r.active);
   const editingTitle =
@@ -160,8 +188,8 @@ export function TasksPage() {
 
   const submit = (values: TaskFormValues) => {
     saveTask.mutate({
-      id: editing?.mode === 'edit' ? editing.task._id : undefined,
-      input: toTaskInput(values, editing?.mode === 'edit' ? 'edit' : 'create'),
+      id: editing?.mode === 'edit' ? editing.task.id : undefined,
+      input: toTaskInput(values),
     });
   };
 
@@ -192,7 +220,7 @@ export function TasksPage() {
             >
               <option value="all">{t('tasks.allRooms')}</option>
               {rooms.data.map((room) => (
-                <option key={room._id} value={room._id}>{room.name}</option>
+                <option key={room.id} value={room.id}>{room.name}</option>
               ))}
             </NativeSelect>
             <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg px-3 text-sm font-semibold text-muted-foreground hover:bg-secondary">
@@ -234,15 +262,15 @@ export function TasksPage() {
           <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-2xl">
             <DialogHeader className="pr-8">
               <DialogTitle>{editingTitle}</DialogTitle>
-              <DialogDescription>
-                Vul de taakgegevens in. Je plek in de takenlijst blijft behouden.
-              </DialogDescription>
+              <DialogDescription>{t('tasks.formDescription')}</DialogDescription>
             </DialogHeader>
             <TaskForm
-              key={editing.mode === 'edit' ? editing.task._id : `new-${editing.roomId ?? ''}`}
+              key={editing.mode === 'edit' ? editing.task.id : `new-${editing.roomId ?? ''}`}
               title={editingTitle}
               showTitle={false}
               className="rounded-none border-0 bg-transparent p-0 shadow-none"
+              mode={editing.mode === 'edit' ? 'edit' : 'create'}
+              limits={limits}
               initial={
                 editing.mode === 'edit'
                   ? taskToForm(editing.task)
@@ -269,7 +297,7 @@ export function TasksPage() {
             {removeTask.isError && <p role="alert" className="text-sm text-destructive">{t('tasks.deleteError')}</p>}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setDeleting(null)}>{t('common.cancel')}</Button>
-              <Button type="button" variant="destructive" disabled={removeTask.isPending} onClick={() => removeTask.mutate(deleting._id)}>
+              <Button type="button" variant="destructive" disabled={removeTask.isPending} onClick={() => removeTask.mutate(deleting.id)}>
                 <Trash2 aria-hidden="true" />{t('tasks.delete')}
               </Button>
             </DialogFooter>
@@ -313,7 +341,7 @@ export function TasksPage() {
                 saveTask.reset();
                 setEditing({ mode: 'edit', task });
               }}
-              onToggleActive={(task) => setActive.mutate({ id: task._id, active: !task.active })}
+              onToggleActive={(task) => setActive.mutate({ id: task.id, active: !task.active })}
               onDelete={setDeleting}
               onBulkDeactivate={() => {
                 if (
@@ -462,7 +490,7 @@ function RoomSection({
             const assignee = users.find((u) => u._id === task.defaultAssigneeId);
             return (
               <li
-                key={task._id}
+                key={task.id}
                 className={cn(
                   'flex items-center gap-4 px-6 py-3 transition-colors hover:bg-secondary/30',
                   !task.active && 'bg-muted/40',
@@ -533,7 +561,7 @@ function RoomSection({
                     {task.active ? t('tasks.deactivate') : t('tasks.activate')}
                   </Button>
                   <Button asChild variant="link" size="sm" className="text-muted-foreground">
-                    <Link to={`/manage/history?entity=task&entityId=${task._id}`}>
+                    <Link to={`/manage/history?entity=task&entityId=${task.id}`}>
                       <History aria-hidden="true" />
                       {t('tasks.history')}
                     </Link>

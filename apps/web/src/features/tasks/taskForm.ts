@@ -1,5 +1,4 @@
-import type { CreateTaskInput, Task } from '@huishoudplanner/shared';
-import { defaultPointsForDuration, MAX_TASK_POINTS, MIN_TASK_POINTS } from '@huishoudplanner/shared/points';
+import type { Task } from '../../api/v2/queries.ts';
 import type { MessageKey } from '../../i18n/nl.ts';
 
 /** Raw form state: everything is a string, as in the inputs. */
@@ -8,7 +7,7 @@ export interface TaskFormValues {
   roomId: string;
   intervalKey: string;
   durationMinutes: string;
-  /** Whole number 0..1000; '' lets the server default it from the duration. */
+  /** A whole number within the limits of the server; '' on a new task lets the server default it from the duration. */
   points: string;
   /** '' = "wie dan ook" */
   defaultAssigneeId: string;
@@ -18,6 +17,12 @@ export interface TaskFormValues {
 }
 
 export type TaskFormErrors = Partial<Record<keyof TaskFormValues, MessageKey>>;
+
+/** The task limits of `GET /api/v2/meta/limits` that the form checks. */
+export interface TaskFormLimits {
+  minPoints: number;
+  maxPoints: number;
+}
 
 export function emptyTaskForm(defaults: Partial<TaskFormValues> = {}): TaskFormValues {
   return {
@@ -39,15 +44,22 @@ export function taskToForm(task: Task): TaskFormValues {
     roomId: task.roomId,
     intervalKey: task.intervalKey,
     durationMinutes: String(task.durationMinutes),
-    points: String(task.points ?? defaultPointsForDuration(task.durationMinutes)),
+    points: String(task.points),
     defaultAssigneeId: task.defaultAssigneeId ?? '',
     notes: task.notes,
     tags: task.tags.join(', '),
   };
 }
 
-/** Same rules as the server: name, room, interval and a whole number of minutes ≥ 1 are required. */
-export function validateTaskForm(values: TaskFormValues): TaskFormErrors {
+/**
+ * Early feedback on the rules of the server: name, room, interval and a whole number of minutes of at least 1 are
+ * required, and the points are a whole number within the limits. The server stays the judge: it answers every
+ * rule again, also while the limits are not loaded yet.
+ */
+export function validateTaskForm(
+  values: TaskFormValues,
+  options: { limits?: TaskFormLimits; mode?: 'create' | 'edit' } = {},
+): TaskFormErrors {
   const errors: TaskFormErrors = {};
   if (!values.name.trim()) errors.name = 'tasks.error.nameRequired';
   if (!values.roomId) errors.roomId = 'tasks.error.roomRequired';
@@ -56,26 +68,37 @@ export function validateTaskForm(values: TaskFormValues): TaskFormErrors {
   if (!duration) errors.durationMinutes = 'tasks.error.durationRequired';
   else if (!/^\d+$/.test(duration) || Number(duration) < 1) errors.durationMinutes = 'tasks.error.durationInvalid';
   const points = values.points.trim();
-  if (points && (!/^\d+$/.test(points) || Number(points) < MIN_TASK_POINTS || Number(points) > MAX_TASK_POINTS)) {
-    errors.points = 'tasks.error.pointsInvalid';
+  if (points === '') {
+    // Only a new task can leave the points to the server's default; an update cannot ask for it.
+    if (options.mode === 'edit') errors.points = 'tasks.error.pointsRequired';
+  } else {
+    const { limits } = options;
+    const outOfRange = limits !== undefined && (Number(points) < limits.minPoints || Number(points) > limits.maxPoints);
+    if (!/^\d+$/.test(points) || outOfRange) errors.points = 'tasks.error.pointsInvalid';
   }
   return errors;
 }
 
-/** The default points for a duration as form text; '' while the duration is not a whole number of at least 1. */
-export function defaultPointsText(duration: string): string {
-  const text = duration.trim();
-  if (!/^\d+$/.test(text) || Number(text) < 1) return '';
-  return String(defaultPointsForDuration(Number(text)));
+/** The body of `POST /api/v2/tasks` and `PATCH /api/v2/tasks/{id}`. */
+export interface TaskBody {
+  name: string;
+  roomId: string;
+  intervalKey: string;
+  durationMinutes: number;
+  points?: number;
+  /** An explicit null means "anyone"; the API documents it. */
+  defaultAssigneeId: string | null;
+  notes: string;
+  tags: string[];
 }
 
 /**
- * The request body. An empty points field means the default for the duration (ADR-0011): a new
- * task omits it, so the server applies the default, and an existing task is sent the computed
- * default, because an update that omits the field would leave the old value.
+ * The request body. An empty points field is left out of the body: a new task then gets the default for its
+ * duration from the server (ADR-0011), and the form does not let an update go out without points. Optional
+ * fields are omitted, never sent as null: the server refuses an explicit null for them.
  */
-export function toTaskInput(values: TaskFormValues, mode: 'create' | 'edit' = 'create'): CreateTaskInput {
-  const points = values.points.trim() === '' && mode === 'edit' ? defaultPointsText(values.durationMinutes) : values.points.trim();
+export function toTaskInput(values: TaskFormValues): TaskBody {
+  const points = values.points.trim();
   return {
     name: values.name.trim(),
     roomId: values.roomId,

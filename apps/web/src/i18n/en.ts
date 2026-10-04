@@ -161,6 +161,8 @@ export const en = {
   "tasks.field.points": "Points",
   "tasks.field.pointsHint": "Points per execution, from 0 to 1000. By default one point per minute; 0 earns nothing.",
   "tasks.error.pointsInvalid": "The points must be a whole number from 0 to 1000.",
+  "tasks.formDescription": "Enter the task details. Your place in the task list is kept.",
+  "tasks.error.pointsRequired": "Enter the points.",
   "stats.tab.points": "Points",
   "stats.points": "Points",
   "stats.points.explainer": "Points go to the person who did the work. The balances and the entries below cover {from} to {to}, the period selected above.",

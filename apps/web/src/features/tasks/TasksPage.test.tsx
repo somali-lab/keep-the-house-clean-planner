@@ -1,17 +1,17 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ANNA, BRAM, mockApi, storeProfile } from '../../test/fixtures.ts';
-import { makeRoom, makeSettings, makeTask, renderWithProviders } from '../../test/render.tsx';
+import { ANNA, BRAM, mockApi, page, problem, storeProfile, v2Basics } from '../../test/fixtures.ts';
+import { makeRoomV2, makeSettings, makeTaskV2, renderWithProviders } from '../../test/render.tsx';
 import { TasksPage } from './TasksPage.tsx';
 
-const keuken = makeRoom({ _id: 'r1', name: 'Keuken', sortOrder: 10 });
-const badkamer = makeRoom({ _id: 'r2', name: 'Badkamer', sortOrder: 20 });
+const keuken = makeRoomV2({ id: 'r1', name: 'Keuken', sortOrder: 10 });
+const badkamer = makeRoomV2({ id: 'r2', name: 'Badkamer', sortOrder: 20 });
 
 const tasks = [
-  makeTask({ _id: 't1', name: 'Vloer dweilen', roomId: 'r1', intervalKey: '1w', durationMinutes: 20 }),
-  makeTask({ _id: 't2', name: 'Aanrecht', roomId: 'r1', intervalKey: 'daily', durationMinutes: 5, defaultAssigneeId: ANNA._id }),
-  makeTask({ _id: 't3', name: 'Douche', roomId: 'r2', intervalKey: '2wk', durationMinutes: 30 }),
-  makeTask({ _id: 't4', name: 'Oude klus', roomId: 'r2', active: false }),
+  makeTaskV2({ id: 't1', name: 'Vloer dweilen', roomId: 'r1', intervalKey: '1w', durationMinutes: 20 }),
+  makeTaskV2({ id: 't2', name: 'Aanrecht', roomId: 'r1', intervalKey: 'daily', durationMinutes: 5, defaultAssigneeId: ANNA._id }),
+  makeTaskV2({ id: 't3', name: 'Douche', roomId: 'r2', intervalKey: '2wk', durationMinutes: 30 }),
+  makeTaskV2({ id: 't4', name: 'Oude klus', roomId: 'r2', active: false }),
 ];
 
 function setup(extraRoutes: Record<string, unknown> = {}) {
@@ -19,8 +19,9 @@ function setup(extraRoutes: Record<string, unknown> = {}) {
   storeProfile(ANNA._id);
   return mockApi({
     '/api/users': [ANNA, BRAM],
-    '/api/rooms': [badkamer, keuken],
-    '/api/tasks': tasks,
+    '/api/v2/rooms': page([badkamer, keuken]),
+    '/api/v2/tasks': page(tasks),
+    ...v2Basics(),
     '/api/settings': makeSettings(),
     ...extraRoutes,
   });
@@ -111,7 +112,7 @@ describe('TasksPage — grouping', () => {
 
 describe('TasksPage — form validation', () => {
   it('requires a duration and does not call the API without one', async () => {
-    const fetchMock = setup({ 'POST /api/tasks': makeTask({ _id: 't9', name: 'Ramen', roomId: 'r1' }) });
+    const fetchMock = setup({ 'POST /api/v2/tasks': makeTaskV2({ id: 't9', name: 'Ramen', roomId: 'r1' }) });
     renderWithProviders(<TasksPage />);
     fireEvent.click(await screen.findByRole('button', { name: 'Nieuwe taak' }));
 
@@ -132,7 +133,7 @@ describe('TasksPage — form validation', () => {
 
     fireEvent.change(duration, { target: { value: '25' } });
     fireEvent.click(within(form).getByRole('button', { name: 'Opslaan' }));
-    await waitFor(() => expect(bodyOf(fetchMock, 'POST', '/api/tasks')).toEqual({
+    await waitFor(() => expect(bodyOf(fetchMock, 'POST', '/api/v2/tasks')).toEqual({
       name: 'Ramen',
       roomId: 'r1',
       intervalKey: '4wk',
@@ -160,7 +161,7 @@ describe('TasksPage — form validation', () => {
   });
 
   it('prefills the room when adding from a room section and edits existing tasks via PATCH', async () => {
-    const fetchMock = setup({ 'PATCH /api/tasks/t3': makeTask({ _id: 't3', name: 'Douche', roomId: 'r2' }) });
+    const fetchMock = setup({ 'PATCH /api/v2/tasks/t3': makeTaskV2({ id: 't3', name: 'Douche', roomId: 'r2' }) });
     renderWithProviders(<TasksPage />);
     fireEvent.click(await screen.findByRole('button', { name: 'Taak toevoegen aan Badkamer' }));
     expect(within(screen.getByRole('form')).getByLabelText('Ruimte')).toHaveValue('r2');
@@ -173,32 +174,85 @@ describe('TasksPage — form validation', () => {
     fireEvent.change(within(form).getByLabelText('Standaard uitvoerder'), { target: { value: BRAM._id } });
     fireEvent.click(within(form).getByRole('button', { name: 'Opslaan' }));
     await waitFor(() =>
-      expect(bodyOf(fetchMock, 'PATCH', '/api/tasks/t3')).toMatchObject({ durationMinutes: 30, defaultAssigneeId: BRAM._id }),
+      expect(bodyOf(fetchMock, 'PATCH', '/api/v2/tasks/t3')).toEqual({
+        name: 'Douche',
+        roomId: 'r2',
+        intervalKey: '2wk',
+        durationMinutes: 30,
+        points: 15,
+        defaultAssigneeId: BRAM._id,
+        notes: '',
+        tags: [],
+      }),
     );
+  });
+
+  it('refuses to save an existing task with an empty points field instead of sending nothing', async () => {
+    const fetchMock = setup({ 'PATCH /api/v2/tasks/t3': makeTaskV2({ id: 't3', name: 'Douche', roomId: 'r2' }) });
+    renderWithProviders(<TasksPage />);
+    await expandAllRooms();
+    fireEvent.click(await screen.findByRole('button', { name: 'Douche bewerken' }));
+    const form = screen.getByRole('form', { name: 'Douche bewerken' });
+    fireEvent.change(within(form).getByLabelText('Punten'), { target: { value: '' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Opslaan' }));
+    expect(await within(form).findByRole('alert')).toHaveTextContent('Vul de punten in.');
+    expect(fetchMock.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === 'PATCH')).toBe(false);
+  });
+
+  it('sends the points typed for a new task and leaves the field out otherwise, so the server computes the default', async () => {
+    const fetchMock = setup({ 'POST /api/v2/tasks': makeTaskV2({ id: 't9', name: 'Ramen', roomId: 'r1' }) });
+    renderWithProviders(<TasksPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Nieuwe taak' }));
+    const form = screen.getByRole('form', { name: 'Nieuwe taak' });
+    expect(within(form).getByLabelText('Punten')).not.toHaveAttribute('placeholder');
+    fireEvent.change(within(form).getByLabelText('Naam'), { target: { value: 'Ramen' } });
+    fireEvent.change(within(form).getByLabelText('Ruimte'), { target: { value: 'r1' } });
+    fireEvent.change(within(form).getByLabelText('Interval'), { target: { value: '4wk' } });
+    fireEvent.change(within(form).getByLabelText('Duur (minuten)'), { target: { value: '25' } });
+    fireEvent.change(within(form).getByLabelText('Punten'), { target: { value: '0' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Opslaan' }));
+    await waitFor(() => expect(bodyOf(fetchMock, 'POST', '/api/v2/tasks')).toMatchObject({ durationMinutes: 25, points: 0 }));
+  });
+
+  it('marks the field the server refused, from the errors member of the problem', async () => {
+    setup({
+      'POST /api/v2/tasks': () => problem(400, 'validation_error', 'One or more fields are invalid.', { errors: { roomId: ['inactive_room'] } }),
+    });
+    renderWithProviders(<TasksPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Nieuwe taak' }));
+    const form = screen.getByRole('form', { name: 'Nieuwe taak' });
+    fireEvent.change(within(form).getByLabelText('Naam'), { target: { value: 'Ramen' } });
+    fireEvent.change(within(form).getByLabelText('Ruimte'), { target: { value: 'r1' } });
+    fireEvent.change(within(form).getByLabelText('Interval'), { target: { value: '4wk' } });
+    fireEvent.change(within(form).getByLabelText('Duur (minuten)'), { target: { value: '25' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Opslaan' }));
+    expect(await within(form).findByRole('alert')).toHaveTextContent('Deze waarde is niet geldig.');
+    expect(within(form).getByLabelText('Ruimte')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByRole('form', { name: 'Nieuwe taak' })).toBeInTheDocument();
   });
 });
 
 describe('TasksPage — actions', () => {
   it('deactivates a single task and runs bulk actions per room', async () => {
     const fetchMock = setup({
-      'PATCH /api/tasks/t1': makeTask({ _id: 't1', name: 'Vloer dweilen', roomId: 'r1', active: false }),
-      'POST /api/rooms/r1/tasks/bulk': { updated: 2 },
+      'PATCH /api/v2/tasks/t1': makeTaskV2({ id: 't1', name: 'Vloer dweilen', roomId: 'r1', active: false }),
+      'POST /api/v2/rooms/r1/tasks/bulk': { updated: 2 },
     });
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     renderWithProviders(<TasksPage />);
     await expandAllRooms();
 
     fireEvent.click(await screen.findByRole('button', { name: 'Vloer dweilen deactiveren' }));
-    await waitFor(() => expect(bodyOf(fetchMock, 'PATCH', '/api/tasks/t1')).toEqual({ active: false }));
+    await waitFor(() => expect(bodyOf(fetchMock, 'PATCH', '/api/v2/tasks/t1')).toEqual({ active: false }));
 
     const bulk = screen.getByRole('group', { name: 'Acties voor alle taken in Keuken' });
     fireEvent.click(within(bulk).getByRole('button', { name: 'Alle taken deactiveren' }));
-    await waitFor(() => expect(bodyOf(fetchMock, 'POST', '/api/rooms/r1/tasks/bulk')).toEqual({ op: 'deactivate' }));
+    await waitFor(() => expect(bodyOf(fetchMock, 'POST', '/api/v2/rooms/r1/tasks/bulk')).toEqual({ op: 'deactivate' }));
 
     fireEvent.change(within(bulk).getByLabelText('Alle taken toewijzen aan'), { target: { value: BRAM._id } });
     fireEvent.click(within(bulk).getByRole('button', { name: 'Toewijzen' }));
     await waitFor(() => {
-      const calls = fetchMock.mock.calls.filter(([u]) => u === '/api/rooms/r1/tasks/bulk');
+      const calls = fetchMock.mock.calls.filter(([u]) => u === '/api/v2/rooms/r1/tasks/bulk');
       expect(JSON.parse(String((calls.at(-1)![1] as RequestInit).body))).toEqual({
         op: 'reassign',
         defaultAssigneeId: BRAM._id,
@@ -207,6 +261,7 @@ describe('TasksPage — actions', () => {
   });
 
   it('permanently deletes a task after confirmation', async () => {
+    // The v2 API deactivates tasks but cannot delete them yet, so the permanent delete stays on the Node client.
     const fetchMock = setup({ 'DELETE /api/tasks/t3': { deleted: true } });
     renderWithProviders(<TasksPage />);
     await expandAllRooms();

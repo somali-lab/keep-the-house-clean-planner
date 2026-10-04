@@ -1,5 +1,4 @@
-import type { Interval, Room, User } from '@huishoudplanner/shared';
-import { MAX_TASK_POINTS, MIN_TASK_POINTS } from '@huishoudplanner/shared/points';
+import type { Interval, User } from '@huishoudplanner/shared';
 import { useId, useState, type FormEvent, type ReactNode } from 'react';
 import { NativeSelect } from '@/components/NativeSelect';
 import { Button } from '@/components/ui/button';
@@ -7,14 +6,19 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
+import type { Room } from '../../api/v2/queries.ts';
 import { t } from '../../i18n/nl.ts';
-import { defaultPointsText, validateTaskForm, type TaskFormErrors, type TaskFormValues } from './taskForm.ts';
+import { validateTaskForm, type TaskFormErrors, type TaskFormLimits, type TaskFormValues } from './taskForm.ts';
 
 export interface TaskFormProps {
   title: string;
   className?: string;
   showTitle?: boolean;
   initial: TaskFormValues;
+  /** An existing task has to give its points; a new one may leave them to the server. */
+  mode?: 'create' | 'edit';
+  /** The limits of the server; the range of the points is not checked before they are loaded. */
+  limits?: TaskFormLimits;
   rooms: Room[];
   intervals: Interval[];
   users: User[];
@@ -34,6 +38,8 @@ export function TaskForm({
   className,
   showTitle = true,
   initial,
+  mode = 'create',
+  limits,
   rooms,
   intervals,
   users,
@@ -54,7 +60,7 @@ export function TaskForm({
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
-    const found = validateTaskForm(values);
+    const found = validateTaskForm(values, { limits, mode });
     setErrors(found);
     if (Object.keys(found).length === 0) onSubmit(values);
   };
@@ -105,7 +111,7 @@ export function TaskForm({
           >
             <option value="">{t('tasks.field.choose')}</option>
             {rooms.map((room) => (
-              <option key={room._id} value={room._id}>
+              <option key={room.id} value={room.id}>
                 {room.name}
               </option>
             ))}
@@ -152,13 +158,12 @@ export function TaskForm({
             {...fieldProps('points')}
             type="number"
             inputMode="numeric"
-            min={MIN_TASK_POINTS}
-            max={MAX_TASK_POINTS}
+            min={limits?.minPoints}
+            max={limits?.maxPoints}
             step={1}
             className="h-10 bg-card"
             aria-describedby={[`${idPrefix}-points-hint`, shown.points ? `${idPrefix}-points-error` : null].filter(Boolean).join(' ')}
             value={values.points}
-            placeholder={defaultPointsText(values.durationMinutes)}
             onChange={(e) => set('points')(e.target.value)}
           />
           <p id={`${idPrefix}-points-hint`} className="text-sm text-muted-foreground">

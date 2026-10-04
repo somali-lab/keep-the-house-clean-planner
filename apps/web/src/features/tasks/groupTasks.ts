@@ -1,4 +1,4 @@
-import type { Room, Task } from '@huishoudplanner/shared';
+import type { Room, Task } from '../../api/v2/queries.ts';
 import { getLocale } from '../../i18n/runtime.ts';
 
 export const UNKNOWN_ROOM_ID = '__unknown__';
@@ -19,7 +19,7 @@ const byName = (a: { name: string }, b: { name: string }) =>
  * sorted by name within a room.
  */
 export function groupTasksByRoom(tasks: Task[], rooms: Room[]): RoomGroup[] {
-  const roomById = new Map(rooms.map((r) => [r._id, r]));
+  const roomById = new Map(rooms.map((r) => [r.id, r]));
   const tasksByRoom = new Map<string, Task[]>();
   for (const task of tasks) {
     const key = roomById.has(task.roomId) ? task.roomId : UNKNOWN_ROOM_ID;
@@ -27,9 +27,9 @@ export function groupTasksByRoom(tasks: Task[], rooms: Room[]): RoomGroup[] {
   }
 
   const groups: RoomGroup[] = [...rooms]
-    .filter((room) => room.active || tasksByRoom.has(room._id))
+    .filter((room) => room.active || tasksByRoom.has(room.id))
     .sort((a, b) => a.sortOrder - b.sortOrder || byName(a, b))
-    .map((room) => ({ roomId: room._id, room, tasks: [...(tasksByRoom.get(room._id) ?? [])].sort(byName) }));
+    .map((room) => ({ roomId: room.id, room, tasks: [...(tasksByRoom.get(room.id) ?? [])].sort(byName) }));
 
   const orphans = tasksByRoom.get(UNKNOWN_ROOM_ID);
   if (orphans) groups.push({ roomId: UNKNOWN_ROOM_ID, room: null, tasks: [...orphans].sort(byName) });
