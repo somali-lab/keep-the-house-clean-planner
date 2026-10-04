@@ -20,6 +20,9 @@ public interface ForStoringRooms
     /// <summary>The rooms that exist among these ids (a malformed or unknown id is simply absent), ordered by sort order, name and id; bounded by the ids asked for.</summary>
     Task<OneOf<IReadOnlyList<Room>, PortError>> FindManyAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken);
 
+    /// <summary>The number of rooms, active or not.</summary>
+    Task<OneOf<long, PortError>> CountAsync(CancellationToken cancellationToken);
+
     /// <summary>The room with the highest sort order, or <see cref="NotFound"/> when there is no room.</summary>
     Task<OneOf<Room, NotFound, PortError>> FindLastAsync(CancellationToken cancellationToken);
 

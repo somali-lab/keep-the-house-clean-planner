@@ -11,7 +11,7 @@ namespace Huishoudplanner.Integration.Tests.Startup;
 
 /// <summary>
 /// The startup order (migrations, then indexes, then the seed) and the seeding from <c>SEED_USERS</c>: the users part of
-/// apps/server/test/seed.test.ts through the real host. The settings, rooms and plan parts of the Node seed arrive with their slices.
+/// apps/server/test/seed.test.ts through the real host. The rooms part (seven default rooms with their audit entries) is covered here too.
 /// </summary>
 public sealed class StartupTests(MongoContainerFixture mongo)
 {
@@ -162,6 +162,79 @@ public sealed class StartupTests(MongoContainerFixture mongo)
             var names = await database.GetCollection<BsonDocument>("users").Find(FilterDefinition<BsonDocument>.Empty).ToListAsync(Ct);
             names.Select(u => u["name"].AsString).Should().Equal("Solo");
             (await database.GetCollection<BsonDocument>("auditLog").CountDocumentsAsync(Builders<BsonDocument>.Filter.Eq("entity", "user"), cancellationToken: Ct)).Should().Be(0);
+        }
+        finally
+        {
+            await client.DropDatabaseAsync(databaseName, Ct);
+        }
+    }
+
+    [Fact]
+    public async Task Host_onAnEmptyDatabase_seedsTheSevenRooms_withAuditEntriesOfTheSystem_andStartedAgainAddsNothing()
+    {
+        var databaseName = MongoContainerFixture.NewDatabaseName();
+        using var client = new MongoClient(mongo.ConnectionString);
+        var database = client.GetDatabase(databaseName);
+        var rooms = database.GetCollection<BsonDocument>("rooms");
+        var auditLog = database.GetCollection<BsonDocument>("auditLog");
+        var roomAudit = Builders<BsonDocument>.Filter.Eq("entity", "room");
+        try
+        {
+            await using (var first = ApiFactory.ForMongo(mongo, databaseName))
+            {
+                using var http = first.CreateClient();
+            }
+
+            var seeded = await rooms.Find(FilterDefinition<BsonDocument>.Empty).Sort(Builders<BsonDocument>.Sort.Ascending("sortOrder")).ToListAsync(Ct);
+            seeded.Select(r => (r["name"].AsString, r["sortOrder"].AsInt32, r["virtual"].AsBoolean, r["active"].AsBoolean, r["version"].AsInt32)).Should().Equal(
+                ("Keuken", 10, false, true, 1),
+                ("Badkamer", 20, false, true, 1),
+                ("Toilet", 30, false, true, 1),
+                ("Woonkamer", 40, false, true, 1),
+                ("Slaapkamer", 50, false, true, 1),
+                ("Hal", 60, false, true, 1),
+                ("Hele huis", 70, true, true, 1));
+            var audit = await auditLog.Find(roomAudit).ToListAsync(Ct);
+            audit.Should().HaveCount(7);
+            audit.Should().OnlyContain(e =>
+                e["source"].AsString == "system" &&
+                e["actorId"].AsObjectId == ObjectId.Empty &&
+                e["action"].AsString == "create");
+            audit.Select(e => e["entityId"].AsObjectId).Should().BeEquivalentTo(seeded.Select(r => r["_id"].AsObjectId));
+
+            await using (var second = ApiFactory.ForMongo(mongo, databaseName))
+            {
+                using var http = second.CreateClient();
+            }
+
+            (await rooms.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: Ct)).Should().Be(7);
+            (await auditLog.CountDocumentsAsync(roomAudit, cancellationToken: Ct)).Should().Be(7);
+        }
+        finally
+        {
+            await client.DropDatabaseAsync(databaseName, Ct);
+        }
+    }
+
+    [Fact]
+    public async Task Host_doesNotAddRoomsWhenSomeAlreadyExist()
+    {
+        var databaseName = MongoContainerFixture.NewDatabaseName();
+        using var client = new MongoClient(mongo.ConnectionString);
+        var database = client.GetDatabase(databaseName);
+        try
+        {
+            await database.GetCollection<BsonDocument>("rooms").InsertOneAsync(
+                new BsonDocument { { "name", "Zolder" }, { "sortOrder", 5 }, { "active", true }, { "virtual", false } }, cancellationToken: Ct);
+
+            await using (var factory = ApiFactory.ForMongo(mongo, databaseName))
+            {
+                using var http = factory.CreateClient();
+            }
+
+            var names = await database.GetCollection<BsonDocument>("rooms").Find(FilterDefinition<BsonDocument>.Empty).ToListAsync(Ct);
+            names.Select(r => r["name"].AsString).Should().Equal("Zolder");
+            (await database.GetCollection<BsonDocument>("auditLog").CountDocumentsAsync(Builders<BsonDocument>.Filter.Eq("entity", "room"), cancellationToken: Ct)).Should().Be(0);
         }
         finally
         {
