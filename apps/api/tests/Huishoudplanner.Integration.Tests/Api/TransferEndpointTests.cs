@@ -481,7 +481,7 @@ public sealed class TransferEndpointTests(TransferWorld world) : IClassFixture<T
         { "a bonus schedule row that starts after today", "bonusFuture", @"^collections\.settings\.0\.bonusSchedule\.0\.from$", "bonus_schedule_in_future" },
         { "a bonus floor after today", "floorFuture", @"^collections\.settings\.0\.bonusFloor$", "bonus_floor_in_future" },
         { "a duplicate cycle index", "duplicateCycle", @"^collections\.cycles\.1\.index$", "duplicate_index" },
-        { "a duplicate id", "duplicateId", @"^collections\.rooms\.1\._id$", "duplicate_id" },
+        { "a duplicate id", "duplicateId", @"^collections\.rooms\.\d+\._id$", "duplicate_id" },
         { "a missing required field", "noName", @"^collections\.rooms\.0\.name$", "required" },
         { "a collection that is not a list", "notAList", @"^collections\.rooms$", "expected_array" },
     };

@@ -268,6 +268,7 @@ Each phase ends in something demonstrable. Slices are small enough for one pull 
 - [x] 6.8 Two maintainer decisions: `GET /api/v2/export/json` is for administrators only (like the import), and a statistics reset that removes nothing and moves nothing writes no audit entry (superseded in part by 6.9).
 - [x] 6.9 A statistics reset always moves `bonusFloor` forward and is audited then, also when every count is zero (people test first and start over); only a reset that removes nothing and leaves the floor where it is is a no-op. Badge awards are rebuilt only when something was removed.
 - [x] 6.10 `order=asc|desc` on the occurrence list: `GET /api/v2/occurrences` takes the optional `order` (default `asc`, so every caller is unchanged); `desc` lists the newest day first with the same sort key reversed (day, task name, id), the cursor carries its order and a cursor of the other order is a `400 validation_error` (`cursor_order_mismatch`) on `cursor`. The existing `(date, assigneeId)` and `(status, date)` indexes serve both directions, no index is added.
+- [x] 6.11 The host seeds the default rooms on a fresh installation: an empty rooms collection gets Keuken, Badkamer, Toilet, Woonkamer, Slaapkamer, Hal and the virtual Hele huis (sort order 10 to 70), each with a `create` audit entry of the system actor in one transaction (`IRoomSeedService`, `ForStoringRooms.CountAsync`, the `rooms` seed step after the settings step); idempotent. The e2e harness no longer creates rooms.
 
 ### Phase 7 — Web app to v2 (D4)
 

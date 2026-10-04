@@ -11,20 +11,6 @@ export const SEED_USERS = [
   { name: 'Bram', color: '#db2777' },
 ];
 
-/**
- * The rooms of a household as the Node server seeded them. The .NET host seeds users, settings and the default plan
- * but no rooms yet (docs/BLOCKERS.md), so the harness creates them through the API, as the first profile.
- */
-export const SEED_ROOMS = [
-  { name: 'Keuken', virtual: false },
-  { name: 'Badkamer', virtual: false },
-  { name: 'Toilet', virtual: false },
-  { name: 'Woonkamer', virtual: false },
-  { name: 'Slaapkamer', virtual: false },
-  { name: 'Hal', virtual: false },
-  { name: 'Hele huis', virtual: true },
-];
-
 export interface ApiUser {
   id: string;
   name: string;
@@ -191,12 +177,6 @@ export async function startServer(options: { now: string; database: string }): P
   // A host that failed to start or to be seeded must not stay running: the fixture never gets the app to stop.
   try {
     await launch(options.now);
-    if ((await app.list('/api/v2/rooms')).length === 0) {
-      const admin = await app.user(SEED_USERS[0]!.name);
-      for (const [index, room] of SEED_ROOMS.entries()) {
-        await app.api('POST', '/api/v2/rooms', { as: admin, body: { ...room, sortOrder: (index + 1) * 10 } });
-      }
-    }
   } catch (error) {
     await halt();
     throw error;
