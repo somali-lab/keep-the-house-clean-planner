@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { toInt } from '../occurrence.ts';
 import { apiV2 } from '../index.ts';
 import { unwrap } from './client.ts';
+import { collectPages } from './paging.ts';
 
 /** The limits and defaults the web app needs from the server (`GET /api/v2/meta/limits`). */
 export interface Limits {
@@ -77,4 +78,68 @@ export function useCalendar(from: string, to: string, enabled = true) {
       );
     },
   });
+}
+
+/** A room as `GET /api/v2/rooms` answers it. */
+export interface Room {
+  id: string;
+  name: string;
+  sortOrder: number;
+  active: boolean;
+  virtual: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A task as `GET /api/v2/tasks` answers it; the points are always the value in force. */
+export interface Task {
+  id: string;
+  name: string;
+  roomId: string;
+  intervalKey: string;
+  durationMinutes: number;
+  points: number;
+  defaultAssigneeId: string | null;
+  active: boolean;
+  notes: string;
+  tags: string[];
+  lastCompletedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** The most the server returns in one page of rooms or tasks (`limit` 1 to 200). */
+const LIST_PAGE_SIZE = 200;
+
+// The keys start with the ones the Node-client queries use, so an invalidation of `['rooms']` or `['tasks']`
+// (settings, planner, history, the task and room mutations) refreshes these as well.
+export const roomsKey = ['rooms', 'v2'] as const;
+export const tasksKey = ['tasks', 'v2'] as const;
+
+export async function fetchRooms(): Promise<Room[]> {
+  const rooms = await collectPages(async (cursor) =>
+    (await unwrap(apiV2.GET('/api/v2/rooms', { params: { query: { limit: String(LIST_PAGE_SIZE), cursor } } }))).data,
+  );
+  return rooms.map((room) => ({ ...room, sortOrder: toInt(room.sortOrder) }));
+}
+
+export async function fetchTasks(): Promise<Task[]> {
+  const tasks = await collectPages(async (cursor) =>
+    (await unwrap(apiV2.GET('/api/v2/tasks', { params: { query: { limit: String(LIST_PAGE_SIZE), cursor } } }))).data,
+  );
+  return tasks.map((task) => ({
+    ...task,
+    durationMinutes: toInt(task.durationMinutes),
+    points: toInt(task.points),
+  }));
+}
+
+/** All rooms, inactive ones included. */
+export function useRooms() {
+  return useQuery({ queryKey: roomsKey, queryFn: fetchRooms });
+}
+
+/** All tasks, inactive ones included. */
+export function useTasks() {
+  return useQuery({ queryKey: tasksKey, queryFn: fetchTasks });
 }

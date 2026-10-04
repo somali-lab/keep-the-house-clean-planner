@@ -3,7 +3,7 @@ import { renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { describe, expect, it } from 'vitest';
 import { LIMITS, calendarRoute, mockApi, testQueryClient } from '../../test/fixtures.ts';
-import { useCalendar, useLimits } from './queries.ts';
+import { useCalendar, useLimits, useRooms, useTasks } from './queries.ts';
 
 function wrapperFor(queryClient = testQueryClient()) {
   return ({ children }: { children: ReactNode }) => (
@@ -48,5 +48,51 @@ describe('useCalendar', () => {
     expect(days.get('2026-09-13')).toMatchObject({ cycleIndex: -1 });
     expect(days.get('2026-09-14')).toMatchObject({ cycleIndex: 0, weekIndex: 0, weekStart: '2026-09-14' });
     expect(days.get('2026-09-22')).toMatchObject({ cycleIndex: 0, weekIndex: 1, weekStart: '2026-09-21' });
+  });
+});
+
+describe('useRooms and useTasks', () => {
+  const room = (id: string, extra = {}) => ({ id, name: `Kamer ${id}`, sortOrder: '10', active: true, virtual: false, createdAt: 'x', updatedAt: 'x', ...extra });
+  const task = (id: string, extra = {}) => ({
+    id, name: `Taak ${id}`, roomId: 'r1', intervalKey: '1w', durationMinutes: '20', points: '15', defaultAssigneeId: null,
+    active: true, notes: '', tags: [], lastCompletedAt: null, createdAt: 'x', updatedAt: 'x', ...extra,
+  });
+
+  it('reads every page of the rooms and maps the numbers', async () => {
+    const fetchMock = mockApi({
+      '/api/v2/rooms': (_init: RequestInit | undefined, url: string) =>
+        new URL(url, 'http://localhost').searchParams.get('cursor') === 'c2'
+          ? { items: [room('r3')], nextCursor: null }
+          : { items: [room('r1'), room('r2')], nextCursor: 'c2' },
+    });
+    const { result } = renderHook(() => useRooms(), { wrapper: wrapperFor() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(result.current.data!.map((r) => r.id)).toEqual(['r1', 'r2', 'r3']);
+    expect(result.current.data![0]).toMatchObject({ sortOrder: 10, active: true });
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['/api/v2/rooms?limit=200', '/api/v2/rooms?limit=200&cursor=c2']);
+  });
+
+  it('reads every page of the tasks, with the points the server computed', async () => {
+    const fetchMock = mockApi({
+      '/api/v2/tasks': (_init: RequestInit | undefined, url: string) =>
+        new URL(url, 'http://localhost').searchParams.get('cursor') === 'c2'
+          ? { items: [task('t2', { points: 0 })], nextCursor: null }
+          : { items: [task('t1')], nextCursor: 'c2' },
+    });
+    const { result } = renderHook(() => useTasks(), { wrapper: wrapperFor() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(result.current.data!.map((t) => [t.id, t.durationMinutes, t.points])).toEqual([['t1', 20, 15], ['t2', 20, 0]]);
+    expect(fetchMock.mock.calls[0]![0]).toBe('/api/v2/tasks?limit=200');
+  });
+
+  it('is invalidated by the key every task mutation of the app already uses', async () => {
+    const fetchMock = mockApi({ '/api/v2/tasks': { items: [task('t1')], nextCursor: null } });
+    const queryClient = testQueryClient();
+    const { result } = renderHook(() => useTasks(), { wrapper: wrapperFor(queryClient) });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    await queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    await waitFor(() => expect(fetchMock.mock.calls.length).toBe(2));
   });
 });

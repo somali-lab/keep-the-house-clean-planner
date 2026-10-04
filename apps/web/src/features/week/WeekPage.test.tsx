@@ -3,7 +3,7 @@ import { createElement, type ComponentProps } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ApiWarning, Occurrence } from '../../api/index.ts';
 import { ANNA, BRAM, mockApi, page, problem, storeProfile, v2Basics } from '../../test/fixtures.ts';
-import { makeOccurrenceV2, makeRoom, makeSettings, makeTask, renderWithProviders } from '../../test/render.tsx';
+import { makeOccurrenceV2, makeRoomV2, makeSettings, makeTaskV2, renderWithProviders } from '../../test/render.tsx';
 import { resetProfileStore } from '../../identity/profileStore.ts';
 import { WeekPage } from './WeekPage.tsx';
 import { groupByDay, matchesTaskName, movedTo, overviewDays, shortDay, weekDays, weekRangeLabel } from './weekModel.ts';
@@ -55,8 +55,8 @@ function setup(settings = makeSettings(), users = [ANNA, BRAM]) {
   return mockApi({
     '/api/users': users,
     '/api/settings': settings,
-    '/api/rooms': [makeRoom({ _id: 'r1', name: 'Woonkamer' })],
-    '/api/tasks': [makeTask({ _id: 't1', name: 'Huishoudtaak', roomId: 'r1' })],
+    '/api/v2/rooms': page([makeRoomV2({ id: 'r1', name: 'Woonkamer' })]),
+    '/api/v2/tasks': page([makeTaskV2({ id: 't1', name: 'Huishoudtaak', roomId: 'r1' })]),
     ...v2Basics(settings.cycleAnchorDate),
     '/api/v2/occurrences': () => page(db),
     ...Object.fromEntries(
@@ -259,8 +259,8 @@ describe('WeekPage', () => {
     const fetchMock = mockApi({
       '/api/users': [ANNA, BRAM],
       '/api/settings': makeSettings(),
-      '/api/rooms': [makeRoom({ _id: 'r1', name: 'Woonkamer' })],
-      '/api/tasks': [makeTask({ _id: 't1', name: 'Huishoudtaak', roomId: 'r1' })],
+      '/api/v2/rooms': page([makeRoomV2({ id: 'r1', name: 'Woonkamer' })]),
+      '/api/v2/tasks': page([makeTaskV2({ id: 't1', name: 'Huishoudtaak', roomId: 'r1' })]),
       ...v2Basics(),
       '/api/v2/occurrences': () => page(db),
       'POST /api/v2/occurrences/o-extra/retraction': () => {
@@ -286,8 +286,8 @@ describe('WeekPage', () => {
     mockApi({
       '/api/users': [ANNA, BRAM],
       '/api/settings': makeSettings(),
-      '/api/rooms': [makeRoom({ _id: 'r1', name: 'Woonkamer' })],
-      '/api/tasks': [makeTask({ _id: 't1', name: 'Huishoudtaak', roomId: 'r1' })],
+      '/api/v2/rooms': page([makeRoomV2({ id: 'r1', name: 'Woonkamer' })]),
+      '/api/v2/tasks': page([makeTaskV2({ id: 't1', name: 'Huishoudtaak', roomId: 'r1' })]),
       ...v2Basics(),
       '/api/v2/occurrences': () => page(db),
     });
@@ -351,8 +351,8 @@ describe('WeekPage', () => {
     mockApi({
       '/api/users': [ANNA, BRAM],
       '/api/settings': makeSettings({ completionControl: 'thumb' }),
-      '/api/rooms': [makeRoom({ _id: 'r1', name: 'Woonkamer' })],
-      '/api/tasks': [makeTask({ _id: 't1', name: 'Huishoudtaak', roomId: 'r1' })],
+      '/api/v2/rooms': page([makeRoomV2({ id: 'r1', name: 'Woonkamer' })]),
+      '/api/v2/tasks': page([makeTaskV2({ id: 't1', name: 'Huishoudtaak', roomId: 'r1' })]),
       ...v2Basics(),
       '/api/v2/occurrences': () => page(db),
     });
@@ -395,8 +395,8 @@ describe('WeekPage', () => {
     const routes = {
       '/api/users': [ANNA, BRAM],
       '/api/settings': makeSettings(),
-      '/api/rooms': [makeRoom({ _id: 'r1', name: 'Woonkamer' })],
-      '/api/tasks': [makeTask({ _id: 't1', name: 'Huishoudtaak', roomId: 'r1' })],
+      '/api/v2/rooms': page([makeRoomV2({ id: 'r1', name: 'Woonkamer' })]),
+      '/api/v2/tasks': page([makeTaskV2({ id: 't1', name: 'Huishoudtaak', roomId: 'r1' })]),
       ...v2Basics(),
       '/api/v2/occurrences': () => page(db),
       'POST /api/v2/occurrences/o2/reschedule': () => problem(409, 'cycle_not_generated', 'No cycle.'),
@@ -418,8 +418,8 @@ describe('WeekPage', () => {
     mockApi({
       '/api/users': [ANNA, BRAM],
       '/api/settings': makeSettings(),
-      '/api/rooms': [makeRoom({ _id: 'r1', name: 'Woonkamer' })],
-      '/api/tasks': [makeTask({ _id: 't1', name: 'Huishoudtaak', roomId: 'r1' })],
+      '/api/v2/rooms': page([makeRoomV2({ id: 'r1', name: 'Woonkamer' })]),
+      '/api/v2/tasks': page([makeTaskV2({ id: 't1', name: 'Huishoudtaak', roomId: 'r1' })]),
       '/api/v2/occurrences': () => page(db),
       '/api/v2/calendar': () => problem(500, 'internal_error'),
     });

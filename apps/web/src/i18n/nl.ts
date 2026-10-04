@@ -192,6 +192,8 @@ export const nl = {
   'tasks.field.points': 'Punten',
   'tasks.field.pointsHint': 'Punten per uitvoering, van 0 tot 1000. Standaard één punt per minuut; 0 levert niets op.',
   'tasks.error.pointsInvalid': 'De punten moeten een heel getal van 0 tot 1000 zijn.',
+  'tasks.formDescription': 'Vul de taakgegevens in. Je plek in de takenlijst blijft behouden.',
+  'tasks.error.pointsRequired': 'Vul de punten in.',
   'stats.tab.points': 'Punten',
   'stats.points': 'Punten',
   'stats.points.explainer': 'Punten gaan naar degene die het werk deed. De standen en posten hieronder gelden van {from} tot {to}, de periode die hierboven is gekozen.',

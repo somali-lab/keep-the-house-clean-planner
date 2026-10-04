@@ -11,8 +11,8 @@ describe('app shell', () => {
     window.history.replaceState(null, '', '/');
     mockApi({
       '/api/users': [ANNA, BRAM],
-      '/api/tasks': [],
-      '/api/rooms': [],
+      '/api/v2/tasks': page([]),
+      '/api/v2/rooms': page([]),
       '/api/settings': makeSettings(),
       '/api/cycle-plans': [],
       '/api/occurrences': [],
@@ -73,8 +73,8 @@ describe('app shell', () => {
     setViewportWidth(375);
     mockApi({
       '/api/users': [ANNA, BRAM],
-      '/api/tasks': [],
-      '/api/rooms': [],
+      '/api/v2/tasks': page([]),
+      '/api/v2/rooms': page([]),
       '/api/settings': makeSettings(),
       '/api/cycle-plans': [],
       '/api/occurrences': [],
@@ -138,8 +138,8 @@ describe('app shell', () => {
     const member = { ...BRAM, role: 'member' as const };
     mockApi({
       '/api/users': [ANNA, member],
-      '/api/tasks': [],
-      '/api/rooms': [],
+      '/api/v2/tasks': page([]),
+      '/api/v2/rooms': page([]),
       '/api/settings': makeSettings(),
       '/api/cycle-plans': [],
       '/api/occurrences': [],

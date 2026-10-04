@@ -1,11 +1,11 @@
-import { weekIndexFor } from '@huishoudplanner/shared/cycle';
 import { ListChecks, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useFilterReset } from '@/components/FilterReset';
 import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { useRooms, useSettings, useTasks } from '../../api/queries.ts';
+import { useSettings } from '../../api/queries.ts';
+import { useCalendar, useRooms, useTasks } from '../../api/v2/queries.ts';
 import { format, t } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
 import { usePersistedFilter } from '../../hooks/usePersistedFilter.ts';
@@ -33,7 +33,10 @@ export function MobileTasksPage({ now }: { now?: Date }) {
   useFilterReset(() => { resetWeeks(); resetRooms(); }, weeks !== 1 || hiddenRoomIds.length > 0);
   const from = dayKeyInZone(now ?? new Date(), settings.data?.timezone ?? 'Europe/Amsterdam');
   const to = addDays(from, weeks * 7 - 1);
-  const cycleWeek = settings.data ? weekIndexFor(from, settings.data.cycleAnchorDate) + 1 : null;
+  // The week of the cycle comes from the server; before the first cycle starts there is none to show.
+  const calendar = useCalendar(from, from, settings.isSuccess);
+  const today = calendar.data?.get(from);
+  const cycleWeek = today && today.cycleIndex >= 0 ? today.weekIndex + 1 : null;
   const occurrences = useOccurrences(from, to, settings.isSuccess);
   const rows = useMemo(() => {
     const relevant = (occurrences.data ?? []).filter(
@@ -44,17 +47,18 @@ export function MobileTasksPage({ now }: { now?: Date }) {
         relevant.filter((occurrence) => occurrence.assigneeId === assigneeId),
         tasks.data ?? [],
         rooms.data ?? [],
-        t('tasks.unknownRoom'), from, settings.data?.cycleAnchorDate ?? from,
+        t('tasks.unknownRoom'),
+        from,
       );
     return { mine: build(profile?._id ?? ''), unassigned: build(null) };
-  }, [from, occurrences.data, profile?._id, rooms.data, settings.data?.cycleAnchorDate, tasks.data]);
+  }, [from, occurrences.data, profile?._id, rooms.data, tasks.data]);
   const hiddenRoomSet = new Set(hiddenRoomIds);
   const filterRooms = (items: TaskOverviewRow[]) =>
     items.filter((row) => row.roomId === null || !hiddenRoomSet.has(row.roomId));
   const visible = { mine: filterRooms(rows.mine), unassigned: filterRooms(rows.unassigned) };
   const allRows = [...rows.mine, ...rows.unassigned];
   const usedRooms = (rooms.data ?? [])
-    .filter((room) => allRows.some((row) => row.roomId === room._id))
+    .filter((room) => allRows.some((row) => row.roomId === room.id))
     .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
 
   if (settings.isPending || tasks.isPending || rooms.isPending || occurrences.isPending) {
@@ -94,10 +98,10 @@ export function MobileTasksPage({ now }: { now?: Date }) {
           <legend className="text-sm font-semibold">{t('mobileTasks.rooms')}</legend>
           <div className="flex flex-wrap gap-2">
             {usedRooms.map((room) => {
-              const checked = !hiddenRoomSet.has(room._id);
+              const checked = !hiddenRoomSet.has(room.id);
               return (
                 <label
-                  key={room._id}
+                  key={room.id}
                   className={cn(
                     'flex min-h-9 cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-semibold transition-colors',
                     checked
@@ -111,9 +115,9 @@ export function MobileTasksPage({ now }: { now?: Date }) {
                     checked={checked}
                     onChange={() =>
                       setHiddenRoomIds((current) => {
-                        return current.includes(room._id)
-                          ? current.filter((id) => id !== room._id)
-                          : [...current, room._id];
+                        return current.includes(room.id)
+                          ? current.filter((id) => id !== room.id)
+                          : [...current, room.id];
                       })
                     }
                   />

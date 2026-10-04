@@ -8,8 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { Occurrence } from '../../api/index.ts';
-import { useRooms, useSettings, useTasks } from '../../api/queries.ts';
-import { useCalendar } from '../../api/v2/queries.ts';
+import { useSettings } from '../../api/queries.ts';
+import { useCalendar, useRooms, useTasks } from '../../api/v2/queries.ts';
 import { addDays, dayKeyInZone } from '@/lib/dayKey';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
@@ -76,8 +76,8 @@ export function TodayPage({ now }: { now?: Date }) {
   }, [snackbar]);
 
   const roomByTask = useMemo(() => {
-    const roomNames = new Map((rooms.data ?? []).map((r) => [r._id, r.name]));
-    return new Map((tasks.data ?? []).map((task) => [task._id, roomNames.get(task.roomId)]));
+    const roomNames = new Map((rooms.data ?? []).map((r) => [r.id, r.name]));
+    return new Map((tasks.data ?? []).map((task) => [task.id, roomNames.get(task.roomId)]));
   }, [tasks.data, rooms.data]);
 
   if (settings.isPending || occurrences.isPending)

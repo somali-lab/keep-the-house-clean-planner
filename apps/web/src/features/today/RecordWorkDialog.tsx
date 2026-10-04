@@ -7,8 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { ApiRequestError, type Occurrence } from '../../api/index.ts';
-import { useRooms, useTasks } from '../../api/queries.ts';
-import { useLimits } from '../../api/v2/queries.ts';
+import { useLimits, useRooms, useTasks } from '../../api/v2/queries.ts';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
 import { useCheckOffPlanned, useOccurrences, useRecordWork } from './api.ts';
@@ -133,7 +132,7 @@ function RecordWorkFormBody({
     [tasks.data],
   );
   const activeRooms = useMemo(() => (rooms.data ?? []).filter((room) => room.active), [rooms.data]);
-  const roomNames = useMemo(() => new Map((rooms.data ?? []).map((room) => [room._id, room.name])), [rooms.data]);
+  const roomNames = useMemo(() => new Map((rooms.data ?? []).map((room) => [room.id, room.name])), [rooms.data]);
 
   const planning = form.mode === 'plan';
   // A planned task that is still open today only matters when the work is recorded as done.
@@ -297,7 +296,7 @@ function RecordWorkFormBody({
           >
             <option value="">{t('recordWork.taskPlaceholder')}</option>
             {activeTasks.map((task) => (
-              <option key={task._id} value={task._id}>
+              <option key={task.id} value={task.id}>
                 {[task.name, roomNames.get(task.roomId)].filter(Boolean).join(' · ')}
               </option>
             ))}
@@ -363,7 +362,7 @@ function RecordWorkFormBody({
               >
                 <option value="">{t('tasks.noRoom')}</option>
                 {activeRooms.map((room) => (
-                  <option key={room._id} value={room._id}>
+                  <option key={room.id} value={room.id}>
                     {room.name}
                   </option>
                 ))}

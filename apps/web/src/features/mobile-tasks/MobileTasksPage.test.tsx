@@ -4,30 +4,30 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { ANNA, BRAM, mockApi, page, storeProfile, v2Basics } from '../../test/fixtures.ts';
 import {
   makeOccurrenceV2,
-  makeRoom,
+  makeRoomV2,
   makeSettings,
-  makeTask,
+  makeTaskV2,
   renderWithProviders,
 } from '../../test/render.tsx';
 import { MobileTasksPage } from './MobileTasksPage.tsx';
 import { taskOverviewRows } from './taskOverviewModel.ts';
 
 const NOW = new Date('2026-09-16T08:00:00Z');
-const LIVING = makeRoom({ _id: 'r1', name: 'Woonkamer', sortOrder: 1 });
-const BEDROOM = makeRoom({ _id: 'r2', name: 'Slaapkamer', sortOrder: 2 });
-const VACUUM = makeTask({ _id: 't1', name: 'Stofzuigen', roomId: LIVING._id });
-const BEDDING = makeTask({ _id: 't2', name: 'Beddengoed', roomId: BEDROOM._id });
+const LIVING = makeRoomV2({ id: 'r1', name: 'Woonkamer', sortOrder: 1 });
+const BEDROOM = makeRoomV2({ id: 'r2', name: 'Slaapkamer', sortOrder: 2 });
+const VACUUM = makeTaskV2({ id: 't1', name: 'Stofzuigen', roomId: LIVING.id });
+const BEDDING = makeTaskV2({ id: 't2', name: 'Beddengoed', roomId: BEDROOM.id });
 
 const planned: Occurrence[] = [
-  makeOccurrenceV2({ id: 'o1', taskId: VACUUM._id, taskNameSnapshot: VACUUM.name, date: '2026-09-16', assigneeId: ANNA._id }),
-  makeOccurrenceV2({ id: 'o2', taskId: VACUUM._id, taskNameSnapshot: VACUUM.name, date: '2026-09-23', assigneeId: ANNA._id }),
-  makeOccurrenceV2({ id: 'o3', taskId: VACUUM._id, taskNameSnapshot: VACUUM.name, date: '2026-09-30', assigneeId: ANNA._id }),
-  makeOccurrenceV2({ id: 'o4', taskId: VACUUM._id, taskNameSnapshot: VACUUM.name, date: '2026-10-07', assigneeId: ANNA._id }),
-  makeOccurrenceV2({ id: 'o5', taskId: BEDDING._id, taskNameSnapshot: BEDDING.name, date: '2026-09-18' }),
+  makeOccurrenceV2({ id: 'o1', taskId: VACUUM.id, taskNameSnapshot: VACUUM.name, date: '2026-09-16', assigneeId: ANNA._id }),
+  makeOccurrenceV2({ id: 'o2', taskId: VACUUM.id, taskNameSnapshot: VACUUM.name, date: '2026-09-23', assigneeId: ANNA._id }),
+  makeOccurrenceV2({ id: 'o3', taskId: VACUUM.id, taskNameSnapshot: VACUUM.name, date: '2026-09-30', assigneeId: ANNA._id }),
+  makeOccurrenceV2({ id: 'o4', taskId: VACUUM.id, taskNameSnapshot: VACUUM.name, date: '2026-10-07', assigneeId: ANNA._id }),
+  makeOccurrenceV2({ id: 'o5', taskId: BEDDING.id, taskNameSnapshot: BEDDING.name, date: '2026-09-18' }),
 ];
 const assignedToSomeoneElse = makeOccurrenceV2({
   id: 'o-other',
-  taskId: BEDDING._id,
+  taskId: BEDDING.id,
   taskNameSnapshot: BEDDING.name,
   date: '2026-09-19',
   assigneeId: BRAM._id,
@@ -38,8 +38,8 @@ function setup(routes: Record<string, unknown> = {}) {
   return mockApi({
     '/api/users': [ANNA, BRAM],
     '/api/settings': makeSettings(),
-    '/api/rooms': [LIVING, BEDROOM],
-    '/api/tasks': [VACUUM, BEDDING],
+    '/api/v2/rooms': page([LIVING, BEDROOM]),
+    '/api/v2/tasks': page([VACUUM, BEDDING]),
     ...v2Basics(),
     '/api/v2/occurrences': (_init: RequestInit | undefined, url: string) => {
       const query = new URL(url, 'http://localhost').searchParams;
@@ -57,38 +57,38 @@ describe('taskOverviewRows', () => {
   it('groups repeated occurrences into one task row with unique sorted dates', () => {
     const duplicate = makeOccurrenceV2({
       id: 'duplicate',
-      taskId: VACUUM._id,
+      taskId: VACUUM.id,
       taskNameSnapshot: VACUUM.name,
       date: '2026-09-16',
     });
-    const rows = taskOverviewRows([...planned, duplicate], [VACUUM, BEDDING], [LIVING, BEDROOM], 'Onbekend', '2026-09-16', '2026-09-14');
-    expect(rows.find((row) => row.taskId === VACUUM._id && row.periodStart === '2026-09-16')).toMatchObject({
+    const rows = taskOverviewRows([...planned, duplicate], [VACUUM, BEDDING], [LIVING, BEDROOM], 'Onbekend', '2026-09-16');
+    expect(rows.find((row) => row.taskId === VACUUM.id && row.periodStart === '2026-09-16')).toMatchObject({
       dates: ['2026-09-16'], cycleWeek: 1,
     });
-    expect(rows.find((row) => row.taskId === VACUUM._id && row.periodStart === '2026-09-23')).toMatchObject({
+    expect(rows.find((row) => row.taskId === VACUUM.id && row.periodStart === '2026-09-23')).toMatchObject({
       dates: ['2026-09-23'], cycleWeek: 2,
     });
-    expect(rows.find((row) => row.taskId === BEDDING._id)).toMatchObject({ dates: ['2026-09-18'], cycleWeek: 1 });
+    expect(rows.find((row) => row.taskId === BEDDING.id)).toMatchObject({ dates: ['2026-09-18'], cycleWeek: 1 });
   });
 
   it('keeps historical room snapshots separate after a task moves rooms', () => {
-    const movedTask = { ...VACUUM, roomId: BEDROOM._id };
+    const movedTask = { ...VACUUM, roomId: BEDROOM.id };
     const rows = taskOverviewRows(
       [
         makeOccurrenceV2({
           id: 'old-room',
-          taskId: VACUUM._id,
+          taskId: VACUUM.id,
           taskNameSnapshot: VACUUM.name,
           date: '2026-09-16',
-          roomIdSnapshot: LIVING._id,
+          roomIdSnapshot: LIVING.id,
           roomNameSnapshot: LIVING.name,
         }),
         makeOccurrenceV2({
           id: 'new-room',
-          taskId: VACUUM._id,
+          taskId: VACUUM.id,
           taskNameSnapshot: VACUUM.name,
           date: '2026-09-23',
-          roomIdSnapshot: BEDROOM._id,
+          roomIdSnapshot: BEDROOM.id,
           roomNameSnapshot: BEDROOM.name,
         }),
       ],
@@ -96,7 +96,6 @@ describe('taskOverviewRows', () => {
       [LIVING, BEDROOM],
       'Onbekend',
       '2026-09-16',
-      '2026-09-14',
     );
 
     expect(rows.map((row) => [row.roomName, row.dates])).toEqual([
@@ -164,7 +163,7 @@ describe('MobileTasksPage', () => {
     expect(await screen.findByRole('button', { name: '1 week' })).toHaveAttribute('aria-pressed', 'true');
   });
   it('opens the Extra Task dialog from the header, on already done, and shows a planned task in its dated block', async () => {
-    const created = makeOccurrenceV2({ id: 'o-new', taskId: BEDDING._id, taskNameSnapshot: BEDDING.name, date: '2026-09-17', assigneeId: ANNA._id, origin: 'adhoc' });
+    const created = makeOccurrenceV2({ id: 'o-new', taskId: BEDDING.id, taskNameSnapshot: BEDDING.name, date: '2026-09-17', assigneeId: ANNA._id, origin: 'adhoc' });
     const fetchMock = setup({
       'POST /api/v2/occurrences': () => {
         planned.push(created);
@@ -183,7 +182,7 @@ describe('MobileTasksPage', () => {
       fireEvent.click(within(dialog).getByRole('radio', { name: 'Inplannen' }));
       const task = within(dialog).getByLabelText('Taak', { selector: 'select' });
       await waitFor(() => expect(within(task).getAllByRole('option')).toHaveLength(3));
-      fireEvent.change(task, { target: { value: BEDDING._id } });
+      fireEvent.change(task, { target: { value: BEDDING.id } });
       fireEvent.change(within(dialog).getByLabelText('Datum'), { target: { value: '2026-09-17' } });
       fireEvent.change(within(dialog).getByLabelText('Voor wie'), { target: { value: ANNA._id } });
       fireEvent.click(within(dialog).getByRole('button', { name: 'Inplannen' }));
