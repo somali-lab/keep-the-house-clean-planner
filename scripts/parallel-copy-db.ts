@@ -11,10 +11,13 @@ import { spawn, spawnSync } from 'node:child_process';
 import { createInterface } from 'node:readline/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isEntry } from './lib/runMain.ts';
 import {
   buildCommands,
   checkRails,
-  compareCounts,
+  isLive,
+  judgeCopy,
+  parseServiceStates,
   MONGO_SERVICE,
   NEXT_SERVICE,
   parseArgs,
@@ -120,16 +123,18 @@ async function main(): Promise<number> {
     return 0;
   }
 
-  const running = docker(commands.running);
-  if (running.status !== 0) throw new Error(`docker compose ps failed:\n${running.stderr}`);
-  const services = running.stdout.split(/\r?\n/).map((s) => s.trim());
-  if (!services.includes(MONGO_SERVICE))
+  const ps = docker(commands.states);
+  if (ps.status !== 0)
+    throw new Error(`docker compose ps failed:
+${ps.stderr}`);
+  const states = parseServiceStates(ps.stdout);
+  if (states[MONGO_SERVICE] !== 'running')
     throw new Error(
       `The "${MONGO_SERVICE}" service is not running. Start it first: docker compose up -d ${MONGO_SERVICE}`,
     );
-  if (services.includes(NEXT_SERVICE)) {
+  if (isLive(states[NEXT_SERVICE])) {
     throw new Error(
-      `"${NEXT_SERVICE}" is running and holds the target database open. Stop it first: docker compose --profile parallel stop ${NEXT_SERVICE}`,
+      `"${NEXT_SERVICE}" is ${states[NEXT_SERVICE]} and may hold the target database open. Stop it first: docker compose --profile parallel stop ${NEXT_SERVICE}`,
     );
   }
 
@@ -165,27 +170,25 @@ async function main(): Promise<number> {
 
   const after = counts(commands.count(options.target), options.target);
   const sourceAfter = counts(commands.count(options.source), options.source);
-  const sourceMoved = compareCounts(before, sourceAfter);
-  const problems = compareCounts(before, after);
+  const { code, problems, sourceMoved } = judgeCopy(before, after, sourceAfter);
   console.log(`\n${describe(options.target, after)}`);
   if (problems.length > 0) {
     console.error(
       `\nThe copy differs from the source as counted before it:\n${problems.map((p) => `  - ${p}`).join('\n')}`,
     );
-    if (sourceMoved.length > 0) {
+    if (code === 0) {
       // The household kept using the live app while the dump ran, so the counts are not comparable. Not a failure.
       console.error(
         `\nThe source changed while it was copied (${sourceMoved.join('; ')}), so this is expected. Run the copy again at a quiet moment if an exact copy is needed.`,
       );
-      return 0;
     }
-    return 1;
+    return code;
   }
   console.log('Copy complete: every collection has the same number of documents as the source.');
   return 0;
 }
 
-if (import.meta.main) {
+if (isEntry(import.meta.url)) {
   main().then(
     (code) => process.exit(code),
     (error: unknown) => {

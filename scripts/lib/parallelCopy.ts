@@ -108,7 +108,8 @@ export function checkRails(options: Pick<CopyOptions, 'source' | 'target' | 'for
         `The ${label} database name "${name}" is not a plain MongoDB database name (letters, digits, underscore).`,
       );
   }
-  if (options.source === options.target)
+  // Names are compared case-insensitively so that "Huishoudplanner" cannot slip past as another database.
+  if (options.source.toLowerCase() === options.target.toLowerCase())
     problems.push(
       'The source and the target are the same database. Nothing is copied over itself, not even with --force.',
     );
@@ -117,7 +118,7 @@ export function checkRails(options: Pick<CopyOptions, 'source' | 'target' | 'for
       `The target database is "${options.target}", not "${DEFAULT_TARGET_DB}". Restoring replaces the target completely; pass --force only if that is really the database to replace.`,
     );
   }
-  if (options.target === DEFAULT_SOURCE_DB) {
+  if (options.target.toLowerCase() === DEFAULT_SOURCE_DB) {
     problems.push(
       `"${DEFAULT_SOURCE_DB}" is the live database of the Node application and is never a restore target, not even with --force.`,
     );
@@ -146,8 +147,8 @@ export interface CopyCommands {
   dropTarget: string[];
   /** Reads the archive from stdin and restores it into the target database. */
   restore: string[];
-  /** Lists the running services of the compose project (with the parallel profile enabled). */
-  running: string[];
+  /** Every container of the compose project with its state, one JSON object per line (parallel profile enabled). */
+  states: string[];
 }
 
 const COUNT_SCRIPT = (database: string) =>
@@ -187,7 +188,7 @@ export function buildCommands(options: CopyOptions): CopyCommands {
       '--nsTo',
       `${options.target}.*`,
     ],
-    running: [...base, '--profile', 'parallel', 'ps', '--status', 'running', '--services'],
+    states: [...base, '--profile', 'parallel', 'ps', '--all', '--format', 'json'],
   };
 }
 
@@ -211,6 +212,51 @@ export function compareCounts(source: Counts, target: Counts): string[] {
   return problems;
 }
 
+/** Service name to container state from `docker compose ps --all --format json` (one JSON object per line, or one array). */
+export function parseServiceStates(output: string): Record<string, string> {
+  const text = output.trim();
+  const rows: { Service?: string; State?: string }[] = text.startsWith('[')
+    ? JSON.parse(text)
+    : text
+        .split(/\r?\n/)
+        .filter((line) => line.trim().startsWith('{'))
+        .map((line) => JSON.parse(line));
+  const states: Record<string, string> = {};
+  for (const row of rows)
+    if (row.Service) states[row.Service] = (row.State ?? 'unknown').toLowerCase();
+  return states;
+}
+
+/** A container in any state but exited or dead (running, restarting, paused, created) may hold or reopen the target database. */
+export const isLive = (state: string | undefined): boolean =>
+  state !== undefined && state !== 'exited' && state !== 'dead';
+
+export interface CopyVerdict {
+  /** 0: complete, or different only because the live source moved; 1: the copy is not what the source was. */
+  code: 0 | 1;
+  problems: string[];
+  /** How the source moved while it was copied. */
+  sourceMoved: string[];
+}
+
+/**
+ * Judges the counts after a copy. A target that differs from the source as counted before is only excused when every difference lies
+ * between the count before and the count after on the source itself (the household kept working while the dump ran).
+ */
+export function judgeCopy(before: Counts, after: Counts, sourceAfter: Counts): CopyVerdict {
+  const problems = compareCounts(before, after);
+  const sourceMoved = compareCounts(before, sourceAfter);
+  if (problems.length === 0) return { code: 0, problems, sourceMoved };
+  const names = new Set([...Object.keys(before), ...Object.keys(after)]);
+  const excused = [...names].every((name) => {
+    const b = before[name] ?? 0;
+    const t = after[name] ?? 0;
+    const a = sourceAfter[name] ?? 0;
+    return t >= Math.min(b, a) && t <= Math.max(b, a);
+  });
+  return { code: excused ? 0 : 1, problems, sourceMoved };
+}
+
 export const USAGE = `Copy the live database into the database of the parallel run (plan section 10, step 2).
 
 Usage: node scripts/parallel-copy-db.ts [options]
@@ -229,9 +275,10 @@ Options
   --help, -h         this text
 
 Prerequisites
+  - Node.js 24 or newer on the Docker host (it runs this script; Docker runs the Mongo tools).
   - Run it from a checkout of the repository on the Docker host, with the "mongo" service running and healthy
     (docker compose up -d mongo). It needs only Docker; no mongodump or mongorestore on the host.
   - Take a backup first (docker compose run --rm backup once). The tool never writes to the source, but a backup is cheap.
-  - Stop app-next while copying (docker compose --profile parallel stop app-next). The tool refuses to run while it is up.
+  - Stop app-next while copying (docker compose --profile parallel stop app-next). The tool refuses to run while it is in any state but exited.
   - Start app-next only after the copy: on an empty database the .NET application seeds default rooms and profiles.
 `;

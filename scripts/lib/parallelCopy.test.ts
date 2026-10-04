@@ -8,6 +8,9 @@ import {
   DEFAULT_TARGET_DB,
   parseArgs,
   UsageError,
+  isLive,
+  judgeCopy,
+  parseServiceStates,
 } from './parallelCopy.ts';
 
 describe('arguments', () => {
@@ -75,6 +78,14 @@ describe('safety rails', () => {
     expect(rails({ source: 'a', target: 'a', force: true }).join(' ')).toContain('same database');
   });
 
+  it('compare database names case-insensitively', () => {
+    expect(rails({ target: 'HUISHOUDPLANNER', force: true }).join(' ')).toContain('same database');
+    expect(rails({ source: 'other', target: 'Huishoudplanner', force: true }).join(' ')).toContain(
+      'live database',
+    );
+    expect(rails({ target: 'Huishoudplanner_Next' })).toHaveLength(1);
+  });
+
   it('never restore into the live database, not even forced', () => {
     expect(rails({ source: 'other', target: DEFAULT_SOURCE_DB, force: true }).join(' ')).toContain(
       'live database',
@@ -136,16 +147,16 @@ describe('commands', () => {
       'b.yml',
     ]);
     const c = buildCommands(options({ project: 'p' }));
-    expect(c.running).toEqual([
+    expect(c.states).toEqual([
       'compose',
       '-p',
       'p',
       '--profile',
       'parallel',
       'ps',
-      '--status',
-      'running',
-      '--services',
+      '--all',
+      '--format',
+      'json',
     ]);
     expect(c.dump.slice(0, 4)).toEqual(['compose', '-p', 'p', 'exec']);
   });
@@ -164,5 +175,51 @@ describe('verification', () => {
       'collection users: source 2, target 3',
       'collection pointGuards exists only in the target (1 documents)',
     ]);
+  });
+});
+
+describe('service states', () => {
+  const ps = [
+    '{"Service":"mongo","State":"running"}',
+    '{"Service":"app-next","State":"Restarting"}',
+  ].join('\n');
+
+  it('are read from the json lines of docker compose ps, also as one array', () => {
+    expect(parseServiceStates(ps)).toEqual({ mongo: 'running', 'app-next': 'restarting' });
+    expect(parseServiceStates('[{"Service":"mongo","State":"running"}]')).toEqual({
+      mongo: 'running',
+    });
+    expect(parseServiceStates('')).toEqual({});
+  });
+
+  it('count every state but exited and dead as live, and a missing container as not', () => {
+    for (const state of ['running', 'restarting', 'created', 'paused', 'removing'])
+      expect(isLive(state)).toBe(true);
+    for (const state of ['exited', 'dead', undefined]) expect(isLive(state)).toBe(false);
+  });
+});
+
+describe('judging a copy', () => {
+  const before = { users: 2, tasks: 10 };
+
+  it('accepts an exact copy', () => {
+    expect(judgeCopy(before, { ...before }, { ...before }).code).toBe(0);
+  });
+
+  it('accepts a difference that lies within the movement of the source itself', () => {
+    const verdict = judgeCopy(before, { users: 2, tasks: 11 }, { users: 2, tasks: 12 });
+    expect(verdict.code).toBe(0);
+    expect(verdict.problems).toHaveLength(1);
+    expect(verdict.sourceMoved).toHaveLength(1);
+  });
+
+  it('fails a copy that differs while the source stood still', () => {
+    expect(judgeCopy(before, { users: 2, tasks: 9 }, { ...before }).code).toBe(1);
+  });
+
+  it('fails a copy that lost something the source did not move on', () => {
+    // tasks moved on the source, but users is missing in the target: not explained by the movement.
+    expect(judgeCopy(before, { tasks: 11 }, { users: 2, tasks: 12 }).code).toBe(1);
+    expect(judgeCopy(before, { users: 1, tasks: 11 }, { users: 2, tasks: 12 }).code).toBe(1);
   });
 });

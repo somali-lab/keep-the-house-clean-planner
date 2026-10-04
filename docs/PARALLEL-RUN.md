@@ -2,7 +2,7 @@
 
 The checklist for slice 8.2 of [the rewrite plan](plans/dotnet-rewrite.md) (section 10): the .NET application (`app-next`) runs next to the Node application for a few days, against a copy of the production database. The household keeps using the Node application. The maintainer walks this document and gives the go for the switch by hand; no agent runs it.
 
-Everything here runs on the Docker host of the installation, in the directory with `docker-compose.yml` and `.env`, in a checkout of the `next` branch (the .NET image is built from `docker/Dockerfile.dotnet`, which only exists there). Commands are `sh`.
+Everything here runs on the Docker host of the installation, in the directory with `docker-compose.yml` and `.env`, in a checkout of the `next` branch (the .NET image is built from `docker/Dockerfile.dotnet`, which only exists there). Commands are `sh`. Node.js 24 or newer is needed on the host for the two scripts.
 
 **What is safe.** `app-next` has its own database (`huishoudplanner_next`) on the same MongoDB instance. The copy script only reads the production database. The parity script only sends `GET` requests. `app-next` sends no notification and makes no AI call unless you opt in below.
 
@@ -24,11 +24,13 @@ Add to `.env` only what you want to change; all of these are optional.
 
 ## 1. Prepare the installation
 
-Back up first, and keep a copy of the archive outside the backup directory:
+**Order matters: back up before anything is converted or recreated.** Take the backup with the checkout and compose file the installation runs on today (the old checkout, before you switch to `next` or pull a new `docker-compose.yml`). The `mongo` service in the new compose file starts with `--replSet`, and `docker compose run backup` starts its `mongo` dependency, so running it from the new checkout can recreate and convert `mongo` before any backup exists. Keep a copy of the archive outside the backup directory:
 
 ```sh
-docker compose run --rm backup once
+docker compose run --rm --no-deps backup once      # old checkout; --no-deps never touches mongo
 ```
+
+Then, in this order: (1) backup, (2) switch to the `next` checkout, (3) convert `mongo` as below, (4) verify the Node application, (5) continue with section 2.
 
 Convert `mongo` to a single-node replica set and verify that the Node application still works on it, as described in [README, MongoDB as a single-node replica set](../README.md#mongodb-as-a-single-node-replica-set). Skip this if `docker compose exec mongo mongosh --quiet --eval "rs.status().myState"` already prints `1`. The Node application needs no change for a replica set. Do not go on before the household's application is healthy on it.
 
@@ -55,7 +57,7 @@ node scripts/parallel-parity.ts --v1 http://localhost:3000 --v2 http://localhost
 
 Never start `app-next` with a plain `docker compose --profile parallel up -d` before the copy exists; name the service.
 
-The parity script reads the same data through both APIs and compares: health, users, rooms, tasks, cycle plans (all members including the slots), cycles, the settings both share, the ranked due list (and its summary), every occurrence of the cycles (open, done, skipped, one-off), the points balances per person (all time and for the range), the badges and the badge awards per person. It exits `0` when everything is equal and `1` otherwise, and prints every difference as `[record] member: v1 ... v2 ...`. Options: `--from/--to` for another occurrence range, `--only users,due` for some checks, `--profile-id` to send a profile id, `--max-diffs`, `--json`; `--help` lists them.
+The parity script reads the same data through both APIs and compares: health, users, rooms, tasks, cycle plans (all members including the slots), cycles, the settings both share, the ranked due list (and its summary), every occurrence of the cycles (open, done, skipped, one-off), the points balances per person (all time and for the range), the badges and the badge awards per person. It exits `0` when everything is equal, `1` when something differs or a check could not read a side, `2` for a usage error and `3` when the run itself failed (for example the Node application is unreachable); it prints every difference as `[record] member: v1 ... v2 ...`. Options: `--from/--to` for another occurrence range, `--only users,due` for some checks, `--profile-id` to send a profile id, `--max-diffs`, `--json`; `--help` lists them.
 
 Ignored on purpose, because they are the intended differences between the contracts: the id member name (`_id` against `id`), the instant notation (`Z` against `+00:00`), paging, `version` (ADR-0022), members only v2 has (`periodOwnerId`, `cycleIndex`, `weekIndex` on occurrences, `startsInFuture` on bonus rows), an absent member against `null` and an absent against an empty list in the settings, the order of lists whose order is not part of the contract, and the id and moment of a badge award (the question is who holds which badge).
 
@@ -107,11 +109,18 @@ The outline from plan section 10; slice 8.3 replaces `docker/Dockerfile` with th
 
 Within the first days after the switch: stop the .NET application and start the last Node image against the same database.
 
+Use the published Node image, never a build from the checkout (after slice 8.3 the checkout builds the .NET image, which is the wrong one). Replace `1.7.0` by the last Node release:
+
 ```sh
-docker compose stop app                        # the .NET application
-# set APP_IMAGE_TAG in .env to the last Node release (for example 1.7.0) and start it:
-docker compose up -d app
+docker compose stop app                                            # the .NET application
+docker pull ghcr.io/somali-lab/keep-the-house-clean-planner:1.7.0
+docker tag ghcr.io/somali-lab/keep-the-house-clean-planner:1.7.0 huishoudplanner-app:1.7.0
+APP_IMAGE_TAG=1.7.0 docker compose up -d --no-build app             # --no-build: never build, use the local tag
+docker compose exec app node --version                             # prints a Node version: it is the Node image
+curl -s http://localhost:3000/api/health                            # {"status":"ok","mongo":"ok"}
 ```
+
+`--no-build` makes compose fail instead of building when the tag is missing. Slice 8.3 changes `docker-compose.yml` and the Dockerfile, so these commands must be re-checked and adapted there.
 
 The rollback is safe because the Node application reads and edits everything the .NET application writes; the exact finding is in the next section. Two things to know:
 

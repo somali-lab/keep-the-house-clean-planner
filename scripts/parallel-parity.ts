@@ -2,12 +2,13 @@
 /**
  * Compares the live Node application (API v1) with app-next (API v2) over HTTP, on the same copy of the data, and reports the
  * differences (docs/PARALLEL-RUN.md, plan section 10 step 4). Read-only: every request is a GET. Exit code 0 when every check is
- * equal, 1 when something differs or a side could not be read, 2 for a usage error.
+ * equal, 1 when something differs or a side could not be read, 2 for a usage error, 3 when the run itself failed.
  *
  * Usage: node scripts/parallel-parity.ts [--v1 http://127.0.0.1:3000] [--v2 http://127.0.0.1:3001] [--profile-id <id>]
  *        [--from YYYY-MM-DD --to YYYY-MM-DD] [--only users,due] [--max-diffs 20] [--timeout-ms 30000] [--json]
  * The comparison rules and the intended differences that are ignored are documented in scripts/lib/parity.ts.
  */
+import { isEntry } from './lib/runMain.ts';
 import { httpReader } from './lib/httpReader.ts';
 import {
   CHECKS,
@@ -17,6 +18,8 @@ import {
   type ParityRange,
   type Reader,
 } from './lib/parity.ts';
+
+class UsageError extends Error {}
 
 interface Args {
   v1: string;
@@ -43,6 +46,9 @@ const USAGE = `Usage: node scripts/parallel-parity.ts [options]
   --json              print the report as JSON instead of text
   --help, -h          this text
 
+Exit codes: 0 all equal, 1 differences (or a check could not read a side), 2 usage error, 3 the run itself failed
+(for example v1 unreachable while reading the cycles). Needs Node.js 24 or newer.
+
 Read-only (GET only). Run it right after the copy: the household keeps changing the live data, and every change since the copy is a
 real difference between the two databases, not a bug.`;
 
@@ -68,7 +74,7 @@ function parse(argv: string[]): Args {
     const take = (): string => {
       if (eq > 0) return arg.slice(eq + 1);
       const next = argv[++i];
-      if (next === undefined) throw new Error(`${flag} needs a value`);
+      if (next === undefined) throw new UsageError(`${flag} needs a value`);
       return next;
     };
     switch (flag) {
@@ -94,19 +100,21 @@ function parse(argv: string[]): Args {
           .filter(Boolean);
         const unknown = names.filter((n) => !(CHECKS as readonly string[]).includes(n));
         if (unknown.length > 0)
-          throw new Error(`Unknown check: ${unknown.join(', ')} (known: ${CHECKS.join(', ')})`);
+          throw new UsageError(
+            `Unknown check: ${unknown.join(', ')} (known: ${CHECKS.join(', ')})`,
+          );
         args.only = names as CheckName[];
         break;
       }
       case '--max-diffs':
         args.maxDiffs = Number(take());
         if (!Number.isInteger(args.maxDiffs) || args.maxDiffs < 1)
-          throw new Error('--max-diffs must be a whole number of at least 1');
+          throw new UsageError('--max-diffs must be a whole number of at least 1');
         break;
       case '--timeout-ms':
         args.timeoutMs = Number(take());
         if (!Number.isInteger(args.timeoutMs) || args.timeoutMs < 1)
-          throw new Error('--timeout-ms must be a whole number of at least 1');
+          throw new UsageError('--timeout-ms must be a whole number of at least 1');
         break;
       case '--json':
         args.json = true;
@@ -116,7 +124,7 @@ function parse(argv: string[]): Args {
         args.help = true;
         break;
       default:
-        throw new Error(`Unknown argument: ${arg}`);
+        throw new UsageError(`Unknown argument: ${arg}`);
     }
   }
   for (const [flag, value] of [
@@ -124,12 +132,12 @@ function parse(argv: string[]): Args {
     ['--to', args.to],
   ] as const) {
     if (value !== undefined && !DAY.test(value))
-      throw new Error(`${flag} must be a day as YYYY-MM-DD`);
+      throw new UsageError(`${flag} must be a day as YYYY-MM-DD`);
   }
   args.v1 = args.v1.replace(/\/+$/, '');
   args.v2 = args.v2.replace(/\/+$/, '');
   if ((args.from === undefined) !== (args.to === undefined))
-    throw new Error('--from and --to go together');
+    throw new UsageError('--from and --to go together');
   return args;
 }
 
@@ -172,12 +180,17 @@ async function main(): Promise<number> {
   return report.ok ? 0 : 1;
 }
 
-if (import.meta.main) {
+if (isEntry(import.meta.url)) {
   main().then(
     (code) => process.exit(code),
     (error: unknown) => {
-      console.error(`${error instanceof Error ? error.message : String(error)}\n\n${USAGE}`);
-      process.exit(2);
+      const message = error instanceof Error ? error.message : String(error);
+      if (error instanceof UsageError) {
+        console.error(`${message}\n\n${USAGE}`);
+        process.exit(2);
+      }
+      console.error(`Parity could not run: ${message}`);
+      process.exit(3);
     },
   );
 }
