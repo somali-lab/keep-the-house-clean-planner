@@ -82,7 +82,7 @@ export interface paths {
         get?: never;
         /**
          * Sets the browser notification moments of a person.
-         * @description A person sets their own moments, an administrator anyone's (403 permission_denied otherwise). The complete setting replaces the stored one; an equal setting writes and audits nothing. The setting is a field of the person, so it needs If-Match with the ETag of the person (GET /users/{id}); another version is 412 precondition_failed, and a setting that changes nothing keeps the version.
+         * @description A person sets their own moments, an administrator anyone's (403 permission_denied otherwise, which the use case decides after the header check: a request without If-Match is 428 first). The complete setting replaces the stored one; an equal setting writes and audits nothing. The setting is a field of the person, so it needs If-Match with the ETag of the person (GET /users/{id}); another version is 412 precondition_failed, and a setting that changes nothing keeps the version.
          */
         put: operations["setUserBrowserNotifications"];
         post?: never;
