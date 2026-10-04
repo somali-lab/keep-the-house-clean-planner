@@ -1,43 +1,25 @@
-import type { OccurrenceView } from '@huishoudplanner/shared';
-import { addDays } from '@huishoudplanner/shared/time';
+import type { Occurrence } from '../../api/index.ts';
 import { getLocale } from '../../i18n/runtime.ts';
 
 /** How far back the Today view looks for overdue items (two cycles). */
 export const OVERDUE_LOOKBACK_DAYS = 56;
 
-/** 'YYYY-MM-DD' of an instant in a timezone, without pulling a date library into the bundle. */
-export function dayKeyInZone(now: Date, timeZone: string): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(now);
-  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
-  return `${get('year')}-${get('month')}-${get('day')}`;
-}
-
-/** Calendar arithmetic on day keys. */
-export function addDaysKey(dayKey: string, days: number): string {
-  return addDays(dayKey, days);
-}
-
 export interface TodayGroups {
   /** 1. My open occurrences for today. */
-  mine: OccurrenceView[];
+  mine: Occurrence[];
   /** 2. Unclaimed ("wie pakt 'm") open occurrences for today. */
-  unclaimed: OccurrenceView[];
+  unclaimed: Occurrence[];
   /** 3. Open occurrences for today assigned to someone else. */
-  others: OccurrenceView[];
+  others: Occurrence[];
   /** 4. Open occurrences from before today. */
-  overdue: OccurrenceView[];
+  overdue: Occurrence[];
   /** Done or skipped today, so undo stays reachable later. */
-  finished: OccurrenceView[];
+  finished: Occurrence[];
 }
 
 /** Section order from plan §1.4. */
 export function groupToday(
-  occurrences: OccurrenceView[],
+  occurrences: Occurrence[],
   profileId: string,
   todayKey: string,
   overdueFrom = '',

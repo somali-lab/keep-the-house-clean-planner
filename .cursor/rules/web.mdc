@@ -14,3 +14,4 @@ alwaysApply: false
 - Follow existing optimistic mutation behavior: rollback on failure and refetch after settlement.
 - Reuse components from `src/components` and `src/components/ui` before creating new primitives.
 - Import shared runtime values from focused subpaths to avoid pulling the full shared index into the bundle.
+- Features on `/api/v2` use the generated client (`apiV2`, `unwrap`) from `src/api`; errors are Problem Details, and the code of a problem is the part of `type` after `urn:huishoudplanner:problem:`. After the OpenAPI document changes, run `npm run generate:api -w apps/web` and commit `src/api/v2/schema.d.ts`.

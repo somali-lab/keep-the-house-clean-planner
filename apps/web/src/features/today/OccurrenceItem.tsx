@@ -1,4 +1,5 @@
-import type { OccurrenceView, User } from '@huishoudplanner/shared';
+import type { User } from '@huishoudplanner/shared';
+import type { Occurrence } from '../../api/index.ts';
 import {
   ArrowRight,
   Check,
@@ -22,7 +23,7 @@ import { cn } from '@/lib/utils';
 import { format, t } from '../../i18n/nl.ts';
 
 export interface OccurrenceItemProps {
-  occurrence: OccurrenceView;
+  occurrence: Occurrence;
   /** The household's today; recorded work can only be undone on the day it was recorded. */
   todayKey: string;
   roomName: string | undefined;

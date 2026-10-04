@@ -25,12 +25,35 @@ export const BRAM = makeUser({ _id: 'b00000000000000000000002', name: 'Bram de V
 export type RouteHandler = unknown | ((init: RequestInit | undefined, url: string) => unknown);
 
 /**
+ * What a handler sees of a request. The generated client (openapi-fetch) hands fetch a `Request`; the v1 client a url
+ * and an init. Both are reduced to a path with its query, and an init with the method, headers and text body.
+ */
+export async function describeRequest(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<{ url: string; init: RequestInit | undefined }> {
+  if (typeof input === 'string' || input instanceof URL) return { url: String(input), init };
+  const parsed = new URL(input.url);
+  const body = input.method === 'GET' || input.method === 'HEAD' ? undefined : await input.clone().text();
+  return {
+    url: `${parsed.pathname}${parsed.search}`,
+    init: {
+      method: input.method,
+      headers: Object.fromEntries(input.headers.entries()),
+      ...(body ? { body } : {}),
+    },
+  };
+}
+
+/**
  * Stubs global fetch with a route table keyed by `METHOD /path` (or just `/path` for GET).
- * Handlers may be values or functions; unknown routes return 404.
+ * Handlers may be values or functions; unknown routes return 404. A handler that returns a `Response` answers with it
+ * (for example a problem+json error); a thrown error is a connection that fails.
  */
 export function mockApi(routes: Record<string, RouteHandler>) {
+  // The mock records what a handler sees (a path and an init), whichever client made the request.
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+    const url = String(input);
     const path = url.split('?')[0]!;
     const method = init?.method ?? 'GET';
     const handler = routes[`${method} ${path}`] ?? (method === 'GET' ? routes[path] : undefined);
@@ -38,11 +61,68 @@ export function mockApi(routes: Record<string, RouteHandler>) {
       return new Response(JSON.stringify({ code: 'not_found' }), { status: 404 });
     }
     const body = typeof handler === 'function' ? await handler(init, url) : handler;
+    if (body instanceof Response) return body;
     return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
   });
-  vi.stubGlobal('fetch', fetchMock);
+  vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+    const described = await describeRequest(input, init);
+    return fetchMock(described.url, described.init);
+  });
   return fetchMock;
 }
+
+/** A page of a bounded v2 list. */
+export const page = <T,>(items: T[]) => ({ items, nextCursor: null });
+
+/** A problem+json answer of the v2 API; `code` is the part after `urn:huishoudplanner:problem:`. */
+export function problem(status: number, code: string, detail = code, extra: Record<string, unknown> = {}): Response {
+  return new Response(
+    JSON.stringify({ type: `urn:huishoudplanner:problem:${code}`, title: code, status, detail, traceId: 'trace', ...extra }),
+    { status, headers: { 'Content-Type': 'application/problem+json' } },
+  );
+}
+
+/** `GET /api/v2/meta/limits` as the server answers it (the values the web app reads). */
+export const LIMITS = {
+  calendar: { cycleDays: 28, cycleWeeks: 4, planWeeks: 4, maxRangeDays: 371 },
+  tasks: { minPoints: 0, maxPoints: 1000, minDurationMinutes: 1, oneOffNameMaxLength: 120, intervalKeyMaxLength: 32, skipReasonMaxLength: 500 },
+};
+
+const DAY_MS = 86_400_000;
+const utc = (dayKey: string) => Date.parse(`${dayKey}T00:00:00Z`);
+
+/**
+ * `GET /api/v2/calendar` for a cycle that starts on `anchor` (a Monday): four weeks per cycle, and a negative cycle index
+ * before the anchor. A stand-in for the server's calendar, so tests do not repeat its rule.
+ */
+export function calendarRoute(anchor = '2026-09-14') {
+  return (_init: RequestInit | undefined, url: string) => {
+    const query = new URL(url, 'http://localhost').searchParams;
+    const from = utc(query.get('from') ?? '');
+    const to = utc(query.get('to') ?? '');
+    const days = [];
+    for (let time = from; time <= to; time += DAY_MS) {
+      const offset = Math.round((time - utc(anchor)) / DAY_MS);
+      const date = new Date(time);
+      const weekday = date.getUTCDay();
+      days.push({
+        dayKey: date.toISOString().slice(0, 10),
+        weekday,
+        cycleIndex: Math.floor(offset / 28),
+        weekIndex: ((Math.floor(offset / 7) % 4) + 4) % 4,
+        isoWeek: '',
+        weekStart: new Date(time - ((weekday + 6) % 7) * DAY_MS).toISOString().slice(0, 10),
+      });
+    }
+    return { timezone: 'Europe/Amsterdam', days };
+  };
+}
+
+/** The routes every page that reads the calendar or the limits needs. */
+export const v2Basics = (anchor = '2026-09-14') => ({
+  '/api/v2/meta/limits': LIMITS,
+  '/api/v2/calendar': calendarRoute(anchor),
+});
 
 export function testQueryClient(): QueryClient {
   return new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });

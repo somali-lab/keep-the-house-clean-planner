@@ -9,8 +9,7 @@ import {
   useSensors,
   type DragEndEvent,
 } from '@dnd-kit/core';
-import type { ApiWarning, OccurrenceView, User } from '@huishoudplanner/shared';
-import { weekIndexFor } from '@huishoudplanner/shared/cycle';
+import type { User } from '@huishoudplanner/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   CalendarDays,
@@ -36,15 +35,16 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { usePersistedFilter } from '../../hooks/usePersistedFilter.ts';
 import { getActiveProfileId } from '../../identity/profileStore.ts';
-import { api } from '../../api/index.ts';
+import { apiV2, unwrap, type ApiWarning, type Occurrence } from '../../api/index.ts';
 import { useRooms, useSettings, useTasks } from '../../api/queries.ts';
+import { useCalendar } from '../../api/v2/queries.ts';
 import { format, t } from '../../i18n/nl.ts';
 import { Avatar } from '../../identity/Avatar.tsx';
 import { useProfile } from '../../identity/index.ts';
 import { PromoteBanner } from '../promote/PromoteBanner.tsx';
 import { CompletionChoiceDialog, useAssigneeChoice } from '../today/CompletionChoiceDialog.tsx';
 import { occurrenceKeys, useOccurrenceAction, useOccurrences } from '../today/api.ts';
-import { addDaysKey, dayKeyInZone } from '../today/todayModel.ts';
+import { addDays, dayKeyInZone } from '@/lib/dayKey';
 import {
   dayDropId,
   groupByDay,
@@ -104,16 +104,18 @@ export function WeekPage({ now }: { now?: Date }) {
       || pastExpanded
       || showCycleWeek,
   );
-  const days = overviewDays(addDaysKey(todayKey, periodOffset * 7));
+  const days = overviewDays(addDays(todayKey, periodOffset * 7));
   const visibleDays = pastExpanded ? days : days.slice(3);
   const from = days[0]!;
   const to = days.at(-1)!;
   const queryKey = occurrenceKeys.range(from, to);
   const occurrences = useOccurrences(from, to, settings.isSuccess);
+  // Which cycle week each day is, and whether its cycle has started, comes from the server.
+  const calendar = useCalendar(from, to);
   const occurrenceAction = useOccurrenceAction(queryKey, { profileId: profile?._id ?? '', todayKey });
   const [warnings, setWarnings] = useState<ApiWarning[]>([]);
   const [failed, setFailed] = useState(false);
-  const [completionChoice, setCompletionChoice] = useState<OccurrenceView | null>(null);
+  const [completionChoice, setCompletionChoice] = useState<Occurrence | null>(null);
   const choiceAssignee = useAssigneeChoice(completionChoice?.assigneeId ?? null);
   const roomByTask = useMemo(() => {
     const roomNames = new Map((rooms.data ?? []).map((room) => [room._id, room.name]));
@@ -122,14 +124,14 @@ export function WeekPage({ now }: { now?: Date }) {
 
   const move = useMutation({
     mutationFn: async ({ id, date }: { id: string; date: string }) =>
-      api.patch<OccurrenceView>(`/api/occurrences/${id}`, { action: 'reschedule', date }),
+      unwrap(apiV2.POST('/api/v2/occurrences/{id}/reschedule', { params: { path: { id } }, body: { date } })),
     onMutate: async ({ id, date }) => {
       setFailed(false);
       setWarnings([]);
       await queryClient.cancelQueries({ queryKey });
-      const previous = queryClient.getQueryData<OccurrenceView[]>(queryKey);
-      queryClient.setQueryData<OccurrenceView[]>(queryKey, (list) =>
-        list?.map((occ) => (occ._id === id ? movedTo(occ, date) : occ)),
+      const previous = queryClient.getQueryData<Occurrence[]>(queryKey);
+      queryClient.setQueryData<Occurrence[]>(queryKey, (list) =>
+        list?.map((occ) => (occ.id === id ? movedTo(occ, date) : occ)),
       );
       return { previous };
     },
@@ -152,16 +154,16 @@ export function WeekPage({ now }: { now?: Date }) {
   );
 
   const requestMove = (id: string, date: string) => {
-    const occ = occurrences.data?.find((o) => o._id === id);
-    if (!occ || occ.date === date || date < (settings.data?.cycleAnchorDate ?? '')) return;
+    const occ = occurrences.data?.find((o) => o.id === id);
+    if (!occ || occ.date === date || (calendar.data?.get(date)?.cycleIndex ?? 0) < 0) return;
     move.mutate({ id, date });
   };
 
-  const complete = (occ: OccurrenceView, mode?: 'assignee' | 'takeOver') => {
+  const complete = (occ: Occurrence, mode?: 'assignee' | 'takeOver') => {
     setFailed(false);
     occurrenceAction.mutate(
       {
-        id: occ._id,
+        id: occ.id,
         kind: 'complete',
         ...(mode === 'takeOver' ? { takeOver: true } : {}),
         ...(mode === 'assignee' && occ.assigneeId ? { completedBy: occ.assigneeId } : {}),
@@ -171,7 +173,7 @@ export function WeekPage({ now }: { now?: Date }) {
   };
 
   const requestComplete = (id: string) => {
-    const occ = occurrences.data?.find((item) => item._id === id);
+    const occ = occurrences.data?.find((item) => item.id === id);
     if (!occ) return;
     if (occ.assigneeId && occ.assigneeId !== profile?._id) {
       setCompletionChoice(occ);
@@ -187,13 +189,13 @@ export function WeekPage({ now }: { now?: Date }) {
     if (id && date) requestMove(id, date);
   };
 
-  if (settings.isPending || tasks.isPending || rooms.isPending || occurrences.isPending)
+  if (settings.isPending || tasks.isPending || rooms.isPending || occurrences.isPending || calendar.isPending)
     return (
       <p role="status" className="py-10 text-center text-muted-foreground">
         {t('app.loading')}
       </p>
     );
-  if (settings.isError || tasks.isError || rooms.isError || occurrences.isError)
+  if (settings.isError || tasks.isError || rooms.isError || occurrences.isError || calendar.isError)
     return (
       <p role="alert" className="rounded-2xl bg-destructive/10 p-4 text-destructive">
         {t('app.error')}
@@ -201,7 +203,7 @@ export function WeekPage({ now }: { now?: Date }) {
     );
 
   const filteredOccurrences = occurrences.data
-    .filter((occurrence) => occurrence.date >= settings.data.cycleAnchorDate)
+    .filter((occurrence) => occurrence.cycleIndex >= 0)
     .filter((occurrence) =>
       personFilter === 'all'
         ? true
@@ -339,8 +341,8 @@ export function WeekPage({ now }: { now?: Date }) {
               dayKey={day.dayKey}
               isToday={day.dayKey === todayKey}
               period={day.dayKey < todayKey ? 'past' : day.dayKey === todayKey ? 'today' : 'future'}
-              cycleStarted={day.dayKey >= settings.data.cycleAnchorDate}
-              cycleWeek={day.dayKey >= settings.data.cycleAnchorDate ? weekIndexFor(day.dayKey, settings.data.cycleAnchorDate) + 1 : null}
+              cycleStarted={(calendar.data.get(day.dayKey)?.cycleIndex ?? 0) >= 0}
+              cycleWeek={(calendar.data.get(day.dayKey)?.cycleIndex ?? 0) >= 0 ? (calendar.data.get(day.dayKey)?.weekIndex ?? 0) + 1 : null}
               showCycleWeek={showCycleWeek}
               items={day.items}
               users={activeUsers}
@@ -383,7 +385,7 @@ interface DayColumnProps {
   cycleStarted: boolean;
   cycleWeek: number | null;
   showCycleWeek: boolean;
-  items: OccurrenceView[];
+  items: Occurrence[];
   users: User[];
   roomByTask: Map<string, string>;
   completionControl: 'circle' | 'thumb';
@@ -440,7 +442,7 @@ function DayColumn({ dayKey, isToday, period, cycleStarted, cycleWeek, showCycle
         <ul className="grid gap-2">
           {items.map((occ) => (
             <WeekItem
-              key={occ._id}
+              key={occ.id}
               occ={occ}
               users={users}
               roomName={occ.roomNameSnapshot ?? (occ.taskId ? (roomByTask.get(occ.taskId) ?? t('tasks.unknownRoom')) : t('tasks.noRoom'))}
@@ -467,7 +469,7 @@ function WeekItem({
   onRetract,
   isToday,
 }: {
-  occ: OccurrenceView;
+  occ: Occurrence;
   users: User[];
   roomName: string;
   completionControl: 'circle' | 'thumb';
@@ -480,7 +482,7 @@ function WeekItem({
   const isOpen = occ.status === 'open';
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, isDragging } =
     useDraggable({
-      id: occurrenceDragId(occ._id),
+      id: occurrenceDragId(occ.id),
       disabled: !isOpen,
     });
   const style = transform
@@ -586,7 +588,7 @@ function WeekItem({
             size="icon"
             className="size-9 shrink-0 rounded-full border-success/50 text-success hover:bg-success/10 hover:text-success"
             aria-label={format('today.completeNamed', { task })}
-            onClick={() => onComplete(occ._id)}
+            onClick={() => onComplete(occ.id)}
           >
             {completionControl === 'thumb' ? <ThumbsUp aria-hidden="true" /> : <Circle aria-hidden="true" />}
           </Button>
@@ -606,7 +608,7 @@ function WeekItem({
             size="icon"
             className="size-9 shrink-0 rounded-full bg-success text-success-foreground hover:bg-success/90"
             aria-label={format('today.undoNamed', { task })}
-            onClick={() => (occ.recordedDone ? onRetract(occ._id) : onUncomplete(occ._id))}
+            onClick={() => (occ.recordedDone ? onRetract(occ.id) : onUncomplete(occ.id))}
           >
             <Check aria-hidden="true" />
           </Button>

@@ -1,9 +1,9 @@
-import type { OccurrenceView } from '@huishoudplanner/shared';
+import type { Occurrence } from '../../api/index.ts';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { ANNA, BRAM, mockApi, storeProfile } from '../../test/fixtures.ts';
+import { ANNA, BRAM, mockApi, page, storeProfile, v2Basics } from '../../test/fixtures.ts';
 import {
-  makeOccurrence,
+  makeOccurrenceV2,
   makeRoom,
   makeSettings,
   makeTask,
@@ -18,15 +18,15 @@ const BEDROOM = makeRoom({ _id: 'r2', name: 'Slaapkamer', sortOrder: 2 });
 const VACUUM = makeTask({ _id: 't1', name: 'Stofzuigen', roomId: LIVING._id });
 const BEDDING = makeTask({ _id: 't2', name: 'Beddengoed', roomId: BEDROOM._id });
 
-const planned: OccurrenceView[] = [
-  makeOccurrence({ _id: 'o1', taskId: VACUUM._id, taskNameSnapshot: VACUUM.name, date: '2026-09-16', assigneeId: ANNA._id }),
-  makeOccurrence({ _id: 'o2', taskId: VACUUM._id, taskNameSnapshot: VACUUM.name, date: '2026-09-23', assigneeId: ANNA._id }),
-  makeOccurrence({ _id: 'o3', taskId: VACUUM._id, taskNameSnapshot: VACUUM.name, date: '2026-09-30', assigneeId: ANNA._id }),
-  makeOccurrence({ _id: 'o4', taskId: VACUUM._id, taskNameSnapshot: VACUUM.name, date: '2026-10-07', assigneeId: ANNA._id }),
-  makeOccurrence({ _id: 'o5', taskId: BEDDING._id, taskNameSnapshot: BEDDING.name, date: '2026-09-18' }),
+const planned: Occurrence[] = [
+  makeOccurrenceV2({ id: 'o1', taskId: VACUUM._id, taskNameSnapshot: VACUUM.name, date: '2026-09-16', assigneeId: ANNA._id }),
+  makeOccurrenceV2({ id: 'o2', taskId: VACUUM._id, taskNameSnapshot: VACUUM.name, date: '2026-09-23', assigneeId: ANNA._id }),
+  makeOccurrenceV2({ id: 'o3', taskId: VACUUM._id, taskNameSnapshot: VACUUM.name, date: '2026-09-30', assigneeId: ANNA._id }),
+  makeOccurrenceV2({ id: 'o4', taskId: VACUUM._id, taskNameSnapshot: VACUUM.name, date: '2026-10-07', assigneeId: ANNA._id }),
+  makeOccurrenceV2({ id: 'o5', taskId: BEDDING._id, taskNameSnapshot: BEDDING.name, date: '2026-09-18' }),
 ];
-const assignedToSomeoneElse = makeOccurrence({
-  _id: 'o-other',
+const assignedToSomeoneElse = makeOccurrenceV2({
+  id: 'o-other',
   taskId: BEDDING._id,
   taskNameSnapshot: BEDDING.name,
   date: '2026-09-19',
@@ -40,12 +40,13 @@ function setup(routes: Record<string, unknown> = {}) {
     '/api/settings': makeSettings(),
     '/api/rooms': [LIVING, BEDROOM],
     '/api/tasks': [VACUUM, BEDDING],
-    '/api/occurrences': (_init: RequestInit | undefined, url: string) => {
+    ...v2Basics(),
+    '/api/v2/occurrences': (_init: RequestInit | undefined, url: string) => {
       const query = new URL(url, 'http://localhost').searchParams;
       const from = query.get('from') ?? '';
       const to = query.get('to') ?? '';
-      return [...planned, assignedToSomeoneElse].filter(
-        (occurrence) => occurrence.date >= from && occurrence.date <= to,
+      return page(
+        [...planned, assignedToSomeoneElse].filter((occurrence) => occurrence.date >= from && occurrence.date <= to),
       );
     },
     ...routes,
@@ -54,8 +55,8 @@ function setup(routes: Record<string, unknown> = {}) {
 
 describe('taskOverviewRows', () => {
   it('groups repeated occurrences into one task row with unique sorted dates', () => {
-    const duplicate = makeOccurrence({
-      _id: 'duplicate',
+    const duplicate = makeOccurrenceV2({
+      id: 'duplicate',
       taskId: VACUUM._id,
       taskNameSnapshot: VACUUM.name,
       date: '2026-09-16',
@@ -74,16 +75,16 @@ describe('taskOverviewRows', () => {
     const movedTask = { ...VACUUM, roomId: BEDROOM._id };
     const rows = taskOverviewRows(
       [
-        makeOccurrence({
-          _id: 'old-room',
+        makeOccurrenceV2({
+          id: 'old-room',
           taskId: VACUUM._id,
           taskNameSnapshot: VACUUM.name,
           date: '2026-09-16',
           roomIdSnapshot: LIVING._id,
           roomNameSnapshot: LIVING.name,
         }),
-        makeOccurrence({
-          _id: 'new-room',
+        makeOccurrenceV2({
+          id: 'new-room',
           taskId: VACUUM._id,
           taskNameSnapshot: VACUUM.name,
           date: '2026-09-23',
@@ -163,9 +164,9 @@ describe('MobileTasksPage', () => {
     expect(await screen.findByRole('button', { name: '1 week' })).toHaveAttribute('aria-pressed', 'true');
   });
   it('opens the Extra Task dialog from the header, on already done, and shows a planned task in its dated block', async () => {
-    const created = makeOccurrence({ _id: 'o-new', taskId: BEDDING._id, taskNameSnapshot: BEDDING.name, date: '2026-09-17', assigneeId: ANNA._id, origin: 'adhoc' });
+    const created = makeOccurrenceV2({ id: 'o-new', taskId: BEDDING._id, taskNameSnapshot: BEDDING.name, date: '2026-09-17', assigneeId: ANNA._id, origin: 'adhoc' });
     const fetchMock = setup({
-      'POST /api/occurrences': () => {
+      'POST /api/v2/occurrences': () => {
         planned.push(created);
         return created;
       },

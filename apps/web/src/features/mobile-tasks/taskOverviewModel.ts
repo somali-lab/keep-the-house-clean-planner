@@ -1,4 +1,5 @@
-import type { OccurrenceView, Room, Task } from '@huishoudplanner/shared';
+import type { Room, Task } from '@huishoudplanner/shared';
+import type { Occurrence } from '../../api/index.ts';
 import { weekIndexFor } from '@huishoudplanner/shared/cycle';
 import { addDays, daysBetween } from '@huishoudplanner/shared/time';
 import { getLocale } from '../../i18n/runtime.ts';
@@ -18,7 +19,7 @@ export interface TaskOverviewRow {
 
 /** One row per task, room, sliding block, and cycle week; dates remain ordered. */
 export function taskOverviewRows(
-  occurrences: OccurrenceView[],
+  occurrences: Occurrence[],
   tasks: Task[],
   rooms: Room[],
   unknownRoom: string,
@@ -39,7 +40,7 @@ export function taskOverviewRows(
     const blockStart = addDays(periodStart, block * 7);
     const cycleWeek = weekIndexFor(occurrence.date, cycleAnchorDate) + 1;
     // A one-off task never merges with another record: each gets its own row.
-    const groupKey = occurrence.taskId === null ? `oneoff:${occurrence._id}` : `${occurrence.taskId}:${roomId ?? ''}:${roomName}:${blockStart}:${cycleWeek}`;
+    const groupKey = occurrence.taskId === null ? `oneoff:${occurrence.id}` : `${occurrence.taskId}:${roomId ?? ''}:${roomName}:${blockStart}:${cycleWeek}`;
     const row = grouped.get(groupKey) ?? {
       taskId: occurrence.taskId,
       key: groupKey,

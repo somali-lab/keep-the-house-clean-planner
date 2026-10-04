@@ -2,8 +2,8 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { resetRequestKeys } from '../../api/requestKey.ts';
 import { applyLanguage } from '../../i18n/runtime.ts';
-import { ANNA, BRAM, mockApi, storeProfile } from '../../test/fixtures.ts';
-import { makeRoom, makeSettings, makeTask, renderWithProviders } from '../../test/render.tsx';
+import { ANNA, BRAM, mockApi, page, storeProfile, v2Basics } from '../../test/fixtures.ts';
+import { makeOccurrenceV2, makeRoom, makeSettings, makeTask, renderWithProviders } from '../../test/render.tsx';
 import type { DueItemView } from './api.ts';
 import { DuePage, spokenDate } from './DuePage.tsx';
 
@@ -46,6 +46,10 @@ function setup(due: DueItemView[] = DUE) {
     '/api/rooms': [makeRoom({ _id: 'r1', name: 'Woonkamer' })],
     'PATCH /api/occurrences/new1': { _id: 'new1', status: 'done' },
     'PATCH /api/occurrences/o-today': { _id: 'o-today', status: 'done' },
+    // The extra-task dialog speaks v2.
+    ...v2Basics(),
+    '/api/v2/occurrences': page([]),
+    'POST /api/v2/occurrences': makeOccurrenceV2({ id: 'new2', taskId: 't2', taskNameSnapshot: 'Stofzuigen', origin: 'adhoc', recordedDone: true }),
   });
 }
 
@@ -154,7 +158,7 @@ describe('DuePage', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Vastleggen' }));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    expect(callsTo(fetchMock, 'POST', '/api/occurrences')).toEqual([
+    expect(callsTo(fetchMock, 'POST', '/api/v2/occurrences')).toEqual([
       { taskId: 't2', date: '2026-09-16', assigneeId: ANNA._id, done: true, requestId: expect.stringMatching(/^[A-Za-z0-9_-]{16,64}$/) },
     ]);
     expect(await screen.findByRole('status')).toHaveTextContent('"Stofzuigen" is vastgelegd.');

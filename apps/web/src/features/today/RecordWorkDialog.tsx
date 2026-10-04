@@ -1,5 +1,3 @@
-import type { OccurrenceView } from '@huishoudplanner/shared';
-import { MAX_TASK_POINTS, MIN_TASK_POINTS } from '@huishoudplanner/shared/points';
 import { CalendarPlus, CircleCheck, CirclePlus, ClipboardCheck, Sparkles, TriangleAlert } from 'lucide-react';
 import { useId, useMemo, useRef, useState, type FormEvent } from 'react';
 import { NativeSelect } from '@/components/NativeSelect';
@@ -8,15 +6,15 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
-import { ApiRequestError } from '../../api/index.ts';
+import { ApiRequestError, type Occurrence } from '../../api/index.ts';
 import { useRooms, useTasks } from '../../api/queries.ts';
+import { useLimits } from '../../api/v2/queries.ts';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
 import { useCheckOffPlanned, useOccurrences, useRecordWork } from './api.ts';
 import { shortDate } from './OccurrenceItem.tsx';
 import {
   buildRecordWork,
-  pointsFieldValue,
   type RecordWorkField,
   type RecordWorkForm,
   type RecordWorkKind,
@@ -31,7 +29,7 @@ interface RecordWorkDialogProps {
   /** Opens on "extra" with this task chosen (the Overdue page records an extra for one task). */
   initialTaskId?: string;
   /** `checkedOff`: the planned occurrence of the task was completed instead of recording an extra one; `planned`: an open occurrence was created. */
-  onRecorded?(occurrence: OccurrenceView, how: RecordWorkHow): void;
+  onRecorded?(occurrence: Occurrence, how: RecordWorkHow): void;
 }
 
 export type RecordWorkHow = 'recorded' | 'checkedOff' | 'planned';
@@ -96,12 +94,13 @@ function RecordWorkFormBody({
   todayKey: string;
   initialTaskId?: string;
   onCancel(): void;
-  onRecorded(occurrence: OccurrenceView, how: RecordWorkHow): void;
+  onRecorded(occurrence: Occurrence, how: RecordWorkHow): void;
 }) {
   const idPrefix = useId();
   const { profile, activeUsers } = useProfile();
   const tasks = useTasks();
   const rooms = useRooms();
+  const limits = useLimits().data?.tasks;
   const record = useRecordWork();
   const checkOff = useCheckOffPlanned();
   const todayOccurrences = useOccurrences(todayKey, todayKey);
@@ -113,7 +112,7 @@ function RecordWorkFormBody({
     name: '',
     roomId: '',
     duration: '',
-    points: null,
+    points: '',
     doneBy: '',
     date: todayKey,
     planFor: '',
@@ -145,7 +144,7 @@ function RecordWorkFormBody({
         )
       : undefined;
   const checkingOff = planned !== undefined && plannedChoice === 'checkOff';
-  const result = buildRecordWork(form, todayKey);
+  const result = buildRecordWork(form, todayKey, limits);
   const validation: Partial<Record<RecordWorkField, MessageKey>> = submitted && !result.ok ? result.errors : {};
   const errors: Partial<Record<RecordWorkField, MessageKey>> = serverDateError
     ? { ...validation, date: serverDateError }
@@ -159,12 +158,16 @@ function RecordWorkFormBody({
     'aria-invalid': errors[field] ? true : undefined,
     'aria-describedby': errors[field] ? `${idPrefix}-${field}-error` : undefined,
   });
+  const pointsErrorText = () =>
+    limits
+      ? format('recordWork.error.points', { min: limits.minPoints, max: limits.maxPoints })
+      : t('recordWork.error.pointsWhole');
   // The summary below is the one alert; each field's message is linked through aria-describedby.
   const fieldError = (field: RecordWorkField) =>
     errors[field] ? (
       <p id={`${idPrefix}-${field}-error`} className="flex items-center gap-1.5 text-sm font-semibold text-destructive">
         <TriangleAlert className="size-4 shrink-0" aria-hidden="true" />
-        {t(errors[field])}
+        {field === 'points' ? pointsErrorText() : t(errors[field])}
       </p>
     ) : null;
 
@@ -183,7 +186,7 @@ function RecordWorkFormBody({
     setServerDateError(null);
     try {
       if (planned && plannedChoice === 'checkOff') {
-        onRecorded(await checkOff.mutateAsync({ id: planned._id, completedBy: form.doneBy }), 'checkedOff');
+        onRecorded(await checkOff.mutateAsync({ id: planned.id, completedBy: form.doneBy }), 'checkedOff');
       } else {
         onRecorded(await record.mutateAsync(result.body), planning ? 'planned' : 'recorded');
       }
@@ -389,16 +392,18 @@ function RecordWorkFormBody({
               className="h-11"
               type="number"
               inputMode="numeric"
-              min={MIN_TASK_POINTS}
-              max={MAX_TASK_POINTS}
+              min={limits?.minPoints}
+              max={limits?.maxPoints}
               step={1}
-              value={pointsFieldValue(form)}
+              value={form.points}
               onChange={(event) => set('points', event.target.value)}
               aria-describedby={[`${idPrefix}-points-hint`, errors.points ? `${idPrefix}-points-error` : null].filter(Boolean).join(' ')}
               aria-invalid={errors.points ? true : undefined}
             />
             <p id={`${idPrefix}-points-hint`} className="text-sm text-muted-foreground">
-              {t('recordWork.pointsHint')}
+              {limits
+                ? format('recordWork.pointsHint', { min: limits.minPoints, max: limits.maxPoints })
+                : t('recordWork.pointsHintNoRange')}
             </p>
             {fieldError('points')}
           </div>

@@ -1,6 +1,13 @@
-import type { OccurrenceView } from '@huishoudplanner/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, ApiRequestError, type ApiClient } from '../../api/index.ts';
+import {
+  apiV2,
+  ApiRequestError,
+  toOccurrence,
+  unwrap,
+  type V2Result,
+  type ApiV2Client,
+  type Occurrence,
+} from '../../api/index.ts';
 import { releaseRequestKey, requestKeyFor } from '../../api/requestKey.ts';
 import { useOfflineQueue } from '../../offline/context.ts';
 
@@ -8,10 +15,27 @@ export const occurrenceKeys = {
   range: (from: string, to: string) => ['occurrences', from, to] as const,
 };
 
+/** The most the server returns in one page (`limit` 1 to 500). */
+const PAGE_SIZE = 500;
+
+/** Every occurrence of the days from `from` to `to`: the bounded pages are followed until the last one. */
+export async function fetchOccurrences(from: string, to: string, client: ApiV2Client = apiV2): Promise<Occurrence[]> {
+  const items: Occurrence[] = [];
+  let cursor: string | undefined;
+  do {
+    const { data } = await unwrap(
+      client.GET('/api/v2/occurrences', { params: { query: { from, to, limit: String(PAGE_SIZE), cursor } } }),
+    );
+    items.push(...data.items.map(toOccurrence));
+    cursor = data.nextCursor ?? undefined;
+  } while (cursor);
+  return items;
+}
+
 export function useOccurrences(from: string, to: string, enabled = true) {
   return useQuery({
     queryKey: occurrenceKeys.range(from, to),
-    queryFn: async () => (await api.get<OccurrenceView[]>(`/api/occurrences?from=${from}&to=${to}`)).data,
+    queryFn: () => fetchOccurrences(from, to),
     enabled,
   });
 }
@@ -39,10 +63,10 @@ export const isQueueable = (action: OccurrenceAction): action is QueueableAction
 
 /** What the server will do, applied locally so the list reacts instantly. */
 export function applyOptimistic(
-  occ: OccurrenceView,
+  occ: Occurrence,
   action: OccurrenceAction,
   context: { profileId: string; todayKey: string; now: Date },
-): OccurrenceView {
+): Occurrence {
   switch (action.kind) {
     case 'complete': {
       // The server credits the actor unless a named person is chosen; work of someone else always carries a choice.
@@ -80,25 +104,30 @@ export function applyOptimistic(
 }
 
 /** Sends one action; the offline sync passes a client that speaks for the profile that queued it. */
-export function sendOccurrenceAction(action: SendableAction, client: ApiClient = api) {
-  if (action.kind === 'claim') return client.post<OccurrenceView>(`/api/occurrences/${action.id}/claim`);
-  if (action.kind === 'assign') {
-    return client.patch<OccurrenceView>(`/api/occurrences/${action.id}`, {
-      action: 'assign',
-      assigneeId: action.assigneeId,
-    });
-  }
-  const body =
-    action.kind === 'complete'
-      ? {
-          action: 'complete',
-          ...(action.completedBy ? { completedBy: action.completedBy } : {}),
-          ...(action.takeOver ? { takeOver: true } : {}),
-        }
-      : action.kind === 'skip'
-        ? { action: 'skip', ...(action.reason ? { reason: action.reason } : {}) }
-        : { action: 'uncomplete' };
-  return client.patch<OccurrenceView>(`/api/occurrences/${action.id}`, body);
+export async function sendOccurrenceAction(
+  action: SendableAction,
+  client: ApiV2Client = apiV2,
+): Promise<V2Result<Occurrence>> {
+  const path = { params: { path: { id: action.id } } };
+  const answer = (() => {
+    switch (action.kind) {
+      case 'claim':
+        return client.POST('/api/v2/occurrences/{id}/claim', path);
+      case 'assign':
+        return client.POST('/api/v2/occurrences/{id}/assignment', { ...path, body: { assigneeId: action.assigneeId } });
+      case 'uncomplete':
+        return client.POST('/api/v2/occurrences/{id}/uncomplete', path);
+      case 'skip':
+        return client.POST('/api/v2/occurrences/{id}/skip', { ...path, body: { reason: action.reason || null } });
+      case 'complete':
+        return client.POST('/api/v2/occurrences/{id}/complete', {
+          ...path,
+          body: { completedBy: action.completedBy ?? null, takeOver: action.takeOver ? true : null },
+        });
+    }
+  })();
+  const result = await unwrap(answer);
+  return { ...result, data: toOccurrence(result.data) };
 }
 
 /**
@@ -111,16 +140,16 @@ export function useOccurrenceAction(
 ) {
   const queryClient = useQueryClient();
   const offline = useOfflineQueue();
-  const replace = (updater: (list: OccurrenceView[]) => OccurrenceView[]) =>
-    queryClient.setQueryData<OccurrenceView[]>(queryKey, (list) => (list ? updater(list) : list));
+  const replace = (updater: (list: Occurrence[]) => Occurrence[]) =>
+    queryClient.setQueryData<Occurrence[]>(queryKey, (list) => (list ? updater(list) : list));
 
   return useMutation({
     // Run even when the browser reports offline, so the action reaches the queue instead of pausing in memory.
     networkMode: 'always',
-    mutationFn: async (action: OccurrenceAction): Promise<OccurrenceView | null> => {
+    mutationFn: async (action: OccurrenceAction): Promise<Occurrence | null> => {
       if (action.kind === 'retract') {
         try {
-          await api.post(`/api/occurrences/${action.id}/retract`);
+          await unwrap(apiV2.POST('/api/v2/occurrences/{id}/retraction', { params: { path: { id: action.id } } }));
         } catch (error) {
           // A second retract finds nothing: the work is already undone.
           if (!(error instanceof ApiRequestError && error.status === 404)) throw error;
@@ -132,7 +161,7 @@ export function useOccurrenceAction(
       } catch (error) {
         if (offline && isQueueable(action) && !(error instanceof ApiRequestError)) {
           const taskName =
-            queryClient.getQueryData<OccurrenceView[]>(queryKey)?.find((occ) => occ._id === action.id)?.taskNameSnapshot ?? '';
+            queryClient.getQueryData<Occurrence[]>(queryKey)?.find((occ) => occ.id === action.id)?.taskNameSnapshot ?? '';
           await offline.enqueue({ action, profileId: context.profileId, taskName });
           return null;
         }
@@ -141,11 +170,11 @@ export function useOccurrenceAction(
     },
     onMutate: async (action) => {
       await queryClient.cancelQueries({ queryKey });
-      const previous = queryClient.getQueryData<OccurrenceView[]>(queryKey);
+      const previous = queryClient.getQueryData<Occurrence[]>(queryKey);
       replace((list) =>
         action.kind === 'retract'
-          ? list.filter((occ) => occ._id !== action.id)
-          : list.map((occ) => (occ._id === action.id ? applyOptimistic(occ, action, { ...context, now: new Date() }) : occ)),
+          ? list.filter((occ) => occ.id !== action.id)
+          : list.map((occ) => (occ.id === action.id ? applyOptimistic(occ, action, { ...context, now: new Date() }) : occ)),
       );
       return { previous };
     },
@@ -153,7 +182,7 @@ export function useOccurrenceAction(
       if (result?.previous) queryClient.setQueryData(queryKey, result.previous);
     },
     onSuccess: (updated) => {
-      if (updated) replace((list) => list.map((occ) => (occ._id === updated._id ? updated : occ)));
+      if (updated) replace((list) => list.map((occ) => (occ.id === updated.id ? updated : occ)));
     },
     // A queued action keeps the optimistic list; a refetch would fail offline anyway. A retract
     // is never queued, so its list is refetched, and so is everything the deleted work fed: the due list
@@ -201,32 +230,37 @@ export function useRecordWork() {
   const queryClient = useQueryClient();
   return useMutation({
     networkMode: 'always',
-    mutationFn: async (input: RecordWorkInput): Promise<OccurrenceView> => {
+    mutationFn: async (input: RecordWorkInput): Promise<Occurrence> => {
       const intent = `record-work:${JSON.stringify(input)}`;
       const requestId = requestKeyFor(intent);
-      const created =
+      const answer =
         input.kind === 'extra'
-          ? (
-              await api.post<OccurrenceView>('/api/occurrences', {
-                taskId: input.taskId,
-                date: input.date,
-                assigneeId: input.assigneeId,
-                ...(input.done ? { done: true } : {}),
-                requestId,
-              })
-            ).data
-          : (
-              await api.post<OccurrenceView>('/api/occurrences/one-off', {
-                name: input.name,
-                roomId: input.roomId,
-                durationMinutes: input.durationMinutes,
-                date: input.date,
-                assigneeId: input.assigneeId,
-                ...(input.done ? { done: true } : {}),
-                ...(input.points === undefined ? {} : { points: input.points }),
-                requestId,
-              })
-            ).data;
+          ? await unwrap(
+              apiV2.POST('/api/v2/occurrences', {
+                body: {
+                  taskId: input.taskId,
+                  date: input.date,
+                  assigneeId: input.assigneeId,
+                  done: input.done ? true : null,
+                  requestId,
+                },
+              }),
+            )
+          : await unwrap(
+              apiV2.POST('/api/v2/occurrences/one-off', {
+                body: {
+                  name: input.name,
+                  roomId: input.roomId,
+                  durationMinutes: input.durationMinutes,
+                  date: input.date,
+                  assigneeId: input.assigneeId,
+                  done: input.done ? true : null,
+                  points: input.points ?? null,
+                  requestId,
+                },
+              }),
+            );
+      const created = toOccurrence(answer.data);
       releaseRequestKey(intent);
       return created;
     },
@@ -240,13 +274,13 @@ export function useRecordWork() {
 
 /**
  * Completes the planned occurrence of a task (for the person who did it) instead of recording an extra
- * execution. It is the same PATCH as a check-off; the key is not needed because completing twice is refused.
+ * execution. It is the same request as a check-off; the key is not needed because completing twice is refused.
  */
 export function useCheckOffPlanned() {
   const queryClient = useQueryClient();
   return useMutation({
     networkMode: 'always',
-    mutationFn: async (input: { id: string; completedBy: string }): Promise<OccurrenceView> =>
+    mutationFn: async (input: { id: string; completedBy: string }): Promise<Occurrence> =>
       (await sendOccurrenceAction({ id: input.id, kind: 'complete', completedBy: input.completedBy })).data,
     onSettled: () =>
       Promise.all(

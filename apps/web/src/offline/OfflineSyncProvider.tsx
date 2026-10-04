@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
-import { ApiRequestError, createApiClient } from '../api/client.ts';
+import { ApiRequestError, createV2Client } from '../api/index.ts';
 import { sendOccurrenceAction } from '../features/today/api.ts';
 import { format, t } from '../i18n/nl.ts';
 import { OfflineQueueContext, type OfflineQueue } from './context.ts';
@@ -30,7 +30,7 @@ export function OfflineSyncProvider({ children, store: givenStore }: { children:
     let changed = false;
     try {
       for (const item of await store.all()) {
-        const client = createApiClient({ getProfileId: () => item.profileId });
+        const client = createV2Client({ getProfileId: () => item.profileId });
         try {
           await sendOccurrenceAction(item.action, client);
         } catch (error) {

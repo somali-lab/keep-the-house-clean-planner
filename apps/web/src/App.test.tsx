@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from './App.tsx';
 import { APP_VERSION } from './version.ts';
-import { ANNA, BRAM, makeProgress, mockApi, storeProfile, testQueryClient } from './test/fixtures.ts';
+import { ANNA, BRAM, makeProgress, mockApi, page, storeProfile, testQueryClient, v2Basics } from './test/fixtures.ts';
 import { makeSettings } from './test/render.tsx';
 import { setViewportWidth } from './test/setup.ts';
 
@@ -16,6 +16,8 @@ describe('app shell', () => {
       '/api/settings': makeSettings(),
       '/api/cycle-plans': [],
       '/api/occurrences': [],
+      ...v2Basics(),
+      '/api/v2/occurrences': page([]),
     });
     storeProfile(ANNA._id);
   });
@@ -76,6 +78,8 @@ describe('app shell', () => {
       '/api/settings': makeSettings(),
       '/api/cycle-plans': [],
       '/api/occurrences': [],
+      ...v2Basics(),
+      '/api/v2/occurrences': page([]),
       '/api/points/progress': makeProgress({ personId: ANNA._id }),
       '/api/badges': { badges: [] },
       '/api/badges/progress': { personId: ANNA._id, items: [] },
@@ -139,6 +143,8 @@ describe('app shell', () => {
       '/api/settings': makeSettings(),
       '/api/cycle-plans': [],
       '/api/occurrences': [],
+      ...v2Basics(),
+      '/api/v2/occurrences': page([]),
     });
     storeProfile(member._id);
     window.history.replaceState(null, '', '/manage/distribution');

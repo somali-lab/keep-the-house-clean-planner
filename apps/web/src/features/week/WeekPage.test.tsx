@@ -1,9 +1,9 @@
-import type { ApiWarning, OccurrenceView } from '@huishoudplanner/shared';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { createElement, type ComponentProps } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ANNA, BRAM, mockApi, storeProfile } from '../../test/fixtures.ts';
-import { makeOccurrence, makeRoom, makeSettings, makeTask, renderWithProviders } from '../../test/render.tsx';
+import type { ApiWarning, Occurrence } from '../../api/index.ts';
+import { ANNA, BRAM, mockApi, page, problem, storeProfile, v2Basics } from '../../test/fixtures.ts';
+import { makeOccurrenceV2, makeRoom, makeSettings, makeTask, renderWithProviders } from '../../test/render.tsx';
 import { resetProfileStore } from '../../identity/profileStore.ts';
 import { WeekPage } from './WeekPage.tsx';
 import { groupByDay, matchesTaskName, movedTo, overviewDays, shortDay, weekDays, weekRangeLabel } from './weekModel.ts';
@@ -22,28 +22,24 @@ vi.mock('@dnd-kit/core', async (importOriginal) => {
 
 const NOW = new Date('2026-09-16T08:00:00Z'); // Wednesday; week 14–20 Sep
 
-let db: OccurrenceView[];
+let db: Occurrence[];
 let nextWarnings: ApiWarning[] = [];
 
 function setup(settings = makeSettings(), users = [ANNA, BRAM]) {
   storeProfile(ANNA._id);
   db = [
-    makeOccurrence({ _id: 'o1', taskNameSnapshot: 'Badkamer', date: '2026-09-15', assigneeId: ANNA._id }),
-    makeOccurrence({ _id: 'o2', taskNameSnapshot: 'Stofzuigen', date: '2026-09-17', plannedDate: '2026-09-16', movedFrom: '2026-09-16', assigneeId: BRAM._id }),
-    makeOccurrence({ _id: 'o3', taskNameSnapshot: 'Afwas', date: '2026-09-15', status: 'done', assigneeId: ANNA._id }),
+    makeOccurrenceV2({ id: 'o1', taskNameSnapshot: 'Badkamer', date: '2026-09-15', assigneeId: ANNA._id }),
+    makeOccurrenceV2({ id: 'o2', taskNameSnapshot: 'Stofzuigen', date: '2026-09-17', plannedDate: '2026-09-16', movedFrom: '2026-09-16', assigneeId: BRAM._id }),
+    makeOccurrenceV2({ id: 'o3', taskNameSnapshot: 'Afwas', date: '2026-09-15', status: 'done', assigneeId: ANNA._id }),
   ];
-  const update = (id: string) => (init: RequestInit) => {
-    const body = JSON.parse(String(init.body)) as {
-      action: 'reschedule' | 'complete' | 'uncomplete';
-      date?: string;
-      completedBy?: string;
-      takeOver?: true;
-    };
-    const current = db.find((o) => o._id === id)!;
+  type Body = { date?: string; completedBy?: string | null; takeOver?: boolean | null };
+  const update = (id: string, name: 'reschedule' | 'complete' | 'uncomplete') => (init: RequestInit | undefined) => {
+    const body = (init?.body ? JSON.parse(String(init.body)) : {}) as Body;
+    const current = db.find((o) => o.id === id)!;
     const updated =
-      body.action === 'reschedule'
+      name === 'reschedule'
         ? movedTo(current, body.date!)
-        : body.action === 'complete'
+        : name === 'complete'
           ? {
               ...current,
               status: 'done' as const,
@@ -53,7 +49,7 @@ function setup(settings = makeSettings(), users = [ANNA, BRAM]) {
               statusBeforeCompletion: 'open' as const,
             }
           : { ...current, status: 'open' as const, completedBy: null, completedAt: null, statusBeforeCompletion: null };
-    db = db.map((o) => (o._id === id ? updated : o));
+    db = db.map((o) => (o.id === id ? updated : o));
     return { ...updated, warnings: nextWarnings };
   };
   return mockApi({
@@ -61,16 +57,24 @@ function setup(settings = makeSettings(), users = [ANNA, BRAM]) {
     '/api/settings': settings,
     '/api/rooms': [makeRoom({ _id: 'r1', name: 'Woonkamer' })],
     '/api/tasks': [makeTask({ _id: 't1', name: 'Huishoudtaak', roomId: 'r1' })],
-    '/api/occurrences': () => db,
-    'PATCH /api/occurrences/o1': update('o1'),
-    'PATCH /api/occurrences/o2': update('o2'),
+    ...v2Basics(settings.cycleAnchorDate),
+    '/api/v2/occurrences': () => page(db),
+    ...Object.fromEntries(
+      ['o1', 'o2'].flatMap((id) =>
+        (['reschedule', 'complete', 'uncomplete'] as const).map((name) => [
+          `POST /api/v2/occurrences/${id}/${name}`,
+          update(id, name),
+        ]),
+      ),
+    ),
   });
 }
 
-const patchBodies = (fetchMock: ReturnType<typeof mockApi>, id: string) =>
+/** The bodies of the requests that sent the intent to one occurrence, in order. */
+const intentBodies = (fetchMock: ReturnType<typeof mockApi>, id: string, name: string) =>
   fetchMock.mock.calls
-    .filter(([u, init]) => u === `/api/occurrences/${id}` && (init as RequestInit | undefined)?.method === 'PATCH')
-    .map(([, init]) => JSON.parse(String((init as RequestInit).body)));
+    .filter(([u, init]) => u === `/api/v2/occurrences/${id}/${name}` && init?.method === 'POST')
+    .map(([, init]) => (init?.body ? JSON.parse(String(init.body)) : null));
 
 describe('weekModel', () => {
   it('lists Monday to Sunday and formats days', () => {
@@ -85,7 +89,7 @@ describe('weekModel', () => {
   });
 
   it('groups by day and derives movedFrom from plannedDate', () => {
-    const occ = makeOccurrence({ _id: 'x', date: '2026-09-15', plannedDate: '2026-09-15' });
+    const occ = makeOccurrenceV2({ id: 'x', date: '2026-09-15', plannedDate: '2026-09-15' });
     expect(movedTo(occ, '2026-09-18')).toMatchObject({ date: '2026-09-18', movedFrom: '2026-09-15' });
     expect(movedTo(movedTo(occ, '2026-09-18'), '2026-09-15').movedFrom).toBeNull();
     expect(groupByDay([occ], ['2026-09-15', '2026-09-16']).map((d) => d.items.length)).toEqual([1, 0]);
@@ -234,14 +238,15 @@ describe('WeekPage', () => {
     const undo = await screen.findByRole('button', { name: 'Badkamer ongedaan maken' });
     fireEvent.click(undo);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Afvinken: Badkamer' })).toBeInTheDocument());
-    expect(patchBodies(fetchMock, 'o1')).toEqual([{ action: 'complete' }, { action: 'uncomplete' }]);
+    expect(intentBodies(fetchMock, 'o1', 'complete')).toEqual([{ completedBy: null, takeOver: null }]);
+    expect(intentBodies(fetchMock, 'o1', 'uncomplete')).toEqual([null]);
   });
 
   it('shows recorded extra work with an Extra label and retracts it on undo', async () => {
     storeProfile(ANNA._id);
     db = [
-      makeOccurrence({
-        _id: 'o-extra',
+      makeOccurrenceV2({
+        id: 'o-extra',
         taskNameSnapshot: 'Ramen',
         date: '2026-09-16',
         assigneeId: ANNA._id,
@@ -256,8 +261,9 @@ describe('WeekPage', () => {
       '/api/settings': makeSettings(),
       '/api/rooms': [makeRoom({ _id: 'r1', name: 'Woonkamer' })],
       '/api/tasks': [makeTask({ _id: 't1', name: 'Huishoudtaak', roomId: 'r1' })],
-      '/api/occurrences': () => db,
-      'POST /api/occurrences/o-extra/retract': () => {
+      ...v2Basics(),
+      '/api/v2/occurrences': () => page(db),
+      'POST /api/v2/occurrences/o-extra/retraction': () => {
         db = [];
         return { retracted: true, id: 'o-extra' };
       },
@@ -267,24 +273,23 @@ describe('WeekPage', () => {
     expect(within(undo.closest('li')!).getByText('Extra')).toBeInTheDocument();
     fireEvent.click(undo);
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Ramen ongedaan maken' })).not.toBeInTheDocument());
-    expect(
-      fetchMock.mock.calls.filter(([u, init]) => u === '/api/occurrences/o-extra/retract' && (init as RequestInit | undefined)?.method === 'POST'),
-    ).toHaveLength(1);
-    expect(patchBodies(fetchMock, 'o-extra')).toEqual([]);
+    expect(intentBodies(fetchMock, 'o-extra', 'retraction')).toHaveLength(1);
+    expect(intentBodies(fetchMock, 'o-extra', 'uncomplete')).toEqual([]);
   });
 
   it('offers no undo for recorded work of an earlier day, because retracting is only an undo of today', async () => {
     storeProfile(ANNA._id);
     db = [
-      makeOccurrence({ _id: 'o-old', taskNameSnapshot: 'Ramen', date: '2026-09-15', assigneeId: ANNA._id, status: 'done', completedBy: ANNA._id, origin: 'adhoc', recordedDone: true }),
-      makeOccurrence({ _id: 'o-planned', taskNameSnapshot: 'Afwas', date: '2026-09-15', assigneeId: ANNA._id, status: 'done', completedBy: ANNA._id }),
+      makeOccurrenceV2({ id: 'o-old', taskNameSnapshot: 'Ramen', date: '2026-09-15', assigneeId: ANNA._id, status: 'done', completedBy: ANNA._id, origin: 'adhoc', recordedDone: true }),
+      makeOccurrenceV2({ id: 'o-planned', taskNameSnapshot: 'Afwas', date: '2026-09-15', assigneeId: ANNA._id, status: 'done', completedBy: ANNA._id }),
     ];
     mockApi({
       '/api/users': [ANNA, BRAM],
       '/api/settings': makeSettings(),
       '/api/rooms': [makeRoom({ _id: 'r1', name: 'Woonkamer' })],
       '/api/tasks': [makeTask({ _id: 't1', name: 'Huishoudtaak', roomId: 'r1' })],
-      '/api/occurrences': () => db,
+      ...v2Basics(),
+      '/api/v2/occurrences': () => page(db),
     });
     renderWithProviders(<WeekPage now={NOW} />);
     fireEvent.click(await screen.findByRole('button', { name: /Afgelopen 3 dagen/ }));
@@ -302,7 +307,7 @@ describe('WeekPage', () => {
     expect(screen.getByRole('alertdialog')).toHaveTextContent('Bram de Vries, die niet meer actief is');
     expect(screen.queryByRole('button', { name: 'Namens Bram de Vries afvinken' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Ik heb de taak overgenomen' }));
-    await waitFor(() => expect(patchBodies(fetchMock, 'o2')).toEqual([{ action: 'complete', takeOver: true }]));
+    await waitFor(() => expect(intentBodies(fetchMock, 'o2', 'complete')).toEqual([{ completedBy: null, takeOver: true }]));
   });
 
   it("asks how to complete another person's task and can take it over", async () => {
@@ -314,19 +319,19 @@ describe('WeekPage', () => {
     expect(screen.getByRole('alertdialog')).toHaveTextContent('Deze taak staat op naam van Bram de Vries');
     fireEvent.click(screen.getByRole('button', { name: 'Ik heb de taak overgenomen' }));
 
-    await waitFor(() => expect(db.find((occurrence) => occurrence._id === 'o2')).toMatchObject({
+    await waitFor(() => expect(db.find((occurrence) => occurrence.id === 'o2')).toMatchObject({
       status: 'done',
       assigneeId: ANNA._id,
       completedBy: ANNA._id,
     }));
-    expect(patchBodies(fetchMock, 'o2')).toEqual([{ action: 'complete', takeOver: true }]);
+    expect(intentBodies(fetchMock, 'o2', 'complete')).toEqual([{ completedBy: null, takeOver: true }]);
   });
 
   it('hides occurrences before the first cycle and explains that the cycle has not started', async () => {
     const fetchMock = setup(makeSettings({ cycleAnchorDate: '2026-09-21' }));
     db = [
-      makeOccurrence({ _id: 'o1', taskNameSnapshot: 'Te vroeg', date: '2026-09-20', assigneeId: ANNA._id }),
-      makeOccurrence({ _id: 'o2', taskNameSnapshot: 'Vanaf de start', date: '2026-09-21', assigneeId: ANNA._id }),
+      makeOccurrenceV2({ id: 'o1', taskNameSnapshot: 'Te vroeg', date: '2026-09-20', assigneeId: ANNA._id, cycleIndex: -1 }),
+      makeOccurrenceV2({ id: 'o2', taskNameSnapshot: 'Vanaf de start', date: '2026-09-21', assigneeId: ANNA._id, cycleIndex: 0 }),
     ];
     renderWithProviders(<WeekPage now={new Date('2026-09-20T08:00:00Z')} />);
 
@@ -339,7 +344,7 @@ describe('WeekPage', () => {
     act(() => {
       dnd.onDragEnd!({ active: { id: 'occ:o2' }, over: { id: 'day:2026-09-20' } });
     });
-    expect(patchBodies(fetchMock, 'o2')).toEqual([]);
+    expect(intentBodies(fetchMock, 'o2', 'reschedule')).toEqual([]);
   });
 
   it('uses the configured completion control and always shows a green check when done', async () => {
@@ -348,10 +353,11 @@ describe('WeekPage', () => {
       '/api/settings': makeSettings({ completionControl: 'thumb' }),
       '/api/rooms': [makeRoom({ _id: 'r1', name: 'Woonkamer' })],
       '/api/tasks': [makeTask({ _id: 't1', name: 'Huishoudtaak', roomId: 'r1' })],
-      '/api/occurrences': () => db,
+      ...v2Basics(),
+      '/api/v2/occurrences': () => page(db),
     });
     storeProfile(ANNA._id);
-    db = [makeOccurrence({ _id: 'o3', taskNameSnapshot: 'Afwas', date: '2026-09-15', status: 'done', assigneeId: ANNA._id })];
+    db = [makeOccurrenceV2({ id: 'o3', taskNameSnapshot: 'Afwas', date: '2026-09-15', status: 'done', assigneeId: ANNA._id })];
     renderWithProviders(<WeekPage now={NOW} />);
     fireEvent.click(await screen.findByRole('button', { name: /Afgelopen 3 dagen/ }));
     const done = await screen.findByRole('button', { name: 'Afwas ongedaan maken' });
@@ -369,7 +375,53 @@ describe('WeekPage', () => {
     const targetDay = screen.getByTestId('day:2026-09-16');
     await waitFor(() => expect(within(targetDay).getByText('Stofzuigen')).toBeInTheDocument());
     expect(within(targetDay).queryByText(/verplaatst van/)).not.toBeInTheDocument();
-    expect(patchBodies(fetchMock, 'o2')).toEqual([{ action: 'reschedule', date: '2026-09-16' }]);
+    expect(intentBodies(fetchMock, 'o2', 'reschedule')).toEqual([{ date: '2026-09-16' }]);
+  });
+
+  it('shows the warnings the server returns for a move', async () => {
+    nextWarnings = [{ code: 'assignee_unavailable', message: 'unavailable', details: { userId: BRAM._id, weekday: 3 } as unknown as ApiWarning['details'] }];
+    setup();
+    renderWithProviders(<WeekPage now={NOW} />);
+    fireEvent.change(await screen.findByLabelText('Filter op persoon'), { target: { value: 'all' } });
+    await screen.findByRole('heading', { name: /^woensdag 16 sep/ });
+    act(() => {
+      dnd.onDragEnd!({ active: { id: 'occ:o2' }, over: { id: 'day:2026-09-16' } });
+    });
+    expect(await screen.findByText('Bram de Vries is op woensdag niet beschikbaar. De taak is wel verplaatst.')).toBeInTheDocument();
+  });
+
+  it('puts an item back when the server refuses the move with a problem', async () => {
+    setup();
+    const routes = {
+      '/api/users': [ANNA, BRAM],
+      '/api/settings': makeSettings(),
+      '/api/rooms': [makeRoom({ _id: 'r1', name: 'Woonkamer' })],
+      '/api/tasks': [makeTask({ _id: 't1', name: 'Huishoudtaak', roomId: 'r1' })],
+      ...v2Basics(),
+      '/api/v2/occurrences': () => page(db),
+      'POST /api/v2/occurrences/o2/reschedule': () => problem(409, 'cycle_not_generated', 'No cycle.'),
+    };
+    mockApi(routes);
+    renderWithProviders(<WeekPage now={NOW} />);
+    fireEvent.change(await screen.findByLabelText('Filter op persoon'), { target: { value: 'all' } });
+    await screen.findByRole('heading', { name: /^woensdag 16 sep/ });
+    act(() => {
+      dnd.onDragEnd!({ active: { id: 'occ:o2' }, over: { id: 'day:2026-09-16' } });
+    });
+    expect(await screen.findByRole('alert')).toHaveTextContent('Verplaatsen lukte niet');
+    await waitFor(() => expect(within(screen.getByTestId('day:2026-09-17')).getByText('Stofzuigen')).toBeInTheDocument());
+    expect(within(screen.getByTestId('day:2026-09-16')).queryByText('Stofzuigen')).not.toBeInTheDocument();
+  });
+
+  it('reads the cycle week of each day from the server calendar', async () => {
+    setup();
+    renderWithProviders(<WeekPage now={NOW} />);
+    await screen.findByRole('button', { name: 'Toon cyclusweek' });
+    fireEvent.click(screen.getByRole('button', { name: 'Toon cyclusweek' }));
+    expect(screen.getByTestId('day:2026-09-16').querySelector('h2')).toHaveTextContent('Cyclusweek 1');
+    fireEvent.click(screen.getByRole('button', { name: 'Volgende periode' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Volgende periode' }));
+    expect((await screen.findByTestId('day:2026-09-30')).querySelector('h2')).toHaveTextContent('Cyclusweek 3');
   });
 
   it('does not offer moving finished items', async () => {

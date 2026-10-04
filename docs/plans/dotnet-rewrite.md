@@ -266,7 +266,7 @@ Each phase ends in something demonstrable. Slices are small enough for one pull 
 
 The generated TypeScript client (`openapi-typescript` + `openapi-fetch`) replaces `apps/web/src/api/client.ts`; the profile header middleware stays. One feature per slice; each slice deletes the shared imports the feature used and moves their tests.
 
-- [ ] 7.1 Client generation, `dayKey.ts`, limits and calendar queries; the `today` and `week` features.
+- [x] 7.1 Client generation, `dayKey.ts`, limits and calendar queries; the `today` and `week` features. (The generated client and its CI drift check, `src/lib/dayKey.ts`, `useLimits`, `useCalendar`, and `today`, `week`, the extra-task dialog and the offline queue on v2. `users`, `rooms`, `tasks` and `settings` stay on the Node client until their slices, so the app runs against the .NET host only from 7.5 on; the Playwright journeys stay red until 7.6.)
 - [ ] 7.2 `mobile-tasks`, `due`, `tasks` (default points from the server).
 - [ ] 7.3 `planner` with server-side validation, `promote`, `ai`, `ai-prompts`.
 - [ ] 7.4 `reward`, `stats`, `completions`, `badges`.
