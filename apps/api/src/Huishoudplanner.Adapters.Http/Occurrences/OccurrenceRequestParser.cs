@@ -94,7 +94,7 @@ internal static partial class OccurrenceRequestParser
     }
 
     /// <summary>The query of the list, from strings so that a malformed value is a field-keyed <c>validation_error</c> and never a binding failure.</summary>
-    public static OneOf<OccurrenceListRequest, ValidationErrors> ParseList(string? from, string? to, string? assigneeId, string? status, string? limit, string? cursor)
+    public static OneOf<OccurrenceListRequest, ValidationErrors> ParseList(string? from, string? to, string? assigneeId, string? status, string? limit, string? cursor, string? order = null)
     {
         var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
         var fromDay = QueryDay(from, "from", errors);
@@ -126,9 +126,25 @@ internal static partial class OccurrenceRequestParser
             }
         }
 
+        var orderValue = OccurrenceOrder.Ascending;
+        if (order is not null)
+        {
+            switch (order)
+            {
+                case "asc":
+                    break;
+                case "desc":
+                    orderValue = OccurrenceOrder.Descending;
+                    break;
+                default:
+                    errors["order"] = ["must be one of: asc, desc"];
+                    break;
+            }
+        }
+
         return errors.Count > 0
             ? new ValidationErrors(errors)
-            : new OccurrenceListRequest(fromDay!.Value, toDay!.Value, assigneeId, statusFilter, limitValue, cursor);
+            : new OccurrenceListRequest(fromDay!.Value, toDay!.Value, assigneeId, statusFilter, limitValue, cursor, orderValue);
     }
 
     private static bool TryDay(string value, out DateOnly day)

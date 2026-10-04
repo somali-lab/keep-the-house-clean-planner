@@ -31,8 +31,8 @@ public static class OccurrenceEndpoints
         routes.MapGet(Path, ListAsync)
             .WithName("listOccurrences")
             .WithTags(OccurrencesTag)
-            .WithSummary("Lists the occurrences on the days from to to, in display order.")
-            .WithDescription("Needs no profile. from and to are required day keys (YYYY-MM-DD), both included, and from must not be after to (from_after_to). assigneeId and status (open, done, skipped) filter the list. Every occurrence carries isOverdue, movedFrom and where its day falls in the cycles (cycleIndex, weekIndex). The list is paged: pass the nextCursor of a page as cursor for the next one (limit 1 to 500, default 100).")
+            .WithSummary("Lists the occurrences on the days from to to, in display order (oldest or newest day first).")
+            .WithDescription("Needs no profile. from and to are required day keys (YYYY-MM-DD), both included, and from must not be after to (from_after_to). assigneeId and status (open, done, skipped) filter the list. Every occurrence carries isOverdue, movedFrom and where its day falls in the cycles (cycleIndex, weekIndex). The list is paged: pass the nextCursor of a page as cursor for the next one (limit 1 to 500, default 100). order is asc (oldest day first, the default) or desc (newest day first); both sort by day, task name and id, and a cursor only continues the order it came from (a cursor of the other order is a validation_error on cursor, cursor_order_mismatch).")
             .Produces<OccurrenceListResponse>(StatusCodes.Status200OK)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status500InternalServerError);
@@ -169,9 +169,10 @@ public static class OccurrenceEndpoints
         string? assigneeId = null,
         string? status = null,
         string? limit = null,
-        string? cursor = null)
+        string? cursor = null,
+        string? order = null)
     {
-        if (OccurrenceRequestParser.ParseList(from, to, assigneeId, status, limit, cursor).TryPickT1(out var invalid, out var request))
+        if (OccurrenceRequestParser.ParseList(from, to, assigneeId, status, limit, cursor, order).TryPickT1(out var invalid, out var request))
         {
             return ProblemResults.From(invalid);
         }

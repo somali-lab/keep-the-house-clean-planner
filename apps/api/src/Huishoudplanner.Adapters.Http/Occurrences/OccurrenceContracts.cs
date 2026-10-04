@@ -108,7 +108,7 @@ public sealed record OccurrenceResponse(
     private static string Day(DateOnly day) => day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 }
 
-/// <summary>One page of occurrences in the display order (day, task name, id); <see cref="NextCursor"/> is <c>null</c> on the last page.</summary>
+/// <summary>One page of occurrences in the display order (day, task name, id; reversed for <c>order=desc</c>); <see cref="NextCursor"/> is <c>null</c> on the last page.</summary>
 public sealed record OccurrenceListResponse(IReadOnlyList<OccurrenceResponse> Items, string? NextCursor);
 
 /// <summary>The answer of a permanent deletion.</summary>

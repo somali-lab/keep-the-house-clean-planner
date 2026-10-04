@@ -89,8 +89,8 @@ public sealed class MongoOccurrenceActionsStoreTests : IDisposable
         return ran.AsT0;
     }
 
-    private static OccurrenceQuery Query(int from, int to, string? assignee = null, OccurrenceStatus? status = null, OccurrenceCursor? after = null, int take = 100) =>
-        new(new DateTimeOffset(Day(from), TimeSpan.Zero), new DateTimeOffset(Day(to + 1), TimeSpan.Zero), assignee, status, after, take);
+    private static OccurrenceQuery Query(int from, int to, string? assignee = null, OccurrenceStatus? status = null, OccurrenceCursor? after = null, int take = 100, OccurrenceOrder order = OccurrenceOrder.Ascending) =>
+        new(new DateTimeOffset(Day(from), TimeSpan.Zero), new DateTimeOffset(Day(to + 1), TimeSpan.Zero), assignee, status, after, take, order);
 
     // ---- reads
 
@@ -164,6 +164,63 @@ public sealed class MongoOccurrenceActionsStoreTests : IDisposable
         seen.Should().HaveCount(6).And.OnlyHaveUniqueItems();
         var all = (await store.ListAsync(Query(14, 20), Ct)).AsT0;
         seen.Should().Equal(all.Select(o => o.Id));
+    }
+
+    private async Task<List<string>> PageThroughAsync(int from, int to, OccurrenceOrder order, int take, string? assignee = null, OccurrenceStatus? status = null)
+    {
+        var seen = new List<string>();
+        OccurrenceCursor? after = null;
+        while (true)
+        {
+            var page = (await store.ListAsync(Query(from, to, assignee, status, after, take, order), Ct)).AsT0;
+            seen.AddRange(page.Select(o => o.Id));
+            if (page.Count < take)
+            {
+                return seen;
+            }
+
+            after = OccurrenceCursor.After(page[^1], order);
+        }
+    }
+
+    [Fact]
+    public async Task List_descendingIsTheReverseOfAscendingAcrossPagesIncludingTiesOnTheSameDay()
+    {
+        for (var i = 0; i < 5; i++)
+        {
+            await SeedAsync(16, "Zelfde naam");
+        }
+
+        await SeedAsync(16, "Andere naam");
+        await SeedAsync(15, "Eerder");
+        await SeedAsync(18, "Later");
+        await SeedAsync(17, "Later");
+
+        var ascending = await PageThroughAsync(14, 20, OccurrenceOrder.Ascending, take: 2);
+        var descending = await PageThroughAsync(14, 20, OccurrenceOrder.Descending, take: 2);
+        var oneBigPage = (await store.ListAsync(Query(14, 20, order: OccurrenceOrder.Descending), Ct)).AsT0.Select(o => o.Id).ToList();
+
+        ascending.Should().HaveCount(9).And.OnlyHaveUniqueItems();
+        descending.Should().Equal(ascending.AsEnumerable().Reverse());
+        oneBigPage.Should().Equal(descending);
+    }
+
+    [Fact]
+    public async Task List_descendingStartsWithTheNewestDayAndCombinesWithTheFilters()
+    {
+        await SeedAsync(14, "A", assignee: Bram, status: "done");
+        await SeedAsync(16, "B", assignee: Bram);
+        await SeedAsync(18, "C", assignee: Anna);
+        await SeedAsync(19, "D", assignee: Bram, status: "done");
+        await SeedAsync(25, "Buiten bereik", assignee: Bram);
+
+        var all = (await store.ListAsync(Query(14, 20, order: OccurrenceOrder.Descending), Ct)).AsT0;
+        var mine = await PageThroughAsync(15, 20, OccurrenceOrder.Descending, take: 1, assignee: Bram);
+        var done = (await store.ListAsync(Query(14, 20, status: OccurrenceStatus.Done, order: OccurrenceOrder.Descending), Ct)).AsT0;
+
+        all.Select(o => o.Date.Day).Should().Equal(19, 18, 16, 14);
+        mine.Should().HaveCount(2);
+        done.Select(o => o.TaskNameSnapshot).Should().Equal("D", "A");
     }
 
     [Fact]

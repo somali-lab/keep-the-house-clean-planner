@@ -85,7 +85,14 @@ public sealed class OccurrenceService(
         {
             if (OccurrenceCursor.TryDecode(request.Cursor, out var decoded))
             {
-                after = decoded;
+                if (decoded.Order == request.Order)
+                {
+                    after = decoded;
+                }
+                else
+                {
+                    errors["cursor"] = ["cursor_order_mismatch"];
+                }
             }
             else
             {
@@ -110,11 +117,12 @@ public sealed class OccurrenceService(
             request.AssigneeId?.ToLowerInvariant(),
             request.Status,
             after,
-            take + 1);
+            take + 1,
+            request.Order);
         var found = await occurrences.ListAsync(query, cancellationToken).ConfigureAwait(false);
         return found.Match<OneOf<OccurrenceList, ValidationErrors, SettingsMissing, PortError>>(
             items => items.Count > take
-                ? new OccurrenceList([.. items.Take(take).Select(context.ViewOf)], OccurrenceCursor.After(items[take - 1]).Encode())
+                ? new OccurrenceList([.. items.Take(take).Select(context.ViewOf)], OccurrenceCursor.After(items[take - 1], request.Order).Encode())
                 : new OccurrenceList([.. items.Select(context.ViewOf)], null),
             error => error);
     }
