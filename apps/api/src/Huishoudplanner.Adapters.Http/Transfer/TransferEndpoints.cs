@@ -14,8 +14,8 @@ namespace Huishoudplanner.Adapters.Http.Transfer;
 
 /// <summary>
 /// The JSON export and import of the whole dataset, <c>GET /api/v2/export/json</c> and <c>POST /api/v2/import/json</c> (requirements 4.11, 8;
-/// <c>routes/transfer.ts</c> of the Node server). The export is open like in the Node server, so it needs no profile; the import replaces everything and
-/// is for administrators (<see cref="AuthorizationPolicies.AdminPolicy"/>, <c>requireAdmin</c> there). A household's full history easily exceeds the
+/// <c>routes/transfer.ts</c> of the Node server). Both are for administrators (<see cref="AuthorizationPolicies.AdminPolicy"/>): the import was already <c>requireAdmin</c> in
+/// the Node server, the export, open there, became administrators only in v2 because it holds the whole household history. The import replaces everything. A household's full history easily exceeds the
 /// default body limit, so the import takes up to <see cref="MaxImportBytes"/>, the limit of the Node server, and nothing more: the body is never read
 /// beyond it.
 /// </summary>
@@ -31,12 +31,15 @@ public static class TransferEndpoints
         ArgumentNullException.ThrowIfNull(routes);
 
         routes.MapGet("/api/v2/export/json", ExportAsync)
+            .RequireAdmin()
             .WithName("exportJson")
             .WithTags(TransferTag)
-            .WithSummary("Downloads the whole dataset as one JSON file.")
-            .WithDescription("Needs no profile, like the Node route. The file has schemaVersion 6, the exportedAt instant and, per collection, the documents as MongoDB relaxed Extended JSON ($oid, $date, $binary), so ids, dates and the badge images survive the round trip: settings, users, rooms, tasks, cyclePlans, cycles, occurrences, pointEntries (the redemptions only, the rest of the ledger is rebuilt on import), badges (with their images) and auditLog. The file is named huishoudplanner-YYYYMMDD.json after today in the household timezone.")
+            .WithSummary("Downloads the whole dataset as one JSON file (administrators).")
+            .WithDescription("For administrators, like the import (400 profile_required without a profile, 403 permission_denied for the other roles); the Node route was open. The file has schemaVersion 6, the exportedAt instant and, per collection, the documents as MongoDB relaxed Extended JSON ($oid, $date, $binary), so ids, dates and the badge images survive the round trip: settings, users, rooms, tasks, cyclePlans, cycles, occurrences, pointEntries (the redemptions only, the rest of the ledger is rebuilt on import), badges (with their images) and auditLog. The file is named huishoudplanner-YYYYMMDD.json after today in the household timezone.")
             .Produces<byte[]>(StatusCodes.Status200OK, "application/json")
             .AddOpenApiOperationTransformer(JsonAsBinary)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status500InternalServerError);
 
         routes.MapPost("/api/v2/import/json", ImportAsync)

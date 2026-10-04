@@ -70,7 +70,9 @@ public sealed class TransferEndpointTests(TransferWorld world) : IClassFixture<T
     [Fact]
     public async Task Export_answersAJsonAttachmentNamedAfterTodayInTheHouseholdTimezone()
     {
-        var response = await world.Source.Client.GetAsync("/api/v2/export/json", Ct);
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v2/export/json");
+        request.Headers.Add("X-Profile-Id", world.Source.Admin.Id);
+        var response = await world.Source.Client.SendAsync(request, Ct);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         response.Content.Headers.ContentType!.MediaType.Should().Be("application/json");
@@ -116,14 +118,25 @@ public sealed class TransferEndpointTests(TransferWorld world) : IClassFixture<T
     }
 
     [Fact]
-    public async Task Export_needsNoProfile_andIsOpenToEveryRole()
+    public async Task Export_requiresAnAdministrator_andAProfile()
     {
         using var target = new TransferTarget(world.Mongo);
-        using var asMember = new HttpRequestMessage(HttpMethod.Get, "/api/v2/export/json");
-        asMember.Headers.Add("X-Profile-Id", target.Member.Id);
 
-        (await target.Client.GetAsync("/api/v2/export/json", Ct)).StatusCode.Should().Be(HttpStatusCode.OK);
-        (await target.Client.SendAsync(asMember, Ct)).StatusCode.Should().Be(HttpStatusCode.OK);
+        using var anonymous = new HttpRequestMessage(HttpMethod.Get, "/api/v2/export/json");
+        var (noProfile, noProfileBody) = await target.SendAsync(anonymous);
+        noProfile.Should().Be(HttpStatusCode.BadRequest);
+        noProfileBody.GetProperty("type").GetString().Should().Be(Code("profile_required"));
+
+        foreach (var actor in new[] { target.Planner, target.Member })
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v2/export/json");
+            request.Headers.Add("X-Profile-Id", actor.Id);
+            var (forbidden, body) = await target.SendAsync(request);
+            forbidden.Should().Be(HttpStatusCode.Forbidden, Details(body));
+            body.GetProperty("type").GetString().Should().Be(Code("permission_denied"));
+        }
+
+        (await target.ExportAsync()).Should().ContainKey("schemaVersion");
     }
 
     // ---- import

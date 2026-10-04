@@ -262,6 +262,7 @@ Each phase ends in something demonstrable. Slices are small enough for one pull 
 - [x] 6.4 PDF sheets with QuestPDF (§3.10). Port `pdf-export.test.ts`.
 - [x] 6.5 JSON export and import with the confirmation and acknowledgement rules. Port `transfer.test.ts`.
 - [x] 6.6 Delete a task (`DELETE /api/v2/tasks/{id}`) with the cascade into plans and badge rules. Port the delete scenario of `tasks.test.ts` and the `task_deleted` scenario of `badges.test.ts` that was deferred in phase 4.
+- [x] 6.8 Two maintainer decisions: `GET /api/v2/export/json` is for administrators only (like the import), and a statistics reset that removes nothing at all (every count zero) changes nothing, writes no audit entry and rebuilds no badge awards, while still answering the zero counts.
 
 ### Phase 7 — Web app to v2 (D4)
 
