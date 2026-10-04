@@ -578,6 +578,56 @@ public sealed class TransferEndpointTests(TransferWorld world) : IClassFixture<T
         target.Capture.All().Should().BeEmpty();
     }
 
+    [Theory]
+    [InlineData(10000, "[")]
+    [InlineData(10000, "{\"a\":")]
+    [InlineData(65, "[")]
+    public async Task Import_refusesAFileNestedTooDeeply_asInvalidJson_withoutCrashing(int depth, string open)
+    {
+        using var target = new TransferTarget(world.Mongo);
+        var text = string.Concat(Enumerable.Repeat(open, depth));
+        using var request = new HttpRequestMessage(HttpMethod.Post, TransferTarget.ImportUrl) { Content = new StringContent(text, Encoding.UTF8, "application/json") };
+        request.Headers.Add("X-Profile-Id", target.Admin.Id);
+        target.Capture.Clear();
+
+        var (status, body) = await target.SendAsync(request);
+
+        status.Should().Be(HttpStatusCode.BadRequest, Details(body));
+        body.GetProperty("errors").GetProperty("body").EnumerateArray().Select(m => m.GetString()).Should().Contain("invalid_json");
+        target.Capture.All().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void TheExportedSettings_carryNoSecretLikeFieldNames()
+    {
+        var names = new List<string>();
+        void Walk(JsonNode? node)
+        {
+            switch (node)
+            {
+                case JsonObject o:
+                    foreach (var p in o)
+                    {
+                        names.Add(p.Key);
+                        Walk(p.Value);
+                    }
+
+                    break;
+                case JsonArray a:
+                    foreach (var i in a)
+                    {
+                        Walk(i);
+                    }
+
+                    break;
+            }
+        }
+
+        Walk(Doc(world.Export, "settings", 0));
+
+        names.Should().NotContain(n => Regex.IsMatch(n, "secret|token|password|api[-_]?key|credential", RegexOptions.IgnoreCase), "an export must never carry a credential");
+    }
+
     [Fact]
     public async Task Import_whenTheReplacementFailsHalfway_rollsBackEverything()
     {

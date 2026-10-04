@@ -45,6 +45,11 @@ internal static class ImportReader
         using var buffer = new MemoryStream();
         await body.CopyToAsync(buffer, cancellationToken).ConfigureAwait(false);
         buffer.Position = 0;
+        if (ExceedsDepth(buffer.GetBuffer().AsSpan(0, (int)buffer.Length)))
+        {
+            return ValidationErrors.For("body", "invalid_json");
+        }
+
         try
         {
             using var text = new StreamReader(buffer, new UTF8Encoding(false), detectEncodingFromByteOrderMarks: true);
@@ -101,6 +106,37 @@ internal static class ImportReader
         }
 
         return issues.Any ? issues.ToErrors() : new MongoParsedImport(version, exportedAt, docs);
+    }
+
+    /// <summary>The deepest nesting a file may have; the JSON reader recurses, so a body of a few thousand brackets would overflow the stack.</summary>
+    public const int MaxDepth = 64;
+
+    /// <summary>Whether the JSON text nests arrays and objects deeper than <see cref="MaxDepth"/> (brackets inside strings do not count).</summary>
+    internal static bool ExceedsDepth(ReadOnlySpan<byte> json)
+    {
+        var depth = 0;
+        var inString = false;
+        var escaped = false;
+        foreach (var b in json)
+        {
+            if (inString)
+            {
+                if (escaped) { escaped = false; }
+                else if (b == (byte)0x5C) { escaped = true; }
+                else if (b == (byte)'"') { inString = false; }
+
+                continue;
+            }
+
+            switch (b)
+            {
+                case (byte)'"': inString = true; break;
+                case (byte)'[' or (byte)'{' when ++depth > MaxDepth: return true;
+                case (byte)']' or (byte)'}': depth--; break;
+            }
+        }
+
+        return false;
     }
 
     private static (int Version, string ExportedAt, Dictionary<string, BsonValue> Collections)? ReadEnvelope(BsonDocument root, ImportIssues issues)
