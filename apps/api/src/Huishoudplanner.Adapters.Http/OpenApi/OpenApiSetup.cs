@@ -1,4 +1,5 @@
 using Huishoudplanner.Adapters.Http.Ai;
+using Huishoudplanner.Adapters.Http.Badges;
 using Huishoudplanner.Adapters.Http.CyclePlans;
 using Huishoudplanner.Adapters.Http.Cycles;
 using Huishoudplanner.Adapters.Http.Due;
@@ -69,6 +70,7 @@ public static class OpenApiSetup
                 new() { Name = CycleEndpoints.CyclesTag, Description = "The generated four-week cycles: a read-only list, created by generation only." },
                 new() { Name = OccurrenceEndpoints.OccurrencesTag, Description = "What actually happened on a day: everyone reads the occurrences; members complete, uncomplete, skip, reschedule, assign and claim them, plan or record extra executions and one-off tasks and retract recorded work, administrators correct or delete a completion." },
                 new() { Name = PointsEndpoints.PointsTag, Description = "The points ledger: everyone reads the balances and the entries, administrators reconcile the ledger with the occurrences." },
+                new() { Name = BadgeEndpoints.BadgesTag, Description = "Badges: administrators define them with a rule and a picture, awards are derived from the audited executions; everyone reads the badges, the awards, the progress and the pictures." },
                 new() { Name = UserEndpoints.UsersTag, Description = "The people of the household: list, create, change, and their browser notification moments." },
                 new() { Name = AiEndpoints.AiTag, Description = "The AI assistant: prompt information, connection test, plan proposals and rebalancing (stored as drafts), task suggestions and plan explanations (stored nowhere); planners use it." },
             };
