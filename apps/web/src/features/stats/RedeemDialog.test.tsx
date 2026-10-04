@@ -1,34 +1,38 @@
-import type { PointEntryView, PointsBalancesResponse } from '@huishoudplanner/shared';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { resetRequestKeys } from '../../api/requestKey.ts';
-import { ANNA, BRAM, mockApi, storeProfile } from '../../test/fixtures.ts';
+import { ANNA, BRAM, LIMITS, mockApi, problem, storeProfile, v2Basics } from '../../test/fixtures.ts';
 import { renderWithProviders } from '../../test/render.tsx';
+import type { PointEntry, PointsBalances } from './api.ts';
 import { RedeemDialog } from './RedeemDialog.tsx';
 
 afterEach(() => resetRequestKeys());
 const KEY = /^[A-Za-z0-9_-]{16,64}$/;
 
-const balance = (personId: string, points: number, redeemed = 0) => ({
+/** A balance; the money is in cents, as the server delivers it, and absent while a point is worth nothing. */
+const balance = (personId: string, points: number, centsPerPoint: number, redeemed = 0) => ({
   personId,
   points,
   earned: points + redeemed,
   redeemed,
-  money: null,
+  money:
+    centsPerPoint > 0
+      ? { earned: (points + redeemed) * centsPerPoint, redeemed: redeemed * centsPerPoint, balance: points * centsPerPoint }
+      : null,
   executions: 1,
   bonusPoints: 0,
 });
 
-const BALANCES = (centsPerPoint: number, annaPoints = 10): PointsBalancesResponse => ({
+const BALANCES = (centsPerPoint: number, annaPoints = 10): PointsBalances => ({
   from: null,
   to: null,
   currencyCode: 'EUR',
   centsPerPoint,
-  balances: [balance(ANNA._id, annaPoints), balance(BRAM._id, 4)],
+  balances: [balance(ANNA._id, annaPoints, centsPerPoint), balance(BRAM._id, 4, centsPerPoint)],
 });
 
-const entryFor = (personId: string, points: number, note: string | null, cents: number): PointEntryView => ({
-  _id: 'e00000000000000000000009',
+const entryFor = (personId: string, points: number, note: string | null, cents: number): PointEntry => ({
+  id: 'e00000000000000000000009',
   key: 'redemption:e00000000000000000000009',
   kind: 'redemption',
   personId,
@@ -47,6 +51,9 @@ const entryFor = (personId: string, points: number, note: string | null, cents: 
   updatedAt: '2026-09-16T08:00:00.000Z',
 });
 
+/** 201: a new booking; a plain value answers 200, which means the server replayed an earlier request. */
+const created = (entry: PointEntry) => new Response(JSON.stringify(entry), { status: 201, headers: { 'Content-Type': 'application/json' } });
+
 function deferred<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((done) => {
@@ -59,7 +66,8 @@ function setup(profileId: string, routes: Record<string, unknown> = {}, balances
   storeProfile(profileId);
   const fetchMock = mockApi({
     '/api/users': [ANNA, BRAM],
-    '/api/points/balances': balances,
+    '/api/v2/points/balances': balances,
+    ...v2Basics(),
     ...routes,
   });
   const onOpenChange = vi.fn();
@@ -68,10 +76,12 @@ function setup(profileId: string, routes: Record<string, unknown> = {}, balances
   return { fetchMock, onOpenChange, onRedeemed, view };
 }
 
+const bookings = (fetchMock: ReturnType<typeof mockApi>) =>
+  fetchMock.mock.calls.filter(([u, init]) => u === '/api/v2/points/redemptions' && (init as RequestInit | undefined)?.method === 'POST');
+
+/** The JSON bodies of the bookings, exactly as sent. */
 const posts = (fetchMock: ReturnType<typeof mockApi>) =>
-  fetchMock.mock.calls
-    .filter(([u, init]) => u === '/api/points/redemptions' && (init as RequestInit | undefined)?.method === 'POST')
-    .map(([, init]) => JSON.parse(String((init as RequestInit).body)) as Record<string, unknown>);
+  bookings(fetchMock).map(([, init]) => JSON.parse(String((init as RequestInit).body)) as Record<string, unknown>);
 
 const dialog = () => screen.getByRole('dialog', { name: 'Punten inwisselen' });
 const submit = () => within(dialog()).getByRole('button', { name: 'Inwisselen' });
@@ -79,7 +89,7 @@ const points = () => within(dialog()).getByLabelText('Aantal punten');
 const loaded = async () => screen.findByText(/Beschikbaar saldo/);
 
 describe('RedeemDialog', () => {
-  it('shows the available balance with what it is worth, and previews the money while typing', async () => {
+  it('shows the available balance with what it is worth, from the money the server delivers, and previews the money while typing', async () => {
     setup(ANNA._id);
     expect(await loaded()).toHaveTextContent(/Beschikbaar saldo: 10 punten \(€\s2,50\)/);
     expect(screen.queryByText(/Dat is/)).not.toBeInTheDocument();
@@ -122,25 +132,38 @@ describe('RedeemDialog', () => {
     expect(posts(fetchMock)).toEqual([]);
   });
 
-  it('books for the active profile with a trimmed note and a request key, reports the money and closes', async () => {
+  it('takes the length of the note from the limits of the server', async () => {
+    const { fetchMock } = setup(ANNA._id, { '/api/v2/meta/limits': { ...LIMITS, points: { ...LIMITS.points, maxRedemptionNoteLength: 20 } } });
+    await loaded();
+    fireEvent.change(points(), { target: { value: '5' } });
+    fireEvent.change(within(dialog()).getByLabelText('Notitie (optioneel)'), { target: { value: 'x'.repeat(21) } });
+    fireEvent.click(submit());
+    expect(await within(dialog()).findByText('De notitie mag maximaal 20 tekens zijn.')).toBeInTheDocument();
+    expect(posts(fetchMock)).toEqual([]);
+  });
+
+  it('books for the active profile with a trimmed note and a request key, as plain JSON, reports the money and closes', async () => {
     const { fetchMock, onRedeemed, onOpenChange } = setup(ANNA._id, {
-      'POST /api/points/redemptions': entryFor(ANNA._id, 4, 'Pizza', 25),
+      'POST /api/v2/points/redemptions': () => created(entryFor(ANNA._id, 4, 'Pizza', 25)),
     });
     await loaded();
     fireEvent.change(points(), { target: { value: '4' } });
     fireEvent.change(within(dialog()).getByLabelText('Notitie (optioneel)'), { target: { value: '  Pizza  ' } });
     fireEvent.click(submit());
     await waitFor(() => expect(onRedeemed).toHaveBeenCalledTimes(1));
+    // The points go as a number; an intent endpoint carries no If-Match.
     expect(posts(fetchMock)).toEqual([{ personId: ANNA._id, points: 4, note: 'Pizza', requestId: expect.stringMatching(KEY) }]);
+    expect(((bookings(fetchMock)[0]![1] as RequestInit).headers as Record<string, string>)['if-match']).toBeUndefined();
     expect(onRedeemed.mock.calls[0]![0]).toMatchObject({ amount: -4 });
     expect(onRedeemed.mock.calls[0]![1]).toMatch(/€\s1,00/);
+    expect(onRedeemed.mock.calls[0]![2]).toBe(false);
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
-  it('leaves the note out when it is empty and reports no money while a point is worth nothing', async () => {
+  it('leaves the note out, never as null, when it is empty and reports no money while a point is worth nothing', async () => {
     const { fetchMock, onRedeemed } = setup(
       ANNA._id,
-      { 'POST /api/points/redemptions': entryFor(ANNA._id, 3, null, 0) },
+      { 'POST /api/v2/points/redemptions': () => entryFor(ANNA._id, 3, null, 0) },
       BALANCES(0),
     );
     await loaded();
@@ -151,9 +174,18 @@ describe('RedeemDialog', () => {
     expect(onRedeemed.mock.calls[0]![1]).toBeNull();
   });
 
+  it('tells the caller when the server replayed a booking it already had (200 instead of 201)', async () => {
+    const { onRedeemed } = setup(ANNA._id, { 'POST /api/v2/points/redemptions': () => entryFor(ANNA._id, 2, null, 25) });
+    await loaded();
+    fireEvent.change(points(), { target: { value: '2' } });
+    fireEvent.click(submit());
+    await waitFor(() => expect(onRedeemed).toHaveBeenCalledTimes(1));
+    expect(onRedeemed.mock.calls[0]![2]).toBe(true);
+  });
+
   it('a double click books once: the second click is ignored while the first is pending', async () => {
-    const reply = deferred<PointEntryView>();
-    const { fetchMock, onRedeemed } = setup(ANNA._id, { 'POST /api/points/redemptions': () => reply.promise });
+    const reply = deferred<PointEntry>();
+    const { fetchMock, onRedeemed } = setup(ANNA._id, { 'POST /api/v2/points/redemptions': () => reply.promise });
     await loaded();
     fireEvent.change(points(), { target: { value: '2' } });
     const button = submit();
@@ -169,7 +201,7 @@ describe('RedeemDialog', () => {
   it('reuses the request key when the same values are retried after a failure, and takes a new one once it succeeded', async () => {
     let attempts = 0;
     const { fetchMock, onRedeemed, view } = setup(ANNA._id, {
-      'POST /api/points/redemptions': () => {
+      'POST /api/v2/points/redemptions': () => {
         attempts += 1;
         if (attempts === 1) throw new TypeError('network down');
         return entryFor(ANNA._id, 2, null, 25);
@@ -196,18 +228,9 @@ describe('RedeemDialog', () => {
   });
 
   it('says so when the server finds the balance too low in the meantime, and keeps the dialog open', async () => {
-    storeProfile(ANNA._id);
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      if (init?.method === 'POST') {
-        return new Response(JSON.stringify({ code: 'insufficient_balance', balance: 1, requested: 4 }), { status: 409 });
-      }
-      const body = url.includes('users') ? [ANNA, BRAM] : BALANCES(25);
-      return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    const { onOpenChange } = setup(ANNA._id, {
+      'POST /api/v2/points/redemptions': () => problem(409, 'insufficient_balance', 'The balance is too low', { balance: 1, requested: 4 }),
     });
-    vi.stubGlobal('fetch', fetchMock);
-    const onOpenChange = vi.fn();
-    renderWithProviders(<RedeemDialog open onOpenChange={onOpenChange} />);
     await loaded();
     fireEvent.change(points(), { target: { value: '4' } });
     fireEvent.click(submit());
@@ -216,7 +239,7 @@ describe('RedeemDialog', () => {
   });
 
   it('lets a member redeem only for themselves: no person choice', async () => {
-    const { fetchMock, onRedeemed } = setup(BRAM._id, { 'POST /api/points/redemptions': entryFor(BRAM._id, 3, null, 25) });
+    const { fetchMock, onRedeemed } = setup(BRAM._id, { 'POST /api/v2/points/redemptions': () => entryFor(BRAM._id, 3, null, 25) });
     expect(await loaded()).toHaveTextContent('Beschikbaar saldo: 4 punten');
     expect(within(dialog()).queryByLabelText('Persoon')).not.toBeInTheDocument();
     fireEvent.change(points(), { target: { value: '3' } });
@@ -226,7 +249,7 @@ describe('RedeemDialog', () => {
   });
 
   it('lets an administrator pick the person, whose balance applies', async () => {
-    const { fetchMock, onRedeemed } = setup(ANNA._id, { 'POST /api/points/redemptions': entryFor(BRAM._id, 3, null, 25) });
+    const { fetchMock, onRedeemed } = setup(ANNA._id, { 'POST /api/v2/points/redemptions': () => entryFor(BRAM._id, 3, null, 25) });
     await loaded();
     const person = within(dialog()).getByLabelText('Persoon');
     expect(person).toHaveValue(ANNA._id);

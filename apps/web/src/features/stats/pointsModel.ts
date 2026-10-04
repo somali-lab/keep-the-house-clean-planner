@@ -1,6 +1,5 @@
-import { cycleEnd, cycleIndexFor, cycleStart } from '@huishoudplanner/shared/cycle';
-import { MAX_REDEMPTION_NOTE_LENGTH, pointsToCents } from '@huishoudplanner/shared/points';
-import { addDays, isoWeek, mondayOf } from '@huishoudplanner/shared/time';
+import { addDays } from '@/lib/dayKey';
+import type { CalendarDay } from '../../api/v2/queries.ts';
 import type { StatsPeriod } from './api.ts';
 
 export interface PointsRange {
@@ -9,17 +8,25 @@ export interface PointsRange {
 }
 
 /**
- * The calendar days the points follow for a statistics period, both included: the current week and
- * the weeks before it, or the current cycle and the cycles before it (never earlier than the first cycle).
- * This is the same window the other statistics reports use.
+ * The calendar days the points follow for a statistics period, both included: the current week and the weeks before it, or the
+ * current cycle and the cycles before it (never earlier than the first cycle). This is the same window the other statistics reports
+ * use. Where today falls comes from the server's calendar (`GET /calendar`); this only lays the requested number of weeks or cycles
+ * back from it. `cycleDays` is the length of a cycle from the limits of the server.
  */
-export function pointsRange(period: StatsPeriod, anchor: string, todayKey: string): PointsRange {
+export function pointsRange(period: StatsPeriod, today: Pick<CalendarDay, 'weekStart' | 'weekIndex' | 'cycleIndex'>, cycleDays: number): PointsRange {
   if (period.unit === 'weeks') {
-    const monday = mondayOf(todayKey);
-    return { from: addDays(monday, -(period.count - 1) * 7), to: addDays(monday, 6) };
+    return { from: addDays(today.weekStart, -(period.count - 1) * 7), to: addDays(today.weekStart, 6) };
   }
-  const current = Math.max(0, cycleIndexFor(todayKey, anchor));
-  return { from: cycleStart(Math.max(0, current - period.count + 1), anchor), to: cycleEnd(current, anchor) };
+  const currentStart = addDays(today.weekStart, -today.weekIndex * 7);
+  const startOf = (cycleIndex: number) => addDays(currentStart, (cycleIndex - today.cycleIndex) * cycleDays);
+  const current = Math.max(0, today.cycleIndex);
+  return { from: startOf(Math.max(0, current - period.count + 1)), to: addDays(startOf(current), cycleDays - 1) };
+}
+
+/** The week number in the ISO week label of the calendar (`2026-W38`), or null for anything else. */
+export function isoWeekNumber(label: string | undefined): number | null {
+  const match = /-W(\d{2})$/.exec(label ?? '');
+  return match ? Number(match[1]) : null;
 }
 
 /** The message and values that label a week or cycle bonus entry (ADR-0012). */
@@ -45,29 +52,17 @@ const BONUS_LABEL_KEY = {
 
 /**
  * What a ledger entry says about its period, or null for an entry that is not a bonus. A bonus is
- * dated on the last day of its period, and `periodStart` is the first day.
+ * dated on the last day of its period, and `periodStart` is the first day; `week` is the ISO week number of that first day, which
+ * the caller reads from the calendar of the server.
  */
-export function bonusLabel(entry: { kind: string; periodStart: string | null; date: string }): BonusLabel | null {
+export function bonusLabel(entry: { kind: string; periodStart: string | null; date: string }, week: number): BonusLabel | null {
   if (!(entry.kind in BONUS_LABEL_KEY) || entry.periodStart === null) return null;
   return {
     key: BONUS_LABEL_KEY[entry.kind as keyof typeof BONUS_LABEL_KEY],
-    week: isoWeek(entry.periodStart).week,
+    week,
     from: entry.periodStart,
     to: entry.date,
   };
-}
-
-const BONUS_KIND_OF_KEY = new Set(Object.keys(BONUS_LABEL_KEY));
-
-/**
- * The label of a bonus that is only known by its ledger key, `<kind>:<personId>:<periodStart>`, as the
- * history of a reconciliation lists it. A week ends six days and a cycle 27 days after its first day.
- */
-export function bonusLabelOfKey(key: string): BonusLabel | null {
-  const [kind, , periodStart] = key.split(':');
-  if (!kind || !periodStart || !BONUS_KIND_OF_KEY.has(kind) || !/^\d{4}-\d{2}-\d{2}$/.test(periodStart)) return null;
-  const days = kind.startsWith('bonus_week') ? 6 : 27;
-  return bonusLabel({ kind: kind as keyof typeof BONUS_LABEL_KEY, periodStart, date: addDays(periodStart, days) });
 }
 
 /** What is typed in the redeem dialog. */
@@ -88,24 +83,27 @@ export function parseWholePoints(text: string): number | null {
 
 /**
  * Checks the redeem form against the balance that is available: at least 1 point, at most the balance
- * (the server refuses a booking that would make the balance negative, requirements 4.12) and a note of at most 200
- * characters. The note is trimmed, like the server does.
+ * (the server refuses a booking that would make the balance negative, requirements 4.12) and a note of at most
+ * `maxNoteLength` characters (a limit of the server). The note is trimmed, like the server does.
  */
-export function buildRedemption(form: RedeemForm, balance: number): RedeemResult {
+export function buildRedemption(form: RedeemForm, balance: number, maxNoteLength: number): RedeemResult {
   const errors: RedeemErrors = {};
   const points = parseWholePoints(form.points);
   if (points === null || points < 1) errors.points = 'redeem.error.points';
   else if (points > balance) errors.points = 'redeem.error.balance';
   const note = form.note.trim();
-  if (note.length > MAX_REDEMPTION_NOTE_LENGTH) errors.note = 'redeem.error.note';
+  if (note.length > maxNoteLength) errors.note = 'redeem.error.note';
   if (Object.keys(errors).length > 0 || points === null) return { ok: false, errors };
   return { ok: true, points, note };
 }
 
-/** The money a typed number of points is worth, in cents; null for an invalid number or while a point is worth nothing. */
+/**
+ * The money a typed number of points is worth, in cents: only the preview of the dialog while someone types. The money of a booking is
+ * the one the server stored with it; null for an invalid number or while a point is worth nothing.
+ */
 export function redemptionCents(text: string, centsPerPoint: number): number | null {
   const points = parseWholePoints(text);
-  return points === null || points < 1 || centsPerPoint <= 0 ? null : pointsToCents(points, centsPerPoint);
+  return points === null || points < 1 || centsPerPoint <= 0 ? null : points * centsPerPoint;
 }
 
 /** The owner can undo a redemption on the day it was booked; an administrator at any time (requirements 4.12). */

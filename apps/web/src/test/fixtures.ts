@@ -105,6 +105,14 @@ export const LIMITS = {
 const DAY_MS = 86_400_000;
 const utc = (dayKey: string) => Date.parse(`${dayKey}T00:00:00Z`);
 
+/** The ISO week label of a day (`2026-W38`), as the server's calendar gives it; a stand-in for tests. */
+function isoWeekLabel(time: number): string {
+  const thursday = new Date(time + (3 - ((new Date(time).getUTCDay() + 6) % 7)) * DAY_MS);
+  const year = thursday.getUTCFullYear();
+  const week = Math.floor((thursday.getTime() - Date.UTC(year, 0, 1)) / (7 * DAY_MS)) + 1;
+  return `${year}-W${String(week).padStart(2, '0')}`;
+}
+
 /**
  * `GET /api/v2/calendar` for a cycle that starts on `anchor` (a Monday): four weeks per cycle, and a negative cycle index
  * before the anchor. A stand-in for the server's calendar, so tests do not repeat its rule.
@@ -124,7 +132,7 @@ export function calendarRoute(anchor = '2026-09-14') {
         weekday,
         cycleIndex: Math.floor(offset / 28),
         weekIndex: ((Math.floor(offset / 7) % 4) + 4) % 4,
-        isoWeek: '',
+        isoWeek: isoWeekLabel(time),
         weekStart: new Date(time - ((weekday + 6) % 7) * DAY_MS).toISOString().slice(0, 10),
       });
     }
