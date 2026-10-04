@@ -57,6 +57,8 @@ export interface PlanEditorProps {
   /** How long it waits before the server validates the unsaved slots. */
   validationDebounceMs?: number;
   onManagePlans?(): void;
+  /** Raised when the page replaces the slots (a reset starts): a drop still waiting for its debounce is dropped, not saved over it. */
+  discardPendingToken?: number;
 }
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error' | 'stale';
@@ -85,6 +87,7 @@ export function PlanEditor({
   debounceMs = 800,
   validationDebounceMs = 300,
   onManagePlans,
+  discardPendingToken = 0,
 }: PlanEditorProps) {
   const [slots, setSlots] = useState<Slot[]>(plan.slots);
   const [themes, setThemes] = useState<string[]>(plan.weekThemes);
@@ -148,8 +151,14 @@ export function PlanEditor({
     versionRef.current = plan.version;
   }, [plan.version]);
   const queue = useRef<Promise<void>>(Promise.resolve());
+  // Saves that are queued or in flight: while there are any, the plan the editor gets back is older than what the person sees.
+  const inFlight = useRef(0);
   const enqueue = (job: () => Promise<void>) => {
-    queue.current = queue.current.then(job, job);
+    inFlight.current += 1;
+    const run = () => job().finally(() => {
+      inFlight.current -= 1;
+    });
+    queue.current = queue.current.then(run, run);
   };
 
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -197,11 +206,17 @@ export function PlanEditor({
   // Keep the editor in sync when another planner action replaces all slots (the page remounts the editor after a reset); an edit that is
   // waiting to be saved, or that came back stale, is the person's and is not replaced.
   useEffect(() => {
-    if (staleSlots.current || pending.current) return;
+    if (staleSlots.current || pending.current || inFlight.current > 0) return;
     if (timer.current) clearTimeout(timer.current);
     timer.current = null;
     setSlots(plan.slots);
   }, [plan.slots]);
+
+  useEffect(() => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+    pending.current = null;
+  }, [discardPendingToken]);
 
   // Flush a pending save when the editor goes away (e.g. switching plans).
   useEffect(

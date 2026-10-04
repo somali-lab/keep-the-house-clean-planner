@@ -79,6 +79,8 @@ export function PlannerPage() {
   const [createdProposal, setCreatedProposal] = useState<AiProposal | null>(null);
   // Bumped after a reset, so that the editor starts again from the emptied plan.
   const [editorEpoch, setEditorEpoch] = useState(0);
+  // Raised when a reset starts, so that a drop still waiting to be saved does not land on the emptied plan.
+  const [discardToken, setDiscardToken] = useState(0);
   const aiDraftCardRef = useRef<HTMLElement | null>(null);
   const focusAiDraftRef = useRef(false);
   const createPlan = useCreatePlan();
@@ -351,6 +353,7 @@ export function PlannerPage() {
               disabled={!plan || resetPlan.isPending}
               onClick={() => {
                 if (!plan) return;
+                setDiscardToken((token) => token + 1);
                 resetPlan.mutate(
                   { planId: plan.id, version: plan.version, slots: [] },
                   {
@@ -607,6 +610,7 @@ export function PlannerPage() {
               plan={plan}
               tasks={tasks.data.filter((task) => task.active)}
               allTasks={tasks.data}
+              discardPendingToken={discardToken}
               rooms={rooms.data}
               users={activeUsers}
               profileId={profile?._id ?? null}

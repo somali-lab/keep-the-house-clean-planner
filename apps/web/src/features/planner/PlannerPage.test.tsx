@@ -151,6 +151,58 @@ describe('PlannerPage — drops', () => {
   });
 });
 
+describe('PlannerPage — edits racing with saves', () => {
+  beforeEach(() => {
+    dnd.onDragEnd = undefined;
+  });
+
+  it('keeps a drop made while the save before it is still in flight', async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const fetchMock: ReturnType<typeof setup> = setup([makePlanV2({ id: 'p1', name: 'Standaard', active: true, version: 3 })], {
+      'PUT /api/v2/cycle-plans/p1/slots': async (init: RequestInit) => {
+        // The save after the first one never answers: the test looks at the editor while it is in flight.
+        if (putCalls(fetchMock).length > 1) return new Promise<Response>(() => undefined);
+        await gate;
+        const slots = (JSON.parse(String(init.body)) as SlotsBody).slots;
+        const plan = { ...fetchMock.server.plans[0]!, slots, version: 4 };
+        fetchMock.server.plans = [plan];
+        return { plan, warnings: [], summary: standInValidation(slots, TASKS, USERS).summary, synchronized: null };
+      },
+    });
+    renderWithProviders(<PlannerPage />);
+    await screen.findByRole('group', { name: 'Kies een week' });
+
+    drop('task:t1', `cell:0:2:${BRAM._id}`);
+    await waitFor(() => expect(putCalls(fetchMock)).toHaveLength(1), { timeout: 2000 });
+    drop('task:t2', `cell:0:3:${BRAM._id}`);
+    // B is past its debounce and queued behind A when A answers.
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    release();
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(within(screen.getByTestId(`cell:0:2:${BRAM._id}`)).getByText('Badkamer')).toBeInTheDocument();
+    expect(within(screen.getByTestId(`cell:0:3:${BRAM._id}`)).getByText('Stofzuigen')).toBeInTheDocument();
+    await waitFor(() => expect(putCalls(fetchMock)).toHaveLength(2), { timeout: 2000 });
+  });
+
+  it('does not let a drop that is still waiting to be saved overwrite a reset that finished first', async () => {
+    const fetchMock = setup([makePlanV2({ id: 'p1', name: 'Standaard', active: true, version: 3, slots: [slotOf('t3', 0, 5, null)] })]);
+    renderWithProviders(<PlannerPage />);
+    await screen.findByRole('group', { name: 'Kies een week' });
+
+    drop('task:t1', `cell:0:2:${BRAM._id}`);
+    await openPlanManagement();
+    fireEvent.click(screen.getByRole('button', { name: 'Plan leegmaken' }));
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Alles terugzetten?' })).getByRole('button', { name: 'Alles terugzetten' }));
+    await screen.findByText('Alle taken staan weer bij “Nog in te plannen”.');
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    expect(callsOf(fetchMock, 'PUT', '/api/v2/cycle-plans/p1/slots').map((call) => call.body)).toEqual([{ slots: [] }]);
+    expect(fetchMock.server.plans[0]!.slots).toEqual([]);
+  });
+});
+
 describe('PlannerPage — validation by the server', () => {
   beforeEach(() => {
     dnd.onDragEnd = undefined;
