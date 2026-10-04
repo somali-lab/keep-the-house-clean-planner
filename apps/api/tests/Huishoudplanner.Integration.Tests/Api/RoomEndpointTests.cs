@@ -257,7 +257,7 @@ public sealed class RoomEndpointTests : IDisposable
 
         var stored = await Rooms.Find(new BsonDocument("_id", ObjectId.Parse(id))).SingleAsync(Ct);
         stored["sortOrder"].BsonType.Should().Be(BsonType.Int32);
-        stored.Names.Should().Equal("_id", "name", "sortOrder", "active", "virtual", "createdAt", "updatedAt");
+        stored.Names.Should().Equal("_id", "name", "sortOrder", "active", "virtual", "createdAt", "updatedAt", "version");
 
         var entries = await RoomAuditEntries();
         var entry = entries.Should().ContainSingle().Subject;
@@ -502,7 +502,7 @@ public sealed class RoomEndpointTests : IDisposable
             .Where(e => e.RoutePattern.RawText?.StartsWith("/api/v2/rooms", StringComparison.Ordinal) == true && !e.RoutePattern.RawText.EndsWith("/tasks/bulk", StringComparison.Ordinal))
             .ToList();
 
-        endpoints.Should().HaveCount(4);
+        endpoints.Should().HaveCount(5);
         foreach (var endpoint in endpoints)
         {
             var methods = endpoint.Metadata.GetMetadata<HttpMethodMetadata>()!.HttpMethods;

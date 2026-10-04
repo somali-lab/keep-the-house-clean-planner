@@ -128,6 +128,15 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         return this;
     }
 
+    /// <summary>
+    /// A client that reads an entity before it writes it and sends the ETag as <c>If-Match</c> (see <see cref="AutoIfMatchHandler"/>), so the
+    /// tests that are not about the precondition keep reading like a client of the finished API.
+    /// </summary>
+    public new HttpClient CreateClient() => CreateDefaultClient(new AutoIfMatchHandler());
+
+    /// <summary>A client without the automatic <c>If-Match</c>: the request reaches the host exactly as the test wrote it.</summary>
+    public HttpClient CreateRawClient() => base.CreateClient();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);

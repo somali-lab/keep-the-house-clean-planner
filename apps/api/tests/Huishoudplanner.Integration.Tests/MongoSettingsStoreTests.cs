@@ -173,6 +173,7 @@ public sealed class MongoSettingsStoreTests(MongoContainerFixture mongo) : IAsyn
         expected["promoteThreshold"] = 5;
         expected["centsPerPoint"] = 0;
         expected["updatedAt"] = new BsonDateTime(new DateTime(2026, 9, 16, 8, 0, 0, DateTimeKind.Utc));
+        expected["version"] = 1; // a document without a version reads as 0 and its first write makes it 1
         (await collection.Find(FilterDefinition<BsonDocument>.Empty).SingleAsync(TestContext.Current.CancellationToken)).ShouldBeBson(expected);
     }
 

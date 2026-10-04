@@ -117,8 +117,8 @@ public sealed class MongoCyclePlanStoreTests : IDisposable
             return TransactionOutcome.Commit(true);
         }, Ct);
 
-        OneOf<CyclePlan, NotFound, PortError> renamed = default;
-        OneOf<Success, NotFound, PortError> deleted = default;
+        OneOf<CyclePlan, NotFound, PortError, PreconditionFailed> renamed = default;
+        OneOf<Success, NotFound, PortError, PreconditionFailed> deleted = default;
         await transactions.RunAsync(async ct =>
         {
             renamed = await store.UpdateMetaAsync(id, new PlanMetaChanges(Name: "B"), Now.AddHours(1), ct);
