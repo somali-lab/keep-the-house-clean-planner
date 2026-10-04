@@ -1,8 +1,7 @@
-import { DEFAULT_INTERVALS } from '@huishoudplanner/shared';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ANNA, BRAM } from '../../test/fixtures.ts';
-import { makeRoomV2, makeTaskV2 } from '../../test/render.tsx';
+import { DEFAULT_INTERVALS, makeRoomV2, makeTaskV2 } from '../../test/render.tsx';
 import { TaskForm } from './TaskForm.tsx';
 import { emptyTaskForm, taskToForm, toTaskInput, validateTaskForm } from './taskForm.ts';
 

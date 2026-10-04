@@ -1,7 +1,6 @@
 import type { Occurrence } from '../../api/index.ts';
 import { getLocale } from '../../i18n/runtime.ts';
-import { mondayOfDay } from '../export/exportModel.ts';
-import { addDays } from '@/lib/dayKey';
+import { addDays, mondayOfDay } from '@/lib/dayKey';
 
 function dayDate(dayKey: string): Date {
   return new Date(`${dayKey}T12:00:00Z`);

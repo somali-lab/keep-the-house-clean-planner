@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addDays, dayKeyInZone, daysBetween, fromDayKeyTime } from './dayKey.ts';
+import { addDays, dayKeyInZone, daysBetween, fromDayKeyTime, mondayOfDay } from './dayKey.ts';
 
 describe('dayKeyInZone', () => {
   it('uses the timezone, not UTC', () => {
@@ -35,6 +35,14 @@ describe('addDays', () => {
     expect(() => addDays('2026-13-01', 1)).toThrow(RangeError);
     expect(() => addDays('2026-02-30', 1)).toThrow(RangeError);
     expect(() => addDays('nope', 1)).toThrow(RangeError);
+  });
+});
+
+describe('mondayOfDay', () => {
+  it('finds the Monday of a week', () => {
+    expect(mondayOfDay('2026-09-16')).toBe('2026-09-14');
+    expect(mondayOfDay('2026-09-20')).toBe('2026-09-14');
+    expect(mondayOfDay('2026-09-21')).toBe('2026-09-21');
   });
 });
 

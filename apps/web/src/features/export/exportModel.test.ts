@@ -1,36 +1,31 @@
 import { describe, expect, it } from 'vitest';
-import { exportUrl, isGenerated, isoWeekLabel, mondayOfDay, rangeGenerated, tasksPdfUrl, weekOptions } from './exportModel.ts';
+import { calendarRoute } from '../../test/fixtures.ts';
+import type { CalendarDay } from '../../api/v2/queries.ts';
+import { exportUrl, isGenerated, rangeGenerated, tasksPdfUrl, weekOptions, weekOptionsRange } from './exportModel.ts';
 
 const cycles = [
   { startDate: '2026-09-14', endDate: '2026-10-11' },
   { startDate: '2026-10-12', endDate: '2026-11-08' },
 ];
 
-describe('ISO weeks', () => {
-  it.each([
-    ['2026-09-14', '2026-W38'],
-    ['2026-09-20', '2026-W38'],
-    ['2026-12-31', '2026-W53'],
-    ['2027-01-03', '2026-W53'],
-    ['2027-01-04', '2027-W01'],
-    ['2025-12-29', '2026-W01'],
-  ])('%s → %s', (day, label) => {
-    expect(isoWeekLabel(day)).toBe(label);
-  });
-
-  it('finds the Monday of a week', () => {
-    expect(mondayOfDay('2026-09-16')).toBe('2026-09-14');
-    expect(mondayOfDay('2026-09-20')).toBe('2026-09-14');
-    expect(mondayOfDay('2026-09-21')).toBe('2026-09-21');
-  });
-});
-
 describe('availability', () => {
-  it('lists the current week and the following weeks', () => {
-    const options = weekOptions('2026-09-16');
+  it('lists the current week and the following weeks from the calendar of the server', async () => {
+    const todayKey = '2026-09-16';
+    const range = weekOptionsRange(todayKey);
+    expect(range).toEqual({ from: '2026-09-10', to: '2026-12-09' });
+    const answer = calendarRoute()(undefined, `/api/v2/calendar?from=${range.from}&to=${range.to}`) as { days: CalendarDay[] };
+    const calendar = new Map(answer.days.map((day) => [day.dayKey, day]));
+    const options = weekOptions(todayKey, calendar);
     expect(options).toHaveLength(12);
     expect(options[0]).toEqual({ label: '2026-W38', monday: '2026-09-14', sunday: '2026-09-20' });
     expect(options.at(-1)?.label).toBe('2026-W49');
+  });
+
+  it('has no options before the calendar has answered, and skips a week it does not know', () => {
+    expect(weekOptions('2026-09-16', new Map())).toEqual([]);
+    const day = (dayKey: string, weekStart: string, isoWeek: string) => [dayKey, { dayKey, weekStart, isoWeek } as CalendarDay] as const;
+    const partial = new Map([day('2026-09-16', '2026-09-14', '2026-W38'), day('2026-09-14', '2026-09-14', '2026-W38')]);
+    expect(weekOptions('2026-09-16', partial).map((o) => o.label)).toEqual(['2026-W38']);
   });
 
   it('requires every week of a range to be generated', () => {
