@@ -1,6 +1,9 @@
-import { requestKeySchema } from '@huishoudplanner/shared/schemas/occurrences';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { REQUEST_KEY_LENGTH, REQUEST_KEY_TTL_MS, createRequestKey, releaseRequestKey, requestKeyFor, resetRequestKeys } from './requestKey.ts';
+
+/** The rule of the server for an idempotency key (ADR-0009, `Idempotency-Key` and `requestKey` of the v2 API). */
+const SERVER_KEY_RULE = /^[A-Za-z0-9_-]{16,64}$/;
+const serverAccepts = (key: string) => SERVER_KEY_RULE.test(key);
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -12,7 +15,7 @@ describe('createRequestKey', () => {
     for (let i = 0; i < 50; i++) {
       const key = createRequestKey();
       expect(key).toHaveLength(REQUEST_KEY_LENGTH);
-      expect(requestKeySchema.safeParse(key).success).toBe(true);
+      expect(serverAccepts(key)).toBe(true);
     }
   });
 
@@ -36,7 +39,7 @@ describe('createRequestKey', () => {
       return array;
     };
     vi.stubGlobal('crypto', { getRandomValues });
-    expect(requestKeySchema.safeParse(createRequestKey()).success).toBe(true);
+    expect(serverAccepts(createRequestKey())).toBe(true);
   });
 });
 
@@ -77,6 +80,6 @@ describe('requestKeyFor', () => {
   });
 
   it('is a valid key the server accepts', () => {
-    expect(requestKeySchema.safeParse(requestKeyFor('x')).success).toBe(true);
+    expect(serverAccepts(requestKeyFor('x'))).toBe(true);
   });
 });

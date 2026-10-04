@@ -8,12 +8,14 @@ import { useSettings } from '../../api/v2/household.ts';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
 import { getLanguage } from '../../i18n/runtime.ts';
 import { dayKeyInZone } from '@/lib/dayKey';
+import { useCalendar } from '../../api/v2/queries.ts';
 import { useCycles } from './api.ts';
 import {
   exportUrl,
   isGenerated,
   rangeGenerated,
   weekOptions,
+  weekOptionsRange,
   weeksOf,
   type ExportRange,
 } from './exportModel.ts';
@@ -30,7 +32,9 @@ export function ExportDialog({ onClose, now }: { onClose(): void; now?: Date }) 
   const settings = useSettings();
   const cycles = useCycles();
   const todayKey = dayKeyInZone(now ?? new Date(), settings.data?.timezone ?? 'Europe/Amsterdam');
-  const options = useMemo(() => weekOptions(todayKey), [todayKey]);
+  const weekRange = weekOptionsRange(todayKey);
+  const calendar = useCalendar(weekRange.from, weekRange.to, settings.isSuccess);
+  const options = useMemo(() => (calendar.data ? weekOptions(todayKey, calendar.data) : []), [todayKey, calendar.data]);
 
   const [range, setRange] = useState<ExportRange>('1');
   const [startWeek, setStartWeek] = useState('');
@@ -39,8 +43,8 @@ export function ExportDialog({ onClose, now }: { onClose(): void; now?: Date }) 
   const [totals, setTotals] = useState(false);
 
   const titleId = `${idPrefix}-title`;
-  const loading = settings.isPending || cycles.isPending;
-  const failed = settings.isError || cycles.isError;
+  const loading = settings.isPending || cycles.isPending || calendar.isPending;
+  const failed = settings.isError || cycles.isError || calendar.isError;
   const generated = cycles.data ?? [];
   const weeks = weeksOf(range);
 

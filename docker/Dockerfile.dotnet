@@ -16,7 +16,6 @@ COPY apps/web/package.json apps/web/
 RUN npm ci
 COPY tsconfig.base.json ./
 COPY version.txt ./
-COPY packages/shared packages/shared
 COPY apps/web apps/web
 # Build identity is declared last so a new release moment does not invalidate the dependency layers.
 ARG APP_OFFICIAL_BUILD=false
