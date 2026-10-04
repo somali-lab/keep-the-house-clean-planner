@@ -271,7 +271,7 @@ The generated TypeScript client (`openapi-typescript` + `openapi-fetch`) replace
 - [ ] 7.3 `planner` with server-side validation, `promote`, `ai`, `ai-prompts`.
 - [ ] 7.4 `reward`, `stats`, `completions`, `badges`.
 - [ ] 7.5 `settings` (bonuses in force from the server), `notifications`, `distribution`, `history`, `export`, `about`.
-- [ ] 7.6 PWA cache rule for `/api/v2/`, offline queue against the intent endpoints; e2e journeys green against the .NET host.
+- [ ] 7.6 PWA cache rule for `/api/v2/`, offline queue against the intent endpoints; e2e journeys green against the .NET host. Remove `continue-on-error` from the e2e job in `.github/workflows/ci.yml` (made non-blocking during phase 7 by decision of the maintainer).
 - [ ] 7.7 `packages/shared` deleted; workspace, lint and typecheck configuration updated.
 
 ### Phase 8 — Parallel run and switch (§10)

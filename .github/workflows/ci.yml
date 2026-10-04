@@ -113,9 +113,13 @@ jobs:
         run: node scripts/smoke-dotnet.mjs
 
   # Runs in parallel with every other job; nothing depends on it and it depends on nothing.
+  # Non-blocking while phase 7 of docs/plans/dotnet-rewrite.md moves the web app to /api/v2 feature by feature
+  # (decided by the maintainer): the journeys run against the Node server, which does not serve v2. Slice 7.6 must
+  # remove continue-on-error and make the journeys green against the .NET host.
   e2e:
     name: End-to-end tests
     runs-on: ubuntu-latest
+    continue-on-error: true
     timeout-minutes: 15
     steps:
       - name: Check out repository
