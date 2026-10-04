@@ -55,7 +55,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Reads one person.
+         * @description Needs no profile. The ETag header carries the version of the person; send it as If-Match when you change the person or set their browser notifications. Answers 404 not_found for an unknown person and 400 validation_error on id for a malformed id.
+         */
+        get: operations["getUser"];
         put?: never;
         post?: never;
         delete?: never;
@@ -63,7 +67,7 @@ export interface paths {
         head?: never;
         /**
          * Changes a person, or deactivates one with active=false.
-         * @description Administrators only. A change that alters nothing writes and audits nothing. 409 last_admin when the last active administrator would be deactivated or demoted.
+         * @description Administrators only. A change that alters nothing writes and audits nothing. 409 last_admin when the last active administrator would be deactivated or demoted. Needs If-Match with the ETag of the person you read: another version is 412 precondition_failed (also for a change that would change nothing), and a change that changes nothing keeps the version.
          */
         patch: operations["updateUser"];
         trace?: never;
@@ -78,7 +82,7 @@ export interface paths {
         get?: never;
         /**
          * Sets the browser notification moments of a person.
-         * @description A person sets their own moments, an administrator anyone's (403 permission_denied otherwise). The complete setting replaces the stored one; an equal setting writes and audits nothing.
+         * @description A person sets their own moments, an administrator anyone's (403 permission_denied otherwise). The complete setting replaces the stored one; an equal setting writes and audits nothing. The setting is a field of the person, so it needs If-Match with the ETag of the person (GET /users/{id}); another version is 412 precondition_failed, and a setting that changes nothing keeps the version.
          */
         put: operations["setUserBrowserNotifications"];
         post?: never;
@@ -119,19 +123,23 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Reads one room.
+         * @description The ETag header carries the version of the room; send it as If-Match when you change or delete the room. Answers 404 not_found for an unknown room and 400 validation_error on id for a malformed id.
+         */
+        get: operations["getRoom"];
         put?: never;
         post?: never;
         /**
          * Deletes a room that holds no tasks (administrators).
-         * @description A room that still holds tasks, active or inactive, cannot be deleted: 409 room_in_use with the number of tasks in the taskCount extension. Answers 404 not_found for an unknown room.
+         * @description A room that still holds tasks, active or inactive, cannot be deleted: 409 room_in_use with the number of tasks in the taskCount extension. Answers 404 not_found for an unknown room. Needs If-Match with the ETag of the room you read; another version is 412 precondition_failed and nothing is deleted.
          */
         delete: operations["deleteRoom"];
         options?: never;
         head?: never;
         /**
          * Changes a room (administrators).
-         * @description Renames, reorders, deactivates or marks the room virtual. A change that changes nothing writes and audits nothing. Answers 404 not_found for an unknown room.
+         * @description Renames, reorders, deactivates or marks the room virtual. A change that changes nothing writes and audits nothing. Answers 404 not_found for an unknown room. Needs If-Match with the ETag of the room you read: another version is 412 precondition_failed (also for a change that would change nothing), and a change that changes nothing keeps the version.
          */
         patch: operations["updateRoom"];
         trace?: never;
@@ -167,19 +175,23 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Reads one task.
+         * @description Needs no profile. The ETag header carries the version of the task; send it as If-Match when you change or delete the task. Answers 404 not_found for an unknown task and 400 validation_error on id for a malformed id.
+         */
+        get: operations["getTask"];
         put?: never;
         post?: never;
         /**
          * Deletes a task for good (planners).
-         * @description Normally a task is deactivated instead. The delete removes the task's slots from every plan that holds one (each such plan gets an update entry with the removed slots and meta reason task_delete) and the task from the badge rules that name it (a rule left without tasks is deactivated; reason task_deleted), all in one transaction, and records a delete entry that keeps the removed fields. Occurrences, points and history stay: they carry their own snapshot. Answers 404 not_found for an unknown task, which changes nothing, and 400 validation_error on id for a malformed id.
+         * @description Normally a task is deactivated instead. The delete removes the task's slots from every plan that holds one (each such plan gets an update entry with the removed slots and meta reason task_delete) and the task from the badge rules that name it (a rule left without tasks is deactivated; reason task_deleted), all in one transaction, and records a delete entry that keeps the removed fields. Occurrences, points and history stay: they carry their own snapshot. Answers 404 not_found for an unknown task, which changes nothing, and 400 validation_error on id for a malformed id. Needs If-Match with the ETag of the task you read; another version is 412 precondition_failed and nothing is deleted.
          */
         delete: operations["deleteTask"];
         options?: never;
         head?: never;
         /**
          * Changes a task, or deactivates one with active=false (planners).
-         * @description A change that changes nothing writes and audits nothing. A change of the default assignee is audited as its own assign entry. points: null resets the points to the default for the duration (a reset that changes nothing is a no-op). Changed references are checked like on create. Answers 404 not_found for an unknown task.
+         * @description A change that changes nothing writes and audits nothing. A change of the default assignee is audited as its own assign entry. points: null resets the points to the default for the duration (a reset that changes nothing is a no-op). Changed references are checked like on create. Answers 404 not_found for an unknown task. Needs If-Match with the ETag of the task you read: another version is 412 precondition_failed (also for a change that would change nothing), and a change that changes nothing keeps the version.
          */
         patch: operations["updateTask"];
         trace?: never;
@@ -437,7 +449,7 @@ export interface paths {
         };
         /**
          * The active cycle plan.
-         * @description Needs no profile. Answers 404 not_found when no plan is active.
+         * @description Needs no profile. The ETag header carries the version of the plan. Answers 404 not_found when no plan is active.
          */
         get: operations["getActiveCyclePlan"];
         put?: never;
@@ -457,21 +469,21 @@ export interface paths {
         };
         /**
          * One cycle plan.
-         * @description Needs no profile. Answers 404 not_found for an unknown plan.
+         * @description Needs no profile. The ETag header carries the version of the plan; send it as If-Match when you change, delete or save the slots of the plan. Answers 404 not_found for an unknown plan.
          */
         get: operations["getCyclePlan"];
         put?: never;
         post?: never;
         /**
          * Deletes a plan that is neither the default nor the active plan (planners).
-         * @description The oldest plan is the default plan: 409 default_plan. The active plan: 409 active_plan. Answers 404 not_found for an unknown plan. The deleted plan is audited.
+         * @description The oldest plan is the default plan: 409 default_plan. The active plan: 409 active_plan. Answers 404 not_found for an unknown plan. The deleted plan is audited. Needs If-Match with the ETag of the plan you read; another version is 412 precondition_failed and nothing is deleted.
          */
         delete: operations["deleteCyclePlan"];
         options?: never;
         head?: never;
         /**
          * Renames a plan or sets its week themes (planners).
-         * @description A change that changes nothing writes and audits nothing. Answers 404 not_found for an unknown plan.
+         * @description A change that changes nothing writes and audits nothing. Answers 404 not_found for an unknown plan. Needs If-Match with the ETag of the plan you read: another version is 412 precondition_failed (also for a change that would change nothing), and a change that changes nothing keeps the version.
          */
         patch: operations["updateCyclePlan"];
         trace?: never;
@@ -506,7 +518,7 @@ export interface paths {
         get?: never;
         /**
          * Replaces all slots of a plan (planners).
-         * @description The plan is validated first: a plan that breaks a hard rule (unknown or inactive task or person, unavailable assignee, the same task twice on one day) is refused with 422 invalid_plan, carrying errors, issues, warnings and summary, and nothing is written. Otherwise the plan is saved and returned with the warnings and the summary. The audit entry holds only the added, removed and changed slots; saving what is stored writes and audits nothing. Saving the slots of the ACTIVE plan always synchronises the upcoming occurrences in the same transaction (the open generated occurrences from today to the end of the next cycle are replaced; done, skipped, moved and ad-hoc ones stay): the replacement is reported in synchronized and audited with the system as source and the saving profile as actor. Saving a draft plan changes no occurrences and answers synchronized null. Answers 500 settings_missing when the installation has no settings.
+         * @description The plan is validated first: a plan that breaks a hard rule (unknown or inactive task or person, unavailable assignee, the same task twice on one day) is refused with 422 invalid_plan, carrying errors, issues, warnings and summary, and nothing is written. Otherwise the plan is saved and returned with the warnings and the summary. The audit entry holds only the added, removed and changed slots; saving what is stored writes and audits nothing. Saving the slots of the ACTIVE plan always synchronises the upcoming occurrences in the same transaction (the open generated occurrences from today to the end of the next cycle are replaced; done, skipped, moved and ad-hoc ones stay): the replacement is reported in synchronized and audited with the system as source and the saving profile as actor. Saving a draft plan changes no occurrences and answers synchronized null. Answers 500 settings_missing when the installation has no settings. The slots are part of the plan, so the save needs If-Match with the ETag of the plan you read (GET /cycle-plans/{id}): another version is 412 precondition_failed, checked before the validation and also for slots that are already stored; the answer carries the new ETag of the plan (a save that stores nothing new keeps it).
          */
         put: operations["replaceCyclePlanSlots"];
         post?: never;
@@ -1108,6 +1120,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/badges/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Reads one badge.
+         * @description Needs no profile. The ETag header carries the version of the badge; send it as If-Match when you change or delete the badge. Answers 404 not_found for an unknown badge and 400 validation_error on id for a malformed id.
+         */
+        get: operations["getBadge"];
+        put?: never;
+        post?: never;
+        /**
+         * Deletes a badge (administrators).
+         * @description The awards of the badge are withdrawn with it. Answers 404 not_found for an unknown badge. Needs If-Match with the ETag of the badge you read; another version is 412 precondition_failed and nothing is deleted.
+         */
+        delete: operations["deleteBadge"];
+        options?: never;
+        head?: never;
+        /**
+         * Changes a badge (administrators).
+         * @description Every field is optional; image: null removes the picture and a new image replaces it. A change that changes nothing writes and audits nothing. A change of the rule or the active flag evaluates the awards again. Answers 404 not_found for an unknown badge. Needs If-Match with the ETag of the badge you read: another version is 412 precondition_failed (also for a change that would change nothing), and a change that changes nothing keeps the version.
+         */
+        patch: operations["updateBadge"];
+        trace?: never;
+    };
     "/api/v2/badges/examples": {
         parameters: {
             query?: never;
@@ -1186,30 +1226,6 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
-        trace?: never;
-    };
-    "/api/v2/badges/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Deletes a badge (administrators).
-         * @description The awards of the badge are withdrawn with it. Answers 404 not_found for an unknown badge.
-         */
-        delete: operations["deleteBadge"];
-        options?: never;
-        head?: never;
-        /**
-         * Changes a badge (administrators).
-         * @description Every field is optional; image: null removes the picture and a new image replaces it. A change that changes nothing writes and audits nothing. A change of the rule or the active flag evaluates the awards again. Answers 404 not_found for an unknown badge.
-         */
-        patch: operations["updateBadge"];
         trace?: never;
     };
     "/api/v2/points/progress": {
@@ -1465,7 +1481,7 @@ export interface paths {
         };
         /**
          * Returns the household settings.
-         * @description Missing optional values are delivered as their defaults: no bonus schedule, EUR, 0 cents per point and automatic reward goals. The bonus schedule rows carry startsInFuture and bonusesInForce holds the amounts in force today, so the client computes nothing. The AI API key is never part of the settings.
+         * @description Missing optional values are delivered as their defaults: no bonus schedule, EUR, 0 cents per point and automatic reward goals. The bonus schedule rows carry startsInFuture and bonusesInForce holds the amounts in force today, so the client computes nothing. The AI API key is never part of the settings. The ETag header carries the version of the settings; send it as If-Match when you change them.
          */
         get: operations["getSettings"];
         put?: never;
@@ -1475,7 +1491,7 @@ export interface paths {
         head?: never;
         /**
          * Changes the given settings (administrators only).
-         * @description Every field is optional and only the given ones change; a patch that changes nothing writes and audits nothing. periodBonuses sets the four bonus amounts from today on: the server writes a schedule row, and a client never sends the schedule. Amounts, currency, cents per point and goals equal to the ones in force change nothing. Removing an interval that tasks use is 409 interval_in_use (with the blocked keys in keys); when concurrent writers keep winning a schedule write the answer is 409 bonus_schedule_conflict. The timezone, the week start and the AI API key cannot be set.
+         * @description Every field is optional and only the given ones change; a patch that changes nothing writes and audits nothing. periodBonuses sets the four bonus amounts from today on: the server writes a schedule row, and a client never sends the schedule. Amounts, currency, cents per point and goals equal to the ones in force change nothing. Removing an interval that tasks use is 409 interval_in_use (with the blocked keys in keys). Needs If-Match with the ETag of the settings you read: another version is 412 precondition_failed (also for a change that would change nothing, and before every other check), and a change that changes nothing keeps the version. A caller that holds the current ETag therefore never meets bonus_schedule_conflict, which remains as the second defence: 409 when the bonus schedule is written against a schedule that changed in between and the write keeps losing to concurrent ones. The timezone, the week start and the AI API key cannot be set.
          */
         patch: operations["updateSettings"];
         trace?: never;
@@ -1733,6 +1749,8 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            /** Format: int32 */
+            version: number | string;
         };
         BadgeRuleRequest: {
             type: string;
@@ -1971,6 +1989,8 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            /** Format: int32 */
+            version: number | string;
         };
         CycleResponse: {
             id: string;
@@ -2760,6 +2780,8 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            /** Format: int32 */
+            version: number | string;
         };
         SettingsResponse: {
             id: string;
@@ -2789,6 +2811,11 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            /**
+             * Format: int32
+             * @description The concurrency version of the settings (the number inside their ETag); send the ETag as If-Match when you change the settings.
+             */
+            version: number | string;
         };
         SkipOccurrenceRequest: {
             /** @description At most 500 characters after trimming; empty means no reason. */
@@ -2865,6 +2892,8 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            /** Format: int32 */
+            version: number | string;
         };
         TaskSuggestionResponse: {
             name: string;
@@ -2981,6 +3010,11 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            /**
+             * Format: int32
+             * @description The concurrency version of the person (the number inside its ETag); send the ETag as If-Match when you change the person.
+             */
+            version: number | string;
         };
         UserWorkload: {
             userId: string;
@@ -3131,6 +3165,8 @@ export interface operations {
             /** @description Created */
             201: {
                 headers: {
+                    /** @description The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write. */
+                    ETag?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3166,10 +3202,64 @@ export interface operations {
             };
         };
     };
-    updateUser: {
+    getUser: {
         parameters: {
             query?: never;
             header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    /** @description The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    updateUser: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The ETag of the version you read, exactly as the server sent it (a version number in double quotes). Missing: 428 precondition_required; not the stored version: 412 precondition_failed with the current ETag; malformed, weak or *: 400 validation_error. */
+                "If-Match": string;
+            };
             path: {
                 id: string;
             };
@@ -3184,6 +3274,8 @@ export interface operations {
             /** @description OK */
             200: {
                 headers: {
+                    /** @description The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write. */
+                    ETag?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3226,6 +3318,24 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
+            /** @description Precondition Failed */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Precondition Required */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description Internal Server Error */
             500: {
                 headers: {
@@ -3240,7 +3350,10 @@ export interface operations {
     setUserBrowserNotifications: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The ETag of the version you read, exactly as the server sent it (a version number in double quotes). Missing: 428 precondition_required; not the stored version: 412 precondition_failed with the current ETag; malformed, weak or *: 400 validation_error. */
+                "If-Match": string;
+            };
             path: {
                 id: string;
             };
@@ -3255,6 +3368,8 @@ export interface operations {
             /** @description OK */
             200: {
                 headers: {
+                    /** @description The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write. */
+                    ETag?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3281,6 +3396,24 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Precondition Failed */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Precondition Required */
+            428: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3357,6 +3490,8 @@ export interface operations {
             /** @description Created */
             201: {
                 headers: {
+                    /** @description The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write. */
+                    ETag?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3401,10 +3536,64 @@ export interface operations {
             };
         };
     };
-    deleteRoom: {
+    getRoom: {
         parameters: {
             query?: never;
             header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    /** @description The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoomResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    deleteRoom: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The ETag of the version you read, exactly as the server sent it (a version number in double quotes). Missing: 428 precondition_required; not the stored version: 412 precondition_failed with the current ETag; malformed, weak or *: 400 validation_error. */
+                "If-Match": string;
+            };
             path: {
                 id: string;
             };
@@ -3457,6 +3646,24 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
+            /** @description Precondition Failed */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Precondition Required */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description Internal Server Error */
             500: {
                 headers: {
@@ -3471,7 +3678,10 @@ export interface operations {
     updateRoom: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The ETag of the version you read, exactly as the server sent it (a version number in double quotes). Missing: 428 precondition_required; not the stored version: 412 precondition_failed with the current ETag; malformed, weak or *: 400 validation_error. */
+                "If-Match": string;
+            };
             path: {
                 id: string;
             };
@@ -3486,6 +3696,8 @@ export interface operations {
             /** @description OK */
             200: {
                 headers: {
+                    /** @description The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write. */
+                    ETag?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3521,6 +3733,24 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Precondition Failed */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Precondition Required */
+            428: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3598,6 +3828,8 @@ export interface operations {
             /** @description Created */
             201: {
                 headers: {
+                    /** @description The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write. */
+                    ETag?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3642,10 +3874,64 @@ export interface operations {
             };
         };
     };
-    deleteTask: {
+    getTask: {
         parameters: {
             query?: never;
             header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    /** @description The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    deleteTask: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The ETag of the version you read, exactly as the server sent it (a version number in double quotes). Missing: 428 precondition_required; not the stored version: 412 precondition_failed with the current ETag; malformed, weak or *: 400 validation_error. */
+                "If-Match": string;
+            };
             path: {
                 id: string;
             };
@@ -3698,6 +3984,24 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
+            /** @description Precondition Failed */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Precondition Required */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description Internal Server Error */
             500: {
                 headers: {
@@ -3712,7 +4016,10 @@ export interface operations {
     updateTask: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The ETag of the version you read, exactly as the server sent it (a version number in double quotes). Missing: 428 precondition_required; not the stored version: 412 precondition_failed with the current ETag; malformed, weak or *: 400 validation_error. */
+                "If-Match": string;
+            };
             path: {
                 id: string;
             };
@@ -3727,6 +4034,8 @@ export interface operations {
             /** @description OK */
             200: {
                 headers: {
+                    /** @description The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write. */
+                    ETag?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3762,6 +4071,24 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Precondition Failed */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Precondition Required */
+            428: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4402,6 +4729,8 @@ export interface operations {
             /** @description Created */
             201: {
                 headers: {
+                    /** @description The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write. */
+                    ETag?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4467,6 +4796,8 @@ export interface operations {
             /** @description OK */
             200: {
                 headers: {
+                    /** @description The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write. */
+                    ETag?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4507,6 +4838,8 @@ export interface operations {
             /** @description OK */
             200: {
                 headers: {
+                    /** @description The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write. */
+                    ETag?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4545,7 +4878,10 @@ export interface operations {
     deleteCyclePlan: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The ETag of the version you read, exactly as the server sent it (a version number in double quotes). Missing: 428 precondition_required; not the stored version: 412 precondition_failed with the current ETag; malformed, weak or *: 400 validation_error. */
+                "If-Match": string;
+            };
             path: {
                 id: string;
             };
@@ -4598,6 +4934,24 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
+            /** @description Precondition Failed */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Precondition Required */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description Internal Server Error */
             500: {
                 headers: {
@@ -4612,7 +4966,10 @@ export interface operations {
     updateCyclePlan: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The ETag of the version you read, exactly as the server sent it (a version number in double quotes). Missing: 428 precondition_required; not the stored version: 412 precondition_failed with the current ETag; malformed, weak or *: 400 validation_error. */
+                "If-Match": string;
+            };
             path: {
                 id: string;
             };
@@ -4627,6 +4984,8 @@ export interface operations {
             /** @description OK */
             200: {
                 headers: {
+                    /** @description The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write. */
+                    ETag?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4662,6 +5021,24 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Precondition Failed */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Precondition Required */
+            428: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4734,7 +5111,10 @@ export interface operations {
     replaceCyclePlanSlots: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The ETag of the version you read, exactly as the server sent it (a version number in double quotes). Missing: 428 precondition_required; not the stored version: 412 precondition_failed with the current ETag; malformed, weak or *: 400 validation_error. */
+                "If-Match": string;
+            };
             path: {
                 id: string;
             };
@@ -4749,6 +5129,8 @@ export interface operations {
             /** @description OK */
             200: {
                 headers: {
+                    /** @description The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write. */
+                    ETag?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4791,8 +5173,26 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
+            /** @description Precondition Failed */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description Unprocessable Entity */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Precondition Required */
+            428: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6674,6 +7074,8 @@ export interface operations {
             /** @description Created */
             201: {
                 headers: {
+                    /** @description The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write. */
+                    ETag?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -6700,6 +7102,239 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    getBadge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    /** @description The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BadgeResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    deleteBadge: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The ETag of the version you read, exactly as the server sent it (a version number in double quotes). Missing: 428 precondition_required; not the stored version: 412 precondition_failed with the current ETag; malformed, weak or *: 400 validation_error. */
+                "If-Match": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BadgeDeletedResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Precondition Failed */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Precondition Required */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    updateBadge: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The ETag of the version you read, exactly as the server sent it (a version number in double quotes). Missing: 428 precondition_required; not the stored version: 412 precondition_failed with the current ETag; malformed, weak or *: 400 validation_error. */
+                "If-Match": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateBadgeRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    /** @description The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BadgeResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Precondition Failed */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Precondition Required */
+            428: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6891,144 +7526,6 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    deleteBadge: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BadgeDeletedResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    updateBadge: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateBadgeRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BadgeResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Conflict */
-            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7592,6 +8089,8 @@ export interface operations {
             /** @description OK */
             200: {
                 headers: {
+                    /** @description The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write. */
+                    ETag?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -7612,7 +8111,10 @@ export interface operations {
     updateSettings: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The ETag of the version you read, exactly as the server sent it (a version number in double quotes). Missing: 428 precondition_required; not the stored version: 412 precondition_failed with the current ETag; malformed, weak or *: 400 validation_error. */
+                "If-Match": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -7625,6 +8127,8 @@ export interface operations {
             /** @description OK */
             200: {
                 headers: {
+                    /** @description The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write. */
+                    ETag?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -7651,6 +8155,24 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Precondition Failed */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Precondition Required */
+            428: {
                 headers: {
                     [name: string]: unknown;
                 };
