@@ -430,3 +430,51 @@ describe('TasksPage — If-Match', () => {
     expect(screen.queryByText(STALE_MESSAGE)).not.toBeInTheDocument();
   });
 });
+
+describe('TasksPage — stale message placement and reset', () => {
+  it('shows the stale-save message inside the edit dialog, where the overlay does not hide it', async () => {
+    setup({ 'PATCH /api/v2/tasks/t3': staleAnswer(6) });
+    renderWithProviders(<TasksPage />);
+    await expandAllRooms();
+    fireEvent.click(await screen.findByRole('button', { name: 'Douche bewerken' }));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.click(within(screen.getByRole('form', { name: 'Douche bewerken' })).getByRole('button', { name: 'Opslaan' }));
+
+    const alert = await within(dialog).findByText(STALE_MESSAGE);
+    expect(alert.closest('[role="alert"]')).not.toBeNull();
+    expect(screen.getAllByText(STALE_MESSAGE)).toHaveLength(1);
+  });
+
+  it('does not show the stale delete error when the delete dialog opens for another task', async () => {
+    setup({ 'DELETE /api/v2/tasks/t3': staleAnswer(8) });
+    renderWithProviders(<TasksPage />);
+    await expandAllRooms();
+    fireEvent.click(await screen.findByRole('button', { name: 'Douche verwijderen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Taak verwijderen' }));
+    expect(await screen.findByText(STALE_MESSAGE)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Annuleren' }));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Aanrecht verwijderen' }));
+
+    expect(screen.getByRole('heading', { name: 'Aanrecht definitief verwijderen?' })).toBeInTheDocument();
+    expect(screen.queryByText(STALE_MESSAGE)).not.toBeInTheDocument();
+  });
+
+  it('says that the task no longer exists when it vanished during a stale delete', async () => {
+    let list = tasks;
+    setup({
+      '/api/v2/tasks': () => page(list),
+      'DELETE /api/v2/tasks/t3': () => {
+        list = list.filter((task) => task.id !== 't3');
+        return staleAnswer(8)();
+      },
+    });
+    renderWithProviders(<TasksPage />);
+    await expandAllRooms();
+    fireEvent.click(await screen.findByRole('button', { name: 'Douche verwijderen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Taak verwijderen' }));
+
+    expect(await screen.findByText('Deze taak bestaat niet meer.')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Douche definitief verwijderen?' })).not.toBeInTheDocument());
+  });
+});

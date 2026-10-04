@@ -101,6 +101,7 @@ export function TasksPage() {
   useFilterReset(() => { resetRoom(); resetInactive(); }, showInactive || roomFilter !== 'all');
   const [editing, setEditing] = useState<Editing>(null);
   const [deleting, setDeleting] = useState<Task | null>(null);
+  const [vanished, setVanished] = useState(false);
   const [collapsedRooms, setCollapsedRooms] = useState<Set<string> | null>(null);
 
   // The tasks key is the prefix of the v2 query too; a changed task also changes the due list and the plan of the days.
@@ -185,8 +186,14 @@ export function TasksPage() {
       const fresh = await rereadTask(task.id);
       // The dialog asks again for the task as it is now; a task that is gone needs no delete.
       setDeleting((current) => (current?.id === task.id ? (fresh ?? null) : current));
+      if (!fresh) setVanished(true);
     },
   });
+
+  const closeDelete = () => {
+    removeTask.reset();
+    setDeleting(null);
+  };
 
   if (rooms.isPending || tasks.isPending || settings.isPending) {
     return (
@@ -318,10 +325,15 @@ export function TasksPage() {
               onSubmit={submit}
               onCancel={() => setEditing(null)}
             />
+            {saveTask.isError && isStaleEntity(saveTask.error) && (
+              <p role="alert" className="rounded-xl bg-destructive/10 p-3 text-sm font-semibold text-destructive">
+                {t('app.staleEntity')}
+              </p>
+            )}
           </DialogContent>
         )}
       </Dialog>
-      <Dialog open={deleting !== null} onOpenChange={(open) => !open && !removeTask.isPending && setDeleting(null)}>
+      <Dialog open={deleting !== null} onOpenChange={(open) => !open && !removeTask.isPending && closeDelete()}>
         {deleting && (
           <DialogContent>
             <DialogHeader>
@@ -334,7 +346,7 @@ export function TasksPage() {
               </p>
             )}
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setDeleting(null)}>{t('common.cancel')}</Button>
+              <Button type="button" variant="outline" onClick={closeDelete}>{t('common.cancel')}</Button>
               <Button type="button" variant="destructive" disabled={removeTask.isPending} onClick={() => removeTask.mutate(deleting)}>
                 <Trash2 aria-hidden="true" />{t('tasks.delete')}
               </Button>
@@ -342,9 +354,9 @@ export function TasksPage() {
           </DialogContent>
         )}
       </Dialog>
-      {saveTask.isError && isStaleEntity(saveTask.error) && (
+      {vanished && (
         <p role="alert" className="rounded-xl bg-destructive/10 p-4 text-destructive">
-          {t('app.staleEntity')}
+          {t('tasks.gone')}
         </p>
       )}
       {setActive.isError && isStaleEntity(setActive.error) && (
@@ -390,7 +402,11 @@ export function TasksPage() {
                 setEditing({ mode: 'edit', task });
               }}
               onToggleActive={(task) => setActive.mutate({ task, active: !task.active })}
-              onDelete={setDeleting}
+              onDelete={(task) => {
+                removeTask.reset();
+                setVanished(false);
+                setDeleting(task);
+              }}
               onBulkDeactivate={() => {
                 if (
                   window.confirm(
