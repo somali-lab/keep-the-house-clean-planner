@@ -14,7 +14,7 @@
     "dev": "concurrently -n server,web \"npm run dev --workspace apps/server\" \"npm run dev --workspace apps/web\"",
     "build": "npm run build --workspaces --if-present",
     "lint": "eslint .",
-    "typecheck": "npm run typecheck --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present && tsc -p scripts",
     "test": "vitest run",
     "test:e2e": "npm run test:e2e --workspace apps/web --if-present",
     "screenshots": "npm run screenshots --workspace apps/web",

@@ -30,6 +30,40 @@ services:
       retries: 5
       start_period: 20s
 
+  # Parallel run (docs/PARALLEL-RUN.md, plan section 10): the .NET application next to the Node application, against a
+  # COPY of the database (huishoudplanner_next on the same MongoDB instance, filled by scripts/parallel-copy-db.ts).
+  # Only started with --profile parallel, so a plain 'docker compose up' is unchanged and the household keeps using
+  # 'app'. Everything that reaches the outside world is off by default so the copy cannot double-send to the household:
+  # NEXT_NOTIFY_* and NEXT_AI_API_KEY are the explicit opt-in, and the NOTIFY_* and AI_API_KEY values of .env never reach
+  # this service. The scheduler runs (the nightly generation on the copy is part of the checklist); switch it off with
+  # NEXT_DISABLE_SCHEDULER=true. The database must exist before this service first starts: copy first, then start.
+  app-next:
+    profiles: ['parallel']
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dotnet
+    image: huishoudplanner-app-next:${APP_NEXT_IMAGE_TAG:-latest}
+    init: true
+    restart: unless-stopped
+    ports:
+      - '${APP_NEXT_PORT:-3001}:3000'
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      MONGO_URL: ${NEXT_MONGO_URL:-mongodb://mongo:27017/huishoudplanner_next?replicaSet=rs0}
+      PORT: '3000'
+      NOTIFY_TYPE: ${NEXT_NOTIFY_TYPE:-none}
+      NOTIFY_URL: ${NEXT_NOTIFY_URL:-}
+      NOTIFY_TOKEN: ${NEXT_NOTIFY_TOKEN:-}
+      AI_API_KEY: ${NEXT_AI_API_KEY:-}
+      DISABLE_SCHEDULER: ${NEXT_DISABLE_SCHEDULER:-false}
+      OTEL_SERVICE_NAME: ${NEXT_OTEL_SERVICE_NAME:-app-next}
+      OTEL_RESOURCE_ATTRIBUTES: ${NEXT_OTEL_RESOURCE_ATTRIBUTES:-deployment.environment.name=parallel}
+    depends_on:
+      mongo:
+        condition: service_healthy
+
   backup:
     image: mongo:8
     init: true
