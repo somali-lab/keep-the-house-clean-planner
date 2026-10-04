@@ -112,15 +112,13 @@ jobs:
       - name: Run the .NET container smoke test
         run: node scripts/smoke-dotnet.mjs
 
-  # Runs in parallel with every other job; nothing depends on it and it depends on nothing.
-  # Non-blocking while phase 7 of docs/plans/dotnet-rewrite.md moves the web app to /api/v2 feature by feature
-  # (decided by the maintainer): the journeys run against the Node server, which does not serve v2. Slice 7.6 must
-  # remove continue-on-error and make the journeys green against the .NET host.
+  # Runs in parallel with every other job; nothing depends on it and it depends on nothing. Blocking again since
+  # slice 7.6 of docs/plans/dotnet-rewrite.md: the journeys drive the built web app on the real .NET host, one host
+  # process per test, on a throwaway single-node MongoDB replica set that globalSetup starts in Docker (mongo:8).
   e2e:
     name: End-to-end tests
     runs-on: ubuntu-latest
-    continue-on-error: true
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -133,6 +131,12 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      # globalSetup publishes the .NET host (dotnet publish) and the tests start it once per test.
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: apps/api/global.json
 
       - name: Read Playwright version
         id: playwright-version
@@ -154,13 +158,11 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
 
-      # globalSetup starts one mongodb-memory-server, which downloads a MongoDB binary on first use.
-      - name: Cache MongoDB test binary
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/mongodb-binaries
-          key: mongodb-binaries-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      # globalSetup would pull it on first use; pulling it here keeps the pull out of the test run.
+      - name: Pull the MongoDB image
+        run: docker pull mongo:8
 
+      # Builds the web app, then globalSetup publishes the host and starts the replica set (see apps/web/e2e/globalSetup.ts).
       - name: Run end-to-end tests
         run: npm run test:e2e
 

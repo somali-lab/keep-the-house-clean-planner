@@ -282,9 +282,9 @@ The web development server is available at <http://localhost:5173> and proxies `
 Useful commands:
 
 - `npm run verify` — run linting, type checking, and all unit, component, and API tests.
-- `npm run test:e2e` — build the web app and run Playwright end-to-end tests.
+- `npm run test:e2e` — build the web app and run the Playwright end-to-end tests against the .NET host (it publishes the host and starts a throwaway MongoDB replica set in Docker, so .NET 10 and Docker are required).
 - `npm run build` — build the web app into `apps/web/dist`.
-- `npm run screenshots` — regenerate the README screenshots from a scripted demo household.
+- `npm run screenshots` — regenerate the README screenshots from a scripted demo household (same harness as the end-to-end tests).
 - `node scripts/smoke.mjs` — run an isolated Docker smoke test without touching an existing installation.
 
 Dependabot checks npm dependencies monthly. It groups compatible minor and patch development updates; TypeScript is reviewed separately against `typescript-eslint`'s peer range. Major updates to TypeScript, Node type declarations, and jsdom are held until the project's tooling or supported Node version can use them. See [`.github/dependabot.yml`](.github/dependabot.yml) for the rules.

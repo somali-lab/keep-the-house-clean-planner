@@ -69,7 +69,7 @@ Empty these documents as part of finishing the work, and report anything left in
 - `apps/web/src/api`: typed HTTP clients and shared queries: the hand-written client of the Node server (`/api`) and, per migrated feature, the generated client of `/api/v2` (`v2/schema.d.ts` is generated from `apps/api/openapi/v2.json` by `npm run generate:api -w apps/web`; never edit it by hand).
 - `apps/web/src/features`: feature UI plus colocated component/model tests.
 - `apps/web/src/i18n`: Dutch and English message catalogs and language runtime.
-- `apps/web/e2e`: isolated Playwright journeys against the real server and a fresh database.
+- `apps/web/e2e`: isolated Playwright journeys against the real .NET host (published by `globalSetup`, one process per test, fixed clock through `APP_FAKE_NOW`) on a throwaway Docker MongoDB replica set, seeded through `/api/v2`.
 - `docker`, `docker-compose.yml`, `scripts/smoke.mjs`, `scripts/smoke-dotnet.mjs`: production image, the .NET image (`docker/Dockerfile.dotnet`, until the switch) and their isolated container smoke tests.
 - `docs/adr`: architecture decision records.
 - `AGENTS.md`, `.github/instructions`, `.cursor/rules`, `.agents/skills`, `.github/copilot-instructions.md`, `CLAUDE.md`: the agent-context layer, maintained by the `context-maintainer` agentic workflow.

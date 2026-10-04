@@ -19,3 +19,4 @@ The list exists so the maintainer can see in one place what was decided without 
 - Backend rewrite D12 (replica set and transactions): [ADR-0021](adr/0021-mongodb-replica-set-and-transactional-writes.md).
 - Backend rewrite D10, D13, D14 (test stack, adapted skills): skill `xunit-tdd-workflow` and `.agents/skills`, slice 0.2.
 - ADR numbers 0016–0021 are one higher than the plan's 0015–0020 because 0015 is retired: [plans/dotnet-rewrite.md](plans/dotnet-rewrite.md) §2.
+- Slice 7.6, PWA cache of `/api/v2/` reads kept per profile (cache key carries `X-Profile-Id`; audit, health, AI, import, jobs and exports stay uncached; offline replay classification): [huishoudplanner-requirements.md](huishoudplanner-requirements.md) §7.3.
