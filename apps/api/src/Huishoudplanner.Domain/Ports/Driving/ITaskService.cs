@@ -31,4 +31,13 @@ public interface ITaskService
     /// changes. Returns how many tasks changed; <see cref="NotFound"/> for an unknown room.
     /// </summary>
     Task<OneOf<int, NotFound, ValidationErrors, ConflictError, PortError>> BulkUpdateRoomAsync(Actor actor, string roomId, BulkRoomChange change, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Removes the task for good, in one transaction: its slots leave every plan that holds one (each such plan gets an <c>update</c> entry with the
+    /// removed slots and <c>meta: { reason: 'task_delete', taskId }</c>), the badge rules that name it stop naming it
+    /// (<see cref="IBadgeService.RemoveTaskFromRulesAsync"/>, reason <c>task_deleted</c>), and the task's own <c>delete</c> entry keeps the removed fields.
+    /// Occurrences, ledger entries and history stay: they carry their own snapshot. <see cref="NotFound"/> for an unknown task (nothing is written),
+    /// a <see cref="ValidationErrors"/> on <c>id</c> for a malformed id.
+    /// </summary>
+    Task<OneOf<Success, NotFound, ValidationErrors, ConflictError, PortError>> DeleteAsync(Actor actor, string id, CancellationToken cancellationToken);
 }

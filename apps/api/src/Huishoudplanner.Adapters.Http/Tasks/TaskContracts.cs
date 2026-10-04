@@ -26,7 +26,7 @@ public sealed record UpdateTaskRequest(
     string? RoomId,
     string? IntervalKey,
     int? DurationMinutes,
-    int? Points,
+    [property: Description("A whole number from 0 to 1000. Left out: unchanged. null: reset to the default for the duration the task has after the change (one point per minute, at least 1 and at most 1000).")] int? Points,
     [property: Description("An active person, or null for anyone. A change is audited as its own assign entry.")] string? DefaultAssigneeId,
     bool? Active,
     string? Notes,
@@ -74,3 +74,6 @@ public sealed record TaskListResponse(IReadOnlyList<TaskResponse> Items, string?
 
 /// <summary>How many tasks a bulk change changed.</summary>
 public sealed record BulkRoomTasksResponse(int Updated);
+
+/// <summary>The answer of a delete: always <c>true</c> (the task is gone).</summary>
+public sealed record TaskDeletedResponse(bool Deleted);

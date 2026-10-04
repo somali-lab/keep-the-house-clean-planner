@@ -10,8 +10,8 @@ namespace Huishoudplanner.Adapters.Http.Tasks;
 
 /// <summary>
 /// <c>/api/v2/tasks</c> and <c>/api/v2/rooms/{id}/tasks/bulk</c> (requirements 4.2, 8). Reads are open like in the Node server;
-/// create, change and the bulk change need a planner (<c>requirePlanner</c> there, <see cref="AuthorizationPolicies.PlannerPolicy"/> here).
-/// A task is deactivated, not deleted: the permanent delete arrives with the plans and badges it has to be removed from.
+/// create, change, delete and the bulk change need a planner (<c>requirePlanner</c> there, <see cref="AuthorizationPolicies.PlannerPolicy"/> here).
+/// A task is normally deactivated; the permanent delete cascades into the plans and the badge rules that name it.
 /// </summary>
 public static class TaskEndpoints
 {
@@ -50,9 +50,22 @@ public static class TaskEndpoints
             .WithName("updateTask")
             .WithTags(TasksTag)
             .WithSummary("Changes a task, or deactivates one with active=false (planners).")
-            .WithDescription("A change that changes nothing writes and audits nothing. A change of the default assignee is audited as its own assign entry. Changed references are checked like on create. Answers 404 not_found for an unknown task.")
+            .WithDescription("A change that changes nothing writes and audits nothing. A change of the default assignee is audited as its own assign entry. points: null resets the points to the default for the duration (a reset that changes nothing is a no-op). Changed references are checked like on create. Answers 404 not_found for an unknown task.")
             .Accepts<UpdateTaskRequest>("application/json")
             .Produces<TaskResponse>(StatusCodes.Status200OK)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status500InternalServerError);
+
+        routes.MapDelete(Path + "/{id}", DeleteAsync)
+            .RequirePlanner()
+            .WithName("deleteTask")
+            .WithTags(TasksTag)
+            .WithSummary("Deletes a task for good (planners).")
+            .WithDescription("Normally a task is deactivated instead. The delete removes the task's slots from every plan that holds one (each such plan gets an update entry with the removed slots and meta reason task_delete) and the task from the badge rules that name it (a rule left without tasks is deactivated; reason task_deleted), all in one transaction, and records a delete entry that keeps the removed fields. Occurrences, points and history stay: they carry their own snapshot. Answers 404 not_found for an unknown task, which changes nothing, and 400 validation_error on id for a malformed id.")
+            .Produces<TaskDeletedResponse>(StatusCodes.Status200OK)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -171,6 +184,22 @@ public static class TaskEndpoints
         var result = await tasks.UpdateAsync(await ActorOf(http), id, patch, cancellationToken);
         return result.Match(
             task => Results.Ok(TaskResponse.From(task)),
+            ProblemResults.From,
+            ProblemResults.From,
+            ProblemResults.From,
+            error => ProblemResults.From(error, logger));
+    }
+
+    private static async Task<IResult> DeleteAsync(
+        string id,
+        HttpContext http,
+        ITaskService tasks,
+        ILogger<ITaskService> logger,
+        CancellationToken cancellationToken)
+    {
+        var result = await tasks.DeleteAsync(await ActorOf(http), id, cancellationToken);
+        return result.Match(
+            _ => Results.Ok(new TaskDeletedResponse(true)),
             ProblemResults.From,
             ProblemResults.From,
             ProblemResults.From,

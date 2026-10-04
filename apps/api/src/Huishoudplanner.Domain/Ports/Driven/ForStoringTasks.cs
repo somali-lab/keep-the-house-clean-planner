@@ -43,4 +43,10 @@ public interface ForStoringTasks
     /// the occurrence use cases, and only when the value changes.
     /// </summary>
     Task<OneOf<Success, NotFound, PortError>> SetLastCompletedAtAsync(string id, DateTimeOffset? lastCompletedAt, DateTimeOffset updatedAt, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Permanently removes the task; <see cref="NotFound"/> when it is gone (or the id is no id). Written together with its audit entry, and
+    /// after the task has left the plans and badge rules that name it. Occurrences, ledger entries and history keep their own snapshot.
+    /// </summary>
+    Task<OneOf<Success, NotFound, PortError>> DeleteAsync(string id, CancellationToken cancellationToken);
 }

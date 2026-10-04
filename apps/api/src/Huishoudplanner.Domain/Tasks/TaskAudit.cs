@@ -29,6 +29,10 @@ public static class TaskAudit
     public static AuditEntry ForCreate(AuditActor actor, HouseholdTask task) =>
         ChangeSet.Between(null, Fields(task)).ToEntry(actor, AuditEntity.Task, task.Id, AuditAction.Create);
 
+    /// <summary>The entry of a permanent delete (<c>deleteTask</c>): every field as it was, nothing after.</summary>
+    public static AuditEntry ForDelete(AuditActor actor, HouseholdTask task) =>
+        ChangeSet.Between(Fields(task), null).ToEntry(actor, AuditEntity.Task, task.Id, AuditAction.Delete);
+
     /// <summary>
     /// The entries of a change that is not a no-op: an <c>update</c> for the changed fields other than the default assignee (when there
     /// are any), then an <c>assign</c> for the default assignee (when it changed).

@@ -57,6 +57,24 @@ internal sealed class MongoCyclePlanStore : ForStoringCyclePlans
     public Task<OneOf<CyclePlan, NotFound, PortError>> FindDefaultAsync(CancellationToken cancellationToken) =>
         FindOneAsync(FilterDefinition<BsonDocument>.Empty, ListOrder, "find the default plan", cancellationToken);
 
+    public async Task<OneOf<IReadOnlyList<CyclePlan>, PortError>> ListHoldingTaskAsync(string taskId, CancellationToken cancellationToken)
+    {
+        if (!ObjectIdConverter.TryParse(taskId, out var task))
+        {
+            return OneOf<IReadOnlyList<CyclePlan>, PortError>.FromT0([]);
+        }
+
+        try
+        {
+            var documents = await FindFluent(new BsonDocument("slots.taskId", task)).Sort(ListOrder).ToListAsync(cancellationToken).ConfigureAwait(false);
+            return OneOf<IReadOnlyList<CyclePlan>, PortError>.FromT0(documents.ConvertAll(ToPlan));
+        }
+        catch (Exception e) when (IsFailure(e))
+        {
+            return Failed("list the plans holding a task", e);
+        }
+    }
+
     public async Task<OneOf<long, PortError>> CountAsync(CancellationToken cancellationToken)
     {
         try

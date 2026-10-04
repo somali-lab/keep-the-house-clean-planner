@@ -32,6 +32,7 @@ public sealed class EndpointPolicyAuditTests
         ["PUT /api/v2/users/{id}/browser-notifications"] = AuthorizationPolicies.ActorPolicy,
         ["POST /api/v2/tasks"] = AuthorizationPolicies.PlannerPolicy,
         ["PATCH /api/v2/tasks/{id}"] = AuthorizationPolicies.PlannerPolicy,
+        ["DELETE /api/v2/tasks/{id}"] = AuthorizationPolicies.PlannerPolicy,
         ["POST /api/v2/rooms/{id}/tasks/bulk"] = AuthorizationPolicies.PlannerPolicy,
         ["POST /api/v2/cycle-plans"] = AuthorizationPolicies.PlannerPolicy,
         ["PATCH /api/v2/cycle-plans/{id}"] = AuthorizationPolicies.PlannerPolicy,

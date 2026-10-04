@@ -241,6 +241,29 @@ internal sealed class MongoTaskStore : ForStoringTasks
         }
     }
 
+    public async Task<OneOf<Success, NotFound, PortError>> DeleteAsync(string id, CancellationToken cancellationToken)
+    {
+        if (MongoTransactionContext.Session is not { IsInTransaction: true } session)
+        {
+            return NoTransaction();
+        }
+
+        if (!ObjectIdConverter.TryParse(id, out var objectId))
+        {
+            return new NotFound();
+        }
+
+        try
+        {
+            var result = await tasks.DeleteOneAsync(session, new BsonDocument("_id", objectId), cancellationToken: cancellationToken).ConfigureAwait(false);
+            return result.DeletedCount == 1 ? new Success() : new NotFound();
+        }
+        catch (Exception e) when (IsFailure(e))
+        {
+            return Failed("delete", e);
+        }
+    }
+
     public async Task<OneOf<Success, NotFound, PortError>> SetLastCompletedAtAsync(string id, DateTimeOffset? lastCompletedAt, DateTimeOffset updatedAt, CancellationToken cancellationToken)
     {
         if (MongoTransactionContext.Session is not { IsInTransaction: true } session)

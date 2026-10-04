@@ -47,7 +47,10 @@ public sealed record CreateTaskCommand(
 /// <summary>The new value of the default assignee in a patch, where <see langword="null"/> is a value ("anyone"), not "absent".</summary>
 public sealed record AssigneeChoice(string? UserId);
 
-/// <summary>A partial update: only the fields that are set change. The default assignee is wrapped because <c>null</c> is a valid new value.</summary>
+/// <summary>
+/// A partial update: only the fields that are set change. The default assignee is wrapped because <c>null</c> is a valid new value. <see cref="ResetPoints"/>
+/// (an explicit <c>points: null</c>) hands the points back to the default for the duration the task has after the patch; <see cref="Points"/> is then ignored.
+/// </summary>
 public sealed record TaskPatch(
     string? Name = null,
     string? RoomId = null,
@@ -57,7 +60,8 @@ public sealed record TaskPatch(
     AssigneeChoice? DefaultAssignee = null,
     bool? Active = null,
     string? Notes = null,
-    IReadOnlyList<string>? Tags = null);
+    IReadOnlyList<string>? Tags = null,
+    bool ResetPoints = false);
 
 /// <summary>A task as the store is asked to create it (validated, normalised, points resolved). The store assigns the id.</summary>
 public sealed record NewTask(

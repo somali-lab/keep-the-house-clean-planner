@@ -3,11 +3,14 @@ using Huishoudplanner.Application.Tests.Rooms;
 using Huishoudplanner.Application.Tests.Settings;
 using Huishoudplanner.Application.Tests.Users;
 using Huishoudplanner.Domain.Audit;
+using Huishoudplanner.Domain.CyclePlans;
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Identity;
 using Huishoudplanner.Domain.Ports.Driven;
 using Huishoudplanner.Domain.Tasks;
 using Huishoudplanner.Domain.Users;
+using Huishoudplanner.Domain.Ports.Driving;
+using Moq;
 using OneOf;
 using Room = Huishoudplanner.Domain.Rooms.Room;
 
@@ -138,6 +141,22 @@ internal sealed partial class FakeTaskStore : ForStoringTasks
         return Task.FromResult<OneOf<HouseholdTask, NotFound, PortError>>(updated);
     }
 
+    public Task<OneOf<Success, NotFound, PortError>> DeleteAsync(string id, CancellationToken cancellationToken)
+    {
+        if (FailWrites)
+        {
+            return Task.FromResult<OneOf<Success, NotFound, PortError>>(new PortError("fake write failure"));
+        }
+
+        var removed = Items.RemoveAll(t => t.Id == id);
+        if (removed > 0)
+        {
+            Writes++;
+        }
+
+        return Task.FromResult<OneOf<Success, NotFound, PortError>>(removed > 0 ? new Success() : new NotFound());
+    }
+
     public Task<OneOf<int, PortError>> CountInRoomAsync(string roomId, CancellationToken cancellationToken) =>
         Task.FromResult<OneOf<int, PortError>>(
             Failure is { } failure ? failure : Items.Count(t => t.RoomId == roomId) + ExtraTasksPerRoom.GetValueOrDefault(roomId));
@@ -152,7 +171,7 @@ internal sealed partial class FakeTaskStore : ForStoringTasks
 }
 
 /// <summary>Runs the work once; an aborted run restores the tasks and the audit entries, like a rolled back transaction.</summary>
-internal sealed class TaskTransactions(FakeTaskStore tasks, Rooms.FakeAudit audit, Generation.FakeOccurrenceStore occurrences) : ForRunningTransactions
+internal sealed class TaskTransactions(FakeTaskStore tasks, Rooms.FakeAudit audit, Generation.FakeOccurrenceStore occurrences, CyclePlans.FakeCyclePlanStore plans) : ForRunningTransactions
 {
     public int Aborts { get; private set; }
 
@@ -170,6 +189,7 @@ internal sealed class TaskTransactions(FakeTaskStore tasks, Rooms.FakeAudit audi
         var tasksBefore = tasks.Items.ToList();
         var auditBefore = audit.Entries.ToList();
         var occurrencesBefore = occurrences.Items.ToList();
+        var plansBefore = plans.Items.ToList();
         var outcome = await work(cancellationToken);
         if (!outcome.ShouldCommit)
         {
@@ -177,6 +197,7 @@ internal sealed class TaskTransactions(FakeTaskStore tasks, Rooms.FakeAudit audi
             tasks.Items = tasksBefore;
             audit.Entries = auditBefore;
             occurrences.Items = occurrencesBefore;
+            plans.Items = plansBefore;
         }
 
         return outcome.Value;
@@ -202,6 +223,10 @@ internal sealed class TaskWorld
 
     public Generation.FakeOccurrenceStore Occurrences { get; } = new();
 
+    public CyclePlans.FakeCyclePlanStore PlanStore { get; } = new();
+
+    public FakeBadgeRules BadgeRules { get; }
+
     public TaskTransactions Transactions { get; }
 
     public Rooms.FixedClock Clock { get; } = new(Now);
@@ -210,8 +235,9 @@ internal sealed class TaskWorld
 
     public TaskWorld()
     {
-        Transactions = new TaskTransactions(TaskStore, Audit, Occurrences);
-        Service = new TaskService(TaskStore, RoomStore, new FakeUserStore(People), SettingsStore, Occurrences, Transactions, Audit, Clock);
+        BadgeRules = new FakeBadgeRules(Audit);
+        Transactions = new TaskTransactions(TaskStore, Audit, Occurrences, PlanStore);
+        Service = new TaskService(TaskStore, RoomStore, new FakeUserStore(People), SettingsStore, Occurrences, PlanStore, BadgeRules.Service, Transactions, Audit, Clock);
     }
 
     public Room Room(string name, bool active = true)
@@ -223,6 +249,15 @@ internal sealed class TaskWorld
 
     public User Person(string name, bool active = true) => People.Add(name, Role.Member, active);
 
+    /// <summary>A plan in the plan store; plans are created in call order, one minute apart.</summary>
+    public CyclePlan SeedPlan(string name, bool active, params CyclePlanSlot[] slots)
+    {
+        var created = Now.AddDays(-10).AddMinutes(PlanStore.Items.Count);
+        var plan = new CyclePlan(PlanStore.NextId(), name, active, slots, ["", "", "", ""], false, PlanSources.Manual, null, null, false, created, created);
+        PlanStore.Items.Add(plan);
+        return plan;
+    }
+
     public HouseholdTask Seed(string name, string roomId, string intervalKey = "1w", int minutes = 30, bool active = true, string? assignee = null)
     {
         var task = new HouseholdTask(TaskStore.NextId(), name, roomId, intervalKey, minutes, minutes, assignee, active, string.Empty, [], null, Now.AddDays(-1), Now.AddDays(-1));
@@ -232,4 +267,43 @@ internal sealed class TaskWorld
 
     public static CreateTaskCommand Command(string roomId, string name = "Badkamer schoonmaken", string intervalKey = "1w", int minutes = 30) =>
         new(name, roomId, intervalKey, minutes);
+}
+
+/// <summary>
+/// The badge side of a task delete: <see cref="IBadgeService.RemoveTaskFromRulesAsync"/> records the task ids it was asked about and, like the
+/// real use case, writes one <c>badge</c> audit entry per call (so a rollback of the delete must take it back), or fails on demand.
+/// </summary>
+internal sealed class FakeBadgeRules
+{
+    private readonly Mock<IBadgeService> badges = new(MockBehavior.Strict);
+
+    public FakeBadgeRules(Rooms.FakeAudit audit)
+    {
+        badges
+            .Setup(b => b.RemoveTaskFromRulesAsync(It.IsAny<Actor>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns((Actor actor, string taskId, CancellationToken _) =>
+            {
+                Calls.Add(taskId);
+                if (Failure is { } failure)
+                {
+                    return Task.FromResult<OneOf<Success, ValidationErrors, ConflictError, PortError>>(failure);
+                }
+
+                audit.Entries.Add(new AuditEntry(
+                    AuditActor.From(actor),
+                    AuditEntity.Badge,
+                    "0123456789abcdef0123456b",
+                    AuditAction.Update,
+                    AuditObject.Empty,
+                    AuditObject.Empty,
+                    AuditObject.Of(("reason", "task_deleted"), ("taskId", new AuditObjectId(taskId)))));
+                return Task.FromResult<OneOf<Success, ValidationErrors, ConflictError, PortError>>(new Success());
+            });
+    }
+
+    public IBadgeService Service => badges.Object;
+
+    public List<string> Calls { get; } = [];
+
+    public PortError? Failure { get; set; }
 }

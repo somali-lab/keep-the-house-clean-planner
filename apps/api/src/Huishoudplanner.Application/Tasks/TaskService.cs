@@ -1,5 +1,6 @@
 using Huishoudplanner.Domain.Audit;
 using Huishoudplanner.Domain.Calendar;
+using Huishoudplanner.Domain.CyclePlans;
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Identity;
 using Huishoudplanner.Domain.Limits;
@@ -20,6 +21,8 @@ public sealed class TaskService(
     ForStoringUsers users,
     ForStoringSettings settings,
     ForStoringOccurrences occurrences,
+    ForStoringCyclePlans plans,
+    IBadgeService badges,
     ForRunningTransactions transactions,
     ForRecordingAudit audit,
     TimeProvider time) : ITaskService
@@ -237,6 +240,102 @@ public sealed class TaskService(
         return updated.Match<OneOf<Success, PortError>>(_ => new Success(), error => error);
     }
 
+    public async Task<OneOf<Success, NotFound, ValidationErrors, ConflictError, PortError>> DeleteAsync(Actor actor, string id, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(actor);
+        if (!TaskRules.IsId(id))
+        {
+            return ValidationErrors.For("id", "invalid_object_id");
+        }
+
+        var ran = await transactions.RunAsync(ct => DeleteInTransactionAsync(actor, id, ct), cancellationToken).ConfigureAwait(false);
+        return ran.Match<OneOf<Success, NotFound, ValidationErrors, ConflictError, PortError>>(
+            outcome => outcome.Match<OneOf<Success, NotFound, ValidationErrors, ConflictError, PortError>>(
+                done => done, notFound => notFound, conflict => conflict, error => error),
+            conflict => conflict,
+            error => error);
+    }
+
+    /// <summary>
+    /// Port of the delete route, <c>removeTaskFromPlans</c>, <c>deleteTask</c> and <c>removeTaskFromBadgeRules</c>, in this order and in one transaction (the Node
+    /// server ran them one after the other): the plans, the task, then the badge rules, whose use case joins this transaction. Occurrences stay as
+    /// they are.
+    /// </summary>
+    private async Task<TransactionOutcome<OneOf<Success, NotFound, ConflictError, PortError>>> DeleteInTransactionAsync(Actor actor, string id, CancellationToken ct)
+    {
+        static TransactionOutcome<OneOf<Success, NotFound, ConflictError, PortError>> Abort(OneOf<Success, NotFound, ConflictError, PortError> value) =>
+            TransactionOutcome.Abort(value);
+
+        var found = await tasks.FindAsync(id, ct).ConfigureAwait(false);
+        if (found.TryPickT1(out var notFound, out var foundRest))
+        {
+            return Abort(notFound);
+        }
+
+        if (foundRest.TryPickT1(out var findError, out var task))
+        {
+            return Abort(findError);
+        }
+
+        var actorForAudit = AuditActor.From(actor);
+        var holding = await plans.ListHoldingTaskAsync(task.Id, ct).ConfigureAwait(false);
+        if (holding.TryPickT1(out var listError, out var held))
+        {
+            return Abort(listError);
+        }
+
+        foreach (var plan in held)
+        {
+            var remaining = CyclePlanSlots.Sort(plan.Slots.Where(slot => slot.TaskId != task.Id));
+            var diff = CyclePlanSlots.Diff(plan.Slots, remaining);
+            if (diff.IsEmpty)
+            {
+                continue;
+            }
+
+            var replaced = await plans.ReplaceSlotsAsync(plan.Id, remaining, time.GetUtcNow(), ct).ConfigureAwait(false);
+            if (replaced.TryPickT1(out var gone, out var replacedRest))
+            {
+                return Abort(gone);
+            }
+
+            if (replacedRest.TryPickT1(out var replaceError, out _))
+            {
+                return Abort(replaceError);
+            }
+
+            var recordedPlan = await audit.RecordAsync(CyclePlanAudit.ForTaskDelete(actorForAudit, plan.Id, task.Id, diff), ct).ConfigureAwait(false);
+            if (recordedPlan.TryPickT1(out var planAuditError, out _))
+            {
+                return Abort(planAuditError);
+            }
+        }
+
+        var deleted = await tasks.DeleteAsync(task.Id, ct).ConfigureAwait(false);
+        if (deleted.TryPickT1(out var vanished, out var deletedRest))
+        {
+            return Abort(vanished);
+        }
+
+        if (deletedRest.TryPickT1(out var deleteError, out _))
+        {
+            return Abort(deleteError);
+        }
+
+        var recorded = await audit.RecordAsync(TaskAudit.ForDelete(actorForAudit, task), ct).ConfigureAwait(false);
+        if (recorded.TryPickT1(out var auditError, out _))
+        {
+            return Abort(auditError);
+        }
+
+        var rules = await badges.RemoveTaskFromRulesAsync(actor, task.Id, ct).ConfigureAwait(false);
+        return rules.Match(
+            _ => TransactionOutcome.Commit<OneOf<Success, NotFound, ConflictError, PortError>>(new Success()),
+            rejected => Abort(new PortError("tasks.delete: the badge rules rejected the task id: " + string.Join(", ", rejected.Errors.Keys))),
+            conflict => Abort(conflict),
+            error => Abort(error));
+    }
+
     public async Task<OneOf<int, NotFound, ValidationErrors, ConflictError, PortError>> BulkUpdateRoomAsync(Actor actor, string roomId, BulkRoomChange change, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(actor);
@@ -417,7 +516,9 @@ public sealed class TaskService(
         RoomId = patch.RoomId ?? before.RoomId,
         IntervalKey = patch.IntervalKey ?? before.IntervalKey,
         DurationMinutes = patch.DurationMinutes ?? before.DurationMinutes,
-        Points = patch.Points ?? before.Points,
+        Points = patch.ResetPoints
+            ? TaskPoints.DefaultForDuration(patch.DurationMinutes ?? before.DurationMinutes)
+            : patch.Points ?? before.Points,
         DefaultAssigneeId = patch.DefaultAssignee is { } choice ? choice.UserId : before.DefaultAssigneeId,
         Active = patch.Active ?? before.Active,
         Notes = patch.Notes ?? before.Notes,

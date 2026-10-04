@@ -52,4 +52,20 @@ public sealed class TaskAuditTests
         change.IsNoOp.Should().BeFalse();
         TaskAudit.ForChange(Actor, TaskId, change).Single().After["tags"].Should().Be(AuditArray.Of("nat"));
     }
+
+    [Fact]
+    public void ForDelete_keepsTheRemovedFields_withoutIdAndTimestamps_andLeavesAfterEmpty()
+    {
+        var entry = TaskAudit.ForDelete(Actor, Task(Person) with { Tags = ["nat"] });
+
+        entry.Entity.Should().Be(AuditEntity.Task);
+        entry.EntityId.Should().Be(TaskId);
+        entry.Action.Should().Be(AuditAction.Delete);
+        entry.After.Keys.Should().BeEmpty();
+        entry.Before["name"].Should().Be(AuditValue.FromString("Badkamer"));
+        entry.Before["defaultAssigneeId"].Should().Be(new AuditObjectId(Person));
+        entry.Before["tags"].Should().Be(AuditArray.Of("nat"));
+        entry.Before.Keys.Should().NotContain(["createdAt", "updatedAt", "_id", "id"]);
+        entry.Meta.Should().BeNull();
+    }
 }

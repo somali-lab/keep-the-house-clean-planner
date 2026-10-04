@@ -40,14 +40,15 @@ internal static class TaskRequestParser
         var roomId = ReadString(body, "roomId", required: false, errors);
         var intervalKey = ReadString(body, "intervalKey", required: false, errors);
         var duration = ReadInteger(body, "durationMinutes", required: false, errors);
-        var points = ReadInteger(body, "points", required: false, errors);
+        var resetPoints = body.TryGetProperty("points", out var pointsValue) && pointsValue.ValueKind == JsonValueKind.Null;
+        var points = resetPoints ? null : ReadInteger(body, "points", required: false, errors);
         var assignee = ReadNullableString(body, "defaultAssigneeId", errors);
         var active = ReadBoolean(body, "active", errors);
         var notes = ReadString(body, "notes", required: false, errors);
         var tags = ReadTags(body, errors);
         return errors.Count > 0
             ? new ValidationErrors(errors)
-            : new TaskPatch(name, roomId, intervalKey, duration, points, assignee, active, notes, tags);
+            : new TaskPatch(name, roomId, intervalKey, duration, points, assignee, active, notes, tags, resetPoints);
     }
 
     public static OneOf<BulkRoomChange, ValidationErrors> ParseBulk(JsonElement body)

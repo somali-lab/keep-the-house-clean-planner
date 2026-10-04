@@ -170,12 +170,16 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Deletes a task for good (planners).
+         * @description Normally a task is deactivated instead. The delete removes the task's slots from every plan that holds one (each such plan gets an update entry with the removed slots and meta reason task_delete) and the task from the badge rules that name it (a rule left without tasks is deactivated; reason task_deleted), all in one transaction, and records a delete entry that keeps the removed fields. Occurrences, points and history stay: they carry their own snapshot. Answers 404 not_found for an unknown task, which changes nothing, and 400 validation_error on id for a malformed id.
+         */
+        delete: operations["deleteTask"];
         options?: never;
         head?: never;
         /**
          * Changes a task, or deactivates one with active=false (planners).
-         * @description A change that changes nothing writes and audits nothing. A change of the default assignee is audited as its own assign entry. Changed references are checked like on create. Answers 404 not_found for an unknown task.
+         * @description A change that changes nothing writes and audits nothing. A change of the default assignee is audited as its own assign entry. points: null resets the points to the default for the duration (a reset that changes nothing is a no-op). Changed references are checked like on create. Answers 404 not_found for an unknown task.
          */
         patch: operations["updateTask"];
         trace?: never;
@@ -2821,6 +2825,9 @@ export interface components {
             removed: number | string;
             generated: components["schemas"]["GenerationResultResponse"][];
         };
+        TaskDeletedResponse: {
+            deleted: boolean;
+        };
         TaskLimits: {
             /** Format: int32 */
             minPoints?: number | string;
@@ -2918,7 +2925,10 @@ export interface components {
             intervalKey: null | string;
             /** Format: int32 */
             durationMinutes: null | number | string;
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description A whole number from 0 to 1000. Left out: unchanged. null: reset to the default for the duration the task has after the change (one point per minute, at least 1 and at most 1000).
+             */
             points: null | number | string;
             /** @description An active person, or null for anyone. A change is audited as its own assign entry. */
             defaultAssigneeId: null | string;
@@ -3605,6 +3615,73 @@ export interface operations {
             };
             /** @description Forbidden */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    deleteTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskDeletedResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
