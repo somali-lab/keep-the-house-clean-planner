@@ -70,7 +70,7 @@ The number of users is configuration, not an assumption in the code. A fresh ins
 _id, name, sortOrder, active, virtual
 ```
 
-A fresh installation includes a `virtual` room for house-wide work that belongs to no single space.
+A fresh installation (an empty rooms collection) seeds the rooms Keuken, Badkamer, Toilet, Woonkamer, Slaapkamer and Hal with sort order 10 to 60, and the `virtual` room "Hele huis" (sort order 70) for house-wide work that belongs to no single space. Each is created as a `create` entry of the system actor in one transaction; a start with rooms present creates nothing.
 
 ### `tasks`
 
