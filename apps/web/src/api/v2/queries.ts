@@ -7,7 +7,16 @@ import { collectPages } from './paging.ts';
 
 /** The limits and defaults the web app needs from the server (`GET /api/v2/meta/limits`). */
 export interface Limits {
-  calendar: { maxRangeDays: number };
+  calendar: { maxRangeDays: number; cycleDays: number };
+  points: { maxRedemptionNoteLength: number; maxEntriesRangeDays: number };
+  badges: {
+    maxNameLength: number;
+    maxDescriptionLength: number;
+    maxImageBytes: number;
+    imageTypes: string[];
+    maxThreshold: number;
+    maxOnTimeWeeksThreshold: number;
+  };
   tasks: {
     minPoints: number;
     maxPoints: number;
@@ -29,7 +38,19 @@ export function useLimits() {
       const { data } = await unwrap(apiV2.GET('/api/v2/meta/limits'));
       const tasks = data.tasks;
       return {
-        calendar: { maxRangeDays: toInt(data.calendar?.maxRangeDays ?? 371) },
+        calendar: { maxRangeDays: toInt(data.calendar?.maxRangeDays ?? 371), cycleDays: toInt(data.calendar?.cycleDays ?? 28) },
+        points: {
+          maxRedemptionNoteLength: toInt(data.points?.maxRedemptionNoteLength ?? 200),
+          maxEntriesRangeDays: toInt(data.points?.maxEntriesRangeDays ?? 371),
+        },
+        badges: {
+          maxNameLength: toInt(data.badges?.maxNameLength ?? 60),
+          maxDescriptionLength: toInt(data.badges?.maxDescriptionLength ?? 200),
+          maxImageBytes: toInt(data.badges?.maxImageBytes ?? 256 * 1024),
+          imageTypes: data.badges?.imageTypes ?? ['image/png', 'image/jpeg', 'image/webp'],
+          maxThreshold: toInt(data.badges?.maxThreshold ?? 100_000),
+          maxOnTimeWeeksThreshold: toInt(data.badges?.maxOnTimeWeeksThreshold ?? 1000),
+        },
         tasks: {
           minPoints: toInt(tasks?.minPoints ?? 0),
           maxPoints: toInt(tasks?.maxPoints ?? 1000),

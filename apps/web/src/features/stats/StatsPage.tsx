@@ -1,4 +1,3 @@
-import type { IntervalRow, StatsGroupBy, UserWorkload, WorkloadCycle } from '@huishoudplanner/shared';
 import { Award, CalendarClock, CalendarX, ChartColumnBig, CircleCheck, Clock, Hourglass, ListChecks, Scale, Trash2, TrendingUp } from 'lucide-react';
 import { useId, useState, type ReactNode } from 'react';
 import { EmptyState } from '@/components/EmptyState';
@@ -11,11 +10,23 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { panelTabsListClass, panelTabsTriggerClass, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
-import { useRooms, useSettings, useTasks, useUsers } from '../../api/queries.ts';
+import { useSettings, useUsers } from '../../api/queries.ts';
+import { useRooms, useTasks } from '../../api/v2/queries.ts';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
 import { usePersistedFilter } from '../../hooks/usePersistedFilter.ts';
-import { useCompletion, useDeviations, useIntervals, useResetStatistics, useWorkload, type StatsPeriod } from './api.ts';
+import {
+  useCompletion,
+  useDeviations,
+  useIntervals,
+  useResetStatistics,
+  useWorkload,
+  type IntervalRow,
+  type StatsGroupBy,
+  type StatsPeriod,
+  type UserWorkload,
+  type WorkloadCycle,
+} from './api.ts';
 import { statsTableClass } from './ChartFrame.tsx';
 import { PointsSection } from './PointsSection.tsx';
 import { FairnessBars, type FairnessRow } from './FairnessBars.tsx';
@@ -123,8 +134,8 @@ export function StatsPage({ now }: { now?: Date } = {}) {
     id === null ? t('tasks.anyone') : (users.data?.find((u) => u._id === id)?.name ?? t('tasks.unknownUser'));
 
   const taskWithRoom = (taskId: string | null, taskName: string) => {
-    const task = tasks.data?.find((item) => item._id === taskId);
-    const room = rooms.data?.find((item) => item._id === task?.roomId);
+    const task = tasks.data?.find((item) => item.id === taskId);
+    const room = rooms.data?.find((item) => item.id === task?.roomId);
     return (
       <span className="grid gap-0.5">
         <span>{taskName}</span>

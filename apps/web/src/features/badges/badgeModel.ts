@@ -1,16 +1,11 @@
-import type { Badge, BadgeProgressItem, CreateBadgeInput, UpdateBadgeInput } from '@huishoudplanner/shared';
-import {
-  BADGE_IMAGE_TYPES,
-  MAX_BADGE_DESCRIPTION_LENGTH,
-  MAX_BADGE_IMAGE_BYTES,
-  MAX_BADGE_NAME_LENGTH,
-  MAX_BADGE_THRESHOLD,
-  MAX_ON_TIME_WEEKS_THRESHOLD,
-  sniffBadgeImageType,
-  type BadgeImageType,
-  type BadgeRuleType,
-} from '@huishoudplanner/shared/badges';
+import type { Limits } from '../../api/v2/queries.ts';
 import type { MessageKey } from '../../i18n/nl.ts';
+import type { Badge, BadgeProgressItem, BadgeRule, BadgeRuleType, CreateBadgeBody, UpdateBadgeBody } from './api.ts';
+
+export type BadgeLimits = Limits['badges'];
+
+/** The picture types a badge accepts (the server's `badges.imageTypes`). */
+export type BadgeImageType = string;
 
 /** What the person did with the image in the editor: nothing, chose a new one, or removed it. */
 export type ImageDraft =
@@ -55,27 +50,25 @@ export function formFromBadge(badge: Badge): BadgeForm {
   };
 }
 
-/** Whether a chosen file can be an image of a badge, judged by what the browser reports; the real bytes are checked on reading. */
-export function checkImageFile(file: { type: string; size: number }): 'badges.error.imageType' | 'badges.error.imageSize' | null {
-  if (!(BADGE_IMAGE_TYPES as readonly string[]).includes(file.type)) return 'badges.error.imageType';
-  if (file.size > MAX_BADGE_IMAGE_BYTES) return 'badges.error.imageSize';
+/**
+ * Whether a chosen file can be an image of a badge, judged by what the browser reports and by the limits of the server. The bytes
+ * themselves are checked by the server, which answers `unsupported_image_type` for a file that only pretends to be an image.
+ */
+export function checkImageFile(
+  file: { type: string; size: number },
+  limits: Pick<BadgeLimits, 'imageTypes' | 'maxImageBytes'>,
+): 'badges.error.imageType' | 'badges.error.imageSize' | null {
+  if (!limits.imageTypes.includes(file.type)) return 'badges.error.imageType';
+  if (file.size > limits.maxImageBytes) return 'badges.error.imageSize';
   return null;
 }
 
-/** Decodes base64 into bytes. */
-function fromBase64(data: string): Uint8Array {
-  const text = atob(data);
-  return Uint8Array.from(text, (char) => char.charCodeAt(0));
-}
-
-/**
- * Reads a chosen file as base64, and checks the first bytes against what the file says it is: a text file renamed to
- * .png is refused here, like the server would refuse it (an SVG never passes).
- */
+/** Reads a chosen file as base64 after the early checks of `checkImageFile`. */
 export async function readImageFile(
   file: File,
+  limits: Pick<BadgeLimits, 'imageTypes' | 'maxImageBytes'>,
 ): Promise<{ ok: true; contentType: BadgeImageType; data: string } | { ok: false; error: NonNullable<ReturnType<typeof checkImageFile>> | 'badges.error.imageRead' }> {
-  const early = checkImageFile(file);
+  const early = checkImageFile(file, limits);
   if (early) return { ok: false, error: early };
   let data: string;
   try {
@@ -93,46 +86,45 @@ export async function readImageFile(
   } catch {
     return { ok: false, error: 'badges.error.imageRead' };
   }
-  const type = sniffBadgeImageType(fromBase64(data));
-  if (type === null || type !== file.type) return { ok: false, error: 'badges.error.imageType' };
-  return { ok: true, contentType: type, data };
+  return { ok: true, contentType: file.type, data };
 }
 
-export function maxThreshold(ruleType: BadgeRuleType): number {
-  return ruleType === 'onTimeWeeks' ? MAX_ON_TIME_WEEKS_THRESHOLD : MAX_BADGE_THRESHOLD;
+export function maxThreshold(ruleType: BadgeRuleType, limits: Pick<BadgeLimits, 'maxThreshold' | 'maxOnTimeWeeksThreshold'>): number {
+  return ruleType === 'onTimeWeeks' ? limits.maxOnTimeWeeksThreshold : limits.maxThreshold;
 }
 
 /** A whole number of 1 or more from the text of the threshold field, or null. */
-export function parseThreshold(text: string, ruleType: BadgeRuleType): number | null {
+export function parseThreshold(text: string, ruleType: BadgeRuleType, limits: Pick<BadgeLimits, 'maxThreshold' | 'maxOnTimeWeeksThreshold'>): number | null {
   const trimmed = text.trim();
   if (!/^\d{1,9}$/.test(trimmed)) return null;
   const value = Number(trimmed);
-  return value >= 1 && value <= maxThreshold(ruleType) ? value : null;
+  return value >= 1 && value <= maxThreshold(ruleType, limits) ? value : null;
 }
 
 export type BadgeSave =
-  | { ok: true; create: CreateBadgeInput; patch: UpdateBadgeInput }
+  | { ok: true; create: CreateBadgeBody; patch: UpdateBadgeBody }
   | { ok: false; errors: BadgeFormErrors };
 
 /**
  * Checks the editor against what the server accepts and builds the request: the whole badge for a new one, and for an
- * existing one only the image when it was changed (a kept image is left out, a removed one is null).
+ * existing one only the image when it was changed (a kept image is left out, a removed one is null: the one place where the API
+ * documents an explicit null). Optional keys are never sent as null.
  */
-export function buildBadgeSave(form: BadgeForm): BadgeSave {
+export function buildBadgeSave(form: BadgeForm, limits: BadgeLimits): BadgeSave {
   const errors: BadgeFormErrors = {};
   const name = form.name.trim();
-  if (name.length < 1 || name.length > MAX_BADGE_NAME_LENGTH) errors.name = 'badges.error.name';
+  if (name.length < 1 || name.length > limits.maxNameLength) errors.name = 'badges.error.name';
   const description = form.description.trim();
-  if (description.length > MAX_BADGE_DESCRIPTION_LENGTH) errors.description = 'badges.error.description';
-  const threshold = parseThreshold(form.threshold, form.ruleType);
+  if (description.length > limits.maxDescriptionLength) errors.description = 'badges.error.description';
+  const threshold = parseThreshold(form.threshold, form.ruleType, limits);
   if (threshold === null) errors.threshold = 'badges.error.threshold';
   if (Object.keys(errors).length > 0 || threshold === null) return { ok: false, errors };
 
-  const rule: CreateBadgeInput['rule'] =
+  const rule: CreateBadgeBody['rule'] =
     form.ruleType === 'onTimeWeeks' ? { type: 'onTimeWeeks', threshold } : { type: form.ruleType, taskIds: [...form.taskIds].sort(), threshold };
   const image = form.image.kind === 'new' ? { contentType: form.image.contentType, data: form.image.data } : undefined;
-  const create: CreateBadgeInput = { name, description, rule, active: form.active, ...(image ? { image } : {}) };
-  const patch: UpdateBadgeInput = {
+  const create: CreateBadgeBody = { name, description, rule, active: form.active, ...(image ? { image } : {}) };
+  const patch: UpdateBadgeBody = {
     name,
     description,
     rule,
@@ -157,7 +149,7 @@ export interface RuleText {
 const MAX_NAMED_TASKS = 3;
 
 /** What a rule counts, with the names of its tasks (unknown tasks are left out, so a deleted task never shows as an id). */
-export function ruleText(rule: Badge['rule'], taskNames: ReadonlyMap<string, string>): RuleText {
+export function ruleText(rule: BadgeRule, taskNames: ReadonlyMap<string, string>): RuleText {
   if (rule.type === 'onTimeWeeks') return { key: 'badges.rule.onTimeWeeks', count: rule.threshold, tasks: [] };
   return {
     key: rule.type === 'executions' ? 'badges.rule.executions' : 'badges.rule.minutes',
@@ -187,7 +179,7 @@ export function badgesWithProgress(badges: Badge[], items: BadgeProgressItem[]):
   const views = badges
     .filter((badge) => badge.active)
     .map((badge) => {
-      const item = byBadge.get(badge._id);
+      const item = byBadge.get(badge.id);
       return { badge, current: item?.current ?? 0, threshold: item?.threshold ?? badge.rule.threshold, awardedAt: item?.awardedAt ?? null };
     });
   const earned = views.filter((view) => view.awardedAt !== null).sort((a, b) => a.awardedAt!.localeCompare(b.awardedAt!));

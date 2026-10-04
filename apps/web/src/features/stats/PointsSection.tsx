@@ -1,11 +1,12 @@
-import { formatCents } from '@huishoudplanner/shared/points';
 import { Award, Gift, HandCoins, Undo2 } from 'lucide-react';
 import { useId, useState } from 'react';
 import { NativeSelect } from '@/components/NativeSelect';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { formatMoney } from '@/lib/money';
 import { ApiRequestError } from '../../api/index.ts';
 import { useSettings, useUsers } from '../../api/queries.ts';
+import { useCalendar, useLimits } from '../../api/v2/queries.ts';
 import { format, t } from '../../i18n/nl.ts';
 import { getLocale } from '../../i18n/runtime.ts';
 import { useProfile } from '../../identity/index.ts';
@@ -14,7 +15,7 @@ import { dayKeyInZone } from '@/lib/dayKey';
 import { useAllTimeBalances, usePointsBalances, usePointsEntries, useUndoRedemption, type StatsPeriod } from './api.ts';
 import { statsTableClass } from './ChartFrame.tsx';
 import { bonusText } from './bonusText.ts';
-import { bonusLabel, canUndoRedemption, pointsRange } from './pointsModel.ts';
+import { bonusLabel, canUndoRedemption, isoWeekNumber, pointsRange } from './pointsModel.ts';
 import { RedeemDialog } from './RedeemDialog.tsx';
 import { formatNumber } from './scale.ts';
 
@@ -41,9 +42,14 @@ export function PointsSection({ period, now }: { period: StatsPeriod; now?: Date
   const undo = useUndoRedemption();
   const allTime = useAllTimeBalances();
 
-  const range = settings.data
-    ? pointsRange(period, settings.data.cycleAnchorDate, dayKeyInZone(now ?? new Date(), settings.data.timezone))
-    : null;
+  const todayKey = settings.data ? dayKeyInZone(now ?? new Date(), settings.data.timezone) : '';
+  // Where today falls in the weeks and cycles is the server's to say: the window is laid back from that day.
+  const today = useCalendar(todayKey, todayKey, settings.isSuccess);
+  const limits = useLimits();
+  const todayDay = today.data?.get(todayKey);
+  const range = todayDay && limits.data ? pointsRange(period, todayDay, limits.data.calendar.cycleDays) : null;
+  // The calendar of the window gives the ISO week number a week bonus is named after.
+  const windowCalendar = useCalendar(range?.from ?? '', range?.to ?? '', range !== null);
   const balances = usePointsBalances(range);
 
   const nameOf = (id: string) => users.data?.find((user) => user._id === id)?.name ?? t('tasks.unknownUser');
@@ -56,9 +62,8 @@ export function PointsSection({ period, now }: { period: StatsPeriod; now?: Date
       ? chosen
       : ((rows.find((row) => row.personId === profile?._id) ?? rows[0])?.personId ?? null);
   const entries = usePointsEntries(personId, range);
-  const todayKey = settings.data ? dayKeyInZone(now ?? new Date(), settings.data.timezone) : '';
 
-  if (settings.isError || balances.isError) {
+  if (settings.isError || today.isError || limits.isError || windowCalendar.isError || balances.isError) {
     return (
       <p role="alert" className="rounded-xl bg-destructive/10 p-4 text-destructive">
         {t('stats.points.error')}
@@ -76,10 +81,11 @@ export function PointsSection({ period, now }: { period: StatsPeriod; now?: Date
   const earned = rows.some((row) => row.executions > 0 || row.points !== 0 || row.redeemed > 0);
   const centsPerPoint = balances.data?.centsPerPoint ?? 0;
   const currencyCode = balances.data?.currencyCode ?? 'EUR';
-  const money = (cents: number, currency: string = currencyCode) => formatCents(cents, currency, getLocale());
+  const money = (cents: number, currency: string = currencyCode) => formatMoney(cents, currency, getLocale());
   /** The balance over the whole ledger, the number the redeem dialog works with; a dash until it is known. */
   const allTimeOf = (id: string) => allTime.data?.balances.find((balance) => balance.personId === id);
-  const hasRedemptions = entries.data?.entries.some((entry) => entry.kind === 'redemption') ?? false;
+  const hasRedemptions = entries.data?.some((entry) => entry.kind === 'redemption') ?? false;
+  const weekOf = (dayKey: string) => isoWeekNumber(windowCalendar.data?.get(dayKey)?.isoWeek) ?? 0;
 
   const undoRedemption = (id: string) => {
     setMessage(null);
@@ -164,7 +170,7 @@ export function PointsSection({ period, now }: { period: StatsPeriod; now?: Date
                   <td className="tabular-nums">{formatNumber(row.executions)}</td>
                   <td className="tabular-nums">{formatNumber(row.bonusPoints)}</td>
                   <td className="tabular-nums">{formatNumber(row.redeemed)}</td>
-                  {centsPerPoint > 0 && <td className="tabular-nums">{money(row.money?.balance ?? row.points * centsPerPoint)}</td>}
+                  {centsPerPoint > 0 && <td className="tabular-nums">{money(row.money?.balance ?? 0)}</td>}
                   <td className="font-bold tabular-nums">{allTime.data ? formatNumber(allTimeOf(row.personId)?.points ?? 0) : '—'}</td>
                   {centsPerPoint > 0 && (
                     <td className="tabular-nums">
@@ -196,7 +202,7 @@ export function PointsSection({ period, now }: { period: StatsPeriod; now?: Date
             <p role="alert" className="rounded-xl bg-destructive/10 p-4 text-destructive">
               {t('stats.points.error')}
             </p>
-          ) : entries.data && !entries.isPlaceholderData && entries.data.entries.length > 0 ? (
+          ) : entries.data && windowCalendar.data && !entries.isPlaceholderData && entries.data.length > 0 ? (
             <div className="overflow-x-auto">
               <table className={statsTableClass}>
                 <caption>{format('stats.points.entries', { name: nameOf(personId) })}</caption>
@@ -209,11 +215,11 @@ export function PointsSection({ period, now }: { period: StatsPeriod; now?: Date
                   </tr>
                 </thead>
                 <tbody>
-                  {entries.data.entries.map((entry) => {
-                    const bonus = bonusLabel(entry);
+                  {entries.data.map((entry) => {
+                    const bonus = entry.periodStart === null ? null : bonusLabel(entry, weekOf(entry.periodStart));
                     const redemption = entry.kind === 'redemption';
                     return (
-                    <tr key={entry._id}>
+                    <tr key={entry.id}>
                       <th scope="row" className="whitespace-nowrap">
                         {longDate(entry.date)}
                       </th>
@@ -251,7 +257,7 @@ export function PointsSection({ period, now }: { period: StatsPeriod; now?: Date
                               className="rounded-full"
                               disabled={undo.isPending}
                               aria-label={format('stats.points.undoLabel', { amount: -entry.amount })}
-                              onClick={() => undoRedemption(entry._id)}
+                              onClick={() => undoRedemption(entry.id)}
                             >
                               <Undo2 aria-hidden="true" />
                               {t('stats.points.undo')}
@@ -267,7 +273,7 @@ export function PointsSection({ period, now }: { period: StatsPeriod; now?: Date
             </div>
           ) : (
             <p className={noneClass}>
-              {entries.isPending || entries.isPlaceholderData ? t('app.loading') : format('stats.points.noEntries', { name: nameOf(personId) })}
+              {entries.isPending || entries.isPlaceholderData || !windowCalendar.data ? t('app.loading') : format('stats.points.noEntries', { name: nameOf(personId) })}
             </p>
           )}
           <PersonBadges personId={personId} title={format('badges.of', { name: nameOf(personId) })} />

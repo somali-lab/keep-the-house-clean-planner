@@ -2,7 +2,7 @@ import type { AuditEntry } from '@huishoudplanner/shared';
 import { format, hasMessage, t, type MessageKey } from '../../i18n/nl.ts';
 import { getLocale } from '../../i18n/runtime.ts';
 import { bonusText } from '../stats/bonusText.ts';
-import { bonusLabelOfKey } from '../stats/pointsModel.ts';
+import { bonusLabelOfKey } from './bonusKey.ts';
 
 export const SYSTEM_ACTOR_ID = '000000000000000000000000';
 

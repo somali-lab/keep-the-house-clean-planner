@@ -1,15 +1,10 @@
-import type { PointsProgressResponse, RewardPeriod } from '@huishoudplanner/shared';
-import { eggsForPercent, REWARD_EGG_COUNT } from '@huishoudplanner/shared/rewards';
+import type { RewardPeriod, RewardProgress } from './api.ts';
 
 export type { RewardPeriod };
 export const REWARD_PERIODS: RewardPeriod[] = ['week', 'cycle'];
 
-/** Number of eggs of the meter and how many are in the basket for a percentage: one per full 10% (requirements 4.12). */
-export const EGG_COUNT = REWARD_EGG_COUNT;
-export const eggsInBasket = eggsForPercent;
-
 /** The meter has a goal and it is met. A period without a goal never counts as reached. */
-export function goalReached(progress: Pick<PointsProgressResponse, 'goalPoints' | 'percent'>): boolean {
+export function goalReached(progress: Pick<RewardProgress, 'goalPoints' | 'percent'>): boolean {
   return progress.goalPoints !== null && progress.percent >= 100;
 }
 
@@ -69,7 +64,7 @@ export function markCelebrated(key: string, storage: CelebrationStorage | null =
 }
 
 /** True when the day is outside the period the progress was read for: the week or cycle rolled over and the data is stale. */
-export function periodRolledOver(progress: Pick<PointsProgressResponse, 'start' | 'end'>, todayKey: string): boolean {
+export function periodRolledOver(progress: Pick<RewardProgress, 'start' | 'end'>, todayKey: string): boolean {
   return todayKey < progress.start || todayKey > progress.end;
 }
 

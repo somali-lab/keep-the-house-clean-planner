@@ -80,9 +80,9 @@ describe('app shell', () => {
       '/api/occurrences': [],
       ...v2Basics(),
       '/api/v2/occurrences': page([]),
-      '/api/points/progress': makeProgress({ personId: ANNA._id }),
-      '/api/badges': { badges: [] },
-      '/api/badges/progress': { personId: ANNA._id, items: [] },
+      '/api/v2/points/progress': makeProgress({ personId: ANNA._id }),
+      '/api/v2/badges': page([]),
+      '/api/v2/badges/progress': { personId: ANNA._id, items: [] },
     });
     render(<App queryClient={testQueryClient()} />);
     fireEvent.click(await screen.findByRole('link', { name: 'Beloning' }));

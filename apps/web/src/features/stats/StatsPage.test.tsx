@@ -1,17 +1,13 @@
-import type {
-  CompletionResponse,
-  DeviationsResponse,
-  IntervalsResponse,
-  PointEntryView,
-  PointsBalancesResponse,
-  PointsEntriesResponse,
-  WorkloadResponse,
-} from '@huishoudplanner/shared';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it, onTestFinished, vi } from 'vitest';
-import { ANNA, BRAM, makeUser, mockApi, storeProfile } from '../../test/fixtures.ts';
-import { makeRoom, makeSettings, makeTask, renderWithProviders } from '../../test/render.tsx';
+import { describe, expect, it, onTestFinished } from 'vitest';
+import { ANNA, BRAM, makeUser, mockApi, page, problem, storeProfile, v2Basics } from '../../test/fixtures.ts';
+import { makeRoomV2, makeSettings, makeTaskV2, renderWithProviders } from '../../test/render.tsx';
+import type { CompletionReport, DeviationReport, IntervalReport, PointEntry, PointsBalances, WorkloadReport } from './api.ts';
 import { StatsPage } from './StatsPage.tsx';
+
+/** An answer with a status of its own: the route table of mockApi answers 200, which for a redemption means a replay. */
+const answer = (body: unknown, status: number) =>
+  new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
 const week = (
   weekIndex: number,
@@ -29,7 +25,7 @@ const week = (
   unassignedPlannedMinutes: unassigned,
 });
 
-const WORKLOAD: WorkloadResponse = {
+const WORKLOAD: WorkloadReport = {
   cycles: [
     {
       index: 0,
@@ -66,7 +62,7 @@ const WORKLOAD: WorkloadResponse = {
   ],
 };
 
-const COMPLETION = (groupBy: string): CompletionResponse =>
+const COMPLETION = (groupBy: string): CompletionReport =>
   groupBy === 'room'
     ? {
         groupBy: 'room',
@@ -84,7 +80,7 @@ const COMPLETION = (groupBy: string): CompletionResponse =>
         ],
       };
 
-const INTERVALS: IntervalsResponse = {
+const INTERVALS: IntervalReport = {
   rows: [
     {
       taskId: 't1',
@@ -125,7 +121,7 @@ const INTERVALS: IntervalsResponse = {
   ],
 };
 
-const DEVIATIONS: DeviationsResponse = {
+const DEVIATIONS: DeviationReport = {
   rows: [
     {
       taskId: 't2',
@@ -160,38 +156,46 @@ const DEVIATIONS: DeviationsResponse = {
   ],
 };
 
-function setup(workload: WorkloadResponse = WORKLOAD, extraRoutes: Record<string, unknown> = {}) {
+function setup(workload: WorkloadReport = WORKLOAD, extraRoutes: Record<string, unknown> = {}) {
   storeProfile(ANNA._id);
   return mockApi({
     '/api/users': [ANNA, BRAM],
     '/api/settings': makeSettings(),
-    '/api/rooms': [
-      makeRoom({ _id: 'r1', name: 'Badkamer' }),
-      makeRoom({ _id: 'r2', name: 'Keuken' }),
-    ],
-    '/api/tasks': [
-      makeTask({ _id: 't1', name: 'Badkamer schoonmaken', roomId: 'r1' }),
-      makeTask({ _id: 't2', name: 'Keuken dweilen', roomId: 'r2' }),
-      makeTask({ _id: 't3', name: 'Ramen lappen', roomId: 'r1' }),
-      makeTask({ _id: 't4', name: 'Afwas', roomId: 'r2' }),
-    ],
-    '/api/stats/workload': workload,
-    '/api/stats/completion': (_init: RequestInit | undefined, url: string) =>
+    '/api/v2/rooms': page([makeRoomV2({ id: 'r1', name: 'Badkamer' }), makeRoomV2({ id: 'r2', name: 'Keuken' })]),
+    '/api/v2/tasks': page([
+      makeTaskV2({ id: 't1', name: 'Badkamer schoonmaken', roomId: 'r1' }),
+      makeTaskV2({ id: 't2', name: 'Keuken dweilen', roomId: 'r2' }),
+      makeTaskV2({ id: 't3', name: 'Ramen lappen', roomId: 'r1' }),
+      makeTaskV2({ id: 't4', name: 'Afwas', roomId: 'r2' }),
+    ]),
+    ...v2Basics(),
+    '/api/v2/stats/workload': workload,
+    '/api/v2/stats/completion': (_init: RequestInit | undefined, url: string) =>
       COMPLETION(new URL(url, 'http://x').searchParams.get('groupBy') ?? 'task'),
-    '/api/stats/intervals': INTERVALS,
-    '/api/stats/deviations': DEVIATIONS,
-    'DELETE /api/stats': {
+    '/api/v2/stats/intervals': INTERVALS,
+    '/api/v2/stats/deviations': DEVIATIONS,
+    'DELETE /api/v2/stats': {
       deletedOccurrences: 12,
+      deletedRecorded: 3,
       resetOccurrences: 4,
       resetTasks: 2,
       deletedPastCycles: 1,
+      removedPointEntries: 5,
+      removedRedemptions: 1,
     },
     ...extraRoutes,
   });
 }
 
 const statsUrls = (fetchMock: ReturnType<typeof mockApi>) =>
-  fetchMock.mock.calls.map(([u]) => String(u)).filter((u) => u.startsWith('/api/stats/'));
+  fetchMock.mock.calls.map(([u]) => String(u)).filter((u) => u.startsWith('/api/v2/stats/'));
+
+/** The reset requests: url and headers (a bulk reset is no entity write, so it carries no If-Match). */
+const resets = (fetchMock: ReturnType<typeof mockApi>) =>
+  fetchMock.mock.calls
+    .filter(([, init]) => (init as RequestInit | undefined)?.method === 'DELETE')
+    .map(([url, init]) => ({ url: String(url), ifMatch: ((init as RequestInit).headers as Record<string, string>)['if-match'] }))
+    .filter((call) => call.url.startsWith('/api/v2/stats'));
 
 async function selectStatsTab(name: string) {
   const tab = await screen.findByRole('tab', { name });
@@ -301,7 +305,7 @@ describe('StatsPage', () => {
 
     fireEvent.change(screen.getByLabelText('Voltooiing per'), { target: { value: 'room' } });
     await waitFor(() =>
-      expect(statsUrls(fetchMock)).toContain('/api/stats/completion?weeks=1&groupBy=room'),
+      expect(statsUrls(fetchMock)).toContain('/api/v2/stats/completion?weeks=1&groupBy=room'),
     );
     expect(
       await within(section).findByRole('columnheader', { name: 'Ruimte' }),
@@ -337,10 +341,10 @@ describe('StatsPage', () => {
     await waitFor(() =>
       expect(statsUrls(fetchMock)).toEqual(
         expect.arrayContaining([
-          '/api/stats/workload?weeks=3',
-          '/api/stats/completion?weeks=3&groupBy=task',
-          '/api/stats/intervals?weeks=3',
-          '/api/stats/deviations?weeks=3',
+          '/api/v2/stats/workload?weeks=3',
+          '/api/v2/stats/completion?weeks=3&groupBy=task',
+          '/api/v2/stats/intervals?weeks=3',
+          '/api/v2/stats/deviations?weeks=3',
         ]),
       ),
     );
@@ -349,10 +353,10 @@ describe('StatsPage', () => {
     await waitFor(() =>
       expect(statsUrls(fetchMock)).toEqual(
         expect.arrayContaining([
-          '/api/stats/workload?cycles=4',
-          '/api/stats/completion?cycles=4&groupBy=task',
-          '/api/stats/intervals?cycles=4',
-          '/api/stats/deviations?cycles=4',
+          '/api/v2/stats/workload?cycles=4',
+          '/api/v2/stats/completion?cycles=4&groupBy=task',
+          '/api/v2/stats/intervals?cycles=4',
+          '/api/v2/stats/deviations?cycles=4',
         ]),
       ),
     );
@@ -398,12 +402,36 @@ describe('StatsPage', () => {
     expect(await screen.findByRole('status')).toHaveTextContent(
       'Je begint opnieuw met de bestaande planning.',
     );
-    expect(
-      fetchMock.mock.calls.some(
-        ([url, init]) =>
-          url === '/api/stats' && (init as RequestInit | undefined)?.method === 'DELETE',
-      ),
-    ).toBe(true);
+    expect(resets(fetchMock)).toEqual([{ url: '/api/v2/stats', ifMatch: undefined }]);
+  });
+
+  it('shows a failed reset inside the confirmation dialog and lets the person try again', async () => {
+    let attempts = 0;
+    const fetchMock = setup(WORKLOAD, {
+      'DELETE /api/v2/stats': () => {
+        attempts += 1;
+        return attempts === 1
+          ? problem(409, 'conflict', 'Busy')
+          : { deletedOccurrences: 0, deletedRecorded: 0, resetOccurrences: 0, resetTasks: 0, deletedPastCycles: 0, removedPointEntries: 0, removedRedemptions: 0 };
+      },
+    });
+    renderWithProviders(<StatsPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Statistieken wissen' }));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Definitief opnieuw beginnen' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('De statistieken konden niet worden gewist.');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Definitief opnieuw beginnen' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('Je begint opnieuw met de bestaande planning.');
+    expect(resets(fetchMock)).toHaveLength(2);
+  });
+
+  it('offers the reset and the purge to administrators only', async () => {
+    setup();
+    storeProfile(BRAM._id);
+    renderWithProviders(<StatsPage />);
+    await screen.findByRole('tab', { name: 'Overzicht' });
+    expect(screen.queryByRole('button', { name: 'Statistieken wissen' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Oude data opschonen' })).not.toBeInTheDocument();
   });
 
   it('purges only data before a chosen date, without a full reset', async () => {
@@ -419,10 +447,7 @@ describe('StatsPage', () => {
     expect(await screen.findByRole('status')).toHaveTextContent(
       'Oude data zijn opgeschoond. Alles vanaf de gekozen datum bleef staan.',
     );
-    const deleteCall = fetchMock.mock.calls.find(
-      ([url, init]) => String(url).startsWith('/api/stats') && (init as RequestInit | undefined)?.method === 'DELETE',
-    );
-    expect(deleteCall?.[0]).toBe('/api/stats?before=2026-09-21');
+    expect(resets(fetchMock)).toEqual([{ url: '/api/v2/stats?before=2026-09-21', ifMatch: undefined }]);
   });
 });
 
@@ -439,17 +464,17 @@ describe('StatsPage: points', () => {
     executions,
     bonusPoints,
   });
-  const BALANCES: PointsBalancesResponse = {
+  const BALANCES: PointsBalances = {
     from: '2026-09-14',
     to: '2026-09-20',
     currencyCode: 'EUR',
     centsPerPoint: 0,
     balances: [bal(ANNA._id, 8, 3), bal(BRAM._id, 0, 0), bal(FORMER._id, 4, 1)],
   };
-  const entry = (id: string, personId: string, date: string, amount: number, title: string) => ({
-    _id: id,
+  const entry = (id: string, personId: string, date: string, amount: number, title: string): PointEntry => ({
+    id,
     key: `execution:${id}`,
-    kind: 'execution' as const,
+    kind: 'execution',
     personId,
     amount,
     date,
@@ -461,11 +486,11 @@ describe('StatsPage: points', () => {
     note: null,
     centsPerPointSnapshot: null,
     currencyCodeSnapshot: null,
-    source: 'live' as const,
+    source: 'live',
     createdAt: '2026-09-16T08:00:00.000Z',
     updatedAt: '2026-09-16T08:00:00.000Z',
   });
-  const ENTRIES: Record<string, PointsEntriesResponse> = {
+  const ENTRIES: Record<string, { entries: PointEntry[] }> = {
     [ANNA._id]: {
       entries: [
         entry('e00000000000000000000001', ANNA._id, '2026-09-16', 5, 'Ramen lappen'),
@@ -475,14 +500,14 @@ describe('StatsPage: points', () => {
     [BRAM._id]: { entries: [] },
     [FORMER._id]: { entries: [entry('e00000000000000000000003', FORMER._id, '2026-09-15', 4, 'Afwassen')] },
   };
-  const pointsRoutes = (balances: PointsBalancesResponse = BALANCES) => ({
+  const pointsRoutes = (balances: PointsBalances = BALANCES) => ({
     '/api/users': [ANNA, BRAM, FORMER],
-    '/api/points/balances': balances,
-    '/api/points/entries': (_init: RequestInit | undefined, url: string) =>
-      ENTRIES[new URL(url, 'http://x').searchParams.get('personId') ?? ''] ?? { entries: [] },
+    '/api/v2/points/balances': balances,
+    '/api/v2/points/entries': (_init: RequestInit | undefined, url: string) =>
+      page(ENTRIES[new URL(url, 'http://x').searchParams.get('personId') ?? '']?.entries ?? []),
   });
   const pointsUrls = (fetchMock: ReturnType<typeof mockApi>) =>
-    fetchMock.mock.calls.map(([u]) => String(u)).filter((u) => u.startsWith('/api/points/'));
+    fetchMock.mock.calls.map(([u]) => String(u)).filter((u) => u.startsWith('/api/v2/points/'));
 
   it('shows the balance of every person and the entries of the active profile for the selected period', async () => {
     const fetchMock = setup(WORKLOAD, pointsRoutes());
@@ -508,10 +533,12 @@ describe('StatsPage: points', () => {
     ]);
     // The balance over the whole ledger is read without a range.
     expect([...pointsUrls(fetchMock)].sort()).toEqual([
-      '/api/points/balances',
-      '/api/points/balances?from=2026-09-14&to=2026-09-20',
-      '/api/points/entries?personId=a00000000000000000000001&from=2026-09-14&to=2026-09-20',
+      '/api/v2/points/balances',
+      '/api/v2/points/balances?from=2026-09-14&to=2026-09-20',
+      '/api/v2/points/entries?personId=a00000000000000000000001&from=2026-09-14&to=2026-09-20&limit=500',
     ]);
+    // The week comes from the calendar of the server (today only), not from arithmetic in the page.
+    expect(fetchMock.mock.calls.map(([u]) => String(u))).toContain('/api/v2/calendar?from=2026-09-16&to=2026-09-16');
   });
 
   it('shows the entries of another person, also of someone who is inactive', async () => {
@@ -534,18 +561,18 @@ describe('StatsPage: points', () => {
     await screen.findByRole('table', { name: 'Punten per persoon' });
 
     fireEvent.change(screen.getByLabelText('Periode'), { target: { value: 'weeks:3' } });
-    await waitFor(() => expect(pointsUrls(fetchMock)).toContain('/api/points/balances?from=2026-08-31&to=2026-09-20'));
+    await waitFor(() => expect(pointsUrls(fetchMock)).toContain('/api/v2/points/balances?from=2026-08-31&to=2026-09-20'));
     fireEvent.change(screen.getByLabelText('Periode'), { target: { value: 'cycles:2' } });
-    await waitFor(() => expect(pointsUrls(fetchMock)).toContain('/api/points/balances?from=2026-09-14&to=2026-10-11'));
+    await waitFor(() => expect(pointsUrls(fetchMock)).toContain('/api/v2/points/balances?from=2026-09-14&to=2026-10-11'));
     await waitFor(() =>
       expect(pointsUrls(fetchMock)).toContain(
-        '/api/points/entries?personId=a00000000000000000000001&from=2026-09-14&to=2026-10-11',
+        '/api/v2/points/entries?personId=a00000000000000000000001&from=2026-09-14&to=2026-10-11&limit=500',
       ),
     );
   });
 
   it('shows the bonus column and labels bonus entries by kind and period, with an icon', async () => {
-    const bonus = (id: string, kind: PointEntryView['kind'], date: string, periodStart: string, amount: number) => ({
+    const bonus = (id: string, kind: PointEntry['kind'], date: string, periodStart: string, amount: number): PointEntry => ({
       ...entry(id, ANNA._id, date, amount, ''),
       key: `${kind}:${ANNA._id}:${periodStart}`,
       kind,
@@ -597,7 +624,7 @@ describe('StatsPage: points', () => {
 
   describe('redemptions', () => {
     const REDEMPTION_ID = 'd00000000000000000000001';
-    const redemption = (id: string, personId: string, date: string, amount: number, note: string | null, cents = 25, currency = 'EUR'): PointEntryView => ({
+    const redemption = (id: string, personId: string, date: string, amount: number, note: string | null, cents = 25, currency = 'EUR'): PointEntry => ({
       ...entry(id, personId, date, amount, ''),
       key: `redemption:${id}`,
       kind: 'redemption',
@@ -606,14 +633,14 @@ describe('StatsPage: points', () => {
       centsPerPointSnapshot: cents,
       currencyCodeSnapshot: currency,
     });
-    const withEntries = (personId: string, entries: PointEntryView[]) => {
+    const withEntries = (personId: string, entries: PointEntry[]) => {
       const original = ENTRIES[personId]!;
       onTestFinished(() => {
         ENTRIES[personId] = original;
       });
       ENTRIES[personId] = { entries };
     };
-    const MONEY: PointsBalancesResponse = {
+    const MONEY: PointsBalances = {
       from: '2026-09-14',
       to: '2026-09-20',
       currencyCode: 'EUR',
@@ -645,7 +672,7 @@ describe('StatsPage: points', () => {
     });
 
     it('shows the all-time balance next to the net of the period, from the whole ledger', async () => {
-      const ALL_TIME: PointsBalancesResponse = {
+      const ALL_TIME: PointsBalances = {
         from: null,
         to: null,
         currencyCode: 'EUR',
@@ -657,7 +684,7 @@ describe('StatsPage: points', () => {
       };
       setup(WORKLOAD, {
         ...pointsRoutes(MONEY),
-        '/api/points/balances': (_init: RequestInit | undefined, url: string) => (url.includes('?') ? MONEY : ALL_TIME),
+        '/api/v2/points/balances': (_init: RequestInit | undefined, url: string) => (url.includes('?') ? MONEY : ALL_TIME),
       });
       renderWithProviders(<StatsPage now={NOW} />);
       await selectStatsTab('Punten');
@@ -739,27 +766,26 @@ describe('StatsPage: points', () => {
       withEntries(ANNA._id, [redemption(REDEMPTION_ID, ANNA._id, '2026-09-16', -4, 'Pizza')]);
       const fetchMock = setup(WORKLOAD, {
         ...pointsRoutes(MONEY),
-        [`DELETE /api/points/redemptions/${REDEMPTION_ID}`]: { deleted: true },
+        [`DELETE /api/v2/points/redemptions/${REDEMPTION_ID}`]: { deleted: true },
       });
       renderWithProviders(<StatsPage now={NOW} />);
       await selectStatsTab('Punten');
       const entries = await screen.findByRole('table', { name: 'Posten van Anna' });
       fireEvent.click(within(entries).getByRole('button', { name: 'Inwisseling van 4 punten ongedaan maken' }));
       expect(await screen.findByRole('status')).toHaveTextContent('De inwisseling is ongedaan gemaakt.');
-      expect(fetchMock.mock.calls.some(([u, init]) => u === `/api/points/redemptions/${REDEMPTION_ID}` && (init as RequestInit).method === 'DELETE')).toBe(true);
-      await waitFor(() => expect(pointsUrls(fetchMock).filter((u) => u.startsWith('/api/points/balances')).length).toBeGreaterThan(1));
+      const undone = fetchMock.mock.calls.filter(([u, init]) => u === `/api/v2/points/redemptions/${REDEMPTION_ID}` && (init as RequestInit).method === 'DELETE');
+      // Undoing is an intent endpoint: no If-Match.
+      expect(undone.map(([, init]) => ((init as RequestInit).headers as Record<string, string>)['if-match'])).toEqual([undefined]);
+      await waitFor(() => expect(pointsUrls(fetchMock).filter((u) => u.startsWith('/api/v2/points/balances')).length).toBeGreaterThan(2));
     });
 
     it('says why when the server refuses to undo a redemption of an earlier day', async () => {
       withEntries(ANNA._id, [redemption(REDEMPTION_ID, ANNA._id, '2026-09-16', -4, null)]);
       storeProfile(ANNA._id);
-      setup(WORKLOAD, pointsRoutes(MONEY));
-      const original = globalThis.fetch;
-      vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) =>
-        init?.method === 'DELETE'
-          ? new Response(JSON.stringify({ code: 'redemption_locked' }), { status: 403 })
-          : original(input, init),
-      );
+      setup(WORKLOAD, {
+        ...pointsRoutes(MONEY),
+        [`DELETE /api/v2/points/redemptions/${REDEMPTION_ID}`]: () => problem(403, 'redemption_locked', 'Locked'),
+      });
       renderWithProviders(<StatsPage now={NOW} />);
       await selectStatsTab('Punten');
       const entries = await screen.findByRole('table', { name: 'Posten van Anna' });
@@ -768,14 +794,11 @@ describe('StatsPage: points', () => {
     });
 
     it('opens the redeem dialog from the Redeem button and confirms the booking with the money it is worth', async () => {
-      setup(WORKLOAD, pointsRoutes(MONEY));
-      const original = globalThis.fetch;
-      // 201: a new booking (the route table of mockApi always answers 200, which means a replay).
-      vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) =>
-        init?.method === 'POST' && String(input) === '/api/points/redemptions'
-          ? new Response(JSON.stringify(redemption(REDEMPTION_ID, ANNA._id, '2026-09-16', -4, null)), { status: 201 })
-          : original(input, init),
-      );
+      // 201: a new booking.
+      setup(WORKLOAD, {
+        ...pointsRoutes(MONEY),
+        'POST /api/v2/points/redemptions': () => answer(redemption(REDEMPTION_ID, ANNA._id, '2026-09-16', -4, null), 201),
+      });
       renderWithProviders(<StatsPage now={NOW} />);
       await selectStatsTab('Punten');
       await screen.findByRole('table', { name: 'Punten per persoon' });
@@ -790,13 +813,11 @@ describe('StatsPage: points', () => {
 
     it('tells the person when the server replayed a redemption it already had, instead of saying it was booked', async () => {
       storeProfile(ANNA._id);
-      setup(WORKLOAD, pointsRoutes(MONEY));
-      const original = globalThis.fetch;
-      vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) =>
-        init?.method === 'POST' && String(input) === '/api/points/redemptions'
-          ? new Response(JSON.stringify(redemption(REDEMPTION_ID, ANNA._id, '2026-09-16', -4, null)), { status: 200 })
-          : original(input, init),
-      );
+      // 200: the server already had this request and replayed it.
+      setup(WORKLOAD, {
+        ...pointsRoutes(MONEY),
+        'POST /api/v2/points/redemptions': () => answer(redemption(REDEMPTION_ID, ANNA._id, '2026-09-16', -4, null), 200),
+      });
       renderWithProviders(<StatsPage now={NOW} />);
       await selectStatsTab('Punten');
       await screen.findByRole('table', { name: 'Punten per persoon' });
