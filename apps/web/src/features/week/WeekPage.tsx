@@ -36,8 +36,8 @@ import { cn } from '@/lib/utils';
 import { usePersistedFilter } from '../../hooks/usePersistedFilter.ts';
 import { getActiveProfileId } from '../../identity/profileStore.ts';
 import { apiV2, unwrap, type ApiWarning, type Occurrence } from '../../api/index.ts';
-import { useRooms, useSettings, useTasks } from '../../api/queries.ts';
-import { useCalendar } from '../../api/v2/queries.ts';
+import { useSettings } from '../../api/queries.ts';
+import { useCalendar, useRooms, useTasks } from '../../api/v2/queries.ts';
 import { format, t } from '../../i18n/nl.ts';
 import { Avatar } from '../../identity/Avatar.tsx';
 import { useProfile } from '../../identity/index.ts';
@@ -118,8 +118,8 @@ export function WeekPage({ now }: { now?: Date }) {
   const [completionChoice, setCompletionChoice] = useState<Occurrence | null>(null);
   const choiceAssignee = useAssigneeChoice(completionChoice?.assigneeId ?? null);
   const roomByTask = useMemo(() => {
-    const roomNames = new Map((rooms.data ?? []).map((room) => [room._id, room.name]));
-    return new Map((tasks.data ?? []).map((task) => [task._id, roomNames.get(task.roomId) ?? t('tasks.unknownRoom')]));
+    const roomNames = new Map((rooms.data ?? []).map((room) => [room.id, room.name]));
+    return new Map((tasks.data ?? []).map((task) => [task.id, roomNames.get(task.roomId) ?? t('tasks.unknownRoom')]));
   }, [rooms.data, tasks.data]);
 
   const move = useMutation({

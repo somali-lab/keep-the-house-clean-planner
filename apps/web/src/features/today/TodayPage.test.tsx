@@ -2,7 +2,7 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Occurrence } from '../../api/index.ts';
 import { ANNA, BRAM, mockApi, page, storeProfile, v2Basics } from '../../test/fixtures.ts';
-import { makeOccurrenceV2, makeRoom, makeSettings, makeTask, renderWithProviders } from '../../test/render.tsx';
+import { makeOccurrenceV2, makeRoomV2, makeSettings, makeTaskV2, renderWithProviders } from '../../test/render.tsx';
 import { applyOptimistic, type OccurrenceAction } from './api.ts';
 import { TodayPage } from './TodayPage.tsx';
 
@@ -53,8 +53,8 @@ function setup(settings = makeSettings(), users = [ANNA, BRAM]) {
   return mockApi({
     '/api/users': users,
     '/api/settings': settings,
-    '/api/rooms': [makeRoom({ _id: 'r1', name: 'Badkamer-ruimte' })],
-    '/api/tasks': [makeTask({ _id: 't2', name: 'Badkamer', roomId: 'r1' })],
+    '/api/v2/rooms': page([makeRoomV2({ id: 'r1', name: 'Badkamer-ruimte' })]),
+    '/api/v2/tasks': page([makeTaskV2({ id: 't2', name: 'Badkamer', roomId: 'r1' })]),
     ...v2Basics(settings.cycleAnchorDate),
     '/api/v2/occurrences': (_init: RequestInit | undefined, url: string) => {
       const query = new URL(url, 'http://localhost').searchParams;
@@ -313,12 +313,12 @@ describe('TodayPage', () => {
     const snackbar = screen.getByRole('status');
     expect(snackbar).toHaveTextContent('"Badkamer" is vastgelegd.');
 
-    const refetchesBefore = (url: string) => fetchMock.mock.calls.filter(([u]) => u === url).length;
-    const [tasksBefore] = [refetchesBefore('/api/tasks')];
+    const refetchesBefore = (url: string) => fetchMock.mock.calls.filter(([u]) => String(u).split('?')[0] === url).length;
+    const [tasksBefore] = [refetchesBefore('/api/v2/tasks')];
     fireEvent.click(within(snackbar).getByRole('button', { name: 'Ongedaan maken' }));
     await waitFor(() => expect(db.some((o) => o.id === 'o-recorded')).toBe(false));
     // The retract also refreshes what the deleted work had fed: the tasks (lastCompletedAt).
-    await waitFor(() => expect(refetchesBefore('/api/tasks')).toBeGreaterThan(tasksBefore));
+    await waitFor(() => expect(refetchesBefore('/api/v2/tasks')).toBeGreaterThan(tasksBefore));
     expect(intentBodies(fetchMock, 'o-recorded', 'complete')).toEqual([]);
     await waitFor(() => expect(screen.queryByRole('region', { name: 'Afgerond' })).not.toBeInTheDocument());
   });
@@ -361,8 +361,8 @@ describe('TodayPage', () => {
     const fetchMock = mockApi({
       '/api/users': [ANNA, BRAM],
       '/api/settings': makeSettings(),
-      '/api/rooms': [makeRoom({ _id: 'r1', name: 'Badkamer-ruimte' })],
-      '/api/tasks': [makeTask({ _id: 't2', name: 'Badkamer', roomId: 'r1' })],
+      '/api/v2/rooms': page([makeRoomV2({ id: 'r1', name: 'Badkamer-ruimte' })]),
+      '/api/v2/tasks': page([makeTaskV2({ id: 't2', name: 'Badkamer', roomId: 'r1' })]),
       ...v2Basics(),
       '/api/v2/occurrences': () => page(db),
       'POST /api/v2/occurrences/o-extra/retraction': () => {
@@ -403,8 +403,8 @@ describe('TodayPage', () => {
     mockApi({
       '/api/users': [ANNA, BRAM],
       '/api/settings': makeSettings(),
-      '/api/rooms': [makeRoom({ _id: 'r1', name: 'Woonkamer' })],
-      '/api/tasks': [],
+      '/api/v2/rooms': page([makeRoomV2({ id: 'r1', name: 'Woonkamer' })]),
+      '/api/v2/tasks': page([]),
       ...v2Basics(),
       '/api/v2/occurrences': () => page(db),
     });
@@ -423,8 +423,8 @@ describe('TodayPage', () => {
     mockApi({
       '/api/users': [ANNA, BRAM],
       '/api/settings': makeSettings(),
-      '/api/rooms': [],
-      '/api/tasks': [],
+      '/api/v2/rooms': page([]),
+      '/api/v2/tasks': page([]),
       ...v2Basics(),
       '/api/v2/occurrences': () => page(db),
       // The record is gone already: the mock has no retract route and answers 404.

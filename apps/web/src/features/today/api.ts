@@ -8,6 +8,7 @@ import {
   type ApiV2Client,
   type Occurrence,
 } from '../../api/index.ts';
+import { collectPages } from '../../api/v2/paging.ts';
 import { releaseRequestKey, requestKeyFor } from '../../api/requestKey.ts';
 import { useOfflineQueue } from '../../offline/context.ts';
 
@@ -17,24 +18,16 @@ export const occurrenceKeys = {
 
 /** The most the server returns in one page (`limit` 1 to 500). */
 const PAGE_SIZE = 500;
-const MAX_PAGES = 200;
 
 /** Every occurrence of the days from `from` to `to`: the bounded pages are followed until the last one. */
 export async function fetchOccurrences(from: string, to: string, client: ApiV2Client = apiV2): Promise<Occurrence[]> {
-  const items: Occurrence[] = [];
-  let cursor: string | undefined;
-  const seen = new Set<string>();
-  do {
-    // A server that repeats a cursor, or never ends, must not keep the page loading forever.
-    if (seen.size >= MAX_PAGES || (cursor && seen.has(cursor))) throw new Error('Occurrence paging did not end.');
-    if (cursor) seen.add(cursor);
+  const all = await collectPages(async (cursor) => {
     const { data } = await unwrap(
       client.GET('/api/v2/occurrences', { params: { query: { from, to, limit: String(PAGE_SIZE), cursor } } }),
     );
-    items.push(...data.items.map(toOccurrence));
-    cursor = data.nextCursor ?? undefined;
-  } while (cursor);
-  return items;
+    return data;
+  });
+  return all.map(toOccurrence);
 }
 
 export function useOccurrences(from: string, to: string, enabled = true) {

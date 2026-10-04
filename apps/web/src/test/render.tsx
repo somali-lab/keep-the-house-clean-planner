@@ -11,6 +11,7 @@ import type { ReactElement } from 'react';
 import { MemoryRouter } from 'react-router';
 import { FilterResetButton, FilterResetProvider } from '@/components/FilterReset';
 import type { Occurrence } from '../api/index.ts';
+import type { Room as RoomV2, Task as TaskV2 } from '../api/v2/queries.ts';
 import { ProfileProvider } from '../identity/index.ts';
 import { testQueryClient } from './fixtures.ts';
 
@@ -24,6 +25,28 @@ export function makeTask(overrides: Partial<Task> & Pick<Task, '_id' | 'name' | 
   return {
     intervalKey: '1w',
     durationMinutes: 15,
+    defaultAssigneeId: null,
+    active: true,
+    notes: '',
+    tags: [],
+    lastCompletedAt: null,
+    createdAt: STAMP,
+    updatedAt: STAMP,
+    ...overrides,
+  };
+}
+
+/** A room as `GET /api/v2/rooms` returns it (field `id`). */
+export function makeRoomV2(overrides: Partial<RoomV2> & Pick<RoomV2, 'id' | 'name'>): RoomV2 {
+  return { sortOrder: 10, active: true, virtual: false, createdAt: STAMP, updatedAt: STAMP, ...overrides };
+}
+
+/** A task as `GET /api/v2/tasks` returns it (field `id`, points always set). */
+export function makeTaskV2(overrides: Partial<TaskV2> & Pick<TaskV2, 'id' | 'name' | 'roomId'>): TaskV2 {
+  return {
+    intervalKey: '1w',
+    durationMinutes: 15,
+    points: 15,
     defaultAssigneeId: null,
     active: true,
     notes: '',
@@ -60,6 +83,12 @@ export function makeOccurrence(overrides: Partial<OccurrenceView> & Pick<Occurre
   };
 }
 
+/** The week of the four-week cycle that starts on Monday 2026-09-14, the cycle of the tests; 0 before it. */
+function testWeekIndex(date: string): number {
+  const days = Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse('2026-09-14T00:00:00Z')) / 86_400_000);
+  return days < 0 ? 0 : Math.floor(days / 7) % 4;
+}
+
 /** An occurrence as `GET /api/v2/occurrences` returns it (field `id`, with the cycle position the server computes). */
 export function makeOccurrenceV2(overrides: Partial<Occurrence> & Pick<Occurrence, 'id'>): Occurrence {
   const date = overrides.date ?? '2026-09-16';
@@ -88,7 +117,7 @@ export function makeOccurrenceV2(overrides: Partial<Occurrence> & Pick<Occurrenc
     isOverdue: false,
     movedFrom: null,
     cycleIndex: date >= '2026-09-14' ? 0 : -1,
-    weekIndex: 0,
+    weekIndex: testWeekIndex(date),
     ...overrides,
   };
 }

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Occurrence } from '../../api/index.ts';
 import { resetRequestKeys } from '../../api/requestKey.ts';
 import { ANNA, BRAM, describeRequest, LIMITS, mockApi, page, problem, storeProfile, v2Basics } from '../../test/fixtures.ts';
-import { makeOccurrenceV2, makeRoom, makeTask, renderWithProviders } from '../../test/render.tsx';
+import { makeOccurrenceV2, makeRoomV2, makeTaskV2, renderWithProviders } from '../../test/render.tsx';
 import { RecordWorkDialog } from './RecordWorkDialog.tsx';
 
 const TODAY = '2026-09-16';
@@ -25,12 +25,12 @@ function setup(routes: Record<string, unknown> = {}, props: { initialTaskId?: st
     '/api/users': [ANNA, BRAM],
     ...v2Basics(),
     '/api/v2/occurrences': page([]),
-    '/api/rooms': [makeRoom({ _id: 'r1', name: 'Keuken' }), makeRoom({ _id: 'r2', name: 'Zolder', active: false })],
-    '/api/tasks': [
-      makeTask({ _id: 't1', name: 'Stofzuigen', roomId: 'r1' }),
-      makeTask({ _id: 't2', name: 'Afwas', roomId: 'r1' }),
-      makeTask({ _id: 't3', name: 'Oud', roomId: 'r1', active: false }),
-    ],
+    '/api/v2/rooms': page([makeRoomV2({ id: 'r1', name: 'Keuken' }), makeRoomV2({ id: 'r2', name: 'Zolder', active: false })]),
+    '/api/v2/tasks': page([
+      makeTaskV2({ id: 't1', name: 'Stofzuigen', roomId: 'r1' }),
+      makeTaskV2({ id: 't2', name: 'Afwas', roomId: 'r1' }),
+      makeTaskV2({ id: 't3', name: 'Oud', roomId: 'r1', active: false }),
+    ]),
     ...routes,
   });
   const onOpenChange = vi.fn();
