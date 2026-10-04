@@ -18,10 +18,10 @@ function setup() {
   return mockApi({
     '/api/users': [ANNA, BRAM],
     '/api/settings': makeSettings(),
-    '/api/ai/prompt-info': {
+    '/api/v2/ai/prompt-info': {
       defaults,
       actions: Object.fromEntries(
-        Object.entries(defaults).map(([key, value]) => [key, { ...value, dynamicData: `Data voor ${key}` }]),
+        Object.entries(defaults).map(([key, value]) => [key, { ...value, fixedPrompt: value.system, dynamicData: `Data voor ${key}` }]),
       ),
     },
     'PATCH /api/settings': (init: RequestInit) => makeSettings(JSON.parse(String(init.body))),

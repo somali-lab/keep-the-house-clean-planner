@@ -11,7 +11,7 @@ import { t } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
 import { usePersistedFilter } from '../../hooks/usePersistedFilter.ts';
 import { AllocationOverview } from '../planner/AllocationOverview.tsx';
-import { usePlans } from '../planner/api.ts';
+import { usePlansV1 as usePlans } from '../planner/plansV1.ts';
 
 export function DistributionPage() {
   const plans = usePlans();

@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import {
   CalendarRange,
@@ -30,17 +31,19 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { useRooms, useSettings, useTasks } from '../../api/queries.ts';
+import { useSettings } from '../../api/queries.ts';
+import { useRooms, useTasks } from '../../api/v2/queries.ts';
 import { format, t } from '../../i18n/nl.ts';
-import { ApiRequestError } from '../../api/index.ts';
+import { ApiRequestError, isStaleEntity } from '../../api/index.ts';
 import { getLocale } from '../../i18n/runtime.ts';
-import type { ActivationPreviewItem, AiProposalResponse } from '@huishoudplanner/shared';
 import { useProfile } from '../../identity/index.ts';
 import { ExportDialog } from '../export/ExportDialog.tsx';
 import { AiDraftCard } from '../ai/AiDraftCard.tsx';
 import { AiPage } from '../ai/AiPage.tsx';
+import type { AiProposal } from '../ai/api.ts';
 import { PromoteBanner } from '../promote/PromoteBanner.tsx';
 import {
+  planKeys,
   useActivatePlan,
   useActivationPreview,
   useCreatePlan,
@@ -48,10 +51,13 @@ import {
   usePlans,
   usePutSlots,
   useUpdatePlan,
+  type ActivationPreviewItem,
+  type CyclePlan,
 } from './api.ts';
 import { PlanEditor } from './PlanEditor.tsx';
 
 export function PlannerPage() {
+  const queryClient = useQueryClient();
   const plans = usePlans();
   const tasks = useTasks();
   const rooms = useRooms();
@@ -70,7 +76,9 @@ export function PlannerPage() {
   const [plansOpen, setPlansOpen] = useState(false);
   const [planName, setPlanName] = useState('');
   // Warnings are only shown right after creation, for the draft that was just created.
-  const [createdProposal, setCreatedProposal] = useState<AiProposalResponse | null>(null);
+  const [createdProposal, setCreatedProposal] = useState<AiProposal | null>(null);
+  // Bumped after a reset, so that the editor starts again from the emptied plan.
+  const [editorEpoch, setEditorEpoch] = useState(0);
   const aiDraftCardRef = useRef<HTMLElement | null>(null);
   const focusAiDraftRef = useRef(false);
   const createPlan = useCreatePlan();
@@ -78,6 +86,24 @@ export function PlannerPage() {
   const updatePlan = useUpdatePlan();
   const resetPlan = usePutSlots();
   const deletePlan = useDeletePlan();
+
+  // The dialogs start clean: an error of an earlier attempt does not greet the next one.
+  const openReset = () => {
+    resetPlan.reset();
+    setConfirmReset(true);
+  };
+  const closeReset = () => {
+    resetPlan.reset();
+    setConfirmReset(false);
+  };
+  const openDelete = () => {
+    deletePlan.reset();
+    setConfirmDelete(true);
+  };
+  const closeDelete = () => {
+    deletePlan.reset();
+    setConfirmDelete(false);
+  };
 
   if (plans.isPending || tasks.isPending || rooms.isPending || settings.isPending)
     return (
@@ -94,11 +120,11 @@ export function PlannerPage() {
 
   const visiblePlans = plans.data.filter((p) => !p.discarded);
   const plan =
-    visiblePlans.find((p) => p._id === selectedId) ??
+    visiblePlans.find((p) => p.id === selectedId) ??
     visiblePlans.find((p) => p.active) ??
     visiblePlans[0];
   const defaultPlan = visiblePlans[0];
-  const isDefaultPlan = plan?._id === defaultPlan?._id;
+  const isDefaultPlan = plan?.id === defaultPlan?.id;
   // An AI draft that was activated or discarded is no longer a concept.
   const isAiDraft = plan !== undefined && plan.draft && !plan.active && plan.source === 'ai';
 
@@ -127,17 +153,18 @@ export function PlannerPage() {
                 <NativeSelect
                   id="planner-plan-select"
                   className="w-56"
-                  value={plan._id}
+                  value={plan.id}
                   onChange={(e) => {
                     setSelectedId(e.target.value);
                     setCreatedProposal(null);
                     setRenaming(false);
-                    setConfirmReset(false);
-                    setConfirmDelete(false);
+                    updatePlan.reset();
+                    closeReset();
+                    closeDelete();
                   }}
                 >
                   {visiblePlans.map((p) => (
-                    <option key={p._id} value={p._id}>
+                    <option key={p.id} value={p.id}>
                       {p.name} {p.active ? t('planner.activeSuffix') : ''}
                     </option>
                   ))}
@@ -151,7 +178,7 @@ export function PlannerPage() {
                     const name = planName.trim();
                     if (!name) return;
                     updatePlan.mutate(
-                      { planId: plan._id, patch: { name } },
+                      { planId: plan.id, version: plan.version, patch: { name } },
                       { onSuccess: () => setRenaming(false) },
                     );
                   }}
@@ -179,7 +206,10 @@ export function PlannerPage() {
                     variant="ghost"
                     size="icon"
                     aria-label={t('common.cancel')}
-                    onClick={() => setRenaming(false)}
+                    onClick={() => {
+                      updatePlan.reset();
+                      setRenaming(false);
+                    }}
                   >
                     <X aria-hidden="true" />
                   </Button>
@@ -198,16 +228,21 @@ export function PlannerPage() {
                   {t('planner.rename')}
                 </Button>
               )}
+              {updatePlan.isError && (
+                <p role="alert" className="rounded-xl bg-destructive/10 p-3 text-sm font-semibold text-destructive">
+                  {isStaleEntity(updatePlan.error) ? t('app.staleEntity') : t('planner.renameError')}
+                </p>
+              )}
               <Button
                 type="button"
                 variant="outline"
                 disabled={createPlan.isPending}
                 onClick={() =>
                   createPlan.mutate(
-                    { name: format('planner.copyName', { name: plan.name }), copyFromId: plan._id },
+                    { name: format('planner.copyName', { name: plan.name }), copyFromId: plan.id },
                     {
                       onSuccess: (created) => {
-                        setSelectedId(created._id);
+                        setSelectedId(created.id);
                         setCreatedProposal(null);
                         setPlansOpen(false);
                       },
@@ -240,7 +275,7 @@ export function PlannerPage() {
                 disabled={plan.slots.length === 0 || resetPlan.isPending}
                 onClick={() => {
                   setPlansOpen(false);
-                  setConfirmReset(true);
+                  openReset();
                 }}
               >
                 <RotateCcw aria-hidden="true" />
@@ -260,7 +295,7 @@ export function PlannerPage() {
                 }
                 onClick={() => {
                   setPlansOpen(false);
-                  setConfirmDelete(true);
+                  openDelete();
                 }}
               >
                 <Trash2 aria-hidden="true" />
@@ -285,8 +320,8 @@ export function PlannerPage() {
                     setSelectedId(result.planId);
                     setCreatedProposal(result);
                     setRenaming(false);
-                    setConfirmReset(false);
-                    setConfirmDelete(false);
+                    closeReset();
+                    closeDelete();
                     setConfirmActivate(false);
                     setNotice(null);
                     focusAiDraftRef.current = true;
@@ -301,14 +336,14 @@ export function PlannerPage() {
 
       <PromoteBanner />
 
-      <Dialog open={confirmReset} onOpenChange={setConfirmReset}>
+      <Dialog open={confirmReset} onOpenChange={(open) => (open ? openReset() : closeReset())}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t('planner.resetConfirmTitle')}</DialogTitle>
             <DialogDescription>{t('planner.resetConfirmBody')}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => setConfirmReset(false)}>
+            <Button type="button" variant="ghost" onClick={closeReset}>
               {t('common.cancel')}
             </Button>
             <Button
@@ -317,10 +352,11 @@ export function PlannerPage() {
               onClick={() => {
                 if (!plan) return;
                 resetPlan.mutate(
-                  { planId: plan._id, slots: [] },
+                  { planId: plan.id, version: plan.version, slots: [] },
                   {
                     onSuccess: () => {
-                      setConfirmReset(false);
+                      closeReset();
+                      setEditorEpoch((epoch) => epoch + 1);
                       setNotice(t('planner.resetDone'));
                     },
                   },
@@ -333,13 +369,13 @@ export function PlannerPage() {
           </DialogFooter>
           {resetPlan.isError && (
             <p role="alert" className="text-sm font-semibold text-destructive">
-              {t('planner.resetError')}
+              {isStaleEntity(resetPlan.error) ? t('app.staleEntity') : t('planner.resetError')}
             </p>
           )}
         </DialogContent>
       </Dialog>
 
-      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+      <Dialog open={confirmDelete} onOpenChange={(open) => (open ? openDelete() : closeDelete())}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t('planner.deleteConfirmTitle')}</DialogTitle>
@@ -348,7 +384,7 @@ export function PlannerPage() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => setConfirmDelete(false)}>
+            <Button type="button" variant="ghost" onClick={closeDelete}>
               {t('common.cancel')}
             </Button>
             <Button
@@ -357,13 +393,25 @@ export function PlannerPage() {
               disabled={!plan || isDefaultPlan || plan.active || deletePlan.isPending}
               onClick={() => {
                 if (!plan || !defaultPlan) return;
-                deletePlan.mutate(plan._id, {
-                  onSuccess: () => {
-                    setSelectedId(defaultPlan._id);
-                    setConfirmDelete(false);
-                    setNotice(t('planner.deleteDone'));
+                deletePlan.mutate(
+                  { planId: plan.id, version: plan.version },
+                  {
+                    onSuccess: () => {
+                      setSelectedId(defaultPlan.id);
+                      closeDelete();
+                      setNotice(t('planner.deleteDone'));
+                    },
+                    onError: (error) => {
+                      if (!isStaleEntity(error)) return;
+                      // The plans are read again by now: a plan that is gone needs no delete, and the dialog must not offer another one.
+                      const left = queryClient.getQueryData<CyclePlan[]>(planKeys.all) ?? [];
+                      if (!left.some((candidate) => candidate.id === plan.id)) {
+                        setSelectedId(defaultPlan.id);
+                        closeDelete();
+                      }
+                    },
                   },
-                });
+                );
               }}
             >
               <Trash2 aria-hidden="true" />
@@ -372,20 +420,11 @@ export function PlannerPage() {
           </DialogFooter>
           {deletePlan.isError && (
             <p role="alert" className="text-sm font-semibold text-destructive">
-              {t('planner.deleteError')}
+              {isStaleEntity(deletePlan.error) ? t('app.staleEntity') : t('planner.deleteError')}
             </p>
           )}
         </DialogContent>
       </Dialog>
-
-      {updatePlan.isError && (
-        <p
-          role="alert"
-          className="rounded-xl bg-destructive/10 p-3 text-sm font-semibold text-destructive"
-        >
-          {t('planner.renameError')}
-        </p>
-      )}
 
       <div className="flex min-w-0 flex-col gap-5">
         {!plan ? (
@@ -394,7 +433,7 @@ export function PlannerPage() {
           </EmptyState>
         ) : (
           <>
-            {isAiDraft && createdProposal?.planId === plan._id && (
+            {isAiDraft && createdProposal?.planId === plan.id && (
               <p
                 role="status"
                 className="rounded-xl border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success"
@@ -417,7 +456,7 @@ export function PlannerPage() {
                 cardRef={aiDraftCardRef}
                 onManage={() => setPlansOpen(true)}
                 rationale={plan.rationale}
-                warnings={createdProposal?.planId === plan._id ? createdProposal.warnings : []}
+                warnings={createdProposal?.planId === plan.id ? createdProposal.warnings : []}
               />
             )}
 
@@ -525,7 +564,7 @@ export function PlannerPage() {
                       setStalePreview(false);
                       setReviewedFreshPreview(false);
                       activatePlan.mutate(
-                        { planId: plan._id, previewToken: preview.previewToken },
+                        { planId: plan.id, previewToken: preview.previewToken },
                         {
                           onSuccess: () => {
                             setConfirmActivate(false);
@@ -564,9 +603,10 @@ export function PlannerPage() {
             )}
 
             <PlanEditor
-              key={plan._id}
+              key={`${plan.id}:${editorEpoch}`}
               plan={plan}
               tasks={tasks.data.filter((task) => task.active)}
+              allTasks={tasks.data}
               rooms={rooms.data}
               users={activeUsers}
               profileId={profile?._id ?? null}

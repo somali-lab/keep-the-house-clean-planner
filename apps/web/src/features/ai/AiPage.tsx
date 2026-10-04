@@ -1,4 +1,3 @@
-import type { AiProposalResponse, TaskSuggestion } from '@huishoudplanner/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { Bot, Check, CircleCheck, FileText, Lightbulb, Plus, Scale, Settings, Sparkles, TriangleAlert, WandSparkles } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
@@ -9,11 +8,15 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
-import { api, ApiRequestError } from '../../api/index.ts';
-import { queryKeys, useRooms, useSettings } from '../../api/queries.ts';
+import { apiV2, ApiRequestError, unwrap } from '../../api/index.ts';
+import { queryKeys, useSettings } from '../../api/queries.ts';
+import type { components } from '../../api/v2/schema';
+import { useRooms } from '../../api/v2/queries.ts';
 import { format, t } from '../../i18n/nl.ts';
 import { usePlans } from '../planner/api.ts';
-import { useAiActions, useAiGenerationStartedAt } from './api.ts';
+import { useAiActions, useAiGenerationStartedAt, type AiProposal, type TaskSuggestion } from './api.ts';
+
+type Schemas = components['schemas'];
 
 function errorText(error: unknown): string {
   if (error instanceof ApiRequestError) {
@@ -49,7 +52,7 @@ export function AiPage({
   section?: 'all' | 'plan' | 'tasks';
   embedded?: boolean;
   /** Called with the stored draft after a successful proposal or rebalance; the caller then owns the announcement. */
-  onPlanCreated?: (result: AiProposalResponse) => void;
+  onPlanCreated?: (result: AiProposal) => void;
 }) {
   const idPrefix = useId();
   const settings = useSettings();
@@ -117,7 +120,7 @@ export function AiPage({
   const activePlan = plans.data.find((p) => p.active);
   const busy = aiWorking;
   const fail = (error: unknown) => setMessage({ kind: 'alert', text: errorText(error) });
-  const announceCreated = (result: AiProposalResponse) => {
+  const announceCreated = (result: AiProposal) => {
     if (onPlanCreated) onPlanCreated(result);
     else setMessage({ kind: 'status', text: t('ai.proposed') });
   };
@@ -125,7 +128,12 @@ export function AiPage({
 
   const addSuggestion = async (s: TaskSuggestion) => {
     try {
-      await api.post('/api/tasks', { name: s.name, roomId, intervalKey: s.intervalKey, durationMinutes: s.durationMinutes, notes: s.notes });
+      // The points are left out: the server defaults them from the duration.
+      await unwrap(
+        apiV2.POST('/api/v2/tasks', {
+          body: { name: s.name, roomId, intervalKey: s.intervalKey, durationMinutes: s.durationMinutes, notes: s.notes } as Schemas['CreateTaskRequest'],
+        }),
+      );
       setAddedSuggestions((names) => [...names, s.name]);
       await queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
     } catch (error) {
@@ -177,7 +185,7 @@ export function AiPage({
               if (!activePlan) return;
               setMessage(null);
               rebalance.mutate(
-                { planId: activePlan._id, ...withConstraints },
+                { planId: activePlan.id, ...withConstraints },
                 {
                   onSuccess: announceCreated,
                   onError: fail,
@@ -196,7 +204,7 @@ export function AiPage({
             onClick={() => {
               if (!activePlan) return;
               setMessage(null);
-              explain.mutate(activePlan._id, {
+              explain.mutate(activePlan.id, {
                 onSuccess: () => {
                   setMessage({ kind: 'status', text: t('ai.explain.ready') });
                   window.setTimeout(() => explanationRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }), 0);
@@ -263,7 +271,7 @@ export function AiPage({
               {(rooms.data ?? [])
                 .filter((r) => r.active)
                 .map((room) => (
-                  <option key={room._id} value={room._id}>
+                  <option key={room.id} value={room.id}>
                     {room.name}
                   </option>
                 ))}
