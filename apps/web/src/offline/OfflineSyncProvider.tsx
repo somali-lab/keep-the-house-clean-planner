@@ -24,10 +24,16 @@ export function isRetryable(error: unknown): boolean {
  * `409 invalid_transition` although nothing is wrong: the first request reached the server and only
  * its answer was lost.
  */
-export function alreadyApplied(action: QueueableAction, status: string): boolean {
+export function alreadyApplied(
+  action: QueueableAction,
+  occurrence: { status: string; completedBy: string | null },
+  profileId: string,
+): boolean {
+  const status = occurrence.status;
   switch (action.kind) {
     case 'complete':
-      return status === 'done';
+      // Done by someone else meanwhile is a real conflict; only the credited person this replay would have named counts.
+      return status === 'done' && occurrence.completedBy === (action.completedBy ?? profileId);
     case 'skip':
       return status === 'skipped';
     case 'uncomplete':
@@ -35,11 +41,16 @@ export function alreadyApplied(action: QueueableAction, status: string): boolean
   }
 }
 
-async function wasAlreadyApplied(action: QueueableAction, error: unknown, client: ApiV2Client): Promise<boolean> {
+/** A client whose reads skip every cache, the service worker's included, so the check sees the stored state. */
+function freshClient(profileId: string): ApiV2Client {
+  return createV2Client({ getProfileId: () => profileId, fetchImpl: (input, init) => fetch(input, { ...init, cache: 'no-store' }) });
+}
+
+async function wasAlreadyApplied(action: QueueableAction, profileId: string, error: unknown): Promise<boolean> {
   if (!(error instanceof ApiRequestError) || error.status !== 409 || error.code !== 'invalid_transition') return false;
   try {
-    const { data } = await unwrap(client.GET('/api/v2/occurrences/{id}', { params: { path: { id: action.id } } }));
-    return alreadyApplied(action, data.status);
+    const { data } = await unwrap(freshClient(profileId).GET('/api/v2/occurrences/{id}', { params: { path: { id: action.id } } }));
+    return alreadyApplied(action, data, profileId);
   } catch {
     return false;
   }
@@ -73,7 +84,7 @@ export function OfflineSyncProvider({ children, store: givenStore }: { children:
           await sendOccurrenceAction(item.action, client);
         } catch (error) {
           if (isRetryable(error)) break;
-          if (!(await wasAlreadyApplied(item.action, error, client))) {
+          if (!(await wasAlreadyApplied(item.action, item.profileId, error))) {
             setConflicts((current) => [...current, item.taskName]);
           }
         }

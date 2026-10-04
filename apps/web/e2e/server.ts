@@ -89,7 +89,6 @@ export async function startServer(options: { now: string; database: string }): P
         ...inheritedEnv,
         ASPNETCORE_ENVIRONMENT: 'test',
         ASPNETCORE_URLS: baseURL,
-        PORT: String(port),
         MONGO_URL: mongoUrl.toString(),
         APP_FAKE_NOW: now,
         DISABLE_SCHEDULER: 'true',
@@ -179,17 +178,28 @@ export async function startServer(options: { now: string; database: string }): P
     async restart(now) {
       await halt();
       app.now = now;
-      await launch(now);
+      try {
+        await launch(now);
+      } catch (error) {
+        await halt();
+        throw error;
+      }
     },
     stop: halt,
   };
 
-  await launch(options.now);
-  if ((await app.list('/api/v2/rooms')).length === 0) {
-    const admin = await app.user(SEED_USERS[0]!.name);
-    for (const [index, room] of SEED_ROOMS.entries()) {
-      await app.api('POST', '/api/v2/rooms', { as: admin, body: { ...room, sortOrder: (index + 1) * 10 } });
+  // A host that failed to start or to be seeded must not stay running: the fixture never gets the app to stop.
+  try {
+    await launch(options.now);
+    if ((await app.list('/api/v2/rooms')).length === 0) {
+      const admin = await app.user(SEED_USERS[0]!.name);
+      for (const [index, room] of SEED_ROOMS.entries()) {
+        await app.api('POST', '/api/v2/rooms', { as: admin, body: { ...room, sortOrder: (index + 1) * 10 } });
+      }
     }
+  } catch (error) {
+    await halt();
+    throw error;
   }
   return app;
 }

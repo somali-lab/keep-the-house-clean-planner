@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { isCacheableApiRequest, profilePartitionedKey } from './apiCache.ts';
 
-const rule = (path: string, method = 'GET') => isCacheableApiRequest({ url: new URL(`http://app.test${path}`), request: { method } });
+const rule = (path: string, method = 'GET', cache = 'default') =>
+  isCacheableApiRequest({ url: new URL(`http://app.test${path}`), request: { method, cache } });
 
 describe('isCacheableApiRequest', () => {
   it.each([
@@ -30,6 +31,10 @@ describe('isCacheableApiRequest', () => {
     '/api/v2',
   ])('never keeps %s', (path) => {
     expect(rule(path)).toBe(false);
+  });
+
+  it('never keeps a read that asks for a fresh answer (cache: no-store)', () => {
+    expect(rule('/api/v2/occurrences/abc', 'GET', 'no-store')).toBe(false);
   });
 
   it('never keeps a write', () => {

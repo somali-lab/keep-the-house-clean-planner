@@ -205,6 +205,33 @@ describe('offline check-off', () => {
     expect(screen.queryByText(/kon niet worden bijgewerkt/)).not.toBeInTheDocument();
   });
 
+  it('reports a replay as a conflict when someone else completed the occurrence meanwhile', async () => {
+    db = db.map((o) => (o.id === 'o-mine' ? { ...o, status: 'done' as const, completedBy: BRAM.id } : o));
+    await store.add(queuedBadkamer());
+    mode = 'applied';
+    stubServer();
+    renderToday();
+
+    expect(await screen.findByText(/"Badkamer" kon niet worden bijgewerkt/)).toBeInTheDocument();
+    expect(await store.all()).toEqual([]);
+  });
+
+  it('reads the occurrence fresh for that check, past the service worker cache', async () => {
+    db = db.map((o) => (o.id === 'o-mine' ? { ...o, status: 'done' as const, completedBy: ANNA.id } : o));
+    await store.add(queuedBadkamer());
+    mode = 'applied';
+    const fetchMock = stubServer();
+    renderToday();
+
+    await waitFor(async () => expect(await store.all()).toEqual([]));
+    const checks = [];
+    for (const [input, init] of fetchMock.mock.calls) {
+      const described = await describeRequest(input, init);
+      if (described.url.endsWith('/api/v2/occurrences/o-mine') && (described.init?.method ?? 'GET') === 'GET') checks.push(init?.cache);
+    }
+    expect(checks).toEqual(['no-store']);
+  });
+
   it('reports a replay that finds the occurrence in another state (409) as a conflict', async () => {
     // The occurrence was skipped by someone else meanwhile, so a queued check-off no longer applies.
     db = db.map((o) => (o.id === 'o-mine' ? { ...o, status: 'skipped' as const } : o));

@@ -9,8 +9,9 @@
  * never kept (the exports and downloads, the audit log, the health check that tells whether the server is
  * reachable, and the AI endpoints).
  */
-export function isCacheableApiRequest({ url, request }: { url: URL; request: { method: string } }): boolean {
-  if (request.method !== 'GET' || !url.pathname.startsWith('/api/v2/')) return false;
+export function isCacheableApiRequest({ url, request }: { url: URL; request: { method: string; cache?: string } }): boolean {
+  // A read that asks for a fresh answer (cache: 'no-store') must reach the network and never be served or kept.
+  if (request.method !== 'GET' || request.cache === 'no-store' || !url.pathname.startsWith('/api/v2/')) return false;
   const area = url.pathname.slice('/api/v2/'.length).split('/')[0];
   return !['export', 'import', 'audit', 'health', 'ai', 'jobs'].includes(area ?? '');
 }
