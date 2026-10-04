@@ -95,7 +95,7 @@ Port of `routes/tasks.ts`, `domain/tasks.ts` and `data/tasks.ts`. Driving port `
 
 ## Notifications (`Huishoudplanner.Domain.Notifications`)
 
-`NotifyMessage` (title, body, structured data) and the driven port `ForSendingNotifications` (never throws; `PortError` messages carry the notifier and HTTP status only, never URL or token; `IsEnabled` is false for the none notifier). `MorningMessage.Compose(MorningCounts)` is the pure Dutch morning text of `domain/notify/morning.ts`; the orchestration (one message per active user, once a day) belongs to the jobs slice 6.3b.
+`NotifyMessage` (title, body, structured data) and the driven port `ForSendingNotifications` (never throws; `PortError` messages carry the notifier and HTTP status only, never URL or token; `IsEnabled` is false for the none notifier). `MorningMessage.Compose(MorningCounts)` is the pure Dutch morning text of `domain/notify/morning.ts`; `MorningResult` (status `Disabled`, `Done` or `Error`, the day, and the counts sent, failed and quiet) is the answer of the driving port `IMorningNotifyService`, which never fails: a read that fails is `Error`, a delivery that fails is counted. `Application/Notifications/MorningNotifyService` reads the active people, the open occurrences of today and the overdue count of `IDueService.GetSummaryAsync`, composes one message per person (nothing to report means quiet, no message) and sends it; it writes nothing. The 07:30 job and `POST /api/v2/jobs/morning-notify` call it.
 
 ## Audit log read (`Huishoudplanner.Domain.Audit`)
 
