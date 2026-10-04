@@ -120,6 +120,8 @@ describe('offline check-off', () => {
     await waitFor(() => expect(db.find((o) => o.id === 'o-mine')?.status).toBe('done'));
     const sent = (await patchCalls(fetchMock)).at(-1)!;
     expect((sent.init!.headers as Record<string, string>)['x-profile-id']).toBe(ANNA._id);
+    // Optional fields are left out, not sent as null: the server refuses an explicit null.
+    expect(sent.init!.body).toBe('{}');
     expect(db.find((o) => o.id === 'o-mine')?.completedBy).toBe(ANNA._id);
     await waitFor(() => expect(screen.queryByText(PENDING_ONE)).not.toBeInTheDocument());
     expect(await store.all()).toEqual([]);

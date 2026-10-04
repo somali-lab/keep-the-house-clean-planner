@@ -238,7 +238,7 @@ describe('WeekPage', () => {
     const undo = await screen.findByRole('button', { name: 'Badkamer ongedaan maken' });
     fireEvent.click(undo);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Afvinken: Badkamer' })).toBeInTheDocument());
-    expect(intentBodies(fetchMock, 'o1', 'complete')).toEqual([{ completedBy: null, takeOver: null }]);
+    expect(intentBodies(fetchMock, 'o1', 'complete')).toEqual([{}]);
     expect(intentBodies(fetchMock, 'o1', 'uncomplete')).toEqual([null]);
   });
 
@@ -307,7 +307,7 @@ describe('WeekPage', () => {
     expect(screen.getByRole('alertdialog')).toHaveTextContent('Bram de Vries, die niet meer actief is');
     expect(screen.queryByRole('button', { name: 'Namens Bram de Vries afvinken' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Ik heb de taak overgenomen' }));
-    await waitFor(() => expect(intentBodies(fetchMock, 'o2', 'complete')).toEqual([{ completedBy: null, takeOver: true }]));
+    await waitFor(() => expect(intentBodies(fetchMock, 'o2', 'complete')).toEqual([{ takeOver: true }]));
   });
 
   it("asks how to complete another person's task and can take it over", async () => {
@@ -324,7 +324,7 @@ describe('WeekPage', () => {
       assigneeId: ANNA._id,
       completedBy: ANNA._id,
     }));
-    expect(intentBodies(fetchMock, 'o2', 'complete')).toEqual([{ completedBy: null, takeOver: true }]);
+    expect(intentBodies(fetchMock, 'o2', 'complete')).toEqual([{ takeOver: true }]);
   });
 
   it('hides occurrences before the first cycle and explains that the cycle has not started', async () => {
@@ -411,6 +411,22 @@ describe('WeekPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Verplaatsen lukte niet');
     await waitFor(() => expect(within(screen.getByTestId('day:2026-09-17')).getByText('Stofzuigen')).toBeInTheDocument());
     expect(within(screen.getByTestId('day:2026-09-16')).queryByText('Stofzuigen')).not.toBeInTheDocument();
+  });
+
+  it('keeps the week usable when the calendar cannot be read', async () => {
+    setup();
+    mockApi({
+      '/api/users': [ANNA, BRAM],
+      '/api/settings': makeSettings(),
+      '/api/rooms': [makeRoom({ _id: 'r1', name: 'Woonkamer' })],
+      '/api/tasks': [makeTask({ _id: 't1', name: 'Huishoudtaak', roomId: 'r1' })],
+      '/api/v2/occurrences': () => page(db),
+      '/api/v2/calendar': () => problem(500, 'internal_error'),
+    });
+    renderWithProviders(<WeekPage now={NOW} />);
+    fireEvent.click(await screen.findByRole('button', { name: /Afgelopen 3 dagen/ }));
+    expect(await screen.findByText('Badkamer')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('reads the cycle week of each day from the server calendar', async () => {

@@ -24,6 +24,12 @@ describe('fetchOccurrences', () => {
     ]);
   });
 
+  it('stops on a cursor that repeats instead of looping', async () => {
+    mockApi({ '/api/v2/occurrences': { items: [makeOccurrenceV2({ id: 'o1' })], nextCursor: 'same' } });
+    const error = await fetchOccurrences('2026-09-14', '2026-09-20').catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(Error);
+  });
+
   it('turns a problem into an ApiRequestError with the code of the problem', async () => {
     mockApi({ '/api/v2/occurrences': () => problem(400, 'from_after_to', 'from must not be after to') });
     const error = await fetchOccurrences('2026-09-20', '2026-09-14').catch((e: unknown) => e);
@@ -55,11 +61,11 @@ describe('sendOccurrenceAction', () => {
     await sendOccurrenceAction({ id: 'o1', kind: 'claim' });
 
     expect(sentTo(fetchMock)).toEqual([
-      ['POST', '/api/v2/occurrences/o1/complete', { completedBy: 'u2', takeOver: null }],
-      ['POST', '/api/v2/occurrences/o1/complete', { completedBy: null, takeOver: true }],
+      ['POST', '/api/v2/occurrences/o1/complete', { completedBy: 'u2' }],
+      ['POST', '/api/v2/occurrences/o1/complete', { takeOver: true }],
       ['POST', '/api/v2/occurrences/o1/uncomplete', null],
       ['POST', '/api/v2/occurrences/o1/skip', { reason: 'ziek' }],
-      ['POST', '/api/v2/occurrences/o1/skip', { reason: null }],
+      ['POST', '/api/v2/occurrences/o1/skip', {}],
       ['POST', '/api/v2/occurrences/o1/assignment', { assigneeId: null }],
       ['POST', '/api/v2/occurrences/o1/claim', null],
     ]);

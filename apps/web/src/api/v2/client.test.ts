@@ -85,6 +85,14 @@ describe('unwrap', () => {
     expect(error).toMatchObject({ status: 502, code: 'http_error' });
   });
 
+  it('maps an error body that is not JSON to http_error', async () => {
+    const fetchImpl = async () => new Response('<html>Bad gateway</html>', { status: 502, statusText: 'Bad Gateway', headers: { 'Content-Type': 'application/json' } });
+    const client = createV2Client({ getProfileId: () => 'abc', fetchImpl });
+    const error = await unwrap(client.GET('/api/v2/meta/limits')).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ApiRequestError);
+    expect(error).toMatchObject({ status: 502, code: 'http_error' });
+  });
+
   it('lets a network failure through unchanged', async () => {
     const fetchImpl = async () => {
       throw new TypeError('Failed to fetch');

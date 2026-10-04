@@ -17,12 +17,17 @@ export const occurrenceKeys = {
 
 /** The most the server returns in one page (`limit` 1 to 500). */
 const PAGE_SIZE = 500;
+const MAX_PAGES = 200;
 
 /** Every occurrence of the days from `from` to `to`: the bounded pages are followed until the last one. */
 export async function fetchOccurrences(from: string, to: string, client: ApiV2Client = apiV2): Promise<Occurrence[]> {
   const items: Occurrence[] = [];
   let cursor: string | undefined;
+  const seen = new Set<string>();
   do {
+    // A server that repeats a cursor, or never ends, must not keep the page loading forever.
+    if (seen.size >= MAX_PAGES || (cursor && seen.has(cursor))) throw new Error('Occurrence paging did not end.');
+    if (cursor) seen.add(cursor);
     const { data } = await unwrap(
       client.GET('/api/v2/occurrences', { params: { query: { from, to, limit: String(PAGE_SIZE), cursor } } }),
     );
@@ -118,11 +123,15 @@ export async function sendOccurrenceAction(
       case 'uncomplete':
         return client.POST('/api/v2/occurrences/{id}/uncomplete', path);
       case 'skip':
-        return client.POST('/api/v2/occurrences/{id}/skip', { ...path, body: { reason: action.reason || null } });
+        return client.POST('/api/v2/occurrences/{id}/skip', { ...path, body: (action.reason ? { reason: action.reason } : {}) as { reason: string | null } });
       case 'complete':
         return client.POST('/api/v2/occurrences/{id}/complete', {
           ...path,
-          body: { completedBy: action.completedBy ?? null, takeOver: action.takeOver ? true : null },
+          // Optional fields are left out: the server refuses an explicit null for them.
+          body: {
+            ...(action.completedBy ? { completedBy: action.completedBy } : {}),
+            ...(action.takeOver ? { takeOver: true } : {}),
+          } as { completedBy: string | null; takeOver: boolean | null },
         });
     }
   })();
@@ -241,9 +250,9 @@ export function useRecordWork() {
                   taskId: input.taskId,
                   date: input.date,
                   assigneeId: input.assigneeId,
-                  done: input.done ? true : null,
+                  ...(input.done ? { done: true } : {}),
                   requestId,
-                },
+                } as { taskId: string; date: string; assigneeId: string | null; done: boolean | null; requestId: string },
               }),
             )
           : await unwrap(
@@ -254,9 +263,18 @@ export function useRecordWork() {
                   durationMinutes: input.durationMinutes,
                   date: input.date,
                   assigneeId: input.assigneeId,
-                  done: input.done ? true : null,
-                  points: input.points ?? null,
+                  ...(input.done ? { done: true } : {}),
+                  ...(input.points === undefined ? {} : { points: input.points }),
                   requestId,
+                } as {
+                  name: string;
+                  roomId: string | null;
+                  durationMinutes: number;
+                  date: string;
+                  assigneeId: string | null;
+                  done: boolean | null;
+                  points: number | null;
+                  requestId: string;
                 },
               }),
             );

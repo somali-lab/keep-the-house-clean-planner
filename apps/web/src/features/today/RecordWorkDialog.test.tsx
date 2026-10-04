@@ -134,7 +134,7 @@ describe('RecordWorkDialog', () => {
         date: TODAY,
         assigneeId: ANNA._id,
         done: true,
-        points: null,
+       
         requestId: expect.stringMatching(KEY),
       },
     ]);
@@ -202,7 +202,7 @@ describe('RecordWorkDialog', () => {
     fireEvent.change(screen.getByLabelText('Duur (minuten)'), { target: { value: '15' } });
     fireEvent.click(submit());
     await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
-    expect(posts(fetchMock, '/api/v2/occurrences/one-off')[0]).toMatchObject({ points: null });
+    expect(posts(fetchMock, '/api/v2/occurrences/one-off')[0]).not.toHaveProperty('points');
   });
 
   it('sends 0 points and rejects points above 1000 without a request', async () => {
@@ -377,7 +377,7 @@ describe('RecordWorkDialog', () => {
       await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
       expect(onRecorded.mock.calls[0]![1]).toBe('checkedOff');
       const completions = fetchMock.mock.calls.filter(([u, init]) => u === '/api/v2/occurrences/o-planned/complete' && init?.method === 'POST');
-      expect(completions.map(([, init]) => JSON.parse(String(init!.body)))).toEqual([{ completedBy: BRAM._id, takeOver: null }]);
+      expect(completions.map(([, init]) => JSON.parse(String(init!.body)))).toEqual([{ completedBy: BRAM._id }]);
       expect(posts(fetchMock, '/api/v2/occurrences')).toEqual([]);
     });
 
@@ -464,7 +464,7 @@ describe('RecordWorkDialog', () => {
 
       await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
       expect(posts(fetchMock, '/api/v2/occurrences')).toEqual([
-        { taskId: 't1', date: '2026-09-18', assigneeId: BRAM._id, done: null, requestId: expect.stringMatching(KEY) },
+        { taskId: 't1', date: '2026-09-18', assigneeId: BRAM._id, requestId: expect.stringMatching(KEY) },
       ]);
       expect(onRecorded.mock.calls[0]![1]).toBe('planned');
       expect(onOpenChange).toHaveBeenCalledWith(false);
@@ -486,7 +486,7 @@ describe('RecordWorkDialog', () => {
 
       await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
       expect(posts(fetchMock, '/api/v2/occurrences/one-off')).toEqual([
-        { name: 'Zolder opruimen', roomId: 'r1', durationMinutes: 90, date: '2026-09-20', assigneeId: null, done: null, points: null, requestId: expect.stringMatching(KEY) },
+        { name: 'Zolder opruimen', roomId: 'r1', durationMinutes: 90, date: '2026-09-20', assigneeId: null, requestId: expect.stringMatching(KEY) },
       ]);
       expect(posts(fetchMock, '/api/v2/occurrences')).toEqual([]);
     });

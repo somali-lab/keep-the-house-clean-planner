@@ -34,7 +34,19 @@ export function createV2Client(options: V2ClientOptions) {
       return request;
     },
   };
-  client.use(profileHeaders);
+  // An error body that claims to be JSON but is not (a proxy page, say) must not surface as a SyntaxError.
+  const readableErrors: Middleware = {
+    async onResponse({ response }) {
+      if (response.ok || !(response.headers.get('content-type') ?? '').includes('json')) return undefined;
+      try {
+        await response.clone().json();
+        return undefined;
+      } catch {
+        return new Response(null, { status: response.status, statusText: response.statusText });
+      }
+    },
+  };
+  client.use(profileHeaders, readableErrors);
   return client;
 }
 

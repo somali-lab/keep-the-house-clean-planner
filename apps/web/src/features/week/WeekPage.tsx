@@ -189,13 +189,13 @@ export function WeekPage({ now }: { now?: Date }) {
     if (id && date) requestMove(id, date);
   };
 
-  if (settings.isPending || tasks.isPending || rooms.isPending || occurrences.isPending || calendar.isPending)
+  if (settings.isPending || tasks.isPending || rooms.isPending || occurrences.isPending)
     return (
       <p role="status" className="py-10 text-center text-muted-foreground">
         {t('app.loading')}
       </p>
     );
-  if (settings.isError || tasks.isError || rooms.isError || occurrences.isError || calendar.isError)
+  if (settings.isError || tasks.isError || rooms.isError || occurrences.isError)
     return (
       <p role="alert" className="rounded-2xl bg-destructive/10 p-4 text-destructive">
         {t('app.error')}
@@ -341,8 +341,9 @@ export function WeekPage({ now }: { now?: Date }) {
               dayKey={day.dayKey}
               isToday={day.dayKey === todayKey}
               period={day.dayKey < todayKey ? 'past' : day.dayKey === todayKey ? 'today' : 'future'}
-              cycleStarted={(calendar.data.get(day.dayKey)?.cycleIndex ?? 0) >= 0}
-              cycleWeek={(calendar.data.get(day.dayKey)?.cycleIndex ?? 0) >= 0 ? (calendar.data.get(day.dayKey)?.weekIndex ?? 0) + 1 : null}
+              // While the calendar is missing (loading or failed) the grid stays usable: days count as started, without a week number.
+              cycleStarted={(calendar.data?.get(day.dayKey)?.cycleIndex ?? 0) >= 0}
+              cycleWeek={calendar.data?.get(day.dayKey) && calendar.data.get(day.dayKey)!.cycleIndex >= 0 ? calendar.data.get(day.dayKey)!.weekIndex + 1 : null}
               showCycleWeek={showCycleWeek}
               items={day.items}
               users={activeUsers}

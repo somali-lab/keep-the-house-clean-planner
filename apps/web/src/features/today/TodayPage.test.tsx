@@ -212,7 +212,7 @@ describe('TodayPage', () => {
     expect(await inSection('Mijn taken', 'Badkamer')).toBeInTheDocument();
     await waitFor(() => expect(db.find((o) => o.id === 'o-mine')?.status).toBe('open'));
     expect(screen.queryByRole('region', { name: 'Afgerond' })).not.toBeInTheDocument();
-    expect(intentBodies(fetchMock, 'o-mine', 'complete')).toEqual([{ completedBy: null, takeOver: null }]);
+    expect(intentBodies(fetchMock, 'o-mine', 'complete')).toEqual([{}]);
     expect(intentBodies(fetchMock, 'o-mine', 'uncomplete')).toEqual([null]);
   });
 
@@ -227,7 +227,7 @@ describe('TodayPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Namens Bram de Vries afvinken' }));
 
     await waitFor(() => expect(db.find((o) => o.id === 'o-other')?.completedBy).toBe(BRAM._id));
-    expect(intentBodies(fetchMock, 'o-other', 'complete')).toEqual([{ completedBy: BRAM._id, takeOver: null }]);
+    expect(intentBodies(fetchMock, 'o-other', 'complete')).toEqual([{ completedBy: BRAM._id }]);
     expect(await inSection('Afgerond', 'Gedaan door Bram de Vries')).toBeInTheDocument();
   });
 
@@ -241,7 +241,7 @@ describe('TodayPage', () => {
     expect(dialog).toHaveTextContent('Bram de Vries, die niet meer actief is');
     expect(screen.queryByRole('button', { name: 'Namens Bram de Vries afvinken' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Ik heb de taak overgenomen' }));
-    await waitFor(() => expect(intentBodies(fetchMock, 'o-other', 'complete')).toEqual([{ completedBy: null, takeOver: true }]));
+    await waitFor(() => expect(intentBodies(fetchMock, 'o-other', 'complete')).toEqual([{ takeOver: true }]));
   });
 
   it("can take over another person's task while checking it off", async () => {
@@ -258,7 +258,7 @@ describe('TodayPage', () => {
         completedBy: ANNA._id,
       });
     });
-    expect(intentBodies(fetchMock, 'o-other', 'complete')).toEqual([{ completedBy: null, takeOver: true }]);
+    expect(intentBodies(fetchMock, 'o-other', 'complete')).toEqual([{ takeOver: true }]);
   });
 
   it('undo after skip → done restores skipped, also later via the item', async () => {
@@ -333,7 +333,7 @@ describe('TodayPage', () => {
     fireEvent.click(await within(dialog).findByRole('button', { name: 'Afvinken' }));
 
     await waitFor(() => expect(db.find((o) => o.id === 'o-mine')?.status).toBe('done'));
-    expect(intentBodies(fetchMock, 'o-mine', 'complete')).toEqual([{ completedBy: ANNA._id, takeOver: null }]);
+    expect(intentBodies(fetchMock, 'o-mine', 'complete')).toEqual([{ completedBy: ANNA._id }]);
     expect(fetchMock.mock.calls.filter(([u, init]) => u === '/api/v2/occurrences' && init?.method === 'POST')).toEqual([]);
     const snackbar = await screen.findByRole('status');
     expect(snackbar).toHaveTextContent('"Badkamer" afgevinkt.');
