@@ -1,13 +1,11 @@
-import type { Settings, VacationRange } from '@huishoudplanner/shared';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { CalendarDays, Plus, Save, TreePalm } from 'lucide-react';
 import { useId, useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { api } from '../../api/index.ts';
-import { queryKeys } from '../../api/queries.ts';
+import type { Settings } from '../../api/v2/household.ts';
 import { format, t } from '../../i18n/nl.ts';
+import { saveErrorText, useUpdateSettings } from './api.ts';
 import { Field, FormActions, FormMessage, listRowClass, SettingsCardHeader, settingsCardClass } from './SettingsCard.tsx';
 
 type Message = { kind: 'status' | 'alert'; text: string } | null;
@@ -31,18 +29,11 @@ export function CalendarSection({ settings }: { settings: Settings }) {
 
 function AnchorForm({ settings }: { settings: Settings }) {
   const idPrefix = useId();
-  const queryClient = useQueryClient();
+  const update = useUpdateSettings();
   const [anchor, setAnchor] = useState(settings.cycleAnchorDate);
   const [message, setMessage] = useState<Message>(null);
-
-  const save = useMutation({
-    mutationFn: () => api.patch('/api/settings', { cycleAnchorDate: anchor }),
-    onSuccess: async () => {
-      setMessage({ kind: 'status', text: t('settings.saved') });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.settings });
-    },
-    onError: () => setMessage({ kind: 'alert', text: t('app.error') }),
-  });
+  /** A saved confirmation is about what was saved; the next edit makes it stale. */
+  const clearSaved = () => setMessage((current) => (current?.kind === 'status' ? null : current));
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -51,7 +42,13 @@ function AnchorForm({ settings }: { settings: Settings }) {
       return;
     }
     setMessage(null);
-    save.mutate();
+    update.mutate(
+      { settings, patch: { cycleAnchorDate: anchor } },
+      {
+        onSuccess: () => setMessage({ kind: 'status', text: t('settings.saved') }),
+        onError: (error) => setMessage({ kind: 'alert', text: saveErrorText(error) }),
+      },
+    );
   };
 
   return (
@@ -69,12 +66,15 @@ function AnchorForm({ settings }: { settings: Settings }) {
           type="date"
           className="h-10 bg-card"
           value={anchor}
-          onChange={(e) => setAnchor(e.target.value)}
+          onChange={(e) => {
+            clearSaved();
+            setAnchor(e.target.value);
+          }}
         />
       </Field>
       {message && <FormMessage kind={message.kind}>{message.text}</FormMessage>}
       <FormActions className="mt-auto">
-        <Button type="submit" disabled={save.isPending}>
+        <Button type="submit" disabled={update.isPending}>
           <Save aria-hidden="true" />
           {t('common.save')}
         </Button>
@@ -85,20 +85,13 @@ function AnchorForm({ settings }: { settings: Settings }) {
 
 function VacationsForm({ settings }: { settings: Settings }) {
   const idPrefix = useId();
-  const queryClient = useQueryClient();
-  const [ranges, setRanges] = useState<VacationRange[]>(settings.vacationRanges);
+  const update = useUpdateSettings();
+  const [ranges, setRanges] = useState(settings.vacationRanges);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [message, setMessage] = useState<Message>(null);
-
-  const save = useMutation({
-    mutationFn: () => api.patch('/api/settings', { vacationRanges: ranges }),
-    onSuccess: async () => {
-      setMessage({ kind: 'status', text: t('settings.saved') });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.settings });
-    },
-    onError: () => setMessage({ kind: 'alert', text: t('app.error') }),
-  });
+  /** A saved confirmation is about what was saved; the next edit makes it stale. */
+  const clearSaved = () => setMessage((current) => (current?.kind === 'status' ? null : current));
 
   const add = () => {
     if (!from || !to) return setMessage({ kind: 'alert', text: t('settings.vacations.incomplete') });
@@ -112,7 +105,13 @@ function VacationsForm({ settings }: { settings: Settings }) {
   const submit = (event: FormEvent) => {
     event.preventDefault();
     setMessage(null);
-    save.mutate();
+    update.mutate(
+      { settings, patch: { vacationRanges: ranges } },
+      {
+        onSuccess: () => setMessage({ kind: 'status', text: t('settings.saved') }),
+        onError: (error) => setMessage({ kind: 'alert', text: saveErrorText(error) }),
+      },
+    );
   };
 
   return (
@@ -138,7 +137,10 @@ function VacationsForm({ settings }: { settings: Settings }) {
                   size="icon-sm"
                   className="ml-auto text-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                   aria-label={format('settings.vacations.remove', vars)}
-                  onClick={() => setRanges((current) => current.filter((_, i) => i !== index))}
+                  onClick={() => {
+                    clearSaved();
+                    setRanges((current) => current.filter((_, i) => i !== index));
+                  }}
                 >
                   ×
                 </Button>
@@ -150,11 +152,17 @@ function VacationsForm({ settings }: { settings: Settings }) {
       <div className="grid items-end gap-3 sm:grid-cols-[1fr_1fr_auto]">
         <Field>
           <Label htmlFor={`${idPrefix}-from`}>{t('settings.vacations.from')}</Label>
-          <Input id={`${idPrefix}-from`} type="date" className="h-10 bg-card" value={from} onChange={(e) => setFrom(e.target.value)} />
+          <Input id={`${idPrefix}-from`} type="date" className="h-10 bg-card" value={from} onChange={(e) => {
+              clearSaved();
+              setFrom(e.target.value);
+            }} />
         </Field>
         <Field>
           <Label htmlFor={`${idPrefix}-to`}>{t('settings.vacations.to')}</Label>
-          <Input id={`${idPrefix}-to`} type="date" className="h-10 bg-card" value={to} onChange={(e) => setTo(e.target.value)} />
+          <Input id={`${idPrefix}-to`} type="date" className="h-10 bg-card" value={to} onChange={(e) => {
+              clearSaved();
+              setTo(e.target.value);
+            }} />
         </Field>
         <Button type="button" variant="outline" className="h-10" onClick={add}>
           <Plus aria-hidden="true" />
@@ -163,7 +171,7 @@ function VacationsForm({ settings }: { settings: Settings }) {
       </div>
       {message && <FormMessage kind={message.kind}>{message.text}</FormMessage>}
       <FormActions>
-        <Button type="submit" disabled={save.isPending}>
+        <Button type="submit" disabled={update.isPending}>
           <Save aria-hidden="true" />
           {t('settings.vacations.save')}
         </Button>

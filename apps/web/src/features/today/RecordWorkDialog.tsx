@@ -117,7 +117,7 @@ function RecordWorkFormBody({
     planFor: '',
   });
   // Until someone else is chosen, the person doing the recording did the work (the profile may still be loading).
-  const form: RecordWorkForm = { ...chosen, doneBy: chosen.doneBy || (profile?._id ?? '') };
+  const form: RecordWorkForm = { ...chosen, doneBy: chosen.doneBy || (profile?.id ?? '') };
   // When the chosen task is still planned today, checking that off is the default: it keeps one execution in the history.
   const [plannedChoice, setPlannedChoice] = useState<'checkOff' | 'extra'>('checkOff');
   const [submitted, setSubmitted] = useState(false);
@@ -434,7 +434,7 @@ function RecordWorkFormBody({
             >
               <option value="">{t('recordWork.anyone')}</option>
               {activeUsers.map((user) => (
-                <option key={user._id} value={user._id}>
+                <option key={user.id} value={user.id}>
                   {user.name}
                 </option>
               ))}
@@ -454,7 +454,7 @@ function RecordWorkFormBody({
             >
               {form.doneBy === '' && <option value="" />}
               {activeUsers.map((user) => (
-                <option key={user._id} value={user._id}>
+                <option key={user.id} value={user.id}>
                   {user.name}
                 </option>
               ))}

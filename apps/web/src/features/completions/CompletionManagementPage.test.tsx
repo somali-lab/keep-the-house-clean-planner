@@ -18,9 +18,9 @@ function makeRecords() {
       roomNameSnapshot: 'Hobbykamer Sven',
       date: '2026-09-27',
       completedAt: '2026-09-27T08:00:00.000Z',
-      completedBy: ANNA._id,
+      completedBy: ANNA.id,
     }),
-    record({ id: 'o00000000000000000000002', taskNameSnapshot: 'Badkamer', date: '2026-09-26', completedAt: '2026-09-26T09:00:00.000Z', completedBy: BRAM._id }),
+    record({ id: 'o00000000000000000000002', taskNameSnapshot: 'Badkamer', date: '2026-09-26', completedAt: '2026-09-26T09:00:00.000Z', completedBy: BRAM.id }),
   ];
 }
 
@@ -36,8 +36,8 @@ const sent = (fetchMock: ReturnType<typeof mockApi>, method: string) =>
 
 describe('CompletionManagementPage', () => {
   it('lists the done occurrences of the range from the v2 list and shows who did what when', async () => {
-    storeProfile(ANNA._id);
-    const fetchMock = mockApi({ '/api/users': [ANNA, BRAM], '/api/settings': makeSettings(), '/api/v2/occurrences': page(makeRecords().reverse()) });
+    storeProfile(ANNA.id);
+    const fetchMock = mockApi({ '/api/v2/users': page([ANNA, BRAM]), '/api/v2/settings': makeSettings(), '/api/v2/occurrences': page(makeRecords().reverse()) });
     renderWithProviders(<CompletionManagementPage now={new Date('2026-09-27T12:00:00.000Z')} />, { headerReset: true });
 
     const row = (await screen.findByText('Kattenmandjes')).closest('li')!;
@@ -52,11 +52,11 @@ describe('CompletionManagementPage', () => {
   });
 
   it('follows the pages of the list', async () => {
-    storeProfile(ANNA._id);
+    storeProfile(ANNA.id);
     const [first, second] = makeRecords();
     const fetchMock = mockApi({
-      '/api/users': [ANNA, BRAM],
-      '/api/settings': makeSettings(),
+      '/api/v2/users': page([ANNA, BRAM]),
+      '/api/v2/settings': makeSettings(),
       '/api/v2/occurrences': (_init: RequestInit | undefined, url: string) =>
         url.includes('cursor=more') ? page([second]) : { items: [first], nextCursor: 'more' },
     });
@@ -67,11 +67,11 @@ describe('CompletionManagementPage', () => {
   });
 
   it('edits through the completion endpoint and permanently deletes after confirmation, both without If-Match', async () => {
-    storeProfile(ANNA._id);
+    storeProfile(ANNA.id);
     let records = makeRecords();
     const fetchMock = mockApi({
-      '/api/users': [ANNA, BRAM],
-      '/api/settings': makeSettings(),
+      '/api/v2/users': page([ANNA, BRAM]),
+      '/api/v2/settings': makeSettings(),
       '/api/v2/occurrences': () => page(records),
       [`POST /api/v2/occurrences/${KATTEN}/completion`]: (init: RequestInit | undefined) => {
         const body = JSON.parse(String(init?.body));
@@ -92,14 +92,14 @@ describe('CompletionManagementPage', () => {
     const editDialog = await screen.findByRole('dialog', { name: 'Kattenmandjes bewerken' });
     fireEvent.change(within(editDialog).getByLabelText('Taakdatum'), { target: { value: '2026-09-28' } });
     fireEvent.change(within(editDialog).getByLabelText('Gereed op'), { target: { value: '2026-09-28T11:30' } });
-    fireEvent.change(within(editDialog).getByLabelText('Uitgevoerd door'), { target: { value: BRAM._id } });
+    fireEvent.change(within(editDialog).getByLabelText('Uitgevoerd door'), { target: { value: BRAM.id } });
     fireEvent.click(within(editDialog).getByRole('button', { name: 'Opslaan' }));
 
     await waitFor(() => expect(sent(fetchMock, 'POST')).toHaveLength(1));
     const [edit] = sent(fetchMock, 'POST');
     expect(edit!.url).toBe(`/api/v2/occurrences/${KATTEN}/completion`);
     // Exactly the three fields, the instant as an ISO string; an intent endpoint carries no If-Match.
-    expect(edit!.body).toEqual({ date: '2026-09-28', completedAt: new Date('2026-09-28T11:30').toISOString(), completedBy: BRAM._id });
+    expect(edit!.body).toEqual({ date: '2026-09-28', completedAt: new Date('2026-09-28T11:30').toISOString(), completedBy: BRAM.id });
     expect(edit!.headers['if-match']).toBeUndefined();
     expect(await screen.findByRole('status')).toHaveTextContent('De gereedmelding is bijgewerkt.');
 
@@ -114,16 +114,16 @@ describe('CompletionManagementPage', () => {
     expect(sent(fetchMock, 'DELETE').map(({ url, body, headers }) => [url, body, headers['if-match']])).toEqual([[`/api/v2/occurrences/${KATTEN}`, undefined, undefined]]);
     expect(screen.getByRole('button', { name: 'Filters van dit scherm resetten' })).toBeDisabled();
     fireEvent.change(screen.getByLabelText('Vanaf'), { target: { value: '2026-09-01' } });
-    expect(window.localStorage.getItem(`huishoudplanner.filters.${ANNA._id}.completions.from`)).toBe('"2026-09-01"');
+    expect(window.localStorage.getItem(`huishoudplanner.filters.${ANNA.id}.completions.from`)).toBe('"2026-09-01"');
     fireEvent.click(screen.getByRole('button', { name: 'Filters van dit scherm resetten' }));
     expect(screen.getByLabelText('Vanaf')).toHaveValue('2026-06-29');
   });
 
   it('shows a refused edit inside the dialog and keeps the typed values', async () => {
-    storeProfile(ANNA._id);
+    storeProfile(ANNA.id);
     mockApi({
-      '/api/users': [ANNA, BRAM],
-      '/api/settings': makeSettings(),
+      '/api/v2/users': page([ANNA, BRAM]),
+      '/api/v2/settings': makeSettings(),
       '/api/v2/occurrences': page(makeRecords()),
       [`POST /api/v2/occurrences/${KATTEN}/completion`]: () => problem(409, 'cycle_not_generated', 'No cycle for that day', { date: '2026-12-01' }),
     });
@@ -138,10 +138,10 @@ describe('CompletionManagementPage', () => {
   });
 
   it('shows a failed delete inside its dialog', async () => {
-    storeProfile(ANNA._id);
+    storeProfile(ANNA.id);
     mockApi({
-      '/api/users': [ANNA, BRAM],
-      '/api/settings': makeSettings(),
+      '/api/v2/users': page([ANNA, BRAM]),
+      '/api/v2/settings': makeSettings(),
       '/api/v2/occurrences': page(makeRecords()),
       [`DELETE /api/v2/occurrences/${KATTEN}`]: () => problem(409, 'invalid_transition', 'Not done'),
     });

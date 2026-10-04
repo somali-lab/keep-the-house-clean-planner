@@ -24,9 +24,9 @@ vi.mock('@dnd-kit/core', async (importOriginal) => {
   };
 });
 
-const ANNA = makeUser({ _id: 'a00000000000000000000001', name: 'Anna', unavailableWeekdays: [2] }); // not on Tuesday
+const ANNA = makeUser({ id: 'a00000000000000000000001', name: 'Anna', unavailableWeekdays: [2] }); // not on Tuesday
 const BRAM = makeUser({
-  _id: 'b00000000000000000000002',
+  id: 'b00000000000000000000002',
   name: 'Bram',
   maxDailyMinutes: { weekday: 60, weekend: 120 },
 });
@@ -41,14 +41,14 @@ type SlotsBody = { slots: CyclePlan['slots'] };
 
 /** The plans the fake server holds; routes read and write them, so a save is visible to the next read of the list. */
 function setup(initial: CyclePlan[], extra: Record<string, unknown> = {}) {
-  storeProfile(ANNA._id);
+  storeProfile(ANNA.id);
   const server = { plans: initial };
   const validate = (id: string) => () => standInValidation(server.plans.find((plan) => plan.id === id)?.slots ?? [], TASKS, USERS);
   const routes: Record<string, unknown> = {
-    '/api/users': USERS,
+    '/api/v2/users': page(USERS),
     '/api/v2/rooms': page([makeRoomV2({ id: 'r1', name: 'Woonkamer' })]),
     '/api/v2/tasks': page(TASKS),
-    '/api/settings': makeSettings(),
+    '/api/v2/settings': makeSettings(),
     '/api/v2/cycle-plans': () => page(server.plans),
     'POST /api/v2/cycle-plans/validation': (init: RequestInit) => standInValidation((JSON.parse(String(init.body)) as SlotsBody).slots, TASKS, USERS),
   };
@@ -100,13 +100,13 @@ describe('PlannerPage — drops', () => {
     expect(screen.queryByRole('region', { name: 'AI-assistent' })).not.toBeInTheDocument();
     await openPlanManagement();
     expect(screen.getByRole('region', { name: 'AI-assistent' })).toBeInTheDocument();
-    expect(within(screen.getByTestId(`cell:0:2:${ANNA._id}`)).getByText('Anna niet beschikbaar')).toBeInTheDocument();
-    expect(within(screen.getByTestId(`cell:0:2:${ANNA._id}`)).queryByText('0 min')).not.toBeInTheDocument();
+    expect(within(screen.getByTestId(`cell:0:2:${ANNA.id}`)).getByText('Anna niet beschikbaar')).toBeInTheDocument();
+    expect(within(screen.getByTestId(`cell:0:2:${ANNA.id}`)).queryByText('0 min')).not.toBeInTheDocument();
 
-    drop('task:t1', `cell:0:2:${ANNA._id}`);
+    drop('task:t1', `cell:0:2:${ANNA.id}`);
 
     expect(screen.getByRole('alert')).toHaveTextContent('Anna kan niet op dinsdag. "Badkamer" is niet geplaatst.');
-    expect(within(screen.getByTestId(`cell:0:2:${ANNA._id}`)).queryByText('Badkamer')).not.toBeInTheDocument();
+    expect(within(screen.getByTestId(`cell:0:2:${ANNA.id}`)).queryByText('Badkamer')).not.toBeInTheDocument();
     await new Promise((resolve) => setTimeout(resolve, 900));
     expect(putCalls(fetchMock)).toHaveLength(0);
   });
@@ -116,14 +116,14 @@ describe('PlannerPage — drops', () => {
     renderWithProviders(<PlannerPage />);
     await screen.findByRole('group', { name: 'Kies een week' });
 
-    drop('task:t1', `cell:0:2:${BRAM._id}`);
+    drop('task:t1', `cell:0:2:${BRAM.id}`);
 
-    expect(within(screen.getByTestId(`cell:0:2:${BRAM._id}`)).getByText('Badkamer')).toBeInTheDocument();
+    expect(within(screen.getByTestId(`cell:0:2:${BRAM.id}`)).getByText('Badkamer')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(putCalls(fetchMock)).toHaveLength(0);
     await waitFor(() => expect(putCalls(fetchMock)).toHaveLength(1), { timeout: 2000 });
     expect(callsOf(fetchMock, 'PUT', '/api/v2/cycle-plans/p1/slots')).toEqual([
-      { ifMatch: '"3"', body: { slots: [{ taskId: 't1', weekIndex: 0, weekday: 2, assigneeId: BRAM._id, sortOrder: 0 }] } },
+      { ifMatch: '"3"', body: { slots: [{ taskId: 't1', weekIndex: 0, weekday: 2, assigneeId: BRAM.id, sortOrder: 0 }] } },
     ]);
     expect(await screen.findByText('Opgeslagen')).toBeInTheDocument();
   });
@@ -133,10 +133,10 @@ describe('PlannerPage — drops', () => {
     renderWithProviders(<PlannerPage />);
     await screen.findByRole('group', { name: 'Kies een week' });
 
-    drop('task:t1', `cell:0:2:${BRAM._id}`);
+    drop('task:t1', `cell:0:2:${BRAM.id}`);
     await waitFor(() => expect(putCalls(fetchMock)).toHaveLength(1), { timeout: 2000 });
     await screen.findByText('Opgeslagen');
-    drop('task:t2', `cell:0:3:${BRAM._id}`);
+    drop('task:t2', `cell:0:3:${BRAM.id}`);
     await waitFor(() => expect(putCalls(fetchMock)).toHaveLength(2), { timeout: 2000 });
 
     expect(callsOf(fetchMock, 'PUT', '/api/v2/cycle-plans/p1/slots').map((call) => call.ifMatch)).toEqual(['"3"', '"4"']);
@@ -173,16 +173,16 @@ describe('PlannerPage — edits racing with saves', () => {
     renderWithProviders(<PlannerPage />);
     await screen.findByRole('group', { name: 'Kies een week' });
 
-    drop('task:t1', `cell:0:2:${BRAM._id}`);
+    drop('task:t1', `cell:0:2:${BRAM.id}`);
     await waitFor(() => expect(putCalls(fetchMock)).toHaveLength(1), { timeout: 2000 });
-    drop('task:t2', `cell:0:3:${BRAM._id}`);
+    drop('task:t2', `cell:0:3:${BRAM.id}`);
     // B is past its debounce and queued behind A when A answers.
     await new Promise((resolve) => setTimeout(resolve, 1000));
     release();
 
     await new Promise((resolve) => setTimeout(resolve, 100));
-    expect(within(screen.getByTestId(`cell:0:2:${BRAM._id}`)).getByText('Badkamer')).toBeInTheDocument();
-    expect(within(screen.getByTestId(`cell:0:3:${BRAM._id}`)).getByText('Stofzuigen')).toBeInTheDocument();
+    expect(within(screen.getByTestId(`cell:0:2:${BRAM.id}`)).getByText('Badkamer')).toBeInTheDocument();
+    expect(within(screen.getByTestId(`cell:0:3:${BRAM.id}`)).getByText('Stofzuigen')).toBeInTheDocument();
     await waitFor(() => expect(putCalls(fetchMock)).toHaveLength(2), { timeout: 2000 });
   });
 
@@ -191,7 +191,7 @@ describe('PlannerPage — edits racing with saves', () => {
     renderWithProviders(<PlannerPage />);
     await screen.findByRole('group', { name: 'Kies een week' });
 
-    drop('task:t1', `cell:0:2:${BRAM._id}`);
+    drop('task:t1', `cell:0:2:${BRAM.id}`);
     await openPlanManagement();
     fireEvent.click(screen.getByRole('button', { name: 'Plan leegmaken' }));
     fireEvent.click(within(screen.getByRole('dialog', { name: 'Alles terugzetten?' })).getByRole('button', { name: 'Alles terugzetten' }));
@@ -209,7 +209,7 @@ describe('PlannerPage — validation by the server', () => {
   });
 
   it('reads the summary of the stored plan from the server while nothing is changed', async () => {
-    const fetchMock = setup([makePlanV2({ id: 'p1', name: 'Standaard', active: true, slots: [slotOf('t1', 0, 1, ANNA._id)] })]);
+    const fetchMock = setup([makePlanV2({ id: 'p1', name: 'Standaard', active: true, slots: [slotOf('t1', 0, 1, ANNA.id)] })]);
     renderWithProviders(<PlannerPage />);
     await screen.findByRole('group', { name: 'Kies een week' });
 
@@ -223,22 +223,22 @@ describe('PlannerPage — validation by the server', () => {
     renderWithProviders(<PlannerPage />);
     await screen.findByRole('group', { name: 'Kies een week' });
 
-    drop('task:t1', `cell:0:1:${BRAM._id}`);
-    drop('task:t2', `cell:0:3:${BRAM._id}`);
+    drop('task:t1', `cell:0:1:${BRAM.id}`);
+    drop('task:t2', `cell:0:3:${BRAM.id}`);
 
     await waitFor(() => expect(callsOf(fetchMock, 'POST', '/api/v2/cycle-plans/validation')).toHaveLength(1), { timeout: 2000 });
     expect(callsOf(fetchMock, 'POST', '/api/v2/cycle-plans/validation')[0]!.body).toEqual({
-      slots: [slotOf('t1', 0, 1, BRAM._id), slotOf('t2', 0, 3, BRAM._id)],
+      slots: [slotOf('t1', 0, 1, BRAM.id), slotOf('t2', 0, 3, BRAM.id)],
     });
     expect(await screen.findByText('Totaal 70 min')).toBeInTheDocument();
   });
 
   it('lists the hard errors the server reports for the plan, named in plain language', async () => {
     const issues: PlanIssue[] = [
-      issueOf({ code: 'assignee_unavailable', slotIndex: 0, taskId: 't1', userId: ANNA._id, weekIndex: 0, weekday: 2 }),
+      issueOf({ code: 'assignee_unavailable', slotIndex: 0, taskId: 't1', userId: ANNA.id, weekIndex: 0, weekday: 2 }),
       issueOf({ code: 'inactive_task', slotIndex: 1, taskId: 't2' }),
     ];
-    setup([makePlanV2({ id: 'p1', name: 'Standaard', active: true, slots: [slotOf('t1', 0, 2, ANNA._id), slotOf('t2', 0, 4, null)] })], {
+    setup([makePlanV2({ id: 'p1', name: 'Standaard', active: true, slots: [slotOf('t1', 0, 2, ANNA.id), slotOf('t2', 0, 4, null)] })], {
       'POST /api/v2/cycle-plans/p1/validation': standInValidation([], TASKS, USERS, issues),
     });
     renderWithProviders(<PlannerPage />);
@@ -285,16 +285,16 @@ describe('PlannerPage — budgets and pool', () => {
         id: 'p1',
         name: 'Standaard',
         active: true,
-        slots: [slotOf('t1', 0, 1, ANNA._id), slotOf('t2', 0, 1, BRAM._id), slotOf('t3', 0, 1, null)],
+        slots: [slotOf('t1', 0, 1, ANNA.id), slotOf('t2', 0, 1, BRAM.id), slotOf('t3', 0, 1, null)],
       }),
     ]);
     renderWithProviders(<PlannerPage />);
     await screen.findByRole('group', { name: 'Kies een week' });
 
-    fireEvent.change(screen.getByLabelText('Filter planner op persoon'), { target: { value: BRAM._id } });
+    fireEvent.change(screen.getByLabelText('Filter planner op persoon'), { target: { value: BRAM.id } });
 
-    expect(screen.queryByTestId(`cell:0:1:${ANNA._id}`)).not.toBeInTheDocument();
-    expect(within(screen.getByTestId(`cell:0:1:${BRAM._id}`)).getByText('Stofzuigen')).toBeInTheDocument();
+    expect(screen.queryByTestId(`cell:0:1:${ANNA.id}`)).not.toBeInTheDocument();
+    expect(within(screen.getByTestId(`cell:0:1:${BRAM.id}`)).getByText('Stofzuigen')).toBeInTheDocument();
     expect(screen.queryByTestId('cell:0:1:any')).not.toBeInTheDocument();
   });
 
@@ -304,17 +304,17 @@ describe('PlannerPage — budgets and pool', () => {
         id: 'p1',
         name: 'Standaard',
         active: true,
-        slots: [slotOf('t1', 0, 6, BRAM._id), slotOf('t2', 0, 6, BRAM._id), slotOf('t1', 0, 1, BRAM._id), slotOf('t2', 0, 1, BRAM._id)],
+        slots: [slotOf('t1', 0, 6, BRAM.id), slotOf('t2', 0, 6, BRAM.id), slotOf('t1', 0, 1, BRAM.id), slotOf('t2', 0, 1, BRAM.id)],
       }),
     ]);
     renderWithProviders(<PlannerPage />);
 
-    const saturday = await screen.findByTestId(`cell:0:6:${BRAM._id}`);
+    const saturday = await screen.findByTestId(`cell:0:6:${BRAM.id}`);
     expect(saturday).toHaveTextContent('70 min');
     expect(saturday).not.toHaveTextContent('Boven budget');
     expect(saturday).not.toHaveClass('is-over-budget');
 
-    const monday = screen.getByTestId(`cell:0:1:${BRAM._id}`);
+    const monday = screen.getByTestId(`cell:0:1:${BRAM.id}`);
     expect(monday).toHaveTextContent('70 min');
     expect(monday).toHaveTextContent('Boven budget');
     expect(monday).toHaveClass('is-over-budget');
@@ -363,7 +363,7 @@ describe('PlannerPage — budgets and pool', () => {
         id: 'p1',
         name: 'Standaard',
         active: true,
-        slots: [slotOf('t1', 0, 1, ANNA._id), slotOf('t2', 0, 1, BRAM._id)],
+        slots: [slotOf('t1', 0, 1, ANNA.id), slotOf('t2', 0, 1, BRAM.id)],
       }),
     ]);
     renderWithProviders(<PlannerPage />, { headerReset: true });
@@ -371,8 +371,8 @@ describe('PlannerPage — budgets and pool', () => {
     const search = await screen.findByRole('searchbox', { name: 'Zoek taken' });
     expect(screen.getByRole('button', { name: 'Filters van dit scherm resetten' })).toBeDisabled();
     const pool = screen.getByRole('complementary', { name: 'Nog in te plannen' });
-    const annaCell = screen.getByTestId(`cell:0:1:${ANNA._id}`);
-    const bramCell = screen.getByTestId(`cell:0:1:${BRAM._id}`);
+    const annaCell = screen.getByTestId(`cell:0:1:${ANNA.id}`);
+    const bramCell = screen.getByTestId(`cell:0:1:${BRAM.id}`);
     const totals = () => screen.getByRole('region', { name: 'Totaal voor de hele cyclus' });
     expect(totals()).toHaveTextContent('Anna: 40 min');
     expect(totals()).toHaveTextContent('Bram: 30 min');
@@ -382,7 +382,7 @@ describe('PlannerPage — budgets and pool', () => {
     expect(within(annaCell).queryByText('Badkamer')).not.toBeInTheDocument();
     expect(within(bramCell).getByText('Stofzuigen')).toBeInTheDocument();
     expect(within(pool).queryByText('Badkamer')).not.toBeInTheDocument();
-    expect(window.localStorage.getItem(`huishoudplanner.filters.${ANNA._id}.planner.search`)).toBe('"STOF"');
+    expect(window.localStorage.getItem(`huishoudplanner.filters.${ANNA.id}.planner.search`)).toBe('"STOF"');
     expect(totals()).toHaveTextContent('Totaal 70 min');
 
     fireEvent.click(screen.getByRole('button', { name: 'Filters van dit scherm resetten' }));
@@ -410,8 +410,8 @@ describe('PlannerPage — budgets and pool', () => {
         name: 'Standaard',
         active: true,
         slots: [
-          ...[0, 1, 2, 3].map((weekIndex) => slotOf('t1', weekIndex, 1, BRAM._id)),
-          ...[0, 1, 2, 3].map((weekIndex) => slotOf('t2', weekIndex, 4, BRAM._id)),
+          ...[0, 1, 2, 3].map((weekIndex) => slotOf('t1', weekIndex, 1, BRAM.id)),
+          ...[0, 1, 2, 3].map((weekIndex) => slotOf('t2', weekIndex, 4, BRAM.id)),
         ],
       }),
     ]);
@@ -430,7 +430,7 @@ describe('PlannerPage — plan actions', () => {
       name: 'Standaard',
       active: true,
       version: 4,
-      slots: [0, 1, 2, 3].map((week) => slotOf('t1', week, 1, ANNA._id)),
+      slots: [0, 1, 2, 3].map((week) => slotOf('t1', week, 1, ANNA.id)),
     });
     const fetchMock = setup([original]);
     renderWithProviders(<PlannerPage />);
@@ -509,7 +509,7 @@ describe('PlannerPage — plan actions', () => {
         planId: 'p2',
         previewToken: 'a'.repeat(64),
         asOfDate: '2026-09-14',
-        removed: [{ occurrenceId: 'o1', cycleIndex: 0, taskId: 't1', taskName: 'Badkamer', date: '2026-09-15', assigneeId: ANNA._id }],
+        removed: [{ occurrenceId: 'o1', cycleIndex: 0, taskId: 't1', taskName: 'Badkamer', date: '2026-09-15', assigneeId: ANNA.id }],
         added: [],
         preserved: {
           done: [],
@@ -593,19 +593,19 @@ describe('PlannerPage — If-Match (ADR-0022)', () => {
     await screen.findByRole('group', { name: 'Kies een week' });
     const readsBefore = planReads(fetchMock);
 
-    drop('task:t1', `cell:0:2:${BRAM._id}`);
+    drop('task:t1', `cell:0:2:${BRAM.id}`);
     await waitFor(() => expect(puts).toBe(1), { timeout: 2000 });
 
     expect(await screen.findByText(STALE_MESSAGE)).toBeInTheDocument();
     await waitFor(() => expect(planReads(fetchMock)).toBeGreaterThan(readsBefore));
     // The edit is still there, and nothing was saved over it.
-    expect(within(screen.getByTestId(`cell:0:2:${BRAM._id}`)).getByText('Badkamer')).toBeInTheDocument();
+    expect(within(screen.getByTestId(`cell:0:2:${BRAM.id}`)).getByText('Badkamer')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Opnieuw opslaan' }));
     await waitFor(() => expect(puts).toBe(2));
     const sent = callsOf(fetchMock, 'PUT', '/api/v2/cycle-plans/p1/slots');
     expect(sent.map((call) => call.ifMatch)).toEqual(['"3"', '"4"']);
-    expect(sent[1]!.body).toEqual({ slots: [{ taskId: 't1', weekIndex: 0, weekday: 2, assigneeId: BRAM._id, sortOrder: 0 }] });
+    expect(sent[1]!.body).toEqual({ slots: [{ taskId: 't1', weekIndex: 0, weekday: 2, assigneeId: BRAM.id, sortOrder: 0 }] });
     await waitFor(() => expect(screen.queryByText(STALE_MESSAGE)).not.toBeInTheDocument());
     expect(await screen.findByText('Opgeslagen')).toBeInTheDocument();
   });
@@ -640,7 +640,7 @@ describe('PlannerPage — If-Match (ADR-0022)', () => {
   });
 
   it('keeps the reset dialog open on a 412, with the message inside it, and clears the message when it is opened again', async () => {
-    const fetchMock = setup([makePlanV2({ id: 'p1', name: 'Standaard', active: true, version: 3, slots: [slotOf('t1', 0, 1, ANNA._id)] })], {
+    const fetchMock = setup([makePlanV2({ id: 'p1', name: 'Standaard', active: true, version: 3, slots: [slotOf('t1', 0, 1, ANNA.id)] })], {
       'PUT /api/v2/cycle-plans/p1/slots': staleAnswer(4),
     });
     renderWithProviders(<PlannerPage />);
@@ -720,7 +720,7 @@ describe('PlannerPage — If-Match (ADR-0022)', () => {
   });
 
   it('treats a 428 as a plain error, not as a stale edit', async () => {
-    setup([makePlanV2({ id: 'p1', name: 'Standaard', active: true, slots: [slotOf('t1', 0, 1, ANNA._id)] })], {
+    setup([makePlanV2({ id: 'p1', name: 'Standaard', active: true, slots: [slotOf('t1', 0, 1, ANNA.id)] })], {
       'PUT /api/v2/cycle-plans/p1/slots': () => problem(428, 'precondition_required'),
     });
     renderWithProviders(<PlannerPage />);
@@ -744,12 +744,12 @@ describe('PlannerPage — AI drafts', () => {
     proposalId: 'prop-1',
     rationale: ['Week 1 rustig.', 'Week 2 meer badkamer.', 'Week 3 ramen.', 'Week 4 gelijk verdeeld.'],
   });
-  const aiSettings = makeSettings({ aiProvider: { type: 'mock' } });
+  const aiSettings = makeSettings({ aiProvider: { type: 'mock', endpoint: null, model: null, timeoutSeconds: null } });
   const proposeButton = () => screen.findByRole('button', { name: 'Voorstel maken' });
 
   it('selects the new draft automatically after a proposal and announces it', async () => {
     const fetchMock: ReturnType<typeof setup> = setup([ACTIVE], {
-      '/api/settings': aiSettings,
+      '/api/v2/settings': aiSettings,
       'POST /api/v2/ai/propose-plan': () => {
         fetchMock.server.plans = [ACTIVE, DRAFT];
         return { planId: 'p-ai', proposalId: 'prop-1', warnings: [], rationale: DRAFT.rationale };
@@ -774,7 +774,7 @@ describe('PlannerPage — AI drafts', () => {
 
   it('shows the AI draft card with rationale and, right after creation, the warnings', async () => {
     const fetchMock: ReturnType<typeof setup> = setup([ACTIVE], {
-      '/api/settings': aiSettings,
+      '/api/v2/settings': aiSettings,
       'POST /api/v2/ai/propose-plan': () => {
         fetchMock.server.plans = [ACTIVE, DRAFT];
         return {
@@ -821,7 +821,7 @@ describe('PlannerPage — AI drafts', () => {
 
   it('keeps the selection and shows the validation error when the proposal is rejected', async () => {
     setup([ACTIVE, DRAFT], {
-      '/api/settings': aiSettings,
+      '/api/v2/settings': aiSettings,
       'POST /api/v2/ai/propose-plan': () => problem(422, 'ai_invalid_plan', 'invalid', { errors: ['assignee_unavailable (slot 0)'] }),
     });
     renderWithProviders(<PlannerPage />);

@@ -1,4 +1,4 @@
-import type { User } from '@huishoudplanner/shared';
+import type { User } from '../../api/v2/household.ts';
 import { CalendarDays, CheckCircle2, Circle, CirclePlus, Clock, ThumbsUp, TriangleAlert } from 'lucide-react';
 import { useId, useState, type FormEvent } from 'react';
 import { EmptyState } from '@/components/EmptyState';
@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
-import { useSettings } from '../../api/queries.ts';
+import { useSettings } from '../../api/v2/household.ts';
 import { format, t } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
 import { shortDate } from '../today/OccurrenceItem.tsx';
@@ -60,7 +60,7 @@ export function DuePage({ now }: { now?: Date }) {
   const onError = () => setFailed(true);
   const requestDoneNow = (item: DueItemView) => {
     const planned = item.nextOccurrence;
-    if (planned?.date === todayKey && planned.assigneeId && planned.assigneeId !== profile?._id) {
+    if (planned?.date === todayKey && planned.assigneeId && planned.assigneeId !== profile?.id) {
       setChoiceFor(item);
       return;
     }
@@ -334,7 +334,7 @@ function DueRow({
             >
               <option value="">{t('today.anyone')}</option>
               {users.map((user) => (
-                <option key={user._id} value={user._id}>
+                <option key={user.id} value={user.id}>
                   {user.name}
                 </option>
               ))}

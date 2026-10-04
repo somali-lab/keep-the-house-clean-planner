@@ -10,16 +10,16 @@ describe('app shell', () => {
   beforeEach(() => {
     window.history.replaceState(null, '', '/');
     mockApi({
-      '/api/users': [ANNA, BRAM],
+      '/api/v2/users': page([ANNA, BRAM]),
       '/api/v2/tasks': page([]),
       '/api/v2/rooms': page([]),
-      '/api/settings': makeSettings(),
+      '/api/v2/settings': makeSettings(),
       '/api/cycle-plans': [],
       '/api/occurrences': [],
       ...v2Basics(),
       '/api/v2/occurrences': page([]),
     });
-    storeProfile(ANNA._id);
+    storeProfile(ANNA.id);
   });
 
   it('renders the standard overview on narrow screens', async () => {
@@ -72,17 +72,17 @@ describe('app shell', () => {
   it('opens the reward tab from the menu, for the active profile', async () => {
     setViewportWidth(375);
     mockApi({
-      '/api/users': [ANNA, BRAM],
+      '/api/v2/users': page([ANNA, BRAM]),
       '/api/v2/tasks': page([]),
       '/api/v2/rooms': page([]),
-      '/api/settings': makeSettings(),
+      '/api/v2/settings': makeSettings(),
       '/api/cycle-plans': [],
       '/api/occurrences': [],
       ...v2Basics(),
       '/api/v2/occurrences': page([]),
-      '/api/v2/points/progress': makeProgress({ personId: ANNA._id }),
+      '/api/v2/points/progress': makeProgress({ personId: ANNA.id }),
       '/api/v2/badges': page([]),
-      '/api/v2/badges/progress': { personId: ANNA._id, items: [] },
+      '/api/v2/badges/progress': { personId: ANNA.id, items: [] },
     });
     render(<App queryClient={testQueryClient()} />);
     fireEvent.click(await screen.findByRole('link', { name: 'Beloning' }));
@@ -137,16 +137,16 @@ describe('app shell', () => {
     setViewportWidth(1280);
     const member = { ...BRAM, role: 'member' as const };
     mockApi({
-      '/api/users': [ANNA, member],
+      '/api/v2/users': page([ANNA, member]),
       '/api/v2/tasks': page([]),
       '/api/v2/rooms': page([]),
-      '/api/settings': makeSettings(),
+      '/api/v2/settings': makeSettings(),
       '/api/cycle-plans': [],
       '/api/occurrences': [],
       ...v2Basics(),
       '/api/v2/occurrences': page([]),
     });
-    storeProfile(member._id);
+    storeProfile(member.id);
     window.history.replaceState(null, '', '/manage/distribution');
     render(<App queryClient={testQueryClient()} />);
 
@@ -187,7 +187,7 @@ describe('app shell', () => {
 
   it('resets only the filters of the screen on display and names the button in English', async () => {
     setViewportWidth(1280);
-    const key = (name: string) => `huishoudplanner.filters.${ANNA._id}.${name}`;
+    const key = (name: string) => `huishoudplanner.filters.${ANNA.id}.${name}`;
     window.localStorage.setItem(key('tasks.room'), '"r1"');
     window.localStorage.setItem(key('stats.period'), '{"unit":"cycles","count":4}');
     window.history.replaceState(null, '', '/manage/statistics');

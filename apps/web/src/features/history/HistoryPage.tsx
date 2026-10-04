@@ -18,7 +18,8 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useRooms, useSettings, useTasks, useUsers } from '../../api/queries.ts';
+import { useRooms, useTasks } from '../../api/queries.ts';
+import { useSettings, useUsers } from '../../api/v2/household.ts';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
 import { getLocale } from '../../i18n/runtime.ts';
 import { useBadges } from '../badges/api.ts';
@@ -54,7 +55,7 @@ export function HistoryPage() {
   const panelMode = Boolean(entity && entityId);
   const [confirmClear, setConfirmClear] = useState(false);
   const { profile } = useProfile();
-  const profileId = profile?._id ?? null;
+  const profileId = profile?.id ?? null;
   const previousProfileId = useRef(profileId);
   const seenProfile = useRef(false);
   useEffect(() => {
@@ -93,7 +94,7 @@ export function HistoryPage() {
 
   const names: NameLookup = useMemo(
     () => ({
-      users: new Map((users.data ?? []).map((u) => [u._id, u.name])),
+      users: new Map((users.data ?? []).map((u) => [u.id, u.name])),
       tasks: new Map((tasks.data ?? []).map((task) => [task._id, task.name])),
       rooms: new Map((rooms.data ?? []).map((r) => [r._id, r.name])),
       plans: new Map((plans.data ?? []).map((p) => [p._id, p.name])),
@@ -135,7 +136,7 @@ export function HistoryPage() {
         </span>
       );
     }
-    const actor = users.data?.find((u) => u._id === entry.actorId);
+    const actor = users.data?.find((u) => u.id === entry.actorId);
     if (actor) return <Avatar name={actor.name} color={actor.color} size="md" />;
     return (
       <span className="grid size-9 place-items-center rounded-full bg-muted text-muted-foreground shadow-sm ring-2 ring-card">
@@ -214,7 +215,7 @@ export function HistoryPage() {
             <NativeSelect id={`${idPrefix}-actor`} value={actorId} onChange={(e) => setFilter('actorId', e.target.value)}>
               <option value="">{t('history.filter.everyone')}</option>
               {(users.data ?? []).map((user) => (
-                <option key={user._id} value={user._id}>
+                <option key={user.id} value={user.id}>
                   {user.name}
                 </option>
               ))}

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { formatMoney } from '@/lib/money';
 import { ApiRequestError } from '../../api/index.ts';
-import { useSettings, useUsers } from '../../api/queries.ts';
+import { useSettings, useUsers } from '../../api/v2/household.ts';
 import { useCalendar, useLimits } from '../../api/v2/queries.ts';
 import { format, t } from '../../i18n/nl.ts';
 import { getLocale } from '../../i18n/runtime.ts';
@@ -52,15 +52,15 @@ export function PointsSection({ period, now }: { period: StatsPeriod; now?: Date
   const windowCalendar = useCalendar(range?.from ?? '', range?.to ?? '', range !== null);
   const balances = usePointsBalances(range);
 
-  const nameOf = (id: string) => users.data?.find((user) => user._id === id)?.name ?? t('tasks.unknownUser');
-  const isInactive = (id: string) => users.data?.find((user) => user._id === id)?.active === false;
+  const nameOf = (id: string) => users.data?.find((user) => user.id === id)?.name ?? t('tasks.unknownUser');
+  const isInactive = (id: string) => users.data?.find((user) => user.id === id)?.active === false;
   const label = (id: string) => (isInactive(id) ? format('stats.points.inactive', { name: nameOf(id) }) : nameOf(id));
 
   const rows = balances.data?.balances ?? [];
   const personId =
     chosen && rows.some((row) => row.personId === chosen)
       ? chosen
-      : ((rows.find((row) => row.personId === profile?._id) ?? rows[0])?.personId ?? null);
+      : ((rows.find((row) => row.personId === profile?.id) ?? rows[0])?.personId ?? null);
   const entries = usePointsEntries(personId, range);
 
   if (settings.isError || today.isError || limits.isError || windowCalendar.isError || balances.isError) {

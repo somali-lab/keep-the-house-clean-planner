@@ -20,9 +20,9 @@ function deferred<T>() {
 }
 
 function setup(routes: Record<string, unknown> = {}, props: { initialTaskId?: string } = {}) {
-  storeProfile(ANNA._id);
+  storeProfile(ANNA.id);
   const fetchMock = mockApi({
-    '/api/users': [ANNA, BRAM],
+    '/api/v2/users': page([ANNA, BRAM]),
     ...v2Basics(),
     '/api/v2/occurrences': page([]),
     '/api/v2/rooms': page([makeRoomV2({ id: 'r1', name: 'Keuken' }), makeRoomV2({ id: 'r2', name: 'Zolder', active: false })]),
@@ -90,15 +90,15 @@ describe('RecordWorkDialog', () => {
     // Inactive tasks are not offered, and the room helps to tell tasks apart.
     await waitFor(() => expect(within(task).getAllByRole('option')).toHaveLength(3));
     expect(within(task).getAllByRole('option').map((o) => o.textContent)).toEqual(['Kies een taak', 'Afwas · Keuken', 'Stofzuigen · Keuken']);
-    expect(screen.getByLabelText('Gedaan door')).toHaveValue(ANNA._id);
+    expect(screen.getByLabelText('Gedaan door')).toHaveValue(ANNA.id);
 
     fireEvent.change(task, { target: { value: 't1' } });
-    fireEvent.change(screen.getByLabelText('Gedaan door'), { target: { value: BRAM._id } });
+    fireEvent.change(screen.getByLabelText('Gedaan door'), { target: { value: BRAM.id } });
     fireEvent.click(submit());
 
     await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
     expect(posts(fetchMock, '/api/v2/occurrences')).toEqual([
-      { taskId: 't1', date: TODAY, assigneeId: BRAM._id, done: true, requestId: expect.stringMatching(KEY) },
+      { taskId: 't1', date: TODAY, assigneeId: BRAM.id, done: true, requestId: expect.stringMatching(KEY) },
     ]);
     expect(onRecorded.mock.calls[0]![0]).toMatchObject({ id: 'new1' });
     expect(onOpenChange).toHaveBeenCalledWith(false);
@@ -132,7 +132,7 @@ describe('RecordWorkDialog', () => {
         roomId: 'r1',
         durationMinutes: 40,
         date: TODAY,
-        assigneeId: ANNA._id,
+        assigneeId: ANNA.id,
         done: true,
        
         requestId: expect.stringMatching(KEY),
@@ -148,7 +148,7 @@ describe('RecordWorkDialog', () => {
     await screen.findByLabelText('Taak');
     expect(screen.queryByLabelText('Punten')).not.toBeInTheDocument();
     choose(oneOffChoice);
-    await waitFor(() => expect(screen.getByLabelText('Gedaan door')).toHaveValue(ANNA._id));
+    await waitFor(() => expect(screen.getByLabelText('Gedaan door')).toHaveValue(ANNA.id));
     const points = screen.getByLabelText('Punten');
     // The range comes from GET /api/v2/meta/limits.
     await waitFor(() => expect(points).toHaveAccessibleDescription(/Van 0 tot 1000. Standaard één punt per minuut/));
@@ -182,7 +182,7 @@ describe('RecordWorkDialog', () => {
     setup({ '/api/v2/meta/limits': { ...LIMITS, tasks: { ...LIMITS.tasks, maxPoints: 500 } } });
     await screen.findByLabelText('Taak');
     choose(oneOffChoice);
-    await waitFor(() => expect(screen.getByLabelText('Gedaan door')).toHaveValue(ANNA._id));
+    await waitFor(() => expect(screen.getByLabelText('Gedaan door')).toHaveValue(ANNA.id));
     fireEvent.change(screen.getByLabelText('Naam van de klus'), { target: { value: 'Kast ophalen' } });
     fireEvent.change(screen.getByLabelText('Duur (minuten)'), { target: { value: '15' } });
     await waitFor(() => expect(screen.getByLabelText('Punten')).toHaveAttribute('max', '500'));
@@ -197,7 +197,7 @@ describe('RecordWorkDialog', () => {
     });
     await screen.findByLabelText('Taak');
     choose(oneOffChoice);
-    await waitFor(() => expect(screen.getByLabelText('Gedaan door')).toHaveValue(ANNA._id));
+    await waitFor(() => expect(screen.getByLabelText('Gedaan door')).toHaveValue(ANNA.id));
     fireEvent.change(screen.getByLabelText('Naam van de klus'), { target: { value: 'Kast ophalen' } });
     fireEvent.change(screen.getByLabelText('Duur (minuten)'), { target: { value: '15' } });
     fireEvent.click(submit());
@@ -211,7 +211,7 @@ describe('RecordWorkDialog', () => {
     });
     await screen.findByLabelText('Taak');
     choose(oneOffChoice);
-    await waitFor(() => expect(screen.getByLabelText('Gedaan door')).toHaveValue(ANNA._id));
+    await waitFor(() => expect(screen.getByLabelText('Gedaan door')).toHaveValue(ANNA.id));
     fireEvent.change(screen.getByLabelText('Naam van de klus'), { target: { value: 'Kast ophalen' } });
     fireEvent.change(screen.getByLabelText('Duur (minuten)'), { target: { value: '15' } });
     const points = screen.getByLabelText('Punten');
@@ -234,7 +234,7 @@ describe('RecordWorkDialog', () => {
     });
     await screen.findByLabelText('Taak');
     choose(oneOffChoice);
-    await waitFor(() => expect(screen.getByLabelText('Gedaan door')).toHaveValue(ANNA._id));
+    await waitFor(() => expect(screen.getByLabelText('Gedaan door')).toHaveValue(ANNA.id));
     fireEvent.change(screen.getByLabelText('Naam van de klus'), { target: { value: 'Kast ophalen' } });
     fireEvent.change(screen.getByLabelText('Duur (minuten)'), { target: { value: '15' } });
     fireEvent.click(submit());
@@ -301,7 +301,7 @@ describe('RecordWorkDialog', () => {
     const fill = async () => {
       const task = await screen.findByLabelText('Taak', { selector: 'select' });
       await waitFor(() => expect(within(task).getAllByRole('option')).toHaveLength(3));
-      await waitFor(() => expect(screen.getByLabelText('Gedaan door')).toHaveValue(ANNA._id));
+      await waitFor(() => expect(screen.getByLabelText('Gedaan door')).toHaveValue(ANNA.id));
       fireEvent.change(task, { target: { value: 't1' } });
     };
     await fill();
@@ -353,31 +353,31 @@ describe('RecordWorkDialog', () => {
   });
 
   describe('when the chosen task is still planned today', () => {
-    const PLANNED = makeOccurrenceV2({ id: 'o-planned', taskId: 't1', taskNameSnapshot: 'Stofzuigen', date: TODAY, assigneeId: ANNA._id });
+    const PLANNED = makeOccurrenceV2({ id: 'o-planned', taskId: 't1', taskNameSnapshot: 'Stofzuigen', date: TODAY, assigneeId: ANNA.id });
 
     async function chooseStofzuigen() {
       const task = await screen.findByLabelText('Taak', { selector: 'select' });
       await waitFor(() => expect(within(task).getAllByRole('option')).toHaveLength(3));
-      await waitFor(() => expect(screen.getByLabelText('Gedaan door')).toHaveValue(ANNA._id));
+      await waitFor(() => expect(screen.getByLabelText('Gedaan door')).toHaveValue(ANNA.id));
       fireEvent.change(task, { target: { value: 't1' } });
     }
 
     it('says so and checks off the planned occurrence by default, for the chosen person', async () => {
       const { fetchMock, onRecorded } = setup({
         '/api/v2/occurrences': page([PLANNED, makeOccurrenceV2({ id: 'o-other', taskId: 't2', date: TODAY }), makeOccurrenceV2({ id: 'o-tomorrow', taskId: 't2', date: '2026-09-17' })]),
-        'POST /api/v2/occurrences/o-planned/complete': { ...PLANNED, status: 'done', completedBy: BRAM._id },
+        'POST /api/v2/occurrences/o-planned/complete': { ...PLANNED, status: 'done', completedBy: BRAM.id },
       });
       await chooseStofzuigen();
       const choices = await screen.findByRole('group', { name: '"Stofzuigen" staat vandaag nog open in het plan.' });
       expect(within(choices).getByRole('radio', { name: 'Vink de geplande taak af' })).toBeChecked();
       expect(within(choices).getByRole('radio', { name: 'Toch een extra keer registreren' })).not.toBeChecked();
 
-      fireEvent.change(screen.getByLabelText('Gedaan door'), { target: { value: BRAM._id } });
+      fireEvent.change(screen.getByLabelText('Gedaan door'), { target: { value: BRAM.id } });
       fireEvent.click(within(dialog()).getByRole('button', { name: 'Afvinken' }));
       await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
       expect(onRecorded.mock.calls[0]![1]).toBe('checkedOff');
       const completions = fetchMock.mock.calls.filter(([u, init]) => u === '/api/v2/occurrences/o-planned/complete' && init?.method === 'POST');
-      expect(completions.map(([, init]) => JSON.parse(String(init!.body)))).toEqual([{ completedBy: BRAM._id }]);
+      expect(completions.map(([, init]) => JSON.parse(String(init!.body)))).toEqual([{ completedBy: BRAM.id }]);
       expect(posts(fetchMock, '/api/v2/occurrences')).toEqual([]);
     });
 
@@ -454,17 +454,17 @@ describe('RecordWorkDialog', () => {
 
     it('plans an extra execution for another person on a later day as an open occurrence', async () => {
       const { fetchMock, onRecorded, onOpenChange } = setup({
-        'POST /api/v2/occurrences': makeOccurrenceV2({ id: 'new1', taskId: 't1', origin: 'adhoc', date: '2026-09-18', assigneeId: BRAM._id }),
+        'POST /api/v2/occurrences': makeOccurrenceV2({ id: 'new1', taskId: 't1', origin: 'adhoc', date: '2026-09-18', assigneeId: BRAM.id }),
       });
       await chooseTask('t1');
       planMode();
       fireEvent.change(dateField(), { target: { value: '2026-09-18' } });
-      fireEvent.change(screen.getByLabelText('Voor wie'), { target: { value: BRAM._id } });
+      fireEvent.change(screen.getByLabelText('Voor wie'), { target: { value: BRAM.id } });
       fireEvent.click(planSubmit());
 
       await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
       expect(posts(fetchMock, '/api/v2/occurrences')).toEqual([
-        { taskId: 't1', date: '2026-09-18', assigneeId: BRAM._id, requestId: expect.stringMatching(KEY) },
+        { taskId: 't1', date: '2026-09-18', assigneeId: BRAM.id, requestId: expect.stringMatching(KEY) },
       ]);
       expect(onRecorded.mock.calls[0]![1]).toBe('planned');
       expect(onOpenChange).toHaveBeenCalledWith(false);
@@ -577,7 +577,7 @@ describe('RecordWorkDialog', () => {
     });
 
     it('only mentions a task that is still planned today when recording as done', async () => {
-      const PLANNED = makeOccurrenceV2({ id: 'o-planned', taskId: 't1', taskNameSnapshot: 'Stofzuigen', date: TODAY, assigneeId: ANNA._id });
+      const PLANNED = makeOccurrenceV2({ id: 'o-planned', taskId: 't1', taskNameSnapshot: 'Stofzuigen', date: TODAY, assigneeId: ANNA.id });
       setup({ '/api/v2/occurrences': page([PLANNED]) });
       await chooseTask('t1');
       expect(await screen.findByRole('group', { name: /staat vandaag nog open/ })).toBeInTheDocument();

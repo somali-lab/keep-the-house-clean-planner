@@ -1,5 +1,3 @@
-import type { User, UserRole } from '@huishoudplanner/shared';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Pencil, Plus, Save, Users } from 'lucide-react';
 import { useId, useState, type CSSProperties, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
@@ -7,9 +5,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/NativeSelect';
 import { cn } from '@/lib/utils';
-import { api } from '../../api/index.ts';
-import { useUsers } from '../../api/queries.ts';
+import { useUsers, type User, type UserRole } from '../../api/v2/household.ts';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
+import { saveErrorText, useSaveUser } from './api.ts';
 import {
   checkboxClass,
   Field,
@@ -50,8 +48,8 @@ export function UsersSection() {
       ) : (
         <ul className="flex flex-col gap-2">
           {users.data.map((user) => (
-            <li key={user._id}>
-              {editing === user._id ? (
+            <li key={user.id}>
+              {editing === user.id ? (
                 <UserForm user={user} onSaved={done} onCancel={() => open(null)} />
               ) : (
                 <div className={cn(listRowClass, !user.active && 'opacity-70')}>
@@ -64,16 +62,14 @@ export function UsersSection() {
                   <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold">{t(`settings.users.role.${user.role}` as MessageKey)}</span>
                   {!user.active && <span className="text-sm text-muted-foreground">({t('settings.users.inactive')})</span>}
                   <span className="text-sm text-muted-foreground">{format('settings.users.summary', user.dailyBudgetMinutes)}</span>
-                  <span className="text-sm text-muted-foreground">
-                    {format('settings.users.maxDailySummary', user.maxDailyMinutes ?? { weekday: 60, weekend: 120 })}
-                  </span>
+                  <span className="text-sm text-muted-foreground">{format('settings.users.maxDailySummary', user.maxDailyMinutes)}</span>
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
                     className="ml-auto"
                     aria-label={format('settings.users.edit', { name: user.name })}
-                    onClick={() => open(user._id)}
+                    onClick={() => open(user.id)}
                   >
                     <Pencil aria-hidden="true" />
                     {t('common.edit')}
@@ -101,7 +97,7 @@ export function UsersSection() {
 
 function UserForm({ user, onSaved, onCancel }: { user?: User; onSaved(): void; onCancel(): void }) {
   const idPrefix = useId();
-  const queryClient = useQueryClient();
+  const save = useSaveUser();
   const [name, setName] = useState(user?.name ?? '');
   const [color, setColor] = useState(user?.color ?? '#2563eb');
   const [active, setActive] = useState(user?.active ?? true);
@@ -109,28 +105,9 @@ function UserForm({ user, onSaved, onCancel }: { user?: User; onSaved(): void; o
   const [unavailable, setUnavailable] = useState<number[]>(user?.unavailableWeekdays ?? []);
   const [weekday, setWeekday] = useState(String(user?.dailyBudgetMinutes.weekday ?? 60));
   const [weekend, setWeekend] = useState(String(user?.dailyBudgetMinutes.weekend ?? 120));
-  const [maxWeekday, setMaxWeekday] = useState(String(user?.maxDailyMinutes?.weekday ?? 60));
-  const [maxWeekend, setMaxWeekend] = useState(String(user?.maxDailyMinutes?.weekend ?? 120));
+  const [maxWeekday, setMaxWeekday] = useState(String(user?.maxDailyMinutes.weekday ?? 60));
+  const [maxWeekend, setMaxWeekend] = useState(String(user?.maxDailyMinutes.weekend ?? 120));
   const [error, setError] = useState<string | null>(null);
-
-  const save = useMutation({
-    mutationFn: async () => {
-      const body = {
-        name: name.trim(),
-        color,
-        role,
-        unavailableWeekdays: [...unavailable].sort((a, b) => a - b),
-        dailyBudgetMinutes: { weekday: Number(weekday), weekend: Number(weekend) },
-        maxDailyMinutes: { weekday: Number(maxWeekday), weekend: Number(maxWeekend) },
-      };
-      return user ? api.patch(`/api/users/${user._id}`, { ...body, active }) : api.post('/api/users', body);
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['users'] });
-      onSaved();
-    },
-    onError: () => setError(t('app.error')),
-  });
 
   const toggleDay = (day: number, checked: boolean) =>
     setUnavailable((current) => (checked ? [...current, day] : current.filter((d) => d !== day)));
@@ -140,7 +117,24 @@ function UserForm({ user, onSaved, onCancel }: { user?: User; onSaved(): void; o
     if (!name.trim()) return setError(t('settings.users.nameRequired'));
     if (![weekday, weekend, maxWeekday, maxWeekend].every(isBudget)) return setError(t('settings.users.budgetInvalid'));
     setError(null);
-    save.mutate();
+    save.mutate(
+      {
+        user,
+        active,
+        input: {
+          name: name.trim(),
+          color,
+          role,
+          unavailableWeekdays: [...unavailable].sort((a, b) => a - b),
+          dailyBudgetMinutes: { weekday: Number(weekday), weekend: Number(weekend) },
+          maxDailyMinutes: { weekday: Number(maxWeekday), weekend: Number(maxWeekend) },
+        },
+      },
+      {
+        onSuccess: onSaved,
+        onError: (failure) => setError(saveErrorText(failure, { last_admin: 'settings.users.lastAdmin' })),
+      },
+    );
   };
 
   return (

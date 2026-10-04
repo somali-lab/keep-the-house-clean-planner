@@ -152,18 +152,18 @@ describe('redemptionCents', () => {
 describe('canUndoRedemption', () => {
   const entry = { kind: 'redemption', personId: 'p1', date: '2026-09-16' };
   it('lets the owner undo on the day it was booked only', () => {
-    expect(canUndoRedemption(entry, { _id: 'p1', role: 'member' }, '2026-09-16')).toBe(true);
-    expect(canUndoRedemption(entry, { _id: 'p1', role: 'member' }, '2026-09-17')).toBe(false);
+    expect(canUndoRedemption(entry, { id: 'p1', role: 'member' }, '2026-09-16')).toBe(true);
+    expect(canUndoRedemption(entry, { id: 'p1', role: 'member' }, '2026-09-17')).toBe(false);
   });
 
   it('refuses another member, and lets an administrator undo any time', () => {
-    expect(canUndoRedemption(entry, { _id: 'p2', role: 'member' }, '2026-09-16')).toBe(false);
-    expect(canUndoRedemption(entry, { _id: 'p2', role: 'planner' }, '2026-09-16')).toBe(false);
-    expect(canUndoRedemption(entry, { _id: 'p2', role: 'admin' }, '2027-01-01')).toBe(true);
+    expect(canUndoRedemption(entry, { id: 'p2', role: 'member' }, '2026-09-16')).toBe(false);
+    expect(canUndoRedemption(entry, { id: 'p2', role: 'planner' }, '2026-09-16')).toBe(false);
+    expect(canUndoRedemption(entry, { id: 'p2', role: 'admin' }, '2027-01-01')).toBe(true);
   });
 
   it('is false without a profile and for entries that are no redemption', () => {
     expect(canUndoRedemption(entry, null, '2026-09-16')).toBe(false);
-    expect(canUndoRedemption({ ...entry, kind: 'execution' }, { _id: 'p2', role: 'admin' }, '2026-09-16')).toBe(false);
+    expect(canUndoRedemption({ ...entry, kind: 'execution' }, { id: 'p2', role: 'admin' }, '2026-09-16')).toBe(false);
   });
 });

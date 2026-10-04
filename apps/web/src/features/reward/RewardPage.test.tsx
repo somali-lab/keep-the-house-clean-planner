@@ -7,21 +7,21 @@ import { PROGRESS_REFETCH_MS } from './api.ts';
 import { RewardPage } from './RewardPage.tsx';
 import { celebrationKey } from './rewardModel.ts';
 
-const WEEK_KEY = celebrationKey(ANNA._id, 'week', '2026-09-14');
+const WEEK_KEY = celebrationKey(ANNA.id, 'week', '2026-09-14');
 const TOILET = makeBadge({ id: 'b00000000000000000000001', name: 'Toiletjuffrouw' });
 
 type Progress = ReturnType<typeof makeProgress>;
 const progressCalls = (fetchMock: ReturnType<typeof mockApi>) => fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/api/v2/points/progress'));
 
 function setup(progress: Progress | ((period: string) => Progress) = makeProgress(), extra: Record<string, unknown> = {}) {
-  storeProfile(ANNA._id);
+  storeProfile(ANNA.id);
   return mockApi({
-    '/api/users': [ANNA],
-    '/api/settings': makeSettings(),
+    '/api/v2/users': page([ANNA]),
+    '/api/v2/settings': makeSettings(),
     '/api/v2/points/progress': (_init: RequestInit | undefined, url: string) =>
       typeof progress === 'function' ? progress(new URL(url, 'http://localhost').searchParams.get('period') ?? 'week') : progress,
     '/api/v2/badges': page([TOILET]),
-    '/api/v2/badges/progress': { personId: ANNA._id, items: [{ badgeId: TOILET.id, current: 10, threshold: 10, awardedAt: '2026-09-16T08:00:00.000Z' }] },
+    '/api/v2/badges/progress': { personId: ANNA.id, items: [{ badgeId: TOILET.id, current: 10, threshold: 10, awardedAt: '2026-09-16T08:00:00.000Z' }] },
     ...extra,
   });
 }
@@ -162,8 +162,8 @@ describe('RewardPage', () => {
     expect(screen.getByRole('progressbar', { name: 'Voortgang deze cyclus' })).toHaveAttribute('aria-valuenow', '25');
     expect(screen.getByText('14 sep t/m 11 okt')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cyclus' })).toHaveAttribute('aria-pressed', 'true');
-    expect(fetchMock.mock.calls.some(([url]) => String(url) === `/api/v2/points/progress?personId=${ANNA._id}&period=cycle`)).toBe(true);
-    expect(window.localStorage.getItem(`huishoudplanner.filters.${ANNA._id}.reward.period`)).toBe('"cycle"');
+    expect(fetchMock.mock.calls.some(([url]) => String(url) === `/api/v2/points/progress?personId=${ANNA.id}&period=cycle`)).toBe(true);
+    expect(window.localStorage.getItem(`huishoudplanner.filters.${ANNA.id}.reward.period`)).toBe('"cycle"');
 
     // The choice is still there after the tab is opened again.
     unmount();
@@ -172,7 +172,7 @@ describe('RewardPage', () => {
   });
 
   it('falls back to the week when the stored period is not a period', async () => {
-    window.localStorage.setItem(`huishoudplanner.filters.${ANNA._id}.reward.period`, '"year"');
+    window.localStorage.setItem(`huishoudplanner.filters.${ANNA.id}.reward.period`, '"year"');
     setup();
     renderWithProviders(<RewardPage />);
     expect(await screen.findByText('3 van 4 punten (75%)')).toBeInTheDocument();
@@ -199,7 +199,7 @@ describe('RewardPage', () => {
     setup();
     const { queryClient } = renderWithProviders(<RewardPage />);
     await screen.findByText('3 van 4 punten (75%)');
-    const query = queryClient.getQueryCache().find({ queryKey: ['points', 'progress', ANNA._id, 'week'] });
+    const query = queryClient.getQueryCache().find({ queryKey: ['points', 'progress', ANNA.id, 'week'] });
     expect(query?.observers[0]?.options.refetchOnWindowFocus).toBe('always');
     expect(query?.observers[0]?.options.refetchInterval).toBe(PROGRESS_REFETCH_MS);
     expect(PROGRESS_REFETCH_MS).toBe(300_000);
@@ -217,8 +217,8 @@ describe('RewardPage', () => {
   });
 
   it('shows an error when the progress cannot be read', async () => {
-    storeProfile(ANNA._id);
-    mockApi({ '/api/users': [ANNA], '/api/settings': makeSettings() });
+    storeProfile(ANNA.id);
+    mockApi({ '/api/v2/users': page([ANNA]), '/api/v2/settings': makeSettings() });
     renderWithProviders(<RewardPage />);
     expect(await screen.findByRole('alert')).toHaveTextContent('De voortgang kon niet worden geladen.');
   });
@@ -275,7 +275,7 @@ describe('RewardPage', () => {
 
       fireEvent.click(screen.getByRole('button', { name: 'Cyclus' }));
       await waitFor(() => expect(scene()).toHaveAttribute('data-celebrating', 'true'));
-      expect(window.localStorage.getItem(celebrationKey(ANNA._id, 'cycle', '2026-09-14'))).toBe('1');
+      expect(window.localStorage.getItem(celebrationKey(ANNA.id, 'cycle', '2026-09-14'))).toBe('1');
     });
 
     it('stops when the last egg has landed, so undoing and redoing the last task does not play it again', async () => {

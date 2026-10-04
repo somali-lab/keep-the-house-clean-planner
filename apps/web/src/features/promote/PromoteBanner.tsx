@@ -29,7 +29,7 @@ export function PromoteBanner() {
     };
     if (!s.toAssigneeId) return format('promote.text', base);
     const person =
-      activeUsers.find((u) => u._id === s.toAssigneeId)?.name ?? t('tasks.unknownUser');
+      activeUsers.find((u) => u.id === s.toAssigneeId)?.name ?? t('tasks.unknownUser');
     return format('promote.textWithAssignee', { ...base, person });
   };
 

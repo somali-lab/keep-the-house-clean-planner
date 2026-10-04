@@ -37,17 +37,17 @@ const item = (overrides: Partial<DueItemView> & Pick<DueItemView, 'taskId' | 'ta
 });
 
 const DUE: DueItemView[] = [
-  item({ taskId: 't1', taskName: 'Badkamer schoonmaken', state: 'overdue', daysSince: 84, ratio: 12, nextOccurrence: { id: 'o-sat', date: '2026-09-19', assigneeId: ANNA._id } }),
+  item({ taskId: 't1', taskName: 'Badkamer schoonmaken', state: 'overdue', daysSince: 84, ratio: 12, nextOccurrence: { id: 'o-sat', date: '2026-09-19', assigneeId: ANNA.id } }),
   item({ taskId: 't2', taskName: 'Stofzuigen', state: 'due', roomName: 'Woonkamer', daysSince: 7 }),
   item({ taskId: 't4', taskName: 'Afwas', state: 'due', intervalKey: 'daily', intervalLabel: 'Dagelijks', daysSince: 1, nextOccurrence: { id: 'o-today', date: '2026-09-16', assigneeId: null } }),
   item({ taskId: 't3', taskName: 'Ramen lappen', state: 'ok', daysSince: 3, ratio: 0.03 }),
 ];
 
 function setup(due: DueItemView[] = DUE) {
-  storeProfile(ANNA._id);
+  storeProfile(ANNA.id);
   return mockApi({
-    '/api/users': [ANNA, BRAM],
-    '/api/settings': makeSettings(),
+    '/api/v2/users': page([ANNA, BRAM]),
+    '/api/v2/settings': makeSettings(),
     '/api/v2/due': dueList(due),
     '/api/v2/tasks': page([makeTaskV2({ id: 't2', name: 'Stofzuigen', roomId: 'r1' }), makeTaskV2({ id: 't4', name: 'Afwas', roomId: 'r1' })]),
     '/api/v2/rooms': page([makeRoomV2({ id: 'r1', name: 'Woonkamer' })]),
@@ -59,10 +59,10 @@ function setup(due: DueItemView[] = DUE) {
 }
 
 function setupWithSettings(settings: ReturnType<typeof makeSettings>) {
-  storeProfile(ANNA._id);
+  storeProfile(ANNA.id);
   return mockApi({
-    '/api/users': [ANNA, BRAM],
-    '/api/settings': settings,
+    '/api/v2/users': page([ANNA, BRAM]),
+    '/api/v2/settings': settings,
     '/api/v2/due': dueList(DUE),
   });
 }
@@ -88,14 +88,14 @@ describe('DuePage', () => {
   });
 
   it('reads every page of the due list and maps the numbers the server may send as strings', async () => {
-    storeProfile(ANNA._id);
+    storeProfile(ANNA.id);
     mockApi({
       '/api/v2/due': (_init: RequestInit | undefined, url: string) =>
         new URL(url, 'http://localhost').searchParams.get('cursor') === 'p2'
           ? { ...dueList([DUE[1]!]), nextCursor: null }
           : { ...dueList([{ ...DUE[0]!, lastCompletedAt: '2026-06-24T10:00:00Z', daysSince: '84', ratio: '12.5', periodDays: '7' } as unknown as DueItemView]), nextCursor: 'p2' },
-      '/api/settings': makeSettings(),
-      '/api/users': [ANNA, BRAM],
+      '/api/v2/settings': makeSettings(),
+      '/api/v2/users': page([ANNA, BRAM]),
       '/api/v2/tasks': page([]),
       '/api/v2/rooms': page([]),
       ...v2Basics(),
@@ -123,11 +123,11 @@ describe('DuePage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Stofzuigen inplannen' }));
     const form = screen.getByRole('form', { name: 'Stofzuigen inplannen' });
     fireEvent.change(within(form).getByLabelText('Datum'), { target: { value: '2026-09-20' } });
-    fireEvent.change(within(form).getByLabelText('Wie'), { target: { value: BRAM._id } });
+    fireEvent.change(within(form).getByLabelText('Wie'), { target: { value: BRAM.id } });
     fireEvent.click(within(form).getByRole('button', { name: 'Inplannen bevestigen' }));
 
     await waitFor(() =>
-      expect(callsTo(fetchMock, 'POST', '/api/v2/occurrences')).toEqual([{ taskId: 't2', date: '2026-09-20', assigneeId: BRAM._id }]),
+      expect(callsTo(fetchMock, 'POST', '/api/v2/occurrences')).toEqual([{ taskId: 't2', date: '2026-09-20', assigneeId: BRAM.id }]),
     );
     await waitFor(() => expect(screen.queryByRole('form')).not.toBeInTheDocument());
   });
@@ -145,15 +145,15 @@ describe('DuePage', () => {
 
   it('shows a problem of the server as the action error', async () => {
     mockApi({
-      '/api/users': [ANNA, BRAM],
-      '/api/settings': makeSettings(),
+      '/api/v2/users': page([ANNA, BRAM]),
+      '/api/v2/settings': makeSettings(),
       '/api/v2/due': dueList(DUE),
       'POST /api/v2/occurrences': () => problem(409, 'cycle_not_generated', 'No cycle', { date: '2026-12-01' }),
       '/api/v2/tasks': page([]),
       '/api/v2/rooms': page([]),
       ...v2Basics(),
     });
-    storeProfile(ANNA._id);
+    storeProfile(ANNA.id);
     renderWithProviders(<DuePage now={NOW} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Stofzuigen nu gedaan' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Dat lukte niet');
@@ -173,8 +173,8 @@ describe('DuePage', () => {
   it('keeps the key when the same click is retried after a failure, and uses a new one after it succeeded', async () => {
     let attempts = 0;
     const fetchMock = mockApi({
-      '/api/users': [ANNA, BRAM],
-      '/api/settings': makeSettings(),
+      '/api/v2/users': page([ANNA, BRAM]),
+      '/api/v2/settings': makeSettings(),
       '/api/v2/due': dueList(DUE),
       'POST /api/v2/occurrences': () => {
         attempts += 1;
@@ -182,7 +182,7 @@ describe('DuePage', () => {
         return makeOccurrenceV2({ id: `new${attempts}` });
       },
     });
-    storeProfile(ANNA._id);
+    storeProfile(ANNA.id);
     renderWithProviders(<DuePage now={NOW} />);
     const button = await screen.findByRole('button', { name: 'Stofzuigen nu gedaan' });
     fireEvent.click(button);
@@ -208,12 +208,12 @@ describe('DuePage', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Extra taak' });
     const task = within(dialog).getByLabelText('Taak');
     await waitFor(() => expect(task).toHaveValue('t2'));
-    await waitFor(() => expect(within(dialog).getByLabelText('Gedaan door')).toHaveValue(ANNA._id));
+    await waitFor(() => expect(within(dialog).getByLabelText('Gedaan door')).toHaveValue(ANNA.id));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Vastleggen' }));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(callsTo(fetchMock, 'POST', '/api/v2/occurrences')).toEqual([
-      { taskId: 't2', date: '2026-09-16', assigneeId: ANNA._id, done: true, requestId: expect.stringMatching(/^[A-Za-z0-9_-]{16,64}$/) },
+      { taskId: 't2', date: '2026-09-16', assigneeId: ANNA.id, done: true, requestId: expect.stringMatching(/^[A-Za-z0-9_-]{16,64}$/) },
     ]);
     expect(await screen.findByRole('status')).toHaveTextContent('"Stofzuigen" is vastgelegd.');
     // The due list is refreshed, because the extra execution restarts the clock of the task.
@@ -241,26 +241,26 @@ describe('DuePage', () => {
         taskId: 't5',
         taskName: 'Vaatwasser leegmaken',
         state: 'due',
-        nextOccurrence: { id: 'o-bram', date: '2026-09-16', assigneeId: BRAM._id },
+        nextOccurrence: { id: 'o-bram', date: '2026-09-16', assigneeId: BRAM.id },
       }),
       item({
         taskId: 't6',
         taskName: 'Planten water geven',
         state: 'due',
-        nextOccurrence: { id: 'o-anna', date: '2026-09-16', assigneeId: ANNA._id },
+        nextOccurrence: { id: 'o-anna', date: '2026-09-16', assigneeId: ANNA.id },
       }),
       item({
         taskId: 't7',
         taskName: 'Kattenbak verschonen',
         state: 'due',
-        nextOccurrence: { id: 'o-bram-later', date: '2026-09-19', assigneeId: BRAM._id },
+        nextOccurrence: { id: 'o-bram-later', date: '2026-09-19', assigneeId: BRAM.id },
       }),
     ];
     const setupOthers = () => {
-      storeProfile(ANNA._id);
+      storeProfile(ANNA.id);
       return mockApi({
-        '/api/users': [ANNA, BRAM],
-        '/api/settings': makeSettings(),
+        '/api/v2/users': page([ANNA, BRAM]),
+        '/api/v2/settings': makeSettings(),
         '/api/v2/due': dueList(SOMEONE_ELSES),
         'POST /api/v2/occurrences': makeOccurrenceV2({ id: 'new1', taskNameSnapshot: 'Kattenbak verschonen' }),
         'POST /api/v2/occurrences/o-bram/complete': makeOccurrenceV2({ id: 'o-bram', status: 'done' }),
@@ -289,17 +289,17 @@ describe('DuePage', () => {
       fireEvent.click(await screen.findByRole('button', { name: 'Namens Bram de Vries afvinken' }));
       await waitFor(() =>
         expect(callsTo(fetchMock, 'POST', '/api/v2/occurrences/o-bram/complete')).toEqual([
-          { completedBy: BRAM._id },
+          { completedBy: BRAM.id },
         ]),
       );
       expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     });
 
     it('only offers to take the task over when the assignee is no longer active', async () => {
-      storeProfile(ANNA._id);
+      storeProfile(ANNA.id);
       const fetchMock = mockApi({
-        '/api/users': [ANNA, { ...BRAM, active: false }],
-        '/api/settings': makeSettings(),
+        '/api/v2/users': page([ANNA, { ...BRAM, active: false }]),
+        '/api/v2/settings': makeSettings(),
         '/api/v2/due': dueList(SOMEONE_ELSES),
         'POST /api/v2/occurrences/o-bram/complete': makeOccurrenceV2({ id: 'o-bram', status: 'done' }),
       });

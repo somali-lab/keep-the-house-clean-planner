@@ -12,7 +12,7 @@ export interface EditorTask {
 }
 
 export interface EditorUser {
-  _id: string;
+  id: string;
   name: string;
   unavailableWeekdays: number[];
 }
@@ -106,7 +106,7 @@ export function applyDrop(
   }
 
   if (targetAssigneeId !== null) {
-    const user = context.users.find((u) => u._id === targetAssigneeId);
+    const user = context.users.find((u) => u.id === targetAssigneeId);
     if (user?.unavailableWeekdays.includes(target.weekday)) {
       return {
         ok: false,

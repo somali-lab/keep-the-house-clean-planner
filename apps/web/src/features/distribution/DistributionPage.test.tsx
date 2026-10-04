@@ -1,12 +1,12 @@
 import type { CyclePlan, Slot } from '@huishoudplanner/shared';
 import { fireEvent, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { makeUser, mockApi, storeProfile } from '../../test/fixtures.ts';
+import { makeUser, mockApi, storeProfile, page } from '../../test/fixtures.ts';
 import { makeRoom, makeSettings, makeTask, renderWithProviders } from '../../test/render.tsx';
 import { DistributionPage } from './DistributionPage.tsx';
 
-const ANNA = makeUser({ _id: 'a00000000000000000000001', name: 'Anna' });
-const BRAM = makeUser({ _id: 'b00000000000000000000002', name: 'Bram' });
+const ANNA = makeUser({ id: 'a00000000000000000000001', name: 'Anna' });
+const BRAM = makeUser({ id: 'b00000000000000000000002', name: 'Bram' });
 const STAMP = '2026-09-14T08:00:00.000Z';
 const slot = (
   taskId: string,
@@ -40,12 +40,12 @@ function plan(slots: Slot[]): CyclePlan {
 
 describe('DistributionPage', () => {
   it('keeps the selected plan after remount and offers a reset', async () => {
-    storeProfile(ANNA._id);
+    storeProfile(ANNA.id);
     mockApi({
-      '/api/users': [ANNA],
+      '/api/v2/users': page([ANNA]),
       '/api/tasks': [],
       '/api/rooms': [],
-      '/api/settings': makeSettings(),
+      '/api/v2/settings': makeSettings(),
       '/api/cycle-plans': [plan([]), { ...plan([]), _id: 'p2', name: 'Zomer', active: false }],
     });
     const first = renderWithProviders(<DistributionPage />);
@@ -74,19 +74,19 @@ describe('DistributionPage', () => {
       intervalKey: '1w',
       durationMinutes: 30,
     });
-    storeProfile(ANNA._id);
+    storeProfile(ANNA.id);
     mockApi({
-      '/api/users': [ANNA, BRAM],
+      '/api/v2/users': page([ANNA, BRAM]),
       '/api/tasks': [weekly, small],
       '/api/rooms': [makeRoom({ _id: 'r1', name: 'Woonkamer' })],
-      '/api/settings': makeSettings(),
+      '/api/v2/settings': makeSettings(),
       '/api/cycle-plans': [
         plan([
-          slot('t1', 0, 1, ANNA._id),
-          slot('t2', 0, 6, ANNA._id),
-          slot('t2', 0, 2, BRAM._id),
-          slot('t1', 0, 0, BRAM._id),
-          slot('t1', 1, 1, BRAM._id),
+          slot('t1', 0, 1, ANNA.id),
+          slot('t2', 0, 6, ANNA.id),
+          slot('t2', 0, 2, BRAM.id),
+          slot('t1', 0, 0, BRAM.id),
+          slot('t1', 1, 1, BRAM.id),
         ]),
       ],
     });
@@ -141,13 +141,13 @@ describe('DistributionPage', () => {
       intervalKey: '1w',
       durationMinutes: 62,
     });
-    storeProfile(ANNA._id);
+    storeProfile(ANNA.id);
     mockApi({
-      '/api/users': [ANNA],
+      '/api/v2/users': page([ANNA]),
       '/api/tasks': [task],
       '/api/rooms': [makeRoom({ _id: 'r1', name: 'Woonkamer' })],
-      '/api/settings': makeSettings(),
-      '/api/cycle-plans': [plan([slot('t1', 1, 1, ANNA._id)])],
+      '/api/v2/settings': makeSettings(),
+      '/api/cycle-plans': [plan([slot('t1', 1, 1, ANNA.id)])],
     });
     renderWithProviders(<DistributionPage />);
 
@@ -171,13 +171,13 @@ describe('DistributionPage', () => {
       intervalKey: '2wk',
       durationMinutes: 25,
     });
-    storeProfile(ANNA._id);
+    storeProfile(ANNA.id);
     mockApi({
-      '/api/users': [ANNA, BRAM],
+      '/api/v2/users': page([ANNA, BRAM]),
       '/api/tasks': [task],
       '/api/rooms': [makeRoom({ _id: 'r1', name: 'Keuken' })],
-      '/api/settings': makeSettings(),
-      '/api/cycle-plans': [plan([slot('t1', 0, 1, ANNA._id), slot('t1', 2, 1, ANNA._id)])],
+      '/api/v2/settings': makeSettings(),
+      '/api/cycle-plans': [plan([slot('t1', 0, 1, ANNA.id), slot('t1', 2, 1, ANNA.id)])],
     });
     renderWithProviders(<DistributionPage />, { route: '/distribution?tab=spacing' });
 

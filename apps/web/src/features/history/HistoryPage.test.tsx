@@ -1,13 +1,13 @@
 import type { AuditEntry } from '@huishoudplanner/shared';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { ANNA, BRAM, mockApi, storeProfile } from '../../test/fixtures.ts';
+import { ANNA, BRAM, mockApi, storeProfile, page } from '../../test/fixtures.ts';
 import { makeRoom, makeSettings, makeTask, renderWithProviders } from '../../test/render.tsx';
 import { SYSTEM_ACTOR_ID } from './describe.ts';
 import { HistoryPage } from './HistoryPage.tsx';
 
 const entry = (overrides: Partial<AuditEntry> & Pick<AuditEntry, '_id' | 'at'>): AuditEntry => ({
-  actorId: ANNA._id,
+  actorId: ANNA.id,
   entity: 'task',
   entityId: 't1',
   action: 'update',
@@ -19,7 +19,7 @@ const entry = (overrides: Partial<AuditEntry> & Pick<AuditEntry, '_id' | 'at'>):
 
 const PAGE_1: AuditEntry[] = [
   entry({ _id: 'e4', at: '2026-09-16T09:30:00.000Z', entity: 'cyclePlan', entityId: 'p1', action: 'ai-apply', after: { active: true }, source: 'ai', meta: { proposalId: 'abc' } }),
-  entry({ _id: 'e3', at: '2026-09-16T09:00:00.000Z', entity: 'occurrence', entityId: 'o1', action: 'complete', before: { status: 'open' }, after: { status: 'done', completedBy: BRAM._id }, meta: { completedBy: BRAM._id, wasAssignee: false } }),
+  entry({ _id: 'e3', at: '2026-09-16T09:00:00.000Z', entity: 'occurrence', entityId: 'o1', action: 'complete', before: { status: 'open' }, after: { status: 'done', completedBy: BRAM.id }, meta: { completedBy: BRAM.id, wasAssignee: false } }),
   entry({ _id: 'e2', at: '2026-09-16T08:30:00.000Z', before: { durationMinutes: 30 }, after: { durationMinutes: 45 } }),
   entry({ _id: 'e1', at: '2026-09-16T08:00:00.000Z', actorId: SYSTEM_ACTOR_ID, source: 'system', entity: 'occurrence', entityId: 'o1', action: 'create', after: { taskNameSnapshot: 'Badkamer schoonmaken', status: 'open' }, meta: { runId: 'r' } }),
 ];
@@ -28,12 +28,12 @@ const PAGE_2: AuditEntry[] = [
 ];
 
 function setup(audit: (init: RequestInit | undefined, url: string) => unknown, extra: Record<string, unknown> = {}) {
-  storeProfile(ANNA._id);
+  storeProfile(ANNA.id);
   return mockApi({
-    '/api/users': [ANNA, BRAM],
+    '/api/v2/users': page([ANNA, BRAM]),
     '/api/tasks': [makeTask({ _id: 't1', name: 'Badkamer schoonmaken', roomId: 'r1' })],
     '/api/rooms': [makeRoom({ _id: 'r1', name: 'Badkamer' })],
-    '/api/settings': makeSettings(),
+    '/api/v2/settings': makeSettings(),
     '/api/cycle-plans': [{ _id: 'p1', name: 'Zomerplan' }],
     '/api/audit': audit,
     ...extra,
@@ -73,8 +73,8 @@ describe('HistoryPage', () => {
     renderWithProviders(<HistoryPage />, { route: '/manage/history', headerReset: true });
     await screen.findAllByRole('listitem');
 
-    fireEvent.change(screen.getByLabelText('Wie'), { target: { value: BRAM._id } });
-    await waitFor(() => expect(auditUrls(fetchMock).at(-1)).toContain(`actorId=${BRAM._id}`));
+    fireEvent.change(screen.getByLabelText('Wie'), { target: { value: BRAM.id } });
+    await waitFor(() => expect(auditUrls(fetchMock).at(-1)).toContain(`actorId=${BRAM.id}`));
 
     fireEvent.change(screen.getByLabelText('Soort'), { target: { value: 'occurrence' } });
     await waitFor(() => expect(auditUrls(fetchMock).at(-1)).toContain('entity=occurrence'));

@@ -33,9 +33,9 @@ const pngFile = (name = 'badge.png') => new File([PNG], name, { type: 'image/png
 const STALE_MESSAGE = 'Deze gegevens zijn intussen door iemand anders gewijzigd. Controleer je wijziging en sla opnieuw op.';
 
 function setup(extra: Record<string, unknown> = {}, badges: Badge[] = [TOILET, MOP]) {
-  storeProfile(ANNA._id);
+  storeProfile(ANNA.id);
   return mockApi({
-    '/api/users': [ANNA],
+    '/api/v2/users': page([ANNA]),
     '/api/v2/rooms': page([makeRoomV2({ id: 'r1', name: 'Badkamer' })]),
     '/api/v2/tasks': page([TOILET_TASK, MOP_TASK, OLD_TASK]),
     '/api/v2/badges': page(badges),

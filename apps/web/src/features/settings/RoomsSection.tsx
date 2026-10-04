@@ -1,5 +1,3 @@
-import type { Room } from '@huishoudplanner/shared';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { DoorOpen, Pencil, Plus, Save, Trash2 } from 'lucide-react';
 import { useId, useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
@@ -7,10 +5,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import { api } from '../../api/index.ts';
-import { queryKeys, useRooms, useTasks } from '../../api/queries.ts';
+import { useRooms, useTasks, type Room } from '../../api/v2/queries.ts';
 import { format, t } from '../../i18n/nl.ts';
 import { getLocale } from '../../i18n/runtime.ts';
+import { isStaleEntity } from '../../api/index.ts';
+import { saveErrorText, useDeleteRoom, useSaveRoom } from './api.ts';
 import {
   checkboxClass,
   Field,
@@ -28,10 +27,12 @@ export function RoomsSection() {
   const idPrefix = useId();
   const rooms = useRooms();
   const tasks = useTasks();
-  const queryClient = useQueryClient();
   const [editing, setEditing] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState<Room | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const removeRoom = useDeleteRoom();
+  // The room is looked up in the list, so that after a stale answer (412) the dialog works with the version that was read again.
+  const deleting = rooms.data?.find((room) => room.id === deletingId) ?? null;
 
   const open = (id: string | null) => {
     setSaved(false);
@@ -41,14 +42,11 @@ export function RoomsSection() {
     setEditing(null);
     setSaved(true);
   };
-
-  const removeRoom = useMutation({
-    mutationFn: async (id: string) => (await api.delete<{ deleted: boolean }>(`/api/rooms/${id}`)).data,
-    onSuccess: async () => {
-      setDeleting(null);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.rooms });
-    },
-  });
+  // A failure of an earlier attempt must not greet the next one.
+  const openDelete = (room: Room | null) => {
+    removeRoom.reset();
+    setDeletingId(room?.id ?? null);
+  };
 
   return (
     <section className={settingsCardClass} aria-labelledby={`${idPrefix}-title`}>
@@ -60,45 +58,45 @@ export function RoomsSection() {
       ) : (
         <ul className="flex flex-col gap-2">
           {[...rooms.data].sort(byOrder).map((room) => {
-            const taskCount = tasks.data.filter((task) => task.roomId === room._id).length;
+            const taskCount = tasks.data.filter((task) => task.roomId === room.id).length;
             return (
-            <li key={room._id}>
-              {editing === room._id ? (
-                <RoomForm room={room} onSaved={done} onCancel={() => open(null)} />
-              ) : (
-                <div className={cn(listRowClass, !room.active && 'opacity-70')}>
-                  <span className="grid h-7 min-w-7 place-items-center rounded-lg bg-secondary px-1.5 text-xs font-bold text-secondary-foreground tabular-nums">
-                    {room.sortOrder}
-                  </span>
-                  <strong className="font-bold">{room.name}</strong>
-                  {!room.active && <span className="text-sm text-muted-foreground">({t('settings.rooms.inactive')})</span>}
-                  {taskCount > 0 && <span className="text-sm text-muted-foreground">{format('settings.rooms.taskCount', { count: taskCount })}</span>}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="ml-auto"
-                    aria-label={format('settings.rooms.edit', { name: room.name })}
-                    onClick={() => open(room._id)}
-                  >
-                    <Pencil aria-hidden="true" />
-                    {t('common.edit')}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    className="text-destructive hover:text-destructive"
-                    disabled={taskCount > 0}
-                    title={taskCount > 0 ? t('settings.rooms.deleteBlocked') : undefined}
-                    aria-label={format('settings.rooms.delete', { name: room.name })}
-                    onClick={() => setDeleting(room)}
-                  >
-                    <Trash2 aria-hidden="true" />
-                  </Button>
-                </div>
-              )}
-            </li>
+              <li key={room.id}>
+                {editing === room.id ? (
+                  <RoomForm room={room} onSaved={done} onCancel={() => open(null)} />
+                ) : (
+                  <div className={cn(listRowClass, !room.active && 'opacity-70')}>
+                    <span className="grid h-7 min-w-7 place-items-center rounded-lg bg-secondary px-1.5 text-xs font-bold text-secondary-foreground tabular-nums">
+                      {room.sortOrder}
+                    </span>
+                    <strong className="font-bold">{room.name}</strong>
+                    {!room.active && <span className="text-sm text-muted-foreground">({t('settings.rooms.inactive')})</span>}
+                    {taskCount > 0 && <span className="text-sm text-muted-foreground">{format('settings.rooms.taskCount', { count: taskCount })}</span>}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="ml-auto"
+                      aria-label={format('settings.rooms.edit', { name: room.name })}
+                      onClick={() => open(room.id)}
+                    >
+                      <Pencil aria-hidden="true" />
+                      {t('common.edit')}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-destructive hover:text-destructive"
+                      disabled={taskCount > 0}
+                      title={taskCount > 0 ? t('settings.rooms.deleteBlocked') : undefined}
+                      aria-label={format('settings.rooms.delete', { name: room.name })}
+                      onClick={() => openDelete(room)}
+                    >
+                      <Trash2 aria-hidden="true" />
+                    </Button>
+                  </div>
+                )}
+              </li>
             );
           })}
         </ul>
@@ -114,17 +112,26 @@ export function RoomsSection() {
         </div>
       )}
       {saved && <FormMessage kind="status">{t('settings.saved')}</FormMessage>}
-      <Dialog open={deleting !== null} onOpenChange={(open) => !open && !removeRoom.isPending && setDeleting(null)}>
+      <Dialog open={deleting !== null} onOpenChange={(isOpen) => !isOpen && !removeRoom.isPending && openDelete(null)}>
         {deleting && (
           <DialogContent>
             <DialogHeader>
               <DialogTitle>{format('settings.rooms.deleteConfirmTitle', { name: deleting.name })}</DialogTitle>
               <DialogDescription>{t('settings.rooms.deleteConfirmBody')}</DialogDescription>
             </DialogHeader>
-            {removeRoom.isError && <FormMessage kind="alert">{t('settings.rooms.deleteError')}</FormMessage>}
+            {removeRoom.isError && (
+              <FormMessage kind="alert">
+                {isStaleEntity(removeRoom.error) ? t('app.staleEntity') : t('settings.rooms.deleteError')}
+              </FormMessage>
+            )}
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setDeleting(null)}>{t('common.cancel')}</Button>
-              <Button type="button" variant="destructive" disabled={removeRoom.isPending} onClick={() => removeRoom.mutate(deleting._id)}>
+              <Button type="button" variant="outline" onClick={() => openDelete(null)}>{t('common.cancel')}</Button>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={removeRoom.isPending}
+                onClick={() => removeRoom.mutate(deleting, { onSuccess: () => openDelete(null) })}
+              >
                 <Trash2 aria-hidden="true" />{t('settings.rooms.deleteConfirm')}
               </Button>
             </DialogFooter>
@@ -137,33 +144,25 @@ export function RoomsSection() {
 
 function RoomForm({ room, onSaved, onCancel }: { room?: Room; onSaved(): void; onCancel(): void }) {
   const idPrefix = useId();
-  const queryClient = useQueryClient();
+  const save = useSaveRoom();
   const [name, setName] = useState(room?.name ?? '');
   const [sortOrder, setSortOrder] = useState(room ? String(room.sortOrder) : '');
   const [active, setActive] = useState(room?.active ?? true);
   const [error, setError] = useState<string | null>(null);
-
-  const save = useMutation({
-    mutationFn: async () => {
-      // A new room without a position goes to the end (server default).
-      const order = sortOrder.trim() === '' ? {} : { sortOrder: Number(sortOrder) };
-      return room
-        ? api.patch(`/api/rooms/${room._id}`, { name: name.trim(), ...order, active })
-        : api.post('/api/rooms', { name: name.trim(), ...order });
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.rooms });
-      onSaved();
-    },
-    onError: () => setError(t('app.error')),
-  });
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (!name.trim()) return setError(t('settings.rooms.nameRequired'));
     if (sortOrder.trim() !== '' && !Number.isInteger(Number(sortOrder))) return setError(t('settings.rooms.sortOrderInvalid'));
     setError(null);
-    save.mutate();
+    save.mutate(
+      // A new room without a position goes to the end (server default).
+      { room, name: name.trim(), ...(sortOrder.trim() === '' ? {} : { sortOrder: Number(sortOrder) }), active },
+      {
+        onSuccess: onSaved,
+        onError: (failure) => setError(saveErrorText(failure)),
+      },
+    );
   };
 
   return (

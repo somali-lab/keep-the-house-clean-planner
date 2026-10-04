@@ -1,26 +1,28 @@
-import type { RewardGoals, Settings } from '@huishoudplanner/shared';
-import { MAX_REWARD_GOAL_POINTS, MIN_REWARD_GOAL_POINTS } from '@huishoudplanner/shared/rewards';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { Egg, Save } from 'lucide-react';
 import { useId, useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { api } from '../../api/index.ts';
-import { queryKeys } from '../../api/queries.ts';
-import { t } from '../../i18n/nl.ts';
+import type { Settings } from '../../api/v2/household.ts';
+import { FALLBACK_LIMITS, useLimits } from '../../api/v2/queries.ts';
+import { format, t } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
+import { saveErrorText, useUpdateSettings } from './api.ts';
 import { Field, FormActions, FormMessage, SettingsCardHeader, settingsCardClass } from './SettingsCard.tsx';
 
 type Message = { kind: 'status' | 'alert'; text: string } | null;
 
-/** The goal typed in a field: null for an empty field (automatic), a whole number from 0 to 100000, or `undefined` when it is not valid. */
-export function parseRewardGoal(text: string): number | null | undefined {
+/** The goal typed in a field: null for an empty field (automatic), a whole number within the limits of the server, or `undefined` when it is not valid. */
+export function parseRewardGoal(
+  text: string,
+  limits: { minGoalPoints: number; maxGoalPoints: number } = FALLBACK_LIMITS.rewards,
+): number | null | undefined {
   const trimmed = text.trim();
   if (trimmed === '') return null;
-  if (!/^\d{1,6}$/.test(trimmed)) return undefined;
+  if (!/^\d{1,7}$/.test(trimmed)) return undefined;
   const value = Number(trimmed);
-  return value >= MIN_REWARD_GOAL_POINTS && value <= MAX_REWARD_GOAL_POINTS ? value : undefined;
+  return value >= limits.minGoalPoints && value <= limits.maxGoalPoints ? value : undefined;
 }
 
 const toText = (goal: number | null | undefined) => (goal === null || goal === undefined ? '' : String(goal));
@@ -33,31 +35,35 @@ export function RewardGoalsSection({ settings }: { settings: Settings }) {
   const idPrefix = useId();
   const queryClient = useQueryClient();
   const { profile } = useProfile();
-  const [week, setWeek] = useState(toText(settings.rewardGoals?.weekPoints));
-  const [cycle, setCycle] = useState(toText(settings.rewardGoals?.cyclePoints));
+  const limits = useLimits().data?.rewards ?? FALLBACK_LIMITS.rewards;
+  const update = useUpdateSettings();
+  const [week, setWeek] = useState(toText(settings.rewardGoals.weekPoints));
+  const [cycle, setCycle] = useState(toText(settings.rewardGoals.cyclePoints));
   const [message, setMessage] = useState<Message>(null);
-
-  const save = useMutation({
-    mutationFn: (rewardGoals: RewardGoals) => api.patch('/api/settings', { rewardGoals }),
-    onSuccess: async () => {
-      setMessage({ kind: 'status', text: t('settings.saved') });
-      await Promise.all([queryClient.invalidateQueries({ queryKey: queryKeys.settings }), queryClient.invalidateQueries({ queryKey: ['points'] })]);
-    },
-    onError: () => setMessage({ kind: 'alert', text: t('app.error') }),
-  });
+  /** A saved confirmation is about what was saved; the next edit makes it stale. */
+  const clearSaved = () => setMessage((current) => (current?.kind === 'status' ? null : current));
 
   if (profile?.role !== 'admin') return null;
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    const weekPoints = parseRewardGoal(week);
-    const cyclePoints = parseRewardGoal(cycle);
+    const weekPoints = parseRewardGoal(week, limits);
+    const cyclePoints = parseRewardGoal(cycle, limits);
     if (weekPoints === undefined || cyclePoints === undefined) {
-      setMessage({ kind: 'alert', text: t('settings.reward.invalid') });
+      setMessage({ kind: 'alert', text: format('settings.reward.invalid', limits) });
       return;
     }
     setMessage(null);
-    save.mutate({ weekPoints, cyclePoints });
+    update.mutate(
+      { settings, patch: { rewardGoals: { weekPoints, cyclePoints } } },
+      {
+        onSuccess: async () => {
+          setMessage({ kind: 'status', text: t('settings.saved') });
+          await queryClient.invalidateQueries({ queryKey: ['points'] });
+        },
+        onError: (error) => setMessage({ kind: 'alert', text: saveErrorText(error) }),
+      },
+    );
   };
 
   return (
@@ -75,13 +81,16 @@ export function RewardGoalsSection({ settings }: { settings: Settings }) {
             id={`${idPrefix}-week`}
             type="number"
             inputMode="numeric"
-            min={MIN_REWARD_GOAL_POINTS}
-            max={MAX_REWARD_GOAL_POINTS}
+            min={limits.minGoalPoints}
+            max={limits.maxGoalPoints}
             step="1"
             className="h-10 bg-card sm:max-w-48"
             placeholder={t('settings.reward.automatic')}
             value={week}
-            onChange={(event) => setWeek(event.target.value)}
+            onChange={(event) => {
+              clearSaved();
+              setWeek(event.target.value);
+            }}
           />
         </Field>
         <Field>
@@ -90,20 +99,23 @@ export function RewardGoalsSection({ settings }: { settings: Settings }) {
             id={`${idPrefix}-cycle`}
             type="number"
             inputMode="numeric"
-            min={MIN_REWARD_GOAL_POINTS}
-            max={MAX_REWARD_GOAL_POINTS}
+            min={limits.minGoalPoints}
+            max={limits.maxGoalPoints}
             step="1"
             className="h-10 bg-card sm:max-w-48"
             placeholder={t('settings.reward.automatic')}
             value={cycle}
-            onChange={(event) => setCycle(event.target.value)}
+            onChange={(event) => {
+              clearSaved();
+              setCycle(event.target.value);
+            }}
           />
         </Field>
       </div>
-      <p className="text-sm text-muted-foreground">{t('settings.reward.hint')}</p>
+      <p className="text-sm text-muted-foreground">{format('settings.reward.hint', limits)}</p>
       {message && <FormMessage kind={message.kind}>{message.text}</FormMessage>}
       <FormActions>
-        <Button type="submit" disabled={save.isPending}>
+        <Button type="submit" disabled={update.isPending}>
           <Save aria-hidden="true" />
           {t('settings.reward.save')}
         </Button>

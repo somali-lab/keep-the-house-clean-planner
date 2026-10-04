@@ -4,7 +4,7 @@ import { NativeSelect } from '@/components/NativeSelect';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useSettings } from '../../api/queries.ts';
+import { useSettings } from '../../api/v2/household.ts';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
 import { getLanguage } from '../../i18n/runtime.ts';
 import { dayKeyInZone } from '@/lib/dayKey';

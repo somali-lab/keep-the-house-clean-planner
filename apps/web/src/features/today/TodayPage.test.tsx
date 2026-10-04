@@ -30,14 +30,14 @@ const INTENTS = {
 
 /** Tiny in-memory server so refetches after a mutation reflect the change. */
 function setup(settings = makeSettings(), users = [ANNA, BRAM]) {
-  storeProfile(ANNA._id);
+  storeProfile(ANNA.id);
   db = [
-    makeOccurrenceV2({ id: 'o-other', taskId: 't1', taskNameSnapshot: 'Stofzuigen', date: TODAY, assigneeId: BRAM._id }),
-    makeOccurrenceV2({ id: 'o-mine', taskId: 't2', taskNameSnapshot: 'Badkamer', date: TODAY, assigneeId: ANNA._id, durationMinutesSnapshot: 30 }),
-    makeOccurrenceV2({ id: 'o-late', taskId: 't3', taskNameSnapshot: 'Ramen', date: '2026-09-14', plannedDate: '2026-09-14', assigneeId: ANNA._id, isOverdue: true }),
+    makeOccurrenceV2({ id: 'o-other', taskId: 't1', taskNameSnapshot: 'Stofzuigen', date: TODAY, assigneeId: BRAM.id }),
+    makeOccurrenceV2({ id: 'o-mine', taskId: 't2', taskNameSnapshot: 'Badkamer', date: TODAY, assigneeId: ANNA.id, durationMinutesSnapshot: 30 }),
+    makeOccurrenceV2({ id: 'o-late', taskId: 't3', taskNameSnapshot: 'Ramen', date: '2026-09-14', plannedDate: '2026-09-14', assigneeId: ANNA.id, isOverdue: true }),
     makeOccurrenceV2({ id: 'o-free', taskId: 't4', taskNameSnapshot: 'Wastafel', date: TODAY, assigneeId: null }),
-    makeOccurrenceV2({ id: 'o-tomorrow', taskId: 't5', taskNameSnapshot: 'Keuken morgen', date: '2026-09-17', assigneeId: ANNA._id }),
-    makeOccurrenceV2({ id: 'o-after-tomorrow', taskId: 't6', taskNameSnapshot: 'Was overmorgen', date: '2026-09-18', assigneeId: ANNA._id }),
+    makeOccurrenceV2({ id: 'o-tomorrow', taskId: 't5', taskNameSnapshot: 'Keuken morgen', date: '2026-09-17', assigneeId: ANNA.id }),
+    makeOccurrenceV2({ id: 'o-after-tomorrow', taskId: 't6', taskNameSnapshot: 'Was overmorgen', date: '2026-09-18', assigneeId: ANNA.id }),
   ];
   const intent = (id: string, name: keyof typeof INTENTS) => (init: RequestInit | undefined) => {
     if (failNext) {
@@ -46,13 +46,13 @@ function setup(settings = makeSettings(), users = [ANNA, BRAM]) {
     }
     const body = (init?.body ? JSON.parse(String(init.body)) : {}) as IntentBody;
     const current = db.find((o) => o.id === id)!;
-    const next = applyOptimistic(current, INTENTS[name](id, body), { profileId: ANNA._id, todayKey: TODAY, now: NOW });
+    const next = applyOptimistic(current, INTENTS[name](id, body), { profileId: ANNA.id, todayKey: TODAY, now: NOW });
     db = db.map((o) => (o.id === id ? next : o));
     return next;
   };
   return mockApi({
-    '/api/users': users,
-    '/api/settings': settings,
+    '/api/v2/users': page(users),
+    '/api/v2/settings': settings,
     '/api/v2/rooms': page([makeRoomV2({ id: 'r1', name: 'Badkamer-ruimte' })]),
     '/api/v2/tasks': page([makeTaskV2({ id: 't2', name: 'Badkamer', roomId: 'r1' })]),
     ...v2Basics(settings.cycleAnchorDate),
@@ -117,14 +117,14 @@ describe('TodayPage', () => {
     renderWithProviders(<TodayPage now={NOW} />);
     await screen.findByRole('heading', { name: 'Mijn taken' });
 
-    expect(screen.getByLabelText('Filter op persoon')).toHaveValue(ANNA._id);
+    expect(screen.getByLabelText('Filter op persoon')).toHaveValue(ANNA.id);
     expect(sectionTitles()).toEqual(['Mijn taken', 'Achterstallig']);
     expect(within(section('Mijn taken')).getByText('Badkamer')).toBeInTheDocument();
     expect(within(section('Mijn taken')).getByText(/Badkamer-ruimte · 30 min · Anna/)).toBeInTheDocument();
     expect(screen.queryByText('Wastafel')).not.toBeInTheDocument();
     expect(screen.queryByText('Stofzuigen')).not.toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Filter op persoon'), { target: { value: BRAM._id } });
+    fireEvent.change(screen.getByLabelText('Filter op persoon'), { target: { value: BRAM.id } });
     expect(await screen.findByRole('heading', { name: 'Taken van Bram de Vries' })).toBeInTheDocument();
     expect(within(section('Taken van Bram de Vries')).getByText('Stofzuigen')).toBeInTheDocument();
     expect(screen.queryByText('Badkamer')).not.toBeInTheDocument();
@@ -151,12 +151,12 @@ describe('TodayPage', () => {
     await screen.findByRole('heading', { name: 'Mijn taken' });
     // The person filter starts at its default, so the header reset has nothing to do.
     expect(screen.getByRole('button', { name: 'Filters van dit scherm resetten' })).toBeDisabled();
-    fireEvent.change(screen.getByLabelText('Filter op persoon'), { target: { value: BRAM._id } });
+    fireEvent.change(screen.getByLabelText('Filter op persoon'), { target: { value: BRAM.id } });
     firstRender.unmount();
     renderWithProviders(<TodayPage now={NOW} />, { headerReset: true });
-    expect(await screen.findByLabelText('Filter op persoon')).toHaveValue(BRAM._id);
+    expect(await screen.findByLabelText('Filter op persoon')).toHaveValue(BRAM.id);
     fireEvent.click(screen.getByRole('button', { name: 'Filters van dit scherm resetten' }));
-    expect(screen.getByLabelText('Filter op persoon')).toHaveValue(ANNA._id);
+    expect(screen.getByLabelText('Filter op persoon')).toHaveValue(ANNA.id);
     expect(screen.getByText('Filters gereset')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Filters van dit scherm resetten' })).toBeDisabled();
   });
@@ -219,15 +219,15 @@ describe('TodayPage', () => {
   it("asks before checking off another person's task and can do so on their behalf", async () => {
     const fetchMock = setup();
     renderWithProviders(<TodayPage now={NOW} />);
-    fireEvent.change(await screen.findByLabelText('Filter op persoon'), { target: { value: BRAM._id } });
+    fireEvent.change(await screen.findByLabelText('Filter op persoon'), { target: { value: BRAM.id } });
     fireEvent.click(await screen.findByRole('button', { name: 'Afvinken: Stofzuigen' }));
 
     expect(screen.getByRole('alertdialog')).toHaveTextContent('Wie heeft “Stofzuigen” gedaan?');
     expect(screen.getByRole('alertdialog')).toHaveTextContent('Deze taak staat op naam van Bram de Vries');
     fireEvent.click(screen.getByRole('button', { name: 'Namens Bram de Vries afvinken' }));
 
-    await waitFor(() => expect(db.find((o) => o.id === 'o-other')?.completedBy).toBe(BRAM._id));
-    expect(intentBodies(fetchMock, 'o-other', 'complete')).toEqual([{ completedBy: BRAM._id }]);
+    await waitFor(() => expect(db.find((o) => o.id === 'o-other')?.completedBy).toBe(BRAM.id));
+    expect(intentBodies(fetchMock, 'o-other', 'complete')).toEqual([{ completedBy: BRAM.id }]);
     expect(await inSection('Afgerond', 'Gedaan door Bram de Vries')).toBeInTheDocument();
   });
 
@@ -254,8 +254,8 @@ describe('TodayPage', () => {
     await waitFor(() => {
       expect(db.find((o) => o.id === 'o-other')).toMatchObject({
         status: 'done',
-        assigneeId: ANNA._id,
-        completedBy: ANNA._id,
+        assigneeId: ANNA.id,
+        completedBy: ANNA.id,
       });
     });
     expect(intentBodies(fetchMock, 'o-other', 'complete')).toEqual([{ takeOver: true }]);
@@ -272,7 +272,7 @@ describe('TodayPage', () => {
     expect(await inSection('Afgerond', 'Overgeslagen: geen tijd')).toBeInTheDocument();
 
     // the skipped item gets completed elsewhere; any refetch picks that up
-    db = db.map((o) => (o.id === 'o-mine' ? applyOptimistic(o, { id: o.id, kind: 'complete' }, { profileId: ANNA._id, todayKey: TODAY, now: NOW }) : o));
+    db = db.map((o) => (o.id === 'o-mine' ? applyOptimistic(o, { id: o.id, kind: 'complete' }, { profileId: ANNA.id, todayKey: TODAY, now: NOW }) : o));
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Afvinken: Ramen' }));
     });
@@ -303,7 +303,7 @@ describe('TodayPage', () => {
       .filter(([u, init]) => u === '/api/v2/occurrences' && init?.method === 'POST')
       .map(([, init]) => JSON.parse(String(init!.body)));
     expect(posted).toEqual([
-      { taskId: 't2', date: TODAY, assigneeId: ANNA._id, done: true, requestId: expect.stringMatching(/^[A-Za-z0-9_-]{16,64}$/) },
+      { taskId: 't2', date: TODAY, assigneeId: ANNA.id, done: true, requestId: expect.stringMatching(/^[A-Za-z0-9_-]{16,64}$/) },
     ]);
 
     // The page jumped back to today and shows the record as finished, marked as extra.
@@ -333,7 +333,7 @@ describe('TodayPage', () => {
     fireEvent.click(await within(dialog).findByRole('button', { name: 'Afvinken' }));
 
     await waitFor(() => expect(db.find((o) => o.id === 'o-mine')?.status).toBe('done'));
-    expect(intentBodies(fetchMock, 'o-mine', 'complete')).toEqual([{ completedBy: ANNA._id }]);
+    expect(intentBodies(fetchMock, 'o-mine', 'complete')).toEqual([{ completedBy: ANNA.id }]);
     expect(fetchMock.mock.calls.filter(([u, init]) => u === '/api/v2/occurrences' && init?.method === 'POST')).toEqual([]);
     const snackbar = await screen.findByRole('status');
     expect(snackbar).toHaveTextContent('"Badkamer" afgevinkt.');
@@ -342,25 +342,25 @@ describe('TodayPage', () => {
   });
 
   it('marks recorded extra work with an Extra badge, and its undo retracts instead of uncompleting', async () => {
-    storeProfile(ANNA._id);
+    storeProfile(ANNA.id);
     db = [
       makeOccurrenceV2({
         id: 'o-extra',
         taskId: 't2',
         taskNameSnapshot: 'Badkamer',
         date: TODAY,
-        assigneeId: ANNA._id,
+        assigneeId: ANNA.id,
         status: 'done',
-        completedBy: ANNA._id,
+        completedBy: ANNA.id,
         completedAt: NOW.toISOString(),
         origin: 'adhoc',
         recordedDone: true,
       }),
-      makeOccurrenceV2({ id: 'o-plain', taskId: 't3', taskNameSnapshot: 'Ramen', date: TODAY, assigneeId: ANNA._id, status: 'done', completedBy: ANNA._id }),
+      makeOccurrenceV2({ id: 'o-plain', taskId: 't3', taskNameSnapshot: 'Ramen', date: TODAY, assigneeId: ANNA.id, status: 'done', completedBy: ANNA.id }),
     ];
     const fetchMock = mockApi({
-      '/api/users': [ANNA, BRAM],
-      '/api/settings': makeSettings(),
+      '/api/v2/users': page([ANNA, BRAM]),
+      '/api/v2/settings': makeSettings(),
       '/api/v2/rooms': page([makeRoomV2({ id: 'r1', name: 'Badkamer-ruimte' })]),
       '/api/v2/tasks': page([makeTaskV2({ id: 't2', name: 'Badkamer', roomId: 'r1' })]),
       ...v2Basics(),
@@ -386,7 +386,7 @@ describe('TodayPage', () => {
   });
 
   it('shows a one-off task (no task record) from its snapshots', async () => {
-    storeProfile(ANNA._id);
+    storeProfile(ANNA.id);
     db = [
       makeOccurrenceV2({
         id: 'o-oneoff',
@@ -395,14 +395,14 @@ describe('TodayPage', () => {
         roomIdSnapshot: 'r1',
         roomNameSnapshot: 'Woonkamer',
         date: TODAY,
-        assigneeId: ANNA._id,
+        assigneeId: ANNA.id,
         origin: 'adhoc',
       }),
-      makeOccurrenceV2({ id: 'o-roomless', taskId: null, taskNameSnapshot: 'Kast ophalen', date: TODAY, assigneeId: ANNA._id, origin: 'adhoc' }),
+      makeOccurrenceV2({ id: 'o-roomless', taskId: null, taskNameSnapshot: 'Kast ophalen', date: TODAY, assigneeId: ANNA.id, origin: 'adhoc' }),
     ];
     mockApi({
-      '/api/users': [ANNA, BRAM],
-      '/api/settings': makeSettings(),
+      '/api/v2/users': page([ANNA, BRAM]),
+      '/api/v2/settings': makeSettings(),
       '/api/v2/rooms': page([makeRoomV2({ id: 'r1', name: 'Woonkamer' })]),
       '/api/v2/tasks': page([]),
       ...v2Basics(),
@@ -416,13 +416,13 @@ describe('TodayPage', () => {
   });
 
   it('treats a second retract (404) as already undone', async () => {
-    storeProfile(ANNA._id);
+    storeProfile(ANNA.id);
     db = [
-      makeOccurrenceV2({ id: 'o-extra', taskId: 't2', taskNameSnapshot: 'Badkamer', date: TODAY, assigneeId: ANNA._id, status: 'done', completedBy: ANNA._id, origin: 'adhoc', recordedDone: true }),
+      makeOccurrenceV2({ id: 'o-extra', taskId: 't2', taskNameSnapshot: 'Badkamer', date: TODAY, assigneeId: ANNA.id, status: 'done', completedBy: ANNA.id, origin: 'adhoc', recordedDone: true }),
     ];
     mockApi({
-      '/api/users': [ANNA, BRAM],
-      '/api/settings': makeSettings(),
+      '/api/v2/users': page([ANNA, BRAM]),
+      '/api/v2/settings': makeSettings(),
       '/api/v2/rooms': page([]),
       '/api/v2/tasks': page([]),
       ...v2Basics(),
@@ -450,13 +450,13 @@ describe('TodayPage', () => {
     fireEvent.change(await screen.findByLabelText('Filter op persoon'), { target: { value: 'all' } });
     fireEvent.click(screen.getByRole('button', { name: 'Meer voor Badkamer' }));
 
-    fireEvent.change(screen.getByLabelText('Toewijzen aan'), { target: { value: BRAM._id } });
-    await waitFor(() => expect(db.find((o) => o.id === 'o-mine')?.assigneeId).toBe(BRAM._id));
+    fireEvent.change(screen.getByLabelText('Toewijzen aan'), { target: { value: BRAM.id } });
+    await waitFor(() => expect(db.find((o) => o.id === 'o-mine')?.assigneeId).toBe(BRAM.id));
 
     fireEvent.click(screen.getByRole('button', { name: 'Meer voor Badkamer' }));
     fireEvent.change(screen.getByLabelText('Toewijzen aan'), { target: { value: '' } });
     await waitFor(() => expect(db.find((o) => o.id === 'o-mine')?.assigneeId).toBeNull());
-    expect(intentBodies(fetchMock, 'o-mine', 'assignment')).toEqual([{ assigneeId: BRAM._id }, { assigneeId: null }]);
+    expect(intentBodies(fetchMock, 'o-mine', 'assignment')).toEqual([{ assigneeId: BRAM.id }, { assigneeId: null }]);
   });
 
   it('rolls back an optimistic check-off when the server fails', async () => {

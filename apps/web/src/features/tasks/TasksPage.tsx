@@ -1,4 +1,4 @@
-import type { User } from '@huishoudplanner/shared';
+import type { User } from '../../api/v2/household.ts';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
@@ -34,7 +34,8 @@ import {
 import { cn } from '@/lib/utils';
 import type { components } from '../../api/v2/schema';
 import { apiV2, ApiRequestError, ifMatch, isStaleEntity, removeFromList, replaceInList, unwrap } from '../../api/index.ts';
-import { queryKeys, useSettings } from '../../api/queries.ts';
+import { queryKeys } from '../../api/queries.ts';
+import { useSettings } from '../../api/v2/household.ts';
 import { tasksKey, toTask, useLimits, useRooms, useTasks, type Task } from '../../api/v2/queries.ts';
 import { format, t } from '../../i18n/nl.ts';
 import { getLanguage } from '../../i18n/runtime.ts';
@@ -96,8 +97,8 @@ export function TasksPage() {
   const settings = useSettings();
   const limits = useLimits().data?.tasks;
   const { activeUsers, profile } = useProfile();
-  const [showInactive, setShowInactive, resetInactive] = usePersistedFilter('tasks.showInactive', profile?._id ?? null, false);
-  const [roomFilter, setRoomFilter, resetRoom] = usePersistedFilter('tasks.room', profile?._id ?? null, 'all');
+  const [showInactive, setShowInactive, resetInactive] = usePersistedFilter('tasks.showInactive', profile?.id ?? null, false);
+  const [roomFilter, setRoomFilter, resetRoom] = usePersistedFilter('tasks.room', profile?.id ?? null, 'all');
   useFilterReset(() => { resetRoom(); resetInactive(); }, showInactive || roomFilter !== 'all');
   const [editing, setEditing] = useState<Editing>(null);
   const [deleting, setDeleting] = useState<Task | null>(null);
@@ -215,7 +216,7 @@ export function TasksPage() {
   const userName = (id: string | null) =>
     id === null
       ? t('tasks.anyone')
-      : (activeUsers.find((u) => u._id === id)?.name ?? t('tasks.unknownUser'));
+      : (activeUsers.find((u) => u.id === id)?.name ?? t('tasks.unknownUser'));
   const visible = tasks.data.filter(
     (task) => (showInactive || task.active) && (roomFilter === 'all' || task.roomId === roomFilter),
   );
@@ -230,7 +231,7 @@ export function TasksPage() {
   const submit = (values: TaskFormValues) => {
     saveTask.mutate({
       task: editing?.mode === 'edit' ? editing.task : undefined,
-      input: toTaskInput(values),
+      input: toTaskInput(values, editing?.mode === 'edit' ? 'edit' : 'create'),
     });
   };
 
@@ -528,7 +529,7 @@ function RoomSection({
             >
               <option value="">{t('tasks.anyone')}</option>
               {users.map((user) => (
-                <option key={user._id} value={user._id}>
+                <option key={user.id} value={user.id}>
                   {user.name}
                 </option>
               ))}
@@ -551,7 +552,7 @@ function RoomSection({
       ) : (
         <ul className={cn('divide-y', !(hasActiveTasks && group.room) && 'border-t')}>
           {group.tasks.map((task) => {
-            const assignee = users.find((u) => u._id === task.defaultAssigneeId);
+            const assignee = users.find((u) => u.id === task.defaultAssigneeId);
             return (
               <li
                 key={task.id}

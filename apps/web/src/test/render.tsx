@@ -1,16 +1,11 @@
-import {
-  DEFAULT_INTERVALS,
-  type OccurrenceView,
-  type Room,
-  type Settings,
-  type Task,
-} from '@huishoudplanner/shared';
+import type { OccurrenceView, Room, Task } from '@huishoudplanner/shared';
 import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
 import { render } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { MemoryRouter } from 'react-router';
 import { FilterResetButton, FilterResetProvider } from '@/components/FilterReset';
 import type { Occurrence } from '../api/index.ts';
+import type { Settings } from '../api/v2/household.ts';
 import type { Room as RoomV2, Task as TaskV2 } from '../api/v2/queries.ts';
 import { ProfileProvider } from '../identity/index.ts';
 import { testQueryClient } from './fixtures.ts';
@@ -123,19 +118,38 @@ export function makeOccurrenceV2(overrides: Partial<Occurrence> & Pick<Occurrenc
   };
 }
 
+/** The intervals of a new household, as `GET /api/v2/settings` answers them. */
+export const DEFAULT_INTERVALS = [
+  { key: 'daily', label: 'Dagelijks', perCycle: 28, periodDays: 1 },
+  { key: '3w', label: '3x per week', perCycle: 12, periodDays: 2 },
+  { key: '2w', label: '2x per week', perCycle: 8, periodDays: 3 },
+  { key: '1w', label: '1x per week', perCycle: 4, periodDays: 7 },
+  { key: '2wk', label: '1x per 2 weken', perCycle: 2, periodDays: 14 },
+  { key: '4wk', label: '1x per 4 weken', perCycle: 1, periodDays: 28 },
+  { key: 'quarter', label: '1x per kwartaal', perCycle: null, periodDays: 91 },
+];
+
+/** The household settings as `GET /api/v2/settings` answers them (defaults delivered, bonuses in force worked out by the server). */
 export function makeSettings(overrides: Partial<Settings> = {}): Settings {
   return {
+    id: 's00000000000000000000001',
     cycleAnchorDate: '2026-09-14',
     weekStartsOn: 1,
     timezone: 'Europe/Amsterdam',
     vacationRanges: [],
     intervals: DEFAULT_INTERVALS,
-    aiProvider: { type: 'none' },
+    aiProvider: { type: 'none', endpoint: null, model: null, timeoutSeconds: null },
+    aiPromptTemplates: null,
     completionControl: 'circle',
     promoteThreshold: 2,
-    dismissedPromotions: [],
+    bonusSchedule: [],
+    bonusesInForce: { weekDone: 0, weekOnTime: 0, cycleDone: 0, cycleOnTime: 0 },
+    currencyCode: 'EUR',
+    centsPerPoint: 0,
+    rewardGoals: { weekPoints: null, cyclePoints: null },
     createdAt: STAMP,
     updatedAt: STAMP,
+    version: 1,
     ...overrides,
   };
 }

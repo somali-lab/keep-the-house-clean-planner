@@ -8,13 +8,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { useUsers } from '../../api/queries.ts';
+import { useUsers } from '../../api/v2/household.ts';
 import { format, t } from '../../i18n/nl.ts';
 
 /** Name and activity of the assignee, also when the profile is no longer active (the server refuses to credit them). */
 export function useAssigneeChoice(assigneeId: string | null): { name: string; active: boolean } {
   const users = useUsers();
-  const user = assigneeId ? users.data?.find((candidate) => candidate._id === assigneeId) : undefined;
+  const user = assigneeId ? users.data?.find((candidate) => candidate.id === assigneeId) : undefined;
   return { name: user?.name ?? t('tasks.unknownUser'), active: user?.active === true };
 }
 

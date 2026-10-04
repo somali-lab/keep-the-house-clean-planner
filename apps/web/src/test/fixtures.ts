@@ -1,4 +1,4 @@
-import type { User } from '@huishoudplanner/shared';
+import type { User } from '../api/v2/household.ts';
 import { QueryClient } from '@tanstack/react-query';
 import { vi } from 'vitest';
 import type { Badge } from '../features/badges/api.ts';
@@ -6,7 +6,8 @@ import type { RewardProgress } from '../features/reward/api.ts';
 
 const STAMP = '2026-09-14T08:00:00.000Z';
 
-export function makeUser(overrides: Partial<User> & Pick<User, '_id' | 'name'>): User {
+/** A person as `GET /api/v2/users` answers it (field `id`, with a `version`). */
+export function makeUser(overrides: Partial<User> & Pick<User, 'id' | 'name'>): User {
   return {
     color: '#2563eb',
     active: true,
@@ -17,12 +18,13 @@ export function makeUser(overrides: Partial<User> & Pick<User, '_id' | 'name'>):
     browserNotifications: { enabled: false, times: [] },
     createdAt: STAMP,
     updatedAt: STAMP,
+    version: 1,
     ...overrides,
   };
 }
 
-export const ANNA = makeUser({ _id: 'a00000000000000000000001', name: 'Anna', color: '#2563eb', role: 'admin' });
-export const BRAM = makeUser({ _id: 'b00000000000000000000002', name: 'Bram de Vries', color: '#db2777' });
+export const ANNA = makeUser({ id: 'a00000000000000000000001', name: 'Anna', color: '#2563eb', role: 'admin' });
+export const BRAM = makeUser({ id: 'b00000000000000000000002', name: 'Bram de Vries', color: '#db2777' });
 
 export type RouteHandler = unknown | ((init: RequestInit | undefined, url: string) => unknown);
 
@@ -100,6 +102,11 @@ export const LIMITS = {
     maxBadges: 100,
     maxRuleTasks: 500,
   },
+  bonuses: { minPoints: 0, maxPoints: 1000 },
+  rewards: { minGoalPoints: 0, maxGoalPoints: 100000, eggCount: 5 },
+  notifications: { maxBrowserTimes: 6 },
+  ai: { minTimeoutSeconds: 10, maxTimeoutSeconds: 900 },
+  defaults: { currencyCode: 'EUR', aiTimeoutSeconds: 180 },
 };
 
 const DAY_MS = 86_400_000;
@@ -179,7 +186,7 @@ export function makeProgress(overrides: Partial<RewardProgress> = {}): RewardPro
   // The server counts the eggs (one per full 10%); this stands in for it, so a test only states the percentage.
   const percent = overrides.percent ?? 75;
   return {
-    personId: ANNA._id,
+    personId: ANNA.id,
     period: 'week',
     start: '2026-09-14',
     end: '2026-09-20',
@@ -193,5 +200,37 @@ export function makeProgress(overrides: Partial<RewardProgress> = {}): RewardPro
     centsPerPoint: 0,
     money: null,
     ...overrides,
+  };
+}
+
+/** The requests a mock received for `METHOD url`, with the parsed JSON body (undefined without one) and the lower-cased headers. */
+export function requestsTo(
+  fetchMock: ReturnType<typeof mockApi>,
+  method: string,
+  url: string,
+): { body: unknown; headers: Record<string, string> }[] {
+  return fetchMock.mock.calls
+    .filter(([u, init]) => u === url && ((init as RequestInit | undefined)?.method ?? 'GET') === method)
+    .map(([, init]) => {
+      const request = init as RequestInit;
+      return {
+        body: typeof request.body === 'string' && request.body !== '' ? (JSON.parse(request.body) as unknown) : undefined,
+        headers: (request.headers ?? {}) as Record<string, string>,
+      };
+    });
+}
+
+/** The routes of the people and the settings every page behind the profile needs. */
+export const householdRoutes = (users: unknown[], settings: unknown) => ({
+  '/api/v2/users': page(users),
+  '/api/v2/settings': settings,
+});
+
+/** A route handler that answers its first call with the first value, the second with the second, and so on (the last one repeats). */
+export function sequence(...answers: (unknown | (() => unknown))[]) {
+  let calls = 0;
+  return () => {
+    const answer = answers[Math.min(calls++, answers.length - 1)];
+    return typeof answer === 'function' ? (answer as () => unknown)() : answer;
   };
 }

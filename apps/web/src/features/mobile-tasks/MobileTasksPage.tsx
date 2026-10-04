@@ -4,7 +4,7 @@ import { useFilterReset } from '@/components/FilterReset';
 import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { useSettings } from '../../api/queries.ts';
+import { useSettings } from '../../api/v2/household.ts';
 import { useCalendar, useRooms, useTasks } from '../../api/v2/queries.ts';
 import { format, t } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
@@ -28,8 +28,8 @@ export function MobileTasksPage({ now }: { now?: Date }) {
   const rooms = useRooms();
   const { profile } = useProfile();
   const [recordOpen, setRecordOpen] = useState(false);
-  const [weeks, setWeeks, resetWeeks] = usePersistedFilter<WeekRange>('mobileTasks.period', profile?._id ?? null, 1);
-  const [hiddenRoomIds, setHiddenRoomIds, resetRooms] = usePersistedFilter<string[]>('mobileTasks.rooms', profile?._id ?? null, []);
+  const [weeks, setWeeks, resetWeeks] = usePersistedFilter<WeekRange>('mobileTasks.period', profile?.id ?? null, 1);
+  const [hiddenRoomIds, setHiddenRoomIds, resetRooms] = usePersistedFilter<string[]>('mobileTasks.rooms', profile?.id ?? null, []);
   useFilterReset(() => { resetWeeks(); resetRooms(); }, weeks !== 1 || hiddenRoomIds.length > 0);
   const from = dayKeyInZone(now ?? new Date(), settings.data?.timezone ?? 'Europe/Amsterdam');
   const to = addDays(from, weeks * 7 - 1);
@@ -40,7 +40,7 @@ export function MobileTasksPage({ now }: { now?: Date }) {
   const occurrences = useOccurrences(from, to, settings.isSuccess);
   const rows = useMemo(() => {
     const relevant = (occurrences.data ?? []).filter(
-      (occurrence) => occurrence.assigneeId === profile?._id || occurrence.assigneeId === null,
+      (occurrence) => occurrence.assigneeId === profile?.id || occurrence.assigneeId === null,
     );
     const build = (assigneeId: string | null) =>
       taskOverviewRows(
@@ -50,8 +50,8 @@ export function MobileTasksPage({ now }: { now?: Date }) {
         t('tasks.unknownRoom'),
         from,
       );
-    return { mine: build(profile?._id ?? ''), unassigned: build(null) };
-  }, [from, occurrences.data, profile?._id, rooms.data, tasks.data]);
+    return { mine: build(profile?.id ?? ''), unassigned: build(null) };
+  }, [from, occurrences.data, profile?.id, rooms.data, tasks.data]);
   const hiddenRoomSet = new Set(hiddenRoomIds);
   const filterRooms = (items: TaskOverviewRow[]) =>
     items.filter((row) => row.roomId === null || !hiddenRoomSet.has(row.roomId));

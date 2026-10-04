@@ -71,7 +71,7 @@ function RedeemFormBody({
   // A second click can arrive before the pending state has rendered, so the guard is synchronous.
   const inFlight = useRef(false);
 
-  const personId = isAdmin && chosenPerson ? chosenPerson : (profile?._id ?? '');
+  const personId = isAdmin && chosenPerson ? chosenPerson : (profile?.id ?? '');
   const row = balances.data?.balances.find((balance) => balance.personId === personId);
   const balance = row?.points ?? 0;
   const centsPerPoint = balances.data?.centsPerPoint ?? 0;
@@ -145,7 +145,7 @@ function RedeemFormBody({
             }}
           >
             {activeUsers.map((user) => (
-              <option key={user._id} value={user._id}>
+              <option key={user.id} value={user.id}>
                 {user.name}
               </option>
             ))}

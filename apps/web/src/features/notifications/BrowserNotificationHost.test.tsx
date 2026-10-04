@@ -1,6 +1,6 @@
 import { act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ANNA, BRAM, makeUser, mockApi, storeProfile, testQueryClient } from '../../test/fixtures.ts';
+import { ANNA, BRAM, makeUser, mockApi, storeProfile, testQueryClient, page } from '../../test/fixtures.ts';
 import { makeOccurrence, makeSettings, renderWithProviders } from '../../test/render.tsx';
 import { BrowserNotificationHost, deliverMoment } from './BrowserNotificationHost.tsx';
 import { CLAIM_STALE_MS, claimKey } from './notificationClaim.ts';
@@ -34,8 +34,8 @@ const ME = makeUser({
   browserNotifications: { enabled: true, times: ['10:00'] },
 });
 const TODAY = '2026-09-16';
-const OPEN_TODAY = makeOccurrence({ _id: 'e00000000000000000000001', assigneeId: ME._id, date: TODAY, taskNameSnapshot: 'Afwassen' });
-const OPEN_OVERDUE = makeOccurrence({ _id: 'e00000000000000000000002', assigneeId: ME._id, date: '2026-09-14', taskNameSnapshot: 'Dweilen' });
+const OPEN_TODAY = makeOccurrence({ _id: 'e00000000000000000000001', assigneeId: ME.id, date: TODAY, taskNameSnapshot: 'Afwassen' });
+const OPEN_OVERDUE = makeOccurrence({ _id: 'e00000000000000000000002', assigneeId: ME.id, date: '2026-09-14', taskNameSnapshot: 'Dweilen' });
 
 beforeEach(stubNotification);
 afterEach(() => vi.useRealTimers());
@@ -52,34 +52,34 @@ describe('deliverMoment', () => {
     const fetchMock = mockApi({ '/api/occurrences': [OPEN_TODAY, OPEN_OVERDUE] });
     // Two tabs share localStorage but have their own query client and in-flight set.
     await Promise.all([
-      deliverMoment(ME._id, 'Europe/Amsterdam', moment, tabs()),
-      deliverMoment(ME._id, 'Europe/Amsterdam', moment, tabs()),
+      deliverMoment(ME.id, 'Europe/Amsterdam', moment, tabs()),
+      deliverMoment(ME.id, 'Europe/Amsterdam', moment, tabs()),
     ]);
     expect(shown).toEqual([
       {
         title: 'Keep the House Clean: 1 taak vandaag, 1 achterstallig',
         body: 'Afwassen, Dweilen',
-        tag: claimKey(ME._id, moment),
+        tag: claimKey(ME.id, moment),
       },
     ]);
     expect(occurrencesCalls(fetchMock)).toBe(1);
     expect(String(fetchMock.mock.calls[0]![0])).toBe(
-      `/api/occurrences?from=2026-07-22&to=${TODAY}&status=open&assigneeId=${ME._id}`,
+      `/api/occurrences?from=2026-07-22&to=${TODAY}&status=open&assigneeId=${ME.id}`,
     );
   });
 
   it('does not repeat a moment that was already delivered', async () => {
     const fetchMock = mockApi({ '/api/occurrences': [OPEN_TODAY] });
-    await deliverMoment(ME._id, 'Europe/Amsterdam', moment, tabs());
-    await deliverMoment(ME._id, 'Europe/Amsterdam', moment, tabs());
+    await deliverMoment(ME.id, 'Europe/Amsterdam', moment, tabs());
+    await deliverMoment(ME.id, 'Europe/Amsterdam', moment, tabs());
     expect(shown).toHaveLength(1);
     expect(occurrencesCalls(fetchMock)).toBe(1);
   });
 
   it('sends nothing when the person has nothing open, and does not look again', async () => {
     const fetchMock = mockApi({ '/api/occurrences': [] });
-    await deliverMoment(ME._id, 'Europe/Amsterdam', moment, tabs());
-    await deliverMoment(ME._id, 'Europe/Amsterdam', moment, tabs());
+    await deliverMoment(ME.id, 'Europe/Amsterdam', moment, tabs());
+    await deliverMoment(ME.id, 'Europe/Amsterdam', moment, tabs());
     expect(shown).toEqual([]);
     expect(occurrencesCalls(fetchMock)).toBe(1);
   });
@@ -87,11 +87,11 @@ describe('deliverMoment', () => {
   it('claims nothing without permission, so granting it within the grace period still delivers', async () => {
     const fetchMock = mockApi({ '/api/occurrences': [OPEN_TODAY] });
     permission = 'default';
-    await deliverMoment(ME._id, 'Europe/Amsterdam', moment, tabs());
+    await deliverMoment(ME.id, 'Europe/Amsterdam', moment, tabs());
     expect(shown).toEqual([]);
     expect(occurrencesCalls(fetchMock)).toBe(0);
     permission = 'granted';
-    await deliverMoment(ME._id, 'Europe/Amsterdam', moment, tabs());
+    await deliverMoment(ME.id, 'Europe/Amsterdam', moment, tabs());
     expect(shown).toHaveLength(1);
   });
 
@@ -101,15 +101,15 @@ describe('deliverMoment', () => {
     const hung = new Promise<unknown[]>((resolve) => (release = resolve));
     mockApi({ '/api/occurrences': () => (++calls === 1 ? hung : [OPEN_TODAY]) });
 
-    const hungTab = deliverMoment(ME._id, 'Europe/Amsterdam', moment, tabs());
+    const hungTab = deliverMoment(ME.id, 'Europe/Amsterdam', moment, tabs());
     await vi.waitFor(() => expect(calls).toBe(1));
     // Inside the stale period the pending claim blocks other tabs.
-    await deliverMoment(ME._id, 'Europe/Amsterdam', moment, tabs());
+    await deliverMoment(ME.id, 'Europe/Amsterdam', moment, tabs());
     expect(calls).toBe(1);
     expect(shown).toEqual([]);
 
     vi.setSystemTime(new Date(Date.parse('2026-09-16T08:00:30Z') + CLAIM_STALE_MS + 1_000));
-    await deliverMoment(ME._id, 'Europe/Amsterdam', moment, tabs());
+    await deliverMoment(ME.id, 'Europe/Amsterdam', moment, tabs());
     expect(shown).toHaveLength(1);
 
     release([OPEN_TODAY]);
@@ -125,10 +125,10 @@ describe('deliverMoment', () => {
         return [OPEN_TODAY];
       },
     });
-    await deliverMoment(ME._id, 'Europe/Amsterdam', moment, tabs());
+    await deliverMoment(ME.id, 'Europe/Amsterdam', moment, tabs());
     expect(shown).toEqual([]);
     failing = false;
-    await deliverMoment(ME._id, 'Europe/Amsterdam', moment, tabs());
+    await deliverMoment(ME.id, 'Europe/Amsterdam', moment, tabs());
     expect(shown).toHaveLength(1);
   });
 });
@@ -137,11 +137,11 @@ describe('BrowserNotificationHost', () => {
   const NOW = '2026-09-16T07:59:30Z';
 
   function setup(profile = ME) {
-    storeProfile(profile._id);
+    storeProfile(profile.id);
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'], now: new Date(NOW) });
     const fetchMock = mockApi({
-      '/api/users': [profile, BRAM],
-      '/api/settings': makeSettings(),
+      '/api/v2/users': page([profile, BRAM]),
+      '/api/v2/settings': makeSettings(),
       '/api/occurrences': [OPEN_TODAY],
     });
     renderWithProviders(<BrowserNotificationHost />);
@@ -188,7 +188,7 @@ describe('BrowserNotificationHost', () => {
       const fetchMock = setup();
       await advance(120_000);
       expect(shown).toEqual([]);
-      expect(fetchMock.mock.calls.some(([url]) => String(url) === '/api/settings')).toBe(false);
+      expect(fetchMock.mock.calls.some(([url]) => String(url) === '/api/v2/settings')).toBe(false);
       expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith('/api/occurrences'))).toBe(false);
     } finally {
       Reflect.deleteProperty(window, 'isSecureContext');
@@ -199,7 +199,7 @@ describe('BrowserNotificationHost', () => {
     permission = 'denied';
     const fetchMock = setup();
     await advance(1_000);
-    expect(fetchMock.mock.calls.some(([url]) => String(url) === '/api/settings')).toBe(false);
+    expect(fetchMock.mock.calls.some(([url]) => String(url) === '/api/v2/settings')).toBe(false);
 
     permission = 'granted';
     vi.setSystemTime(new Date('2026-09-16T08:02:00Z'));
@@ -213,6 +213,6 @@ describe('BrowserNotificationHost', () => {
     await advance(60_000);
     expect(shown).toEqual([]);
     expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith('/api/occurrences'))).toBe(false);
-    expect(fetchMock.mock.calls.some(([url]) => String(url) === '/api/settings')).toBe(false);
+    expect(fetchMock.mock.calls.some(([url]) => String(url) === '/api/v2/settings')).toBe(false);
   });
 });

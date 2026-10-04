@@ -80,13 +80,14 @@ describe('TaskForm points', () => {
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ points: '0' }));
   });
 
-  it('asks for the points of an existing task instead of silently keeping the old value', () => {
+  it('lets an existing task hand its points back to the duration by emptying the field', () => {
     const task = makeTaskV2({ id: 't1', name: 'Ramen', roomId: 'r1', durationMinutes: 30, points: 8 });
     const { points, onSubmit, save } = renderForm(taskToForm(task), 'edit');
+    expect(points).toHaveAccessibleDescription(/Laat leeg/);
     fireEvent.change(points, { target: { value: '' } });
     save();
-    expect(screen.getByRole('alert')).toHaveTextContent('Vul de punten in.');
-    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ points: '' }));
   });
 });
 
@@ -108,9 +109,16 @@ describe('task form model: points', () => {
     expect(validateTaskForm({ ...base, points: 'abc' }, {}).points).toBe('tasks.error.pointsInvalid');
   });
 
-  it('requires points only on edit', () => {
+  it('accepts empty points on create and on edit (the default for the duration)', () => {
     expect(validateTaskForm({ ...base, points: '' }, { limits, mode: 'create' })).toEqual({});
-    expect(validateTaskForm({ ...base, points: '' }, { limits, mode: 'edit' }).points).toBe('tasks.error.pointsRequired');
+    expect(validateTaskForm({ ...base, points: '' }, { limits, mode: 'edit' })).toEqual({});
+  });
+
+  it('sends an explicit null for the points only when an edit empties them', () => {
+    expect(toTaskInput({ ...base, points: '' }, 'edit').points).toBeNull();
+    expect('points' in toTaskInput({ ...base, points: '' }, 'create')).toBe(false);
+    expect('points' in toTaskInput({ ...base, points: '' })).toBe(false);
+    expect(toTaskInput({ ...base, points: '9' }, 'edit').points).toBe(9);
   });
 
   it('builds the exact body: points only when given, nothing sent as null where the API refuses it', () => {

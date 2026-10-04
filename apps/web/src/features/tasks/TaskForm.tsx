@@ -1,4 +1,4 @@
-import type { Interval, User } from '@huishoudplanner/shared';
+import type { Interval, User } from '../../api/v2/household.ts';
 import { useId, useState, type FormEvent, type ReactNode } from 'react';
 import { NativeSelect } from '@/components/NativeSelect';
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,7 @@ export interface TaskFormProps {
   className?: string;
   showTitle?: boolean;
   initial: TaskFormValues;
-  /** An existing task has to give its points; a new one may leave them to the server. */
+  /** An existing task may empty its points to hand them back to the duration; a new one leaves them to the server. */
   mode?: 'create' | 'edit';
   /** The limits of the server; the range of the points is not checked before they are loaded. */
   limits?: TaskFormLimits;
@@ -167,7 +167,7 @@ export function TaskForm({
             onChange={(e) => set('points')(e.target.value)}
           />
           <p id={`${idPrefix}-points-hint`} className="text-sm text-muted-foreground">
-            {t('tasks.field.pointsHint')}
+            {t(mode === 'edit' ? 'tasks.field.pointsHintEdit' : 'tasks.field.pointsHint')}
           </p>
           {errorFor('points')}
         </Field>
@@ -181,7 +181,7 @@ export function TaskForm({
           >
             <option value="">{t('tasks.anyone')}</option>
             {users.map((user) => (
-              <option key={user._id} value={user._id}>
+              <option key={user.id} value={user.id}>
                 {user.name}
               </option>
             ))}

@@ -1,5 +1,4 @@
-import type { AiPromptTemplates } from '@huishoudplanner/shared';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Braces, RotateCcw, Save } from 'lucide-react';
 import { useId, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router';
@@ -8,9 +7,10 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
-import { api, apiV2, ApiRequestError, unwrap } from '../../api/index.ts';
-import { queryKeys, useSettings } from '../../api/queries.ts';
+import { apiV2, ApiRequestError, isStaleEntity, unwrap } from '../../api/index.ts';
+import { useSettings, type AiPromptTemplates, type Settings } from '../../api/v2/household.ts';
 import { t, type MessageKey } from '../../i18n/nl.ts';
+import { useUpdateSettings } from '../settings/api.ts';
 
 type PromptAction = keyof AiPromptTemplates;
 
@@ -49,12 +49,12 @@ export function AiPromptsPage({ embedded = false }: { embedded?: boolean }) {
 
   const effective = Object.fromEntries(
     ACTIONS.map(({ key }) => [key, { system: promptInfo.data.actions[key].system, user: promptInfo.data.actions[key].user }]),
-  ) as AiPromptTemplates;
+  ) as unknown as AiPromptTemplates;
 
   return (
     <PromptEditor
       embedded={embedded}
-      key={settings.data.updatedAt}
+      settings={settings.data}
       initial={settings.data.aiPromptTemplates ?? effective}
       defaults={promptInfo.data.defaults}
       info={promptInfo.data}
@@ -62,9 +62,21 @@ export function AiPromptsPage({ embedded = false }: { embedded?: boolean }) {
   );
 }
 
-function PromptEditor({ initial, defaults, info, embedded }: { initial: AiPromptTemplates; defaults: AiPromptTemplates; info: PromptInfo; embedded: boolean }) {
+function PromptEditor({
+  settings,
+  initial,
+  defaults,
+  info,
+  embedded,
+}: {
+  settings: Settings;
+  initial: AiPromptTemplates;
+  defaults: AiPromptTemplates;
+  info: PromptInfo;
+  embedded: boolean;
+}) {
   const id = useId();
-  const queryClient = useQueryClient();
+  const saveSettings = useUpdateSettings();
   const [searchParams, setSearchParams] = useSearchParams();
   const selected =
     ACTIONS.find(({ key }) => ACTION_TABS[key] === searchParams.get('tab'))?.key ??
@@ -72,19 +84,6 @@ function PromptEditor({ initial, defaults, info, embedded }: { initial: AiPrompt
   const [prompts, setPrompts] = useState<AiPromptTemplates>(initial);
   const [message, setMessage] = useState<{ kind: 'status' | 'alert'; text: string } | null>(null);
 
-  const save = useMutation({
-    // The settings are still the Node server's (slice 7.5); only the prompt information is read from /api/v2.
-    mutationFn: async () => api.patch('/api/settings', { aiPromptTemplates: prompts }),
-    onSuccess: async () => {
-      setMessage({ kind: 'status', text: t('aiPrompts.saved') });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.settings });
-    },
-    onError: (error) =>
-      setMessage({
-        kind: 'alert',
-        text: error instanceof ApiRequestError && error.code === 'validation_error' ? t('aiPrompts.invalid') : t('app.error'),
-      }),
-  });
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -93,7 +92,21 @@ function PromptEditor({ initial, defaults, info, embedded }: { initial: AiPrompt
       setMessage({ kind: 'alert', text: t('aiPrompts.invalid') });
       return;
     }
-    save.mutate();
+    saveSettings.mutate(
+      { settings, patch: { aiPromptTemplates: prompts } },
+      {
+        onSuccess: () => setMessage({ kind: 'status', text: t('aiPrompts.saved') }),
+        onError: (error) =>
+          setMessage({
+            kind: 'alert',
+            text: isStaleEntity(error)
+              ? t('app.staleEntity')
+              : error instanceof ApiRequestError && error.code === 'validation_error'
+                ? t('aiPrompts.invalid')
+                : t('app.error'),
+          }),
+      },
+    );
   };
 
   const prompt = prompts[selected];
@@ -161,7 +174,7 @@ function PromptEditor({ initial, defaults, info, embedded }: { initial: AiPrompt
               {t('aiPrompts.resetAll')}
             </Button>
           </div>
-          <Button type="submit" disabled={save.isPending}>
+          <Button type="submit" disabled={saveSettings.isPending}>
             <Save aria-hidden="true" />{t('common.save')}
           </Button>
         </div>

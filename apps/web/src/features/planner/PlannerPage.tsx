@@ -31,7 +31,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { useSettings } from '../../api/queries.ts';
+import { useSettings } from '../../api/v2/household.ts';
 import { useRooms, useTasks } from '../../api/v2/queries.ts';
 import { format, t } from '../../i18n/nl.ts';
 import { ApiRequestError, isStaleEntity } from '../../api/index.ts';
@@ -613,7 +613,7 @@ export function PlannerPage() {
               discardPendingToken={discardToken}
               rooms={rooms.data}
               users={activeUsers}
-              profileId={profile?._id ?? null}
+              profileId={profile?.id ?? null}
               intervals={settings.data.intervals}
               onManagePlans={() => setPlansOpen(true)}
             />
@@ -631,7 +631,7 @@ function ActivationPreviewSection({
 }: {
   title: string;
   items: ActivationPreviewItem[];
-  activeUsers: { _id: string; name: string }[];
+  activeUsers: { id: string; name: string }[];
 }) {
   return (
     <section className="mt-3" aria-label={title}>
@@ -644,7 +644,7 @@ function ActivationPreviewSection({
         <ul className="mt-1 space-y-1 text-sm">
           {items.map((item, index) => {
             const person =
-              activeUsers.find((user) => user._id === item.assigneeId)?.name ??
+              activeUsers.find((user) => user.id === item.assigneeId)?.name ??
               (item.assigneeId ? t('planner.activate.unknownPerson') : t('planner.anyone'));
             const date = formatPreviewDate(item.date);
             return (

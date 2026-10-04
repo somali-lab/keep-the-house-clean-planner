@@ -1,23 +1,18 @@
-import type { Settings } from '@huishoudplanner/shared';
-import {
-  DEFAULT_CURRENCY_CODE,
-  formatCents,
-  isTwoDecimalCurrency,
-  MAX_CENTS_PER_POINT,
-  MIN_CENTS_PER_POINT,
-} from '@huishoudplanner/shared/points';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { isTwoDecimalCurrency } from '@/lib/currency';
+import { formatMoney } from '@/lib/money';
+import { useQueryClient } from '@tanstack/react-query';
 import { Coins, Save } from 'lucide-react';
 import { useId, useMemo, useState, type FormEvent } from 'react';
 import { NativeSelect } from '@/components/NativeSelect';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { api } from '../../api/index.ts';
-import { queryKeys } from '../../api/queries.ts';
+import type { Settings } from '../../api/v2/household.ts';
+import { FALLBACK_LIMITS, useLimits } from '../../api/v2/queries.ts';
 import { format, t } from '../../i18n/nl.ts';
 import { getLocale } from '../../i18n/runtime.ts';
 import { useProfile } from '../../identity/index.ts';
+import { saveErrorText, useUpdateSettings } from './api.ts';
 import { Field, FormActions, FormMessage, SettingsCardHeader, settingsCardClass } from './SettingsCard.tsx';
 
 type Message = { kind: 'status' | 'alert'; text: string } | null;
@@ -36,11 +31,14 @@ export function currencyCodes(current: string): string[] {
   return known.includes(current) ? known : [...known, current].sort();
 }
 
-/** The cents typed in the field, or null when it is not a whole number from 0 to 10000. The server validates too. */
-export function parseCentsPerPoint(text: string): number | null {
-  if (!/^\d{1,5}$/.test(text.trim())) return null;
+/** The cents typed in the field, or null when it is not a whole number within the limits of the server. The server validates too. */
+export function parseCentsPerPoint(
+  text: string,
+  limits: { minCentsPerPoint: number; maxCentsPerPoint: number } = FALLBACK_LIMITS.points,
+): number | null {
+  if (!/^\d{1,6}$/.test(text.trim())) return null;
   const value = Number(text);
-  return value >= MIN_CENTS_PER_POINT && value <= MAX_CENTS_PER_POINT ? value : null;
+  return value >= limits.minCentsPerPoint && value <= limits.maxCentsPerPoint ? value : null;
 }
 
 /** "EUR – euro" in the interface language; the code alone when the runtime cannot name it. */
@@ -62,27 +60,20 @@ export function ConversionSection({ settings }: { settings: Settings }) {
   const idPrefix = useId();
   const queryClient = useQueryClient();
   const { profile } = useProfile();
-  const currentCurrency = settings.currencyCode ?? DEFAULT_CURRENCY_CODE;
-  const currentCents = settings.centsPerPoint ?? 0;
+  const limits = useLimits().data?.points ?? FALLBACK_LIMITS.points;
+  const update = useUpdateSettings();
+  const currentCurrency = settings.currencyCode;
   const [currencyCode, setCurrencyCode] = useState(currentCurrency);
-  const [cents, setCents] = useState(String(currentCents));
+  const [cents, setCents] = useState(String(settings.centsPerPoint));
   const [message, setMessage] = useState<Message>(null);
+  /** A saved confirmation is about what was saved; the next edit makes it stale. */
+  const clearSaved = () => setMessage((current) => (current?.kind === 'status' ? null : current));
   const codes = useMemo(() => currencyCodes(currentCurrency), [currentCurrency]);
-
-  const save = useMutation({
-    mutationFn: (body: { currencyCode: string; centsPerPoint: number }) => api.patch('/api/settings', body),
-    onSuccess: async () => {
-      setMessage({ kind: 'status', text: t('settings.saved') });
-      // Balances and entries are shown in this currency, so they are read again too.
-      await Promise.all([queryClient.invalidateQueries({ queryKey: queryKeys.settings }), queryClient.invalidateQueries({ queryKey: ['points'] })]);
-    },
-    onError: () => setMessage({ kind: 'alert', text: t('app.error') }),
-  });
 
   if (profile?.role !== 'admin') return null;
 
-  const parsed = parseCentsPerPoint(cents);
-  const preview = parsed !== null && parsed > 0 ? formatCents(parsed, currencyCode, getLocale()) : null;
+  const parsed = parseCentsPerPoint(cents, limits);
+  const preview = parsed !== null && parsed > 0 ? formatMoney(parsed, currencyCode, getLocale()) : null;
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -91,11 +82,21 @@ export function ConversionSection({ settings }: { settings: Settings }) {
       return;
     }
     if (parsed === null) {
-      setMessage({ kind: 'alert', text: t('settings.conversion.invalid') });
+      setMessage({ kind: 'alert', text: format('settings.conversion.invalid', limits) });
       return;
     }
     setMessage(null);
-    save.mutate({ currencyCode, centsPerPoint: parsed });
+    update.mutate(
+      { settings, patch: { currencyCode, centsPerPoint: parsed } },
+      {
+        onSuccess: async () => {
+          setMessage({ kind: 'status', text: t('settings.saved') });
+          // Balances and entries are shown in this currency, so they are read again too.
+          await queryClient.invalidateQueries({ queryKey: ['points'] });
+        },
+        onError: (error) => setMessage({ kind: 'alert', text: saveErrorText(error) }),
+      },
+    );
   };
 
   return (
@@ -113,7 +114,10 @@ export function ConversionSection({ settings }: { settings: Settings }) {
             id={`${idPrefix}-currency`}
             className="[&_select]:h-10 sm:max-w-72"
             value={currencyCode}
-            onChange={(event) => setCurrencyCode(event.target.value)}
+            onChange={(event) => {
+              clearSaved();
+              setCurrencyCode(event.target.value);
+            }}
           >
             {codes.map((code) => (
               <option key={code} value={code}>
@@ -128,16 +132,19 @@ export function ConversionSection({ settings }: { settings: Settings }) {
             id={`${idPrefix}-cents`}
             type="number"
             inputMode="numeric"
-            min={MIN_CENTS_PER_POINT}
-            max={MAX_CENTS_PER_POINT}
+            min={limits.minCentsPerPoint}
+            max={limits.maxCentsPerPoint}
             step="1"
             className="h-10 bg-card sm:max-w-48"
             value={cents}
-            onChange={(event) => setCents(event.target.value)}
+            onChange={(event) => {
+              clearSaved();
+              setCents(event.target.value);
+            }}
           />
         </Field>
       </div>
-      <p className="text-sm text-muted-foreground">{t('settings.conversion.hint')}</p>
+      <p className="text-sm text-muted-foreground">{format('settings.conversion.hint', limits)}</p>
       {preview ? (
         <p className="text-sm font-semibold">{format('settings.conversion.preview', { money: preview })}</p>
       ) : (
@@ -145,7 +152,7 @@ export function ConversionSection({ settings }: { settings: Settings }) {
       )}
       {message && <FormMessage kind={message.kind}>{message.text}</FormMessage>}
       <FormActions>
-        <Button type="submit" disabled={save.isPending}>
+        <Button type="submit" disabled={update.isPending}>
           <Save aria-hidden="true" />
           {t('settings.conversion.save')}
         </Button>
