@@ -260,7 +260,7 @@ Each phase ends in something demonstrable. Slices are small enough for one pull 
 - [ ] 6.2 Notifications: ntfy and Home Assistant adapters, morning message. Port `notify.test.ts`.
 - [ ] 6.3 Scheduler and the manual job endpoints. Port the nightly and manual-run cases of `generation.test.ts`, `points-reconcile.test.ts`, `points-bonuses.test.ts` and `badges.test.ts` that were deferred in phases 3 and 4.
 - [x] 6.4 PDF sheets with QuestPDF (§3.10). Port `pdf-export.test.ts`.
-- [ ] 6.5 JSON export and import with the confirmation and acknowledgement rules. Port `transfer.test.ts`.
+- [ ] 6.5 JSON export and import with the confirmation and acknowledgement rules. Port `transfer.test.ts`. (Built except one step: the rebuild of the badge awards after an import and the deferred import step of `badges.test.ts` need the badge award service of the badges slice; the import already clears the awards and runs the points reconciliation with the import trigger. Tick when that step is done.)
 
 ### Phase 7 — Web app to v2 (D4)
 
