@@ -191,7 +191,9 @@ public sealed class StatisticsService(
         if (ran.IsT0 && ran.AsT0.IsT0 && !ran.AsT0.AsT0.RemovedNothing())
         {
             // The awards follow the history they are derived from (ADR-0014): they are rebuilt from what remains, after the reset has committed.
-            // A reset that removed nothing left the history as it was, so the awards need no rebuild.
+            // A reset that removed nothing, whether or not it moved the bonus floor, left the history as it was, so the awards need no rebuild:
+            // they are derived from the executions and the ledger, never from the floor, and a purge that removed nothing leaves no award behind that
+            // the purged history supported.
             // A failure there is logged and never fails the reset; the next reconciliation repairs the awards.
             await badges.ReconcileSafelyAsync(AuditActor.From(actor), BadgeEvalTrigger.Reset, null, cancellationToken).ConfigureAwait(false);
         }
@@ -231,9 +233,11 @@ public sealed class StatisticsService(
             return Abort(resetError);
         }
 
-        if (result.RemovedNothing())
+        if (plan.ChangesNothing(result))
         {
-            // A no-op writes and audits nothing: aborting rolls back whatever the store wrote, such as the bonus floor, and the answer keeps the zero counts.
+            // The one true no-op: nothing removed and the floor already where the reset would put it. Nothing was written, so aborting only ends the
+            // transaction; no audit entry is written and the answer keeps the zero counts. A reset that removed nothing but moved the floor is a real
+            // state change and is audited like any other.
             return TransactionOutcome.Abort<OneOf<StatisticsResetResult, BeforeInFuture, SettingsMissing, PortError>>(result);
         }
 

@@ -201,19 +201,42 @@ public sealed class StatisticsServiceTests
         entry.Meta["resetId"].Should().BeOfType<AuditString>().Which.Value.Should().NotBeNullOrWhiteSpace();
     }
 
+    private static readonly StatisticsResetResult Zero = new(0, 0, 0, 0, 0, 0, 0);
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task Reset_thatRemovesNothing_answersTheZeroCounts_butWritesAndAuditsNothing(bool purge)
+    public async Task Reset_thatRemovesNothing_butMovesTheFloor_isRecordedWithTheFloorChange_andAnswersTheZeroCounts(bool purge)
     {
         var world = new StatisticsWorld();
-        world.Resetter.Result = new StatisticsResetResult(0, 0, 0, 0, 0, 0, 0);
+        world.Resetter.Result = Zero;
 
         var result = await world.Service.ResetAsync(Admin, purge ? new DateOnly(2026, 10, 12) : null, Ct);
 
-        result.AsT0.Should().Be(new StatisticsResetResult(0, 0, 0, 0, 0, 0, 0));
+        result.AsT0.Should().Be(Zero);
+        world.Transactions.Aborts.Should().Be(0);
+        var entry = world.Audit.Entries.Should().ContainSingle("moving the floor is a real state change").Subject;
+        entry.Before.Keys.Should().NotContain("bonusFloor", "there was no floor before");
+        entry.After["bonusFloor"].Should().Be(new AuditString(purge ? "2026-10-12" : "2026-10-14"));
+        entry.Meta!["removedPointEntries"].Should().Be(new AuditInteger(0));
+    }
+
+    [Theory]
+    [InlineData(false, "2026-10-14")]
+    [InlineData(false, "2026-10-20")]
+    [InlineData(true, "2026-10-12")]
+    [InlineData(true, "2026-10-13")]
+    public async Task Reset_thatRemovesNothing_andLeavesTheFloorWhereItIs_isANoOp_thatAuditsNothing(bool purge, string floor)
+    {
+        var world = new StatisticsWorld();
+        world.Settings = world.Settings! with { BonusFloor = DateOnly.Parse(floor, System.Globalization.CultureInfo.InvariantCulture) };
+        world.Resetter.Result = Zero;
+
+        var result = await world.Service.ResetAsync(Admin, purge ? new DateOnly(2026, 10, 12) : null, Ct);
+
+        result.AsT0.Should().Be(Zero);
         world.Audit.Entries.Should().BeEmpty();
-        world.Transactions.Aborts.Should().Be(1, "the transaction rolls back whatever the store wrote, such as the bonus floor");
+        world.Transactions.Aborts.Should().Be(1, "nothing changed, so nothing is committed");
     }
 
     [Fact]

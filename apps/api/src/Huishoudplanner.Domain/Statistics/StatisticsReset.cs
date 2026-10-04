@@ -33,6 +33,16 @@ public sealed record StatisticsResetPlan(
     /// <summary>The floor is written only when the reset moves it.</summary>
     public bool MovesBonusFloor => BonusFloorBefore != BonusFloor;
 
+    /// <summary>
+    /// Whether the reset changed nothing at all: it removed and reopened nothing and the floor was already at, or beyond, the value it would be set
+    /// to. Only such a reset is a no-op that writes and audits nothing; moving the floor is a state change of its own.
+    /// </summary>
+    public bool ChangesNothing(StatisticsResetResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        return !MovesBonusFloor && result.RemovedNothing();
+    }
+
     public static OneOf.OneOf<StatisticsResetPlan, BeforeInFuture> Create(HouseholdSettings settings, DateTimeOffset now, DateOnly? before)
     {
         ArgumentNullException.ThrowIfNull(settings);
@@ -79,9 +89,9 @@ public sealed record StatisticsResetResult(
     int RemovedRedemptions)
 {
     /// <summary>
-    /// Whether the reset removed and reopened nothing at all. Such a reset is a no-op: it is rolled back (the bonus floor stays where it was),
-    /// writes no audit entry and starts no rebuild of the awards, and the answer still carries the zero counts. A method, so it is not part of
-    /// the serialized answer.
+    /// Whether the reset removed and reopened nothing at all. It then starts no rebuild of the awards, and the answer still carries the zero
+    /// counts; whether it is also a no-op without audit entry depends on the bonus floor (<see cref="StatisticsResetPlan.ChangesNothing"/>).
+    /// A method, so it is not part of the serialized answer.
     /// </summary>
     public bool RemovedNothing() =>
         DeletedOccurrences == 0 && DeletedRecorded == 0 && ResetOccurrences == 0 && ResetTasks == 0
