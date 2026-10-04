@@ -1,8 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
-import { ApiRequestError, createV2Client } from '../api/index.ts';
-import { sendOccurrenceAction } from '../features/today/api.ts';
+import { ApiRequestError, createV2Client, unwrap, type ApiV2Client } from '../api/index.ts';
+import { sendOccurrenceAction, type QueueableAction } from '../features/today/api.ts';
 import { format, t } from '../i18n/nl.ts';
 import { OfflineQueueContext, type OfflineQueue } from './context.ts';
 import { defaultStore, type QueueStore } from './queue.ts';
@@ -10,10 +10,48 @@ import { defaultStore, type QueueStore } from './queue.ts';
 /** Extra retry while changes wait, for when the server was down rather than the device offline. */
 export const RETRY_INTERVAL_MS = 30_000;
 
+/** Answers that say "try again later" rather than "this can never work": the change stays in the queue. */
+const RETRYABLE_STATUSES = new Set([408, 425, 429]);
+
+/** Whether a failed replay must stay queued: no answer at all, a 5xx, or a transient 4xx. */
+export function isRetryable(error: unknown): boolean {
+  if (!(error instanceof ApiRequestError)) return true;
+  return error.status >= 500 || RETRYABLE_STATUSES.has(error.status);
+}
+
 /**
- * Queues check-offs that got no answer and sends them in order once online.
- * A 4xx answer means the occurrence changed meanwhile: the change is dropped
- * and reported. No answer or a 5xx keeps the queue for the next attempt.
+ * Whether the occurrence is already in the state the queued action wanted. A replay then answers
+ * `409 invalid_transition` although nothing is wrong: the first request reached the server and only
+ * its answer was lost.
+ */
+export function alreadyApplied(action: QueueableAction, status: string): boolean {
+  switch (action.kind) {
+    case 'complete':
+      return status === 'done';
+    case 'skip':
+      return status === 'skipped';
+    case 'uncomplete':
+      return status !== 'done';
+  }
+}
+
+async function wasAlreadyApplied(action: QueueableAction, error: unknown, client: ApiV2Client): Promise<boolean> {
+  if (!(error instanceof ApiRequestError) || error.status !== 409 || error.code !== 'invalid_transition') return false;
+  try {
+    const { data } = await unwrap(client.GET('/api/v2/occurrences/{id}', { params: { path: { id: action.id } } }));
+    return alreadyApplied(action, data.status);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Queues check-offs that got no answer and sends them in order once online. The queued actions are the
+ * intent endpoints of Today (complete, uncomplete, skip): they carry no `If-Match` (ADR-0022), so a replay
+ * never meets `412` or `428`. A permanent 4xx answer (the occurrence changed or is gone, or the request is
+ * refused) drops the change and reports it, so a replay never loops; a replay that finds the occurrence
+ * already in the wanted state is done silently. No answer, a 5xx or a transient 4xx (408, 425, 429) keeps
+ * the queue for the next attempt.
  */
 export function OfflineSyncProvider({ children, store: givenStore }: { children: ReactNode; store?: QueueStore }) {
   const queryClient = useQueryClient();
@@ -34,8 +72,10 @@ export function OfflineSyncProvider({ children, store: givenStore }: { children:
         try {
           await sendOccurrenceAction(item.action, client);
         } catch (error) {
-          if (!(error instanceof ApiRequestError) || error.status >= 500) break;
-          setConflicts((current) => [...current, item.taskName]);
+          if (isRetryable(error)) break;
+          if (!(await wasAlreadyApplied(item.action, error, client))) {
+            setConflicts((current) => [...current, item.taskName]);
+          }
         }
         await store.remove(item.seq);
         changed = true;

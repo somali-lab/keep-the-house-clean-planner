@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { isCacheableApiRequest, profilePartitionedKey } from './src/offline/apiCache.ts';
 import { buildAppVersion, buildReleaseDate, sourceRef } from './src/versionModel.ts';
 
 const releaseVersion = readFileSync(new URL('../../version.txt', import.meta.url), 'utf8');
@@ -38,19 +39,18 @@ export default defineConfig({
       },
       workbox: {
         navigateFallbackDenylist: [/^\/api\//],
-        // Last known data when offline. Exports (PDF/JSON) are never cached.
+        // Last known data when offline (requirements 7.3), kept per profile: the actor is chosen by the X-Profile-Id
+        // header, which is not part of the URL. The rule and the key live in src/offline/apiCache.ts; workbox copies
+        // those functions into the service worker, so they must stay self-contained.
         runtimeCaching: [
           {
-            urlPattern: ({ url, request }) =>
-              request.method === 'GET' &&
-              url.pathname.startsWith('/api/') &&
-              !url.pathname.startsWith('/api/export/') &&
-              !url.pathname.startsWith('/api/v2/export/'),
+            urlPattern: isCacheableApiRequest,
             handler: 'NetworkFirst',
             options: {
               cacheName: 'api-get',
               networkTimeoutSeconds: 4,
               expiration: { maxEntries: 200, maxAgeSeconds: 7 * 24 * 60 * 60 },
+              plugins: [{ cacheKeyWillBeUsed: profilePartitionedKey }],
             },
           },
         ],
