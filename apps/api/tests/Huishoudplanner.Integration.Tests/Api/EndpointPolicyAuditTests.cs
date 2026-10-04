@@ -65,6 +65,7 @@ public sealed class EndpointPolicyAuditTests
         ["DELETE /api/v2/stats"] = AuthorizationPolicies.AdminPolicy,
         ["POST /api/v2/jobs/generation"] = AuthorizationPolicies.PlannerPolicy,
         ["POST /api/v2/jobs/audit-retention"] = AuthorizationPolicies.PlannerPolicy,
+        ["POST /api/v2/jobs/morning-notify"] = AuthorizationPolicies.PlannerPolicy,
     };
 
     private static readonly string[] ReadMethods = [HttpMethods.Get, HttpMethods.Head, HttpMethods.Options];

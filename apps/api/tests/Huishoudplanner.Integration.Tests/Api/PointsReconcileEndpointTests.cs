@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using Huishoudplanner.Adapters.Jobs;
 using Huishoudplanner.Domain.Audit;
 using Huishoudplanner.Domain.Ports.Driving;
 using Huishoudplanner.Integration.Tests.Fixtures;
@@ -14,7 +15,8 @@ namespace Huishoudplanner.Integration.Tests.Api;
 /// ADR-0011, <c>points-reconcile.test.ts</c> on the real host and a real replica set: the reconciliation makes the ledger match the occurrences,
 /// idempotently, at startup, in the nightly run and on an administrator's request (<c>POST /api/v2/points/recompute</c>). Old and drifted data is
 /// written straight into the database, which no use case does, to prove the reconciliation repairs it. Monday 2026-09-14 is the first day of cycle 0.
-/// The bonus step is in <c>PointsBonusEndpointTests</c>; the badge step and the import are later slices.
+/// The bonus step is in <c>PointsBonusEndpointTests</c>; the badge step and the import are later slices. The manual generation route and the scheduled
+/// nightly job (slice 6.3b) are the last block.
 /// </summary>
 public sealed class PointsReconcileEndpointTests(MongoContainerFixture mongo)
 {
@@ -371,5 +373,54 @@ public sealed class PointsReconcileEndpointTests(MongoContainerFixture mongo)
         (second.Points!.Created, second.Points.Updated, second.Points.Removed).Should().Be((0, 0, 0));
         // Generation of the same cycles twice is idempotent too, so the second run adds nothing to the log.
         (await h.AuditCountAsync(), await Snapshot(h)).Should().Be((audits, entries));
+    }
+
+    // ---- the manual generation route, the scheduled nightly run and the points reconciliation
+
+    [Fact]
+    public async Task ManualRecompute_reconcilesThroughTheAdministratorOnlyRouteAfterAManualGeneration()
+    {
+        await using var h = await PointsHarness.StartAsync(mongo);
+        var task = await h.InsertTaskAsync("Stofzuigen", 30, points: null);
+        var monday = await h.InsertDoneOccurrenceAsync("2026-09-14", task, h.P1);
+
+        (await h.SendAsync(HttpMethod.Post, "/api/v2/jobs/generation", h.Admin)).Status.Should().Be(HttpStatusCode.OK);
+        (await h.EntryOfAsync(monday)).Should().BeNull();
+        await Recompute(h);
+
+        (await h.EntryOfAsync(monday))!["amount"].AsInt32.Should().Be(30);
+        (await Summaries(h)).Should().ContainSingle().Subject["meta"]["trigger"].AsString.Should().Be("admin");
+    }
+
+    [Fact]
+    public async Task ManualGeneration_neverReconcilesTheLedger_butTheScheduledNightlyJobDoesAsTheSystem()
+    {
+        await using var h = await PointsHarness.StartAsync(mongo);
+        var task = await h.InsertTaskAsync("Stofzuigen", 30, points: null);
+        var monday = await h.InsertDoneOccurrenceAsync("2026-09-14", task, h.P1);
+
+        var manual = await h.SendAsync(HttpMethod.Post, "/api/v2/jobs/generation", h.Admin);
+
+        manual.Status.Should().Be(HttpStatusCode.OK, manual.Body.ToString());
+        (await h.EntryOfAsync(monday)).Should().BeNull();
+        (await Summaries(h)).Should().BeEmpty();
+
+        var job = h.Services.GetServices<IJob>().OfType<NightlyGenerationJob>().Single();
+        var outcome = await h.Services.GetRequiredService<JobRunner>().RunAsync(job, Ct);
+
+        outcome.Should().Be(JobOutcome.Succeeded);
+        (await h.EntryOfAsync(monday))!["amount"].AsInt32.Should().Be(30);
+        var summary = (await Summaries(h)).Should().ContainSingle().Subject;
+        (summary["meta"]["trigger"].AsString, summary["meta"]["snapshotsSet"].AsInt32, summary["meta"]["created"].AsInt32, summary["source"].AsString).Should().Be(("nightly", 1, 1, "system"));
+    }
+
+    [Fact]
+    public async Task TheCompositeNightlyRun_hasNoManualTriggerAndTheOldNightlyRouteIsGone()
+    {
+        await using var h = await PointsHarness.StartAsync(mongo);
+
+        var response = await h.SendAsync(HttpMethod.Post, "/api/v2/jobs/nightly", h.Admin);
+
+        response.Status.Should().Be(HttpStatusCode.NotFound);
     }
 }

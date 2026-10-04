@@ -17,7 +17,7 @@ namespace Huishoudplanner.Integration.Tests.Fixtures;
 /// occurrences (ported from <c>generation.test.ts</c>, <c>cycles-api.test.ts</c> and <c>interval-change.test.ts</c>). The first start seeds
 /// the settings on the clock's day, so a clock on Monday 2026-09-14 gives the anchor 2026-09-14: cycle 0 is 14 Sep to 11 Oct and cycle 1 is
 /// 12 Oct to 8 Nov (it contains the end of DST on 25 Oct). Generation runs through <see cref="IGenerationService"/> because the nightly and
-/// manual job endpoints are slice 6.3.
+/// manual job endpoints sit behind the same use cases.
 /// </summary>
 public sealed class GenerationHarness : IDisposable
 {
@@ -28,7 +28,7 @@ public sealed class GenerationHarness : IDisposable
     private readonly MongoClient mongoClient;
     private readonly ApiFactory factory;
 
-    public GenerationHarness(MongoContainerFixture mongo, string now = MondayMorning)
+    public GenerationHarness(MongoContainerFixture mongo, string now = MondayMorning, ForSendingNotifications? notifier = null)
     {
         Planner = directory.Add(Role.Planner);
         Admin = directory.Add(Role.Admin);
@@ -36,6 +36,10 @@ public sealed class GenerationHarness : IDisposable
         mongoClient = new MongoClient(mongo.ConnectionString);
         Database = mongoClient.GetDatabase(databaseName);
         factory = ApiFactory.ForMongo(mongo, databaseName).WithPort<ForFindingUsers>(directory).WithPort<TimeProvider>(Clock);
+        if (notifier is not null)
+        {
+            factory.WithPort(notifier);
+        }
         Client = factory.CreateClient();
     }
 

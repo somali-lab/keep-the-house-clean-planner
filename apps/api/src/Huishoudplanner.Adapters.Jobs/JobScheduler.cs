@@ -38,7 +38,7 @@ public sealed class JobScheduler
         }
 
         var now = time.GetUtcNow();
-        foreach (var job in jobs)
+        foreach (var job in jobs.Where(j => j.Enabled))
         {
             var cron = CronExpression.Parse(job.Schedule, CronFormat.Standard);
             if (cron.GetNextOccurrence(now, zone) is { } next)

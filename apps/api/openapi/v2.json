@@ -4878,7 +4878,7 @@
           "Jobs"
         ],
         "summary": "Generates the current and the next cycle now (planners).",
-        "description": "Does the generation part of the nightly job: the occurrences of the current and the next cycle are generated from the active plan, idempotently, and open generated occurrences that no longer match the active plan are replaced. The audit entries carry the requesting profile as actor (source ui) and the run id in meta.runId. It never touches the points ledger. Answers 500 settings_missing when the installation has no settings, and 409 when another change to the same data is running.",
+        "description": "Does the generation part of the nightly job: the occurrences of the current and the next cycle are generated from the active plan, idempotently, and open generated occurrences that no longer match the active plan are replaced. The audit entries carry the requesting profile as actor (source ui) and the run id in meta.runId. It never touches the points ledger. The answer carries the due summary ({ due, overdue }) of the due list after the run. Answers 500 settings_missing when the installation has no settings, and 409 when another change to the same data is running.",
         "operationId": "runGeneration",
         "responses": {
           "200": {
@@ -4955,6 +4955,38 @@
           },
           "500": {
             "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/jobs/morning-notify": {
+      "post": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Sends the morning notification now (planners).",
+        "description": "Sends one Dutch message to every active person through the configured notification channel (ntfy or Home Assistant): the open tasks planned for them today, the open tasks for anyone and the household's overdue tasks. A person with nothing to report gets none (counted as quiet). Writes nothing. Without a channel it answers status disabled and sends nothing; a delivery that fails is counted in failed, and data that cannot be read gives status error. The answer is always 200.",
+        "operationId": "runMorningNotify",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MorningNotifyResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -7555,7 +7587,8 @@
         "required": [
           "runId",
           "removed",
-          "generated"
+          "generated",
+          "due"
         ],
         "type": "object",
         "properties": {
@@ -7575,6 +7608,9 @@
             "items": {
               "$ref": "#/components/schemas/GenerationResultResponse"
             }
+          },
+          "due": {
+            "$ref": "#/components/schemas/DueSummaryResponse"
           }
         }
       },
@@ -7818,6 +7854,52 @@
               "string"
             ],
             "format": "double"
+          }
+        }
+      },
+      "MorningNotifyResponse": {
+        "required": [
+          "status",
+          "date",
+          "sent",
+          "failed",
+          "quiet"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "date": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date"
+          },
+          "sent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "failed": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "quiet": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },
