@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ANNA, BRAM, householdRoutes, mockApi, page, problem, requestsTo, storeProfile } from '../../test/fixtures.ts';
 import { makeSettings, renderWithProviders } from '../../test/render.tsx';
-import { DataSection, readExport } from './DataSection.tsx';
+import { DataSection, fileNameOf, MAX_IMPORT_BYTES, readExport } from './DataSection.tsx';
 
 const FILE = {
   schemaVersion: 1,
@@ -13,9 +13,11 @@ const IMPORT_PATH = '/api/v2/import/json';
 const IMPORT_URL = `${IMPORT_PATH}?mode=replace&confirm=true`;
 const RESULT = { replaced: {}, auditAdded: 0, removedPointEntries: 0, removedRedemptions: 0, removedBadges: 0, removedBadgeAwards: 0 };
 
-function choose(content: string, name = 'huishoudplanner-20260916.json') {
+function choose(content: string, name = 'huishoudplanner-20260916.json', size?: number) {
   const input = screen.getByLabelText('JSON-bestand importeren');
-  Object.defineProperty(input, 'files', { value: [new File([content], name, { type: 'application/json' })], configurable: true });
+  const file = new File([content], name, { type: 'application/json' });
+  if (size !== undefined) Object.defineProperty(file, 'size', { value: size });
+  Object.defineProperty(input, 'files', { value: [file], configurable: true });
   fireEvent.change(input);
 }
 
@@ -45,6 +47,15 @@ describe('readExport', () => {
   });
 });
 
+describe('fileNameOf', () => {
+  it('reads the name the server gives, and survives a name that is not valid percent-encoding', () => {
+    expect(fileNameOf('attachment; filename="huishoudplanner-20260916.json"')).toBe('huishoudplanner-20260916.json');
+    expect(fileNameOf("attachment; filename*=UTF-8''huis%20planner.json")).toBe('huis planner.json');
+    expect(fileNameOf('attachment; filename="100%.json"')).toBe('100%.json');
+    expect(fileNameOf(null)).toBe('huishoudplanner.json');
+  });
+});
+
 describe('DataSection — export', () => {
   it('offers the export to administrators only', async () => {
     setup({}, BRAM);
@@ -65,7 +76,11 @@ describe('DataSection — export', () => {
     const revokeUrl = vi.fn();
     Object.defineProperty(URL, 'createObjectURL', { value: createUrl, configurable: true });
     Object.defineProperty(URL, 'revokeObjectURL', { value: revokeUrl, configurable: true });
-    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      // The link has to be in the document when it is clicked.
+      expect(document.body.contains(this)).toBe(true);
+    });
+    const timers = vi.spyOn(globalThis, 'setTimeout');
     renderWithProviders(<DataSection />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Exporteren (JSON)' }));
@@ -74,7 +89,10 @@ describe('DataSection — export', () => {
     const anchor = click.mock.contexts[0] as HTMLAnchorElement;
     expect(anchor.download).toBe('huishoudplanner-20260916.json');
     expect(createUrl).toHaveBeenCalledTimes(1);
-    await waitFor(() => expect(revokeUrl).toHaveBeenCalledWith('blob:export'));
+    // The object URL lives long enough for the browser to start the download.
+    expect(revokeUrl).not.toHaveBeenCalled();
+    expect(timers.mock.calls.some(([, delay]) => delay === 10_000)).toBe(true);
+    expect(document.querySelector('a[download]')).toBeNull();
   });
 
   it('says so when the export fails', async () => {
@@ -268,6 +286,15 @@ describe('DataSection — import', () => {
     fireEvent.click(confirm);
     await waitFor(() => expect(importUrls(fetchMock)).toEqual([IMPORT_URL, IMPORT_URL + '&acknowledgeRedemptions=true']));
     expect(await screen.findByRole('status')).toHaveTextContent('Import voltooid');
+  });
+
+  it('refuses a file over 200 MB before reading or sending it', async () => {
+    const fetchMock = setup();
+    renderWithProviders(<DataSection />);
+    choose(JSON.stringify(FILE), 'groot.json', MAX_IMPORT_BYTES + 1);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Dit bestand is te groot om te importeren (200 MB).');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(importUrls(fetchMock)).toEqual([]);
   });
 
   it('says so when the file is too large', async () => {

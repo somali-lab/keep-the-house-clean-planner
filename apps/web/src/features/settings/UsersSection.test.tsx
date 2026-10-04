@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { ANNA, BRAM, householdRoutes, makeUser, mockApi, page, problem, requestsTo, storeProfile } from '../../test/fixtures.ts';
+import { ANNA, BRAM, householdRoutes, makeUser, mockApi, page, problem, requestsTo, sequence, storeProfile } from '../../test/fixtures.ts';
 import { makeSettings, renderWithProviders } from '../../test/render.tsx';
 import { UsersSection } from './UsersSection.tsx';
 
@@ -81,6 +81,33 @@ describe('UsersSection', () => {
     const form = screen.getByRole('form', { name: 'Bewerk Bram de Vries' });
     fireEvent.click(within(form).getByRole('button', { name: 'Opslaan' }));
     expect(await within(form).findByRole('alert')).toHaveTextContent('Er moet minstens één actieve beheerder blijven.');
+  });
+
+  it('sends the version that was read again when the person saves a second time after a 412', async () => {
+    const url = `/api/v2/users/${BRAM.id}`;
+    const fetchMock = setup({
+      '/api/v2/users': sequence(page([ANNA, BRAM_V3, GUEST]), page([ANNA, { ...BRAM, version: 6 }, GUEST])),
+      [`PATCH ${url}`]: sequence(() => problem(412, 'precondition_failed', 'Changed.'), { ...BRAM, version: 7 }),
+    });
+    renderWithProviders(<UsersSection />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Bewerk Bram de Vries' }));
+    const form = screen.getByRole('form', { name: 'Bewerk Bram de Vries' });
+    fireEvent.change(within(form).getByLabelText('Naam'), { target: { value: 'Bram B' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Opslaan' }));
+    await within(form).findByRole('alert');
+    await waitFor(() => expect(requestsTo(fetchMock, 'GET', '/api/v2/users?limit=500').length).toBeGreaterThan(1));
+    fireEvent.click(within(form).getByRole('button', { name: 'Opslaan' }));
+    await waitFor(() => expect(requestsTo(fetchMock, 'PATCH', url)).toHaveLength(2));
+    expect(requestsTo(fetchMock, 'PATCH', url).map((r) => r.headers['if-match'])).toEqual(['"3"', '"6"']);
+  });
+
+  it('shows the first field error of a refused value', async () => {
+    setup({ [`PATCH /api/v2/users/${BRAM.id}`]: () => problem(400, 'validation_error', 'Invalid.', { errors: { color: ['invalid_color'] } }) });
+    renderWithProviders(<UsersSection />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Bewerk Bram de Vries' }));
+    const form = screen.getByRole('form', { name: 'Bewerk Bram de Vries' });
+    fireEvent.click(within(form).getByRole('button', { name: 'Opslaan' }));
+    expect(await within(form).findByRole('alert')).toHaveTextContent('Ongeldige waarde voor color: invalid_color.');
   });
 
   it('adds a person with default budgets', async () => {

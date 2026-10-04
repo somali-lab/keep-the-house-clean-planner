@@ -66,6 +66,8 @@ export function ConversionSection({ settings }: { settings: Settings }) {
   const [currencyCode, setCurrencyCode] = useState(currentCurrency);
   const [cents, setCents] = useState(String(settings.centsPerPoint));
   const [message, setMessage] = useState<Message>(null);
+  /** A saved confirmation is about what was saved; the next edit makes it stale. */
+  const clearSaved = () => setMessage((current) => (current?.kind === 'status' ? null : current));
   const codes = useMemo(() => currencyCodes(currentCurrency), [currentCurrency]);
 
   if (profile?.role !== 'admin') return null;
@@ -112,7 +114,10 @@ export function ConversionSection({ settings }: { settings: Settings }) {
             id={`${idPrefix}-currency`}
             className="[&_select]:h-10 sm:max-w-72"
             value={currencyCode}
-            onChange={(event) => setCurrencyCode(event.target.value)}
+            onChange={(event) => {
+              clearSaved();
+              setCurrencyCode(event.target.value);
+            }}
           >
             {codes.map((code) => (
               <option key={code} value={code}>
@@ -132,7 +137,10 @@ export function ConversionSection({ settings }: { settings: Settings }) {
             step="1"
             className="h-10 bg-card sm:max-w-48"
             value={cents}
-            onChange={(event) => setCents(event.target.value)}
+            onChange={(event) => {
+              clearSaved();
+              setCents(event.target.value);
+            }}
           />
         </Field>
       </div>

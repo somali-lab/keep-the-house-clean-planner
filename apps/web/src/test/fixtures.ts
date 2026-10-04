@@ -225,3 +225,12 @@ export const householdRoutes = (users: unknown[], settings: unknown) => ({
   '/api/v2/users': page(users),
   '/api/v2/settings': settings,
 });
+
+/** A route handler that answers its first call with the first value, the second with the second, and so on (the last one repeats). */
+export function sequence(...answers: (unknown | (() => unknown))[]) {
+  let calls = 0;
+  return () => {
+    const answer = answers[Math.min(calls++, answers.length - 1)];
+    return typeof answer === 'function' ? (answer as () => unknown)() : answer;
+  };
+}

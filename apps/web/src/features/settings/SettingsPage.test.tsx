@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { ANNA, BRAM, LIMITS, householdRoutes, mockApi, page, problem, requestsTo, storeProfile } from '../../test/fixtures.ts';
+import { ANNA, BRAM, LIMITS, householdRoutes, mockApi, page, problem, requestsTo, sequence, storeProfile } from '../../test/fixtures.ts';
 import { makeSettings, renderWithProviders } from '../../test/render.tsx';
 import { SettingsPage } from './SettingsPage.tsx';
 
@@ -293,5 +293,81 @@ describe('SettingsPage — bonuses', () => {
     fireEvent.click(within(form).getByRole('button', { name: 'Puntenwaarde opslaan' }));
     await waitFor(() => expect(patches(fetchMock)).toHaveLength(2));
     expect(patches(fetchMock).map((request) => request.headers['if-match'])).toEqual(['"3"', '"4"']);
+  });
+});
+
+describe('SettingsPage — a retry after a refused save', () => {
+  const STALE = () => problem(412, 'precondition_failed', 'The settings changed.');
+  const rereadAndRetry = async (form: HTMLElement, button: string, fetchMock: ReturnType<typeof mockApi>) => {
+    await waitFor(() => expect(requestsTo(fetchMock, 'GET', '/api/v2/settings').length).toBeGreaterThan(1));
+    // The version read again reaches the form before the next click.
+    await waitFor(() => expect(within(form).getByRole('alert')).toBeInTheDocument());
+    fireEvent.click(within(form).getByRole('button', { name: button }));
+    await waitFor(() => expect(patches(fetchMock)).toHaveLength(2));
+  };
+
+  it('sends the version that was read again when the person saves a second time after a 412', async () => {
+    const fetchMock = setup({
+      '/api/v2/settings': sequence(makeSettings({ version: 3 }), makeSettings({ version: 5 })),
+      'PATCH /api/v2/settings': sequence(STALE, makeSettings({ version: 6 })),
+    });
+    renderWithProviders(<SettingsPage initialTab="calendar" />);
+    const form = await screen.findByRole('form', { name: 'Puntenwaarde' });
+    fireEvent.change(within(form).getByLabelText('Waarde van één punt (in centen)'), { target: { value: '12' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Puntenwaarde opslaan' }));
+    expect(await within(form).findByRole('alert')).toHaveTextContent('Deze gegevens zijn intussen door iemand anders gewijzigd');
+    await rereadAndRetry(form, 'Puntenwaarde opslaan', fetchMock);
+    expect(patches(fetchMock).map((request) => request.headers['if-match'])).toEqual(['"3"', '"5"']);
+    expect(within(form).getByLabelText('Waarde van één punt (in centen)')).toHaveValue(12);
+  });
+
+  it('reads the settings again after a bonus conflict (409), keeps the edit and retries with the new version', async () => {
+    const fetchMock = setup({
+      '/api/v2/settings': sequence(makeSettings({ version: 3 }), makeSettings({ version: 5 })),
+      'PATCH /api/v2/settings': sequence(() => problem(409, 'bonus_schedule_conflict', 'Conflict.'), makeSettings({ version: 6 })),
+    });
+    renderWithProviders(<SettingsPage initialTab="calendar" />);
+    const form = await screen.findByRole('form', { name: 'Bonussen' });
+    fireEvent.change(within(form).getByLabelText('Week: alles gedaan'), { target: { value: '9' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Bonussen opslaan' }));
+    expect(await within(form).findByRole('alert')).toHaveTextContent('Iemand anders heeft de bonusbedragen net gewijzigd');
+    await rereadAndRetry(form, 'Bonussen opslaan', fetchMock);
+    expect(patches(fetchMock).map((request) => request.headers['if-match'])).toEqual(['"3"', '"5"']);
+    expect(within(form).getByLabelText('Week: alles gedaan')).toHaveValue(9);
+  });
+
+  it('shows the first field error of a refused value instead of the generic message', async () => {
+    setup({
+      'PATCH /api/v2/settings': () => problem(400, 'validation_error', 'Invalid.', { errors: { currencyCode: ['invalid_currency'] } }),
+    });
+    renderWithProviders(<SettingsPage initialTab="calendar" />);
+    const form = await screen.findByRole('form', { name: 'Puntenwaarde' });
+    fireEvent.click(within(form).getByRole('button', { name: 'Puntenwaarde opslaan' }));
+    expect(await within(form).findByRole('alert')).toHaveTextContent('Ongeldige waarde voor currencyCode: invalid_currency.');
+  });
+
+  it.each([
+    ['Cyclusstart', 'Startdatum (maandag)', '2026-10-12', 'Opslaan'],
+    ['Puntenwaarde', 'Waarde van één punt (in centen)', '33', 'Puntenwaarde opslaan'],
+    ['Beloningsdoelen', 'Doel per week (punten)', '8', 'Doelen opslaan'],
+    ['Bonussen', 'Week: alles gedaan', '8', 'Bonussen opslaan'],
+  ])('clears the saved message of the %s form as soon as it is edited', async (name, label, value, save) => {
+    setup();
+    renderWithProviders(<SettingsPage initialTab="calendar" />);
+    const form = await screen.findByRole('form', { name });
+    fireEvent.click(within(form).getByRole('button', { name: save }));
+    expect(await within(form).findByRole('status')).toHaveTextContent('Opgeslagen.');
+    fireEvent.change(within(form).getByLabelText(label), { target: { value } });
+    expect(within(form).queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('clears the saved message of the vacations form when a range is removed', async () => {
+    setup({}, makeSettings({ vacationRanges: [{ from: '2026-12-21', to: '2027-01-03' }] }));
+    renderWithProviders(<SettingsPage initialTab="calendar" />);
+    const form = await screen.findByRole('form', { name: 'Vakanties' });
+    fireEvent.click(within(form).getByRole('button', { name: 'Vakanties opslaan' }));
+    expect(await within(form).findByRole('status')).toBeInTheDocument();
+    fireEvent.click(within(form).getByRole('button', { name: /Verwijder vakantie/ }));
+    expect(within(form).queryByRole('status')).not.toBeInTheDocument();
   });
 });

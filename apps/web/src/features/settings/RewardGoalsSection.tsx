@@ -40,6 +40,8 @@ export function RewardGoalsSection({ settings }: { settings: Settings }) {
   const [week, setWeek] = useState(toText(settings.rewardGoals.weekPoints));
   const [cycle, setCycle] = useState(toText(settings.rewardGoals.cyclePoints));
   const [message, setMessage] = useState<Message>(null);
+  /** A saved confirmation is about what was saved; the next edit makes it stale. */
+  const clearSaved = () => setMessage((current) => (current?.kind === 'status' ? null : current));
 
   if (profile?.role !== 'admin') return null;
 
@@ -85,7 +87,10 @@ export function RewardGoalsSection({ settings }: { settings: Settings }) {
             className="h-10 bg-card sm:max-w-48"
             placeholder={t('settings.reward.automatic')}
             value={week}
-            onChange={(event) => setWeek(event.target.value)}
+            onChange={(event) => {
+              clearSaved();
+              setWeek(event.target.value);
+            }}
           />
         </Field>
         <Field>
@@ -100,7 +105,10 @@ export function RewardGoalsSection({ settings }: { settings: Settings }) {
             className="h-10 bg-card sm:max-w-48"
             placeholder={t('settings.reward.automatic')}
             value={cycle}
-            onChange={(event) => setCycle(event.target.value)}
+            onChange={(event) => {
+              clearSaved();
+              setCycle(event.target.value);
+            }}
           />
         </Field>
       </div>

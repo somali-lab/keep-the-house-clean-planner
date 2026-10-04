@@ -41,6 +41,8 @@ export function BonusSection({ settings }: { settings: Settings }) {
     cycleOnTime: String(inForce.cycleOnTime),
   });
   const [message, setMessage] = useState<Message>(null);
+  /** A saved confirmation is about what was saved; the next edit makes it stale. */
+  const clearSaved = () => setMessage((current) => (current?.kind === 'status' ? null : current));
 
   if (profile?.role !== 'admin') return null;
 
@@ -87,7 +89,10 @@ export function BonusSection({ settings }: { settings: Settings }) {
               step="1"
               className="h-10 bg-card sm:max-w-48"
               value={values[field]}
-              onChange={(e) => setValues((previous) => ({ ...previous, [field]: e.target.value }))}
+              onChange={(e) => {
+                clearSaved();
+                setValues((previous) => ({ ...previous, [field]: e.target.value }));
+              }}
             />
           </Field>
         ))}

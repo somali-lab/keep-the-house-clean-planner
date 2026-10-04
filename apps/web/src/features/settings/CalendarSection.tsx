@@ -32,6 +32,8 @@ function AnchorForm({ settings }: { settings: Settings }) {
   const update = useUpdateSettings();
   const [anchor, setAnchor] = useState(settings.cycleAnchorDate);
   const [message, setMessage] = useState<Message>(null);
+  /** A saved confirmation is about what was saved; the next edit makes it stale. */
+  const clearSaved = () => setMessage((current) => (current?.kind === 'status' ? null : current));
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -64,7 +66,10 @@ function AnchorForm({ settings }: { settings: Settings }) {
           type="date"
           className="h-10 bg-card"
           value={anchor}
-          onChange={(e) => setAnchor(e.target.value)}
+          onChange={(e) => {
+            clearSaved();
+            setAnchor(e.target.value);
+          }}
         />
       </Field>
       {message && <FormMessage kind={message.kind}>{message.text}</FormMessage>}
@@ -85,6 +90,8 @@ function VacationsForm({ settings }: { settings: Settings }) {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [message, setMessage] = useState<Message>(null);
+  /** A saved confirmation is about what was saved; the next edit makes it stale. */
+  const clearSaved = () => setMessage((current) => (current?.kind === 'status' ? null : current));
 
   const add = () => {
     if (!from || !to) return setMessage({ kind: 'alert', text: t('settings.vacations.incomplete') });
@@ -130,7 +137,10 @@ function VacationsForm({ settings }: { settings: Settings }) {
                   size="icon-sm"
                   className="ml-auto text-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                   aria-label={format('settings.vacations.remove', vars)}
-                  onClick={() => setRanges((current) => current.filter((_, i) => i !== index))}
+                  onClick={() => {
+                    clearSaved();
+                    setRanges((current) => current.filter((_, i) => i !== index));
+                  }}
                 >
                   ×
                 </Button>
@@ -142,11 +152,17 @@ function VacationsForm({ settings }: { settings: Settings }) {
       <div className="grid items-end gap-3 sm:grid-cols-[1fr_1fr_auto]">
         <Field>
           <Label htmlFor={`${idPrefix}-from`}>{t('settings.vacations.from')}</Label>
-          <Input id={`${idPrefix}-from`} type="date" className="h-10 bg-card" value={from} onChange={(e) => setFrom(e.target.value)} />
+          <Input id={`${idPrefix}-from`} type="date" className="h-10 bg-card" value={from} onChange={(e) => {
+              clearSaved();
+              setFrom(e.target.value);
+            }} />
         </Field>
         <Field>
           <Label htmlFor={`${idPrefix}-to`}>{t('settings.vacations.to')}</Label>
-          <Input id={`${idPrefix}-to`} type="date" className="h-10 bg-card" value={to} onChange={(e) => setTo(e.target.value)} />
+          <Input id={`${idPrefix}-to`} type="date" className="h-10 bg-card" value={to} onChange={(e) => {
+              clearSaved();
+              setTo(e.target.value);
+            }} />
         </Field>
         <Button type="button" variant="outline" className="h-10" onClick={add}>
           <Plus aria-hidden="true" />

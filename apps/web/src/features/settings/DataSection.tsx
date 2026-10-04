@@ -57,10 +57,25 @@ function importProblems(error: unknown): string[] {
 }
 
 /** The `Content-Disposition` file name, or a plain one. */
-function fileNameOf(disposition: string | null): string {
+export function fileNameOf(disposition: string | null): string {
   const match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition ?? '');
-  return match?.[1] ? decodeURIComponent(match[1]) : 'huishoudplanner.json';
+  const raw = match?.[1];
+  if (!raw) return DEFAULT_EXPORT_NAME;
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    // A name that is not valid percent-encoding is used as the server wrote it.
+    return raw;
+  }
 }
+
+const DEFAULT_EXPORT_NAME = 'huishoudplanner.json';
+
+/** The body limit of the import on the server (200 MB); a larger file is refused here, before it is read. */
+export const MAX_IMPORT_BYTES = 200 * 1024 * 1024;
+
+/** How long the object URL of a download lives: the browser starts the download from it after the click. */
+const REVOKE_AFTER_MS = 10_000;
 
 /** JSON export download (administrators), a confirmed full import and the reset of the execution data. */
 export function DataSection() {
@@ -147,8 +162,11 @@ export function DataSection() {
       const anchor = document.createElement('a');
       anchor.href = url;
       anchor.download = fileNameOf(response.headers.get('Content-Disposition'));
+      anchor.style.display = 'none';
+      document.body.appendChild(anchor);
       anchor.click();
-      setTimeout(() => URL.revokeObjectURL(url), 0);
+      anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(url), REVOKE_AFTER_MS);
     },
     onError: () => setMessage({ kind: 'alert', text: t('settings.data.exportError') }),
   });
@@ -159,6 +177,10 @@ export function DataSection() {
     input.value = '';
     if (!file) return;
     setMessage(null);
+    if (file.size > MAX_IMPORT_BYTES) {
+      setMessage({ kind: 'alert', text: t('settings.data.tooLarge') });
+      return;
+    }
     const parsed = readExport(file.name, await file.text());
     if (!parsed) {
       setMessage({ kind: 'alert', text: t('settings.data.invalidFile') });

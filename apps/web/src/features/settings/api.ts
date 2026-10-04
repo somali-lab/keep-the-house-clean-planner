@@ -16,7 +16,7 @@ import {
 import { collectPages } from '../../api/v2/paging.ts';
 import { roomsKey, toRoom, type Room } from '../../api/v2/queries.ts';
 import type { components } from '../../api/v2/schema';
-import { t, type MessageKey } from '../../i18n/nl.ts';
+import { format, t, type MessageKey } from '../../i18n/nl.ts';
 
 type Schemas = components['schemas'];
 
@@ -59,7 +59,11 @@ export function useUpdateSettings() {
       queryClient.setQueryData(settingsKey, saved);
     },
     onError: async (error) => {
-      if (isStaleEntity(error)) await queryClient.invalidateQueries({ queryKey: settingsKey });
+      // A stale version (412) and a bonus row that someone else wrote first (409) both mean the settings moved on: read them again,
+      // so that the message is true and the next save carries the stored version.
+      if (isStaleEntity(error) || (error instanceof ApiRequestError && error.code === 'bonus_schedule_conflict')) {
+        await queryClient.invalidateQueries({ queryKey: settingsKey });
+      }
     },
   });
 }
@@ -70,8 +74,20 @@ export function saveErrorText(error: unknown, byCode: Partial<Record<string, Mes
   if (error instanceof ApiRequestError) {
     const key = byCode[error.code];
     if (key) return t(key);
+    const first = firstFieldError(error);
+    if (first) return format('app.validationField', first);
   }
   return t('app.error');
+}
+
+/** The first refused field of a `400 validation_error` with its reason, from the `errors` of the Problem Details. */
+function firstFieldError(error: ApiRequestError): { field: string; reason: string } | null {
+  if (error.code !== 'validation_error' || typeof error.details !== 'object' || error.details === null || Array.isArray(error.details)) return null;
+  for (const [field, reasons] of Object.entries(error.details)) {
+    const reason = Array.isArray(reasons) ? reasons.find((item) => typeof item === 'string') : typeof reasons === 'string' ? reasons : undefined;
+    if (typeof reason === 'string') return { field, reason };
+  }
+  return null;
 }
 
 /** A person, as the form builds it. */

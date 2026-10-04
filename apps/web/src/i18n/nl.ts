@@ -9,6 +9,7 @@ export const nl = {
   'app.loading': 'Laden…',
   'app.error': 'Er ging iets mis.',
   'app.staleEntity': 'Deze gegevens zijn intussen door iemand anders gewijzigd. Controleer je wijziging en sla opnieuw op.',
+  'app.validationField': 'Ongeldige waarde voor {field}: {reason}.',
   'app.version': 'Versie {version}',
   'about.title': 'Over Keep the House Clean',
   'about.description': 'Versie en projectinformatie van deze installatie.',

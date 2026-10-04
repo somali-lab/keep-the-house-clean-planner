@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ANNA, BRAM, LIMITS, householdRoutes, makeUser, mockApi, problem, requestsTo, storeProfile } from '../../test/fixtures.ts';
+import { ANNA, BRAM, LIMITS, householdRoutes, makeUser, mockApi, page, problem, requestsTo, sequence, storeProfile } from '../../test/fixtures.ts';
 import { makeSettings, renderWithProviders } from '../../test/render.tsx';
 import { BrowserNotificationsSection } from './BrowserNotificationsSection.tsx';
 
@@ -113,6 +113,25 @@ describe('BrowserNotificationsSection moments', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Opslaan' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Deze gegevens zijn intussen door iemand anders gewijzigd');
     expect(within(screen.getByRole('list', { name: 'Gekozen tijden' })).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['08:00', '09:30']);
+  });
+
+  it('sends the version that was read again when the person saves a second time after a 412', async () => {
+    storeProfile(BRAM.id);
+    const url = `/api/v2/users/${BRAM.id}/browser-notifications`;
+    const first = makeUser({ ...BRAM, version: 2, browserNotifications: { enabled: true, times: ['08:00'] } });
+    const fetchMock = mockApi({
+      '/api/v2/settings': makeSettings(),
+      '/api/v2/users': sequence(page([ANNA, first]), page([ANNA, { ...first, version: 5 }])),
+      '/api/v2/meta/limits': LIMITS,
+      [`PUT ${url}`]: sequence(() => problem(412, 'precondition_failed', 'Changed.'), { ...first, version: 6 }),
+    });
+    renderWithProviders(<BrowserNotificationsSection />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Opslaan' }));
+    await screen.findByRole('alert');
+    await waitFor(() => expect(requestsTo(fetchMock, 'GET', '/api/v2/users?limit=500').length).toBeGreaterThan(1));
+    fireEvent.click(screen.getByRole('button', { name: 'Opslaan' }));
+    await waitFor(() => expect(requestsTo(fetchMock, 'PUT', url)).toHaveLength(2));
+    expect(requestsTo(fetchMock, 'PUT', url).map((r) => r.headers['if-match'])).toEqual(['"2"', '"5"']);
   });
 
   it('explains an empty, duplicate or surplus time without saving', async () => {

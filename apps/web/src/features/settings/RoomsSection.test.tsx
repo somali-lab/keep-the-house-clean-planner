@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { ANNA, BRAM, householdRoutes, mockApi, page, problem, requestsTo, storeProfile } from '../../test/fixtures.ts';
+import { ANNA, BRAM, householdRoutes, mockApi, page, problem, requestsTo, sequence, storeProfile } from '../../test/fixtures.ts';
 import { makeRoomV2, makeSettings, makeTaskV2, renderWithProviders } from '../../test/render.tsx';
 import { RoomsSection } from './RoomsSection.tsx';
 
@@ -61,6 +61,24 @@ describe('RoomsSection', () => {
 
     expect(await within(form).findByRole('alert')).toHaveTextContent('Deze gegevens zijn intussen door iemand anders gewijzigd');
     expect(within(form).getByLabelText('Naam')).toHaveValue('Keuken 2');
+  });
+
+  it('sends the version that was read again when the person saves a second time after a 412', async () => {
+    const url = `/api/v2/rooms/${KEUKEN.id}`;
+    const fetchMock = setup({
+      '/api/v2/rooms': sequence(page([KEUKEN, SCHUUR, BADKAMER]), page([{ ...KEUKEN, version: 9 }, SCHUUR, BADKAMER])),
+      [`PATCH ${url}`]: sequence(() => problem(412, 'precondition_failed', 'Changed.'), { ...KEUKEN, version: 10 }),
+    });
+    renderWithProviders(<RoomsSection />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Bewerk Keuken' }));
+    const form = screen.getByRole('form', { name: 'Bewerk Keuken' });
+    fireEvent.change(within(form).getByLabelText('Naam'), { target: { value: 'Keuken 2' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Opslaan' }));
+    await within(form).findByRole('alert');
+    await waitFor(() => expect(requestsTo(fetchMock, 'GET', '/api/v2/rooms?limit=200').length).toBeGreaterThan(1));
+    fireEvent.click(within(form).getByRole('button', { name: 'Opslaan' }));
+    await waitFor(() => expect(requestsTo(fetchMock, 'PATCH', url)).toHaveLength(2));
+    expect(requestsTo(fetchMock, 'PATCH', url).map((r) => r.headers['if-match'])).toEqual(['"4"', '"9"']);
   });
 
   it('adds a room, leaving the position to the server when empty', async () => {
