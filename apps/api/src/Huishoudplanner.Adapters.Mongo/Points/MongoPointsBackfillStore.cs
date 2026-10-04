@@ -86,7 +86,7 @@ internal sealed class MongoPointsBackfillStore : ForBackfillingPoints
         }
     }
 
-    private static BonusSource ToBonusSource(BsonDocument document)
+    internal static BonusSource ToBonusSource(BsonDocument document)
     {
         var status = document.TryGetValue("status", out var s) && s.IsString
             ? s.AsString switch

@@ -4927,6 +4927,64 @@
         }
       }
     },
+    "/api/v2/points/progress": {
+      "get": {
+        "tags": [
+          "Points"
+        ],
+        "summary": "How far one person is towards the goal of this week or cycle.",
+        "description": "Needs no profile. personId and period (week or cycle) are required. The period is the one of today in the household timezone. earnedPoints are the executions and bonuses dated in it, so a redemption never lowers them; the goal is the explicit goal of the settings (0 means none), else the points of the work planned for the person as its owner (null when nothing is planned). percent is capped at 100. eggs (one per full 10%) and eggCount are the reward meter; money is in cents and null while a point is worth nothing.",
+        "operationId": "getPointsProgress",
+        "parameters": [
+          {
+            "name": "personId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "period",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RewardProgressResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/audit": {
       "get": {
         "tags": [
@@ -10267,6 +10325,143 @@
               "string"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "RewardMoneyResponse": {
+        "required": [
+          "earned",
+          "goal"
+        ],
+        "type": "object",
+        "properties": {
+          "earned": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "The cents the earned points are worth.",
+            "format": "int64"
+          },
+          "goal": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "description": "The cents the goal is worth; null when there is no goal.",
+            "format": "int64"
+          }
+        }
+      },
+      "RewardProgressResponse": {
+        "required": [
+          "personId",
+          "period",
+          "start",
+          "end",
+          "earnedPoints",
+          "goalPoints",
+          "goalSource",
+          "percent",
+          "eggs",
+          "eggCount",
+          "currencyCode",
+          "centsPerPoint",
+          "money"
+        ],
+        "type": "object",
+        "properties": {
+          "personId": {
+            "type": "string"
+          },
+          "period": {
+            "type": "string",
+            "description": "week or cycle."
+          },
+          "start": {
+            "type": "string",
+            "description": "The first day of the period, YYYY-MM-DD."
+          },
+          "end": {
+            "type": "string",
+            "description": "The last day of the period, YYYY-MM-DD."
+          },
+          "earnedPoints": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "The points of executions and bonuses dated in the period; a redemption does not lower them.",
+            "format": "int64"
+          },
+          "goalPoints": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "description": "The goal in points; null when there is no goal: nothing is planned for the person, or an administrator set 0.",
+            "format": "int32"
+          },
+          "goalSource": {
+            "type": "string",
+            "description": "explicit when an administrator set the goal, else automatic: the points of the work planned for the person."
+          },
+          "percent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "The share of the goal that is earned, a whole number from 0 to 100; 0 without a goal.",
+            "format": "int32"
+          },
+          "eggs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "The eggs in the basket for the percentage: one per full 10%, 0 to eggCount.",
+            "format": "int32"
+          },
+          "eggCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "The eggs in the basket when the meter is full.",
+            "format": "int32"
+          },
+          "currencyCode": {
+            "type": "string",
+            "description": "The ISO 4217 code of the household currency."
+          },
+          "centsPerPoint": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "The cents one point is worth now; 0 means no money is shown.",
+            "format": "int32"
+          },
+          "money": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Earned and goal in whole cents; null while a point is worth nothing.",
+                "$ref": "#/components/schemas/RewardMoneyResponse"
+              }
+            ]
           }
         }
       },
