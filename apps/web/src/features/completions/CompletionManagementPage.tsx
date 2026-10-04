@@ -1,4 +1,3 @@
-import type { OccurrenceView } from '@huishoudplanner/shared';
 import { CheckCircle2, Filter, Pencil, Trash2 } from 'lucide-react';
 import { useId, useMemo, useState } from 'react';
 import { EmptyState } from '@/components/EmptyState';
@@ -16,6 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import type { Occurrence } from '../../api/index.ts';
 import { useSettings, useUsers } from '../../api/v2/household.ts';
 import { format, t } from '../../i18n/nl.ts';
 import { getLocale } from '../../i18n/runtime.ts';
@@ -25,7 +25,7 @@ import { addDays, dayKeyInZone } from '@/lib/dayKey';
 import { useCompletionRecords, useDeleteCompletion, useEditCompletion } from './api.ts';
 
 interface EditState {
-  occurrence: OccurrenceView;
+  occurrence: Occurrence;
   date: string;
   completedAt: string;
   completedBy: string;
@@ -52,7 +52,7 @@ export function CompletionManagementPage({ now }: { now?: Date }) {
   const editCompletion = useEditCompletion();
   const deleteCompletion = useDeleteCompletion();
   const [edit, setEdit] = useState<EditState | null>(null);
-  const [remove, setRemove] = useState<OccurrenceView | null>(null);
+  const [remove, setRemove] = useState<Occurrence | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   const records = useMemo(() => [...(completions.data ?? [])].reverse(), [completions.data]);
@@ -65,7 +65,7 @@ export function CompletionManagementPage({ now }: { now?: Date }) {
   });
   const formatDay = (day: string) => dayFormatter.format(new Date(`${day}T12:00:00.000Z`));
 
-  const openEdit = (occurrence: OccurrenceView) => {
+  const openEdit = (occurrence: Occurrence) => {
     if (!occurrence.completedAt || !occurrence.completedBy) return;
     setMessage(null);
     setEdit({
@@ -105,7 +105,7 @@ export function CompletionManagementPage({ now }: { now?: Date }) {
       ) : (
         <ul className="grid gap-3">
           {records.map((occurrence) => (
-            <li key={occurrence._id} className="grid gap-4 rounded-xl border bg-card p-4 shadow-sm lg:grid-cols-[minmax(14rem,1.4fr)_repeat(3,minmax(9rem,1fr))_auto] lg:items-center">
+            <li key={occurrence.id} className="grid gap-4 rounded-xl border bg-card p-4 shadow-sm lg:grid-cols-[minmax(14rem,1.4fr)_repeat(3,minmax(9rem,1fr))_auto] lg:items-center">
               <div className="min-w-0">
                 <p className="truncate font-bold">{occurrence.taskNameSnapshot}</p>
                 <p className="truncate text-sm text-muted-foreground">{occurrence.roomNameSnapshot ?? t('tasks.unknownRoom')}</p>
@@ -164,7 +164,7 @@ export function CompletionManagementPage({ now }: { now?: Date }) {
             <Button
               type="button"
               disabled={!edit?.date || !edit.completedAt || !edit.completedBy || editCompletion.isPending}
-              onClick={() => edit && editCompletion.mutate({ id: edit.occurrence._id, date: edit.date, completedAt: new Date(edit.completedAt).toISOString(), completedBy: edit.completedBy }, { onSuccess: () => { setEdit(null); setMessage(t('completions.saved')); } })}
+              onClick={() => edit && editCompletion.mutate({ id: edit.occurrence.id, date: edit.date, completedAt: new Date(edit.completedAt).toISOString(), completedBy: edit.completedBy }, { onSuccess: () => { setEdit(null); setMessage(t('completions.saved')); } })}
             >
               {t('common.save')}
             </Button>
@@ -181,7 +181,7 @@ export function CompletionManagementPage({ now }: { now?: Date }) {
           </DialogHeader>
           <DialogFooter>
             <Button type="button" variant="ghost" disabled={deleteCompletion.isPending} onClick={() => setRemove(null)}>{t('common.cancel')}</Button>
-            <Button type="button" variant="destructive" disabled={deleteCompletion.isPending} onClick={() => remove && deleteCompletion.mutate(remove._id, { onSuccess: () => { setRemove(null); setMessage(t('completions.deleted')); } })}>
+            <Button type="button" variant="destructive" disabled={deleteCompletion.isPending} onClick={() => remove && deleteCompletion.mutate(remove.id, { onSuccess: () => { setRemove(null); setMessage(t('completions.deleted')); } })}>
               <Trash2 aria-hidden="true" />
               {t('completions.deleteConfirm')}
             </Button>

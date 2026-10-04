@@ -1,5 +1,3 @@
-import { formatCents } from '@huishoudplanner/shared/points';
-import type { PointEntryView } from '@huishoudplanner/shared';
 import { HandCoins, TriangleAlert } from 'lucide-react';
 import { useId, useRef, useState, type FormEvent } from 'react';
 import { NativeSelect } from '@/components/NativeSelect';
@@ -7,11 +5,13 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { formatMoney } from '@/lib/money';
 import { ApiRequestError } from '../../api/index.ts';
+import { useLimits } from '../../api/v2/queries.ts';
 import { format, t } from '../../i18n/nl.ts';
 import { getLocale } from '../../i18n/runtime.ts';
 import { useProfile } from '../../identity/index.ts';
-import { useAllTimeBalances, useRedeemPoints } from './api.ts';
+import { useAllTimeBalances, useRedeemPoints, type PointEntry } from './api.ts';
 import { buildRedemption, redemptionCents, type RedeemField, type RedeemForm } from './pointsModel.ts';
 import { formatNumber } from './scale.ts';
 
@@ -19,7 +19,7 @@ interface RedeemDialogProps {
   open: boolean;
   onOpenChange(open: boolean): void;
   /** Called after the booking succeeded, with the stored entry and the money it is worth (null while a point is worth nothing). */
-  onRedeemed?(entry: PointEntryView, money: string | null, replayed: boolean): void;
+  onRedeemed?(entry: PointEntry, money: string | null, replayed: boolean): void;
 }
 
 /**
@@ -55,11 +55,12 @@ function RedeemFormBody({
   onRedeemed,
 }: {
   onCancel(): void;
-  onRedeemed(entry: PointEntryView, money: string | null, replayed: boolean): void;
+  onRedeemed(entry: PointEntry, money: string | null, replayed: boolean): void;
 }) {
   const idPrefix = useId();
   const { profile, activeUsers } = useProfile();
   const balances = useAllTimeBalances();
+  const limits = useLimits();
   const redeem = useRedeemPoints();
   const formRef = useRef<HTMLFormElement>(null);
   const isAdmin = profile?.role === 'admin';
@@ -75,10 +76,11 @@ function RedeemFormBody({
   const balance = row?.points ?? 0;
   const centsPerPoint = balances.data?.centsPerPoint ?? 0;
   const currencyCode = balances.data?.currencyCode ?? 'EUR';
-  const money = (cents: number) => formatCents(cents, currencyCode, getLocale());
+  const money = (cents: number) => formatMoney(cents, currencyCode, getLocale());
   const preview = redemptionCents(form.points, centsPerPoint);
 
-  const result = buildRedemption(form, balance);
+  const noteMax = limits.data?.points.maxRedemptionNoteLength ?? 0;
+  const result = buildRedemption(form, balance, noteMax);
   const errors = submitted && !result.ok ? result.errors : {};
   const set = <K extends keyof RedeemForm>(key: K, value: RedeemForm[K]) => {
     setFailure(null);
@@ -93,7 +95,7 @@ function RedeemFormBody({
     return key ? (
       <p id={`${idPrefix}-${field}-error`} className="flex items-center gap-1.5 text-sm font-semibold text-destructive">
         <TriangleAlert className="size-4 shrink-0" aria-hidden="true" />
-        {format(key, { points: formatNumber(balance) })}
+        {format(key, { points: formatNumber(balance), max: noteMax })}
       </p>
     ) : null;
   };
@@ -114,7 +116,7 @@ function RedeemFormBody({
       const { entry, replayed } = await redeem.mutateAsync({ personId, points: result.points, note: result.note });
       // The booking is shown in the currency and at the factor it was stored with.
       const worth = entry.centsPerPointSnapshot
-        ? formatCents(-entry.amount * entry.centsPerPointSnapshot, entry.currencyCodeSnapshot ?? currencyCode, getLocale())
+        ? formatMoney(-entry.amount * entry.centsPerPointSnapshot, entry.currencyCodeSnapshot ?? currencyCode, getLocale())
         : null;
       onRedeemed(entry, worth, replayed);
     } catch (error) {
@@ -124,7 +126,7 @@ function RedeemFormBody({
     }
   };
 
-  const loading = balances.isPending;
+  const loading = balances.isPending || limits.isPending;
   const noBalance = !loading && balance < 1;
   const errorFields = FIELD_ORDER.filter((field) => errors[field]);
 
@@ -156,7 +158,7 @@ function RedeemFormBody({
         {loading
           ? t('app.loading')
           : centsPerPoint > 0
-            ? format('redeem.availableMoney', { points: formatNumber(balance), money: money(balance * centsPerPoint) })
+            ? format('redeem.availableMoney', { points: formatNumber(balance), money: money(row?.money?.balance ?? 0) })
             : format('redeem.available', { points: formatNumber(balance) })}
       </p>
       {noBalance && <p className="text-sm text-muted-foreground">{t('redeem.noBalance')}</p>}
@@ -192,7 +194,7 @@ function RedeemFormBody({
           onChange={(event) => set('note', event.target.value)}
           {...fieldProps('note')}
         />
-        <p className="text-sm text-muted-foreground">{t('redeem.noteHint')}</p>
+        <p className="text-sm text-muted-foreground">{format('redeem.noteHint', { max: noteMax })}</p>
         {fieldError('note')}
       </div>
 
@@ -213,7 +215,7 @@ function RedeemFormBody({
         <Button type="button" variant="outline" className="h-11 rounded-full" onClick={onCancel}>
           {t('common.cancel')}
         </Button>
-        <Button type="submit" className="h-11 rounded-full" disabled={redeem.isPending || !profile || loading || noBalance}>
+        <Button type="submit" className="h-11 rounded-full" disabled={redeem.isPending || !profile || loading || noBalance || !limits.data}>
           {redeem.isPending ? t('redeem.submitting') : t('redeem.submit')}
         </Button>
       </div>

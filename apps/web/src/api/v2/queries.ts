@@ -7,7 +7,16 @@ import { collectPages } from './paging.ts';
 
 /** The limits and defaults the web app needs from the server (`GET /api/v2/meta/limits`). */
 export interface Limits {
-  calendar: { maxRangeDays: number };
+  calendar: { maxRangeDays: number; cycleDays: number };
+  points: { maxRedemptionNoteLength: number; maxEntriesRangeDays: number; minCentsPerPoint: number; maxCentsPerPoint: number };
+  badges: {
+    maxNameLength: number;
+    maxDescriptionLength: number;
+    maxImageBytes: number;
+    imageTypes: string[];
+    maxThreshold: number;
+    maxOnTimeWeeksThreshold: number;
+  };
   tasks: {
     minPoints: number;
     maxPoints: number;
@@ -16,7 +25,6 @@ export interface Limits {
     skipReasonMaxLength: number;
   };
   /** The money conversion: cents one point is worth. */
-  points: { minCentsPerPoint: number; maxCentsPerPoint: number };
   /** The amount of one period bonus. */
   bonuses: { minPoints: number; maxPoints: number };
   /** The goal of the reward meter, in points. */
@@ -34,7 +42,7 @@ export const FALLBACK_LIMITS = {
   notifications: { maxBrowserTimes: 6 },
   ai: { minTimeoutSeconds: 10, maxTimeoutSeconds: 900, defaultTimeoutSeconds: 180 },
   defaults: { currencyCode: 'EUR' },
-} as const satisfies Pick<Limits, 'points' | 'bonuses' | 'rewards' | 'notifications' | 'ai' | 'defaults'>;
+} as const satisfies Pick<Limits, 'bonuses' | 'rewards' | 'notifications' | 'ai' | 'defaults'> & { points: Pick<Limits['points'], 'minCentsPerPoint' | 'maxCentsPerPoint'> };
 
 export const limitsKey = ['limits'] as const;
 
@@ -48,17 +56,27 @@ export function useLimits() {
       const { data } = await unwrap(apiV2.GET('/api/v2/meta/limits'));
       const tasks = data.tasks;
       return {
-        calendar: { maxRangeDays: toInt(data.calendar?.maxRangeDays ?? 371) },
+        calendar: { maxRangeDays: toInt(data.calendar?.maxRangeDays ?? 371), cycleDays: toInt(data.calendar?.cycleDays ?? 28) },
+        points: {
+          maxRedemptionNoteLength: toInt(data.points?.maxRedemptionNoteLength ?? 200),
+          maxEntriesRangeDays: toInt(data.points?.maxEntriesRangeDays ?? 371),
+          minCentsPerPoint: toInt(data.points?.minCentsPerPoint ?? FALLBACK_LIMITS.points.minCentsPerPoint),
+          maxCentsPerPoint: toInt(data.points?.maxCentsPerPoint ?? FALLBACK_LIMITS.points.maxCentsPerPoint),
+        },
+        badges: {
+          maxNameLength: toInt(data.badges?.maxNameLength ?? 60),
+          maxDescriptionLength: toInt(data.badges?.maxDescriptionLength ?? 200),
+          maxImageBytes: toInt(data.badges?.maxImageBytes ?? 256 * 1024),
+          imageTypes: data.badges?.imageTypes ?? ['image/png', 'image/jpeg', 'image/webp'],
+          maxThreshold: toInt(data.badges?.maxThreshold ?? 100_000),
+          maxOnTimeWeeksThreshold: toInt(data.badges?.maxOnTimeWeeksThreshold ?? 1000),
+        },
         tasks: {
           minPoints: toInt(tasks?.minPoints ?? 0),
           maxPoints: toInt(tasks?.maxPoints ?? 1000),
           minDurationMinutes: toInt(tasks?.minDurationMinutes ?? 1),
           oneOffNameMaxLength: toInt(tasks?.oneOffNameMaxLength ?? 120),
           skipReasonMaxLength: toInt(tasks?.skipReasonMaxLength ?? 500),
-        },
-        points: {
-          minCentsPerPoint: toInt(data.points?.minCentsPerPoint ?? FALLBACK_LIMITS.points.minCentsPerPoint),
-          maxCentsPerPoint: toInt(data.points?.maxCentsPerPoint ?? FALLBACK_LIMITS.points.maxCentsPerPoint),
         },
         bonuses: {
           minPoints: toInt(data.bonuses?.minPoints ?? FALLBACK_LIMITS.bonuses.minPoints),

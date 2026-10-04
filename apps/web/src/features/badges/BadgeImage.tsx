@@ -1,4 +1,4 @@
-import type { Badge } from '@huishoudplanner/shared';
+import type { Badge } from './api.ts';
 import { Medal } from 'lucide-react';
 import { cn } from '@/lib/utils';
 

@@ -1,5 +1,3 @@
-import type { PointsProgressResponse } from '@huishoudplanner/shared';
-import { formatCents } from '@huishoudplanner/shared/points';
 import { PartyPopper } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useSettings } from '../../api/v2/household.ts';
@@ -14,13 +12,12 @@ import { useProfile } from '../../identity/index.ts';
 import { PersonBadges } from '../badges/PersonBadges.tsx';
 import { compactDate } from '../mobile-tasks/taskOverviewModel.ts';
 import { dayKeyInZone } from '@/lib/dayKey';
-import { usePointsProgress } from './api.ts';
+import { formatMoney } from '@/lib/money';
+import { usePointsProgress, type RewardProgress } from './api.ts';
 import { RewardMeter } from './RewardMeter.tsx';
 import {
   celebrationKey,
   celebrationMode,
-  eggsInBasket,
-  EGG_COUNT,
   goalReached,
   markCelebrated,
   periodRolledOver,
@@ -111,7 +108,7 @@ export function RewardPage({ now }: { now?: Date }) {
   );
 }
 
-function RewardCard({ progress }: { progress: PointsProgressResponse }) {
+function RewardCard({ progress }: { progress: RewardProgress }) {
   const headingId = useId();
   const reducedMotion = useReducedMotion();
   const key = celebrationKey(progress.personId, progress.period, progress.start);
@@ -137,10 +134,10 @@ function RewardCard({ progress }: { progress: PointsProgressResponse }) {
   }, [celebratingKey]);
 
   const celebrating = reached && celebratingKey === key;
-  const eggs = eggsInBasket(progress.percent);
-  const eggsText = format('reward.eggs', { count: eggs, total: EGG_COUNT });
+  const { eggs, eggCount } = progress;
+  const eggsText = format('reward.eggs', { count: eggs, total: eggCount });
   const locale = getLocale();
-  const money = (cents: number) => formatCents(cents, progress.currencyCode, locale);
+  const money = (cents: number) => formatMoney(cents, progress.currencyCode, locale);
   const title = t(`reward.progress.${progress.period}` as MessageKey);
 
   const noGoal = progress.goalPoints === null;
@@ -171,6 +168,7 @@ function RewardCard({ progress }: { progress: PointsProgressResponse }) {
             <RewardMeter
               percent={progress.percent}
               eggs={eggs}
+              eggCount={eggCount}
               label={format('reward.scene', { eggs: eggsText })}
               celebrating={celebrating}
               reducedMotion={reducedMotion}

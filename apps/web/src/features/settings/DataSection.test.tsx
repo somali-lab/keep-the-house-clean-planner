@@ -30,7 +30,7 @@ const importUrls = (fetchMock: ReturnType<typeof mockApi>) => importCalls(fetchM
 const importBodies = (fetchMock: ReturnType<typeof mockApi>) =>
   importCalls(fetchMock).map(([, init]) => JSON.parse(String((init as RequestInit).body)));
 const resetCalls = (fetchMock: ReturnType<typeof mockApi>) =>
-  fetchMock.mock.calls.filter(([u, init]) => u === '/api/stats' && (init as RequestInit | undefined)?.method === 'DELETE');
+  fetchMock.mock.calls.filter(([u, init]) => u === '/api/v2/stats' && (init as RequestInit | undefined)?.method === 'DELETE');
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -287,7 +287,7 @@ describe('DataSection — import', () => {
 
 describe('DataSection — reset', () => {
   it('resets completion and execution data only after confirmation', async () => {
-    const fetchMock = setup({ 'DELETE /api/stats': { deletedOccurrences: 4, resetOccurrences: 3 } });
+    const fetchMock = setup({ 'DELETE /api/v2/stats': { deletedOccurrences: 4, resetOccurrences: 3 } });
     renderWithProviders(<DataSection />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Uitvoeringsgegevens resetten' }));

@@ -50,7 +50,7 @@ export function PersonBadges({
       </div>
       <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {views.map(({ badge, current, threshold, awardedAt }) => (
-          <li key={badge._id} className="flex items-center gap-3 rounded-xl border bg-background/60 p-3">
+          <li key={badge.id} className="flex items-center gap-3 rounded-xl border bg-background/60 p-3">
             <BadgeImage badge={badge} muted={awardedAt === null} />
             <div className="min-w-0">
               <p className="font-bold [overflow-wrap:anywhere]">{badge.name}</p>

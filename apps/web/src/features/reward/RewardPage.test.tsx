@@ -1,26 +1,27 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { applyLanguage } from '../../i18n/runtime.ts';
-import { ANNA, makeBadge, makeProgress, mockApi, storeProfile, page } from '../../test/fixtures.ts';
+import { ANNA, makeBadge, makeProgress, mockApi, page, storeProfile } from '../../test/fixtures.ts';
 import { makeSettings, renderWithProviders } from '../../test/render.tsx';
 import { PROGRESS_REFETCH_MS } from './api.ts';
 import { RewardPage } from './RewardPage.tsx';
 import { celebrationKey } from './rewardModel.ts';
 
 const WEEK_KEY = celebrationKey(ANNA.id, 'week', '2026-09-14');
-const TOILET = makeBadge({ _id: 'b00000000000000000000001', name: 'Toiletjuffrouw' });
+const TOILET = makeBadge({ id: 'b00000000000000000000001', name: 'Toiletjuffrouw' });
 
 type Progress = ReturnType<typeof makeProgress>;
+const progressCalls = (fetchMock: ReturnType<typeof mockApi>) => fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/api/v2/points/progress'));
 
 function setup(progress: Progress | ((period: string) => Progress) = makeProgress(), extra: Record<string, unknown> = {}) {
   storeProfile(ANNA.id);
   return mockApi({
     '/api/v2/users': page([ANNA]),
     '/api/v2/settings': makeSettings(),
-    '/api/points/progress': (_init: RequestInit | undefined, url: string) =>
+    '/api/v2/points/progress': (_init: RequestInit | undefined, url: string) =>
       typeof progress === 'function' ? progress(new URL(url, 'http://localhost').searchParams.get('period') ?? 'week') : progress,
-    '/api/badges': { badges: [TOILET] },
-    '/api/badges/progress': { personId: ANNA.id, items: [{ badgeId: TOILET._id, current: 10, threshold: 10, awardedAt: '2026-09-16T08:00:00.000Z' }] },
+    '/api/v2/badges': page([TOILET]),
+    '/api/v2/badges/progress': { personId: ANNA.id, items: [{ badgeId: TOILET.id, current: 10, threshold: 10, awardedAt: '2026-09-16T08:00:00.000Z' }] },
     ...extra,
   });
 }
@@ -71,6 +72,28 @@ describe('RewardPage', () => {
     expect(scene().querySelectorAll('ellipse[stroke-dasharray]')).toHaveLength(3);
     expect(screen.queryByText('Doel gehaald!')).not.toBeInTheDocument();
     expect(screen.getByText('Het doel is het totaal van de punten van het werk dat voor je gepland staat.')).toBeInTheDocument();
+  });
+
+  it('takes the eggs from the server and does not work them out from the percentage', async () => {
+    setup(makeProgress({ percent: 75, eggs: 4, eggCount: 10 }));
+    renderWithProviders(<RewardPage />);
+    expect(await screen.findByText('4 van 10 eieren in de mand')).toBeInTheDocument();
+    expect(scene().querySelectorAll('.reward-egg')).toHaveLength(4);
+    expect(scene().querySelectorAll('ellipse[stroke-dasharray]')).toHaveLength(6);
+  });
+
+  it('draws as many places in the basket as the server counts eggs for a full meter', async () => {
+    setup(makeProgress({ percent: 100, earnedPoints: 4, eggs: 5, eggCount: 5 }));
+    renderWithProviders(<RewardPage />);
+    expect(await screen.findByText('5 van 5 eieren in de mand')).toBeInTheDocument();
+    expect(scene().querySelectorAll('.reward-egg')).toHaveLength(5);
+    expect(scene().querySelectorAll('ellipse[stroke-dasharray]')).toHaveLength(0);
+  });
+
+  it('formats the money, delivered in cents, with the currency of the household in the language of the interface', async () => {
+    setup(makeProgress({ centsPerPoint: 25, currencyCode: 'EUR', money: { earned: 123456, goal: null } }));
+    renderWithProviders(<RewardPage />);
+    expect(await screen.findByText(/Waarde: € 1.234,56/)).toBeInTheDocument();
   });
 
   it('shows only the earned money when the goal has none, and says when an administrator set the goal', async () => {
@@ -139,7 +162,7 @@ describe('RewardPage', () => {
     expect(screen.getByRole('progressbar', { name: 'Voortgang deze cyclus' })).toHaveAttribute('aria-valuenow', '25');
     expect(screen.getByText('14 sep t/m 11 okt')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cyclus' })).toHaveAttribute('aria-pressed', 'true');
-    expect(fetchMock.mock.calls.some(([url]) => String(url) === `/api/points/progress?personId=${ANNA.id}&period=cycle`)).toBe(true);
+    expect(fetchMock.mock.calls.some(([url]) => String(url) === `/api/v2/points/progress?personId=${ANNA.id}&period=cycle`)).toBe(true);
     expect(window.localStorage.getItem(`huishoudplanner.filters.${ANNA.id}.reward.period`)).toBe('"cycle"');
 
     // The choice is still there after the tab is opened again.
@@ -158,11 +181,10 @@ describe('RewardPage', () => {
 
   it('reads the progress again when the week or cycle rolled over while the tab stayed open', async () => {
     const fetchMock = setup(makeProgress());
-    const progressCalls = () => fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/api/points/progress')).length;
     // The device says it is already Monday 21 September, but the progress is for 14 to 20 September.
     renderWithProviders(<RewardPage now={new Date('2026-09-21T10:00:00Z')} />);
     await screen.findByText('3 van 4 punten (75%)');
-    await waitFor(() => expect(progressCalls()).toBeGreaterThanOrEqual(2));
+    await waitFor(() => expect(progressCalls(fetchMock).length).toBeGreaterThanOrEqual(2));
   });
 
   it('does not read again while the day is inside the period that was read', async () => {
@@ -170,7 +192,7 @@ describe('RewardPage', () => {
     renderWithProviders(<RewardPage now={new Date('2026-09-20T20:00:00Z')} />);
     await screen.findByText('3 van 4 punten (75%)');
     await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/api/points/progress'))).toHaveLength(1);
+    expect(progressCalls(fetchMock)).toHaveLength(1);
   });
 
   it('refreshes on every window focus and every five minutes while the tab is open', async () => {

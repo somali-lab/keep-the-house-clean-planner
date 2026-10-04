@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { cn } from '@/lib/utils';
-import { chickenOffset, EGG_COUNT } from './rewardModel.ts';
+import { chickenOffset } from './rewardModel.ts';
 
 /** Horizontal room of the chicken in the picture: it walks 1.9 units for every percent. */
 const TRACK_UNITS_PER_PERCENT = 1.9;
@@ -26,13 +26,16 @@ function eggCentre(index: number): { x: number; y: number } {
 export function RewardMeter({
   percent,
   eggs,
+  eggCount,
   label,
   celebrating,
   reducedMotion,
   onCelebrationEnd,
 }: {
   percent: number;
+  /** The eggs in the basket and the places it has, both counted by the server. */
   eggs: number;
+  eggCount: number;
   label: string;
   celebrating: boolean;
   reducedMotion: boolean;
@@ -84,20 +87,20 @@ export function RewardMeter({
         <path d="M18 128h10M60 130h14M120 128h8M190 130h12M232 128h8" stroke="var(--border)" strokeWidth="2" strokeLinecap="round" />
 
         {/* Empty places in the basket are dashed outlines, so a missing egg is never only a missing colour. */}
-        {Array.from({ length: EGG_COUNT }, (_, index) => {
+        {Array.from({ length: eggCount }, (_, index) => {
           const { x, y } = eggCentre(index);
           return index < eggs ? null : (
             <ellipse key={`slot-${index}`} cx={x} cy={y} rx="6" ry="7.5" fill="none" stroke="var(--muted-foreground)" strokeWidth="1.5" strokeDasharray="3 2.5" />
           );
         })}
-        {Array.from({ length: Math.min(EGG_COUNT, eggs) }, (_, index) => {
+        {Array.from({ length: Math.min(eggCount, eggs) }, (_, index) => {
           const { x, y } = eggCentre(index);
           return (
             <g
               key={`egg-${index}`}
               className="reward-egg"
               style={{ '--egg-index': index } as CSSProperties}
-              ref={index === EGG_COUNT - 1 ? lastEgg : undefined}
+              ref={index === Math.min(eggCount, eggs) - 1 ? lastEgg : undefined}
             >
               <ellipse cx={x} cy={y} rx="6.5" ry="8" fill="oklch(0.97 0.03 85)" stroke="var(--foreground)" strokeWidth="1.5" />
               <path d={`M${x - 3} ${y - 2}q2-3 4-2`} fill="none" stroke="var(--primary)" strokeWidth="1.5" strokeLinecap="round" />

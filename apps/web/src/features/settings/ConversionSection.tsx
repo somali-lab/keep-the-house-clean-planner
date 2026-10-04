@@ -1,4 +1,5 @@
-import { formatCents, isTwoDecimalCurrency } from '@/lib/money';
+import { isTwoDecimalCurrency } from '@/lib/currency';
+import { formatMoney } from '@/lib/money';
 import { useQueryClient } from '@tanstack/react-query';
 import { Coins, Save } from 'lucide-react';
 import { useId, useMemo, useState, type FormEvent } from 'react';
@@ -70,7 +71,7 @@ export function ConversionSection({ settings }: { settings: Settings }) {
   if (profile?.role !== 'admin') return null;
 
   const parsed = parseCentsPerPoint(cents, limits);
-  const preview = parsed !== null && parsed > 0 ? formatCents(parsed, currencyCode, getLocale()) : null;
+  const preview = parsed !== null && parsed > 0 ? formatMoney(parsed, currencyCode, getLocale()) : null;
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
