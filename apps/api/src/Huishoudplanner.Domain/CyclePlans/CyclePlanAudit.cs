@@ -61,5 +61,15 @@ public static class CyclePlanAudit
             actor, AuditEntity.CyclePlan, planId, AuditAction.Update, AuditObject.Of(("slots", before)), AuditObject.Of(("slots", after)), meta);
     }
 
+    /// <summary>
+    /// A deleted task left the plan (<c>removeTaskFromPlans</c>): the slot entry with <c>meta: { reason: 'task_delete', taskId }</c>
+    /// (requirements 4.9).
+    /// </summary>
+    public static AuditEntry ForTaskDelete(AuditActor actor, string planId, string taskId, SlotDiff diff)
+    {
+        ArgumentNullException.ThrowIfNull(taskId);
+        return ForSlots(actor, planId, diff, AuditObject.Of(("reason", "task_delete"), ("taskId", new AuditObjectId(taskId))));
+    }
+
     private static AuditArray Strings(IEnumerable<string> values) => new([.. values.Select(AuditValue.FromString)]);
 }

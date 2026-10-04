@@ -1,5 +1,6 @@
 using Huishoudplanner.Application.Tests.Settings;
 using Huishoudplanner.Domain.Audit;
+using Huishoudplanner.Domain.CyclePlans;
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Tasks;
 
@@ -472,6 +473,48 @@ public sealed class TaskServiceTests
         result.AsT0.Points.Should().Be(30, "points do not follow the duration once set");
     }
 
+    [Fact]
+    public async Task Update_withResetPoints_handsThePointsBackToTheDuration_asANormalUpdateEntry()
+    {
+        var world = new TaskWorld();
+        var room = world.Room("Badkamer");
+        var task = world.Seed("Badkamer schoonmaken", room.Id);
+        world.TaskStore.Items[0] = task with { Points = 50 };
+
+        var result = await world.Service.UpdateAsync(TaskWorld.Planner, task.Id, new TaskPatch(ResetPoints: true), Ct);
+
+        result.AsT0.Points.Should().Be(30);
+        var entry = world.Audit.Entries.Should().ContainSingle().Which;
+        entry.Action.Should().Be(AuditAction.Update);
+        entry.Before.Should().Be(AuditObject.Of(("points", 50)));
+        entry.After.Should().Be(AuditObject.Of(("points", 30)));
+    }
+
+    [Fact]
+    public async Task Update_withResetPointsAndANewDuration_usesTheNewDuration()
+    {
+        var world = new TaskWorld();
+        var room = world.Room("Badkamer");
+        var task = world.Seed("Badkamer schoonmaken", room.Id);
+
+        var result = await world.Service.UpdateAsync(TaskWorld.Planner, task.Id, new TaskPatch(DurationMinutes: 45, ResetPoints: true), Ct);
+
+        result.AsT0.Points.Should().Be(45);
+    }
+
+    [Fact]
+    public async Task Update_withResetPoints_whenThePointsAlreadyAreTheDefault_writesAndAuditsNothing()
+    {
+        var world = new TaskWorld();
+        var room = world.Room("Badkamer");
+        var task = world.Seed("Badkamer schoonmaken", room.Id);
+
+        var result = await world.Service.UpdateAsync(TaskWorld.Planner, task.Id, new TaskPatch(ResetPoints: true), Ct);
+
+        result.AsT0.Should().Be(task);
+        NothingWritten(world);
+    }
+
     // ---- list
 
     [Fact]
@@ -689,6 +732,179 @@ public sealed class TaskServiceTests
     private static void NothingWritten(TaskWorld world)
     {
         world.TaskStore.Writes.Should().Be(0);
+        world.Audit.Entries.Should().BeEmpty();
+    }
+
+    // ---- delete (tasks.test.ts DELETE /api/tasks/:id, the plan cascade and the badge rules of badges.test.ts)
+
+    private const string UnknownTaskId = "0123456789abcdef01234567";
+
+    [Fact]
+    public async Task Delete_removesTheTask_andAuditsItsPreviousValues()
+    {
+        var world = new TaskWorld();
+        var room = world.Room("Badkamer");
+        var task = world.Seed("Wegwerpklus", room.Id);
+
+        var result = await world.Service.DeleteAsync(TaskWorld.Planner, task.Id, Ct);
+
+        result.IsT0.Should().BeTrue();
+        world.TaskStore.Items.Should().BeEmpty();
+        var entry = world.Audit.Entries.Where(e => e.Entity == AuditEntity.Task).Should().ContainSingle().Which;
+        entry.Should().Be(TaskAudit.ForDelete(PlannerActor, task));
+        entry.Before["name"].Should().Be(AuditValue.FromString("Wegwerpklus"));
+        entry.After.Keys.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Delete_removesTheSlotsFromEveryPlanThatHoldsOne_withAnUpdateEntryEach_andLeavesOtherPlansAlone()
+    {
+        var world = new TaskWorld();
+        var room = world.Room("Badkamer");
+        var task = world.Seed("Wegwerpklus", room.Id);
+        var keep = world.Seed("Blijft", room.Id);
+        var active = world.SeedPlan("Actief", true, new CyclePlanSlot(task.Id, 0, 1, null), new CyclePlanSlot(keep.Id, 0, 1, null), new CyclePlanSlot(task.Id, 2, 5, null));
+        var draft = world.SeedPlan("Concept", false, new CyclePlanSlot(task.Id, 1, 3, null));
+        var untouched = world.SeedPlan("Andere", false, new CyclePlanSlot(keep.Id, 3, 0, null));
+        var writesBefore = world.PlanStore.Writes;
+
+        var result = await world.Service.DeleteAsync(TaskWorld.Planner, task.Id, Ct);
+
+        result.IsT0.Should().BeTrue();
+        world.PlanStore.Items.Single(p => p.Id == active.Id).Slots.Should().Equal(new CyclePlanSlot(keep.Id, 0, 1, null));
+        world.PlanStore.Items.Single(p => p.Id == draft.Id).Slots.Should().BeEmpty();
+        world.PlanStore.Items.Single(p => p.Id == untouched.Id).Slots.Should().Equal(new CyclePlanSlot(keep.Id, 3, 0, null));
+        world.PlanStore.Writes.Should().Be(writesBefore + 2);
+        var meta = AuditObject.Of(("reason", "task_delete"), ("taskId", new AuditObjectId(task.Id)));
+        var planEntries = world.Audit.Entries.Where(e => e.Entity == AuditEntity.CyclePlan).ToList();
+        planEntries.Select(e => e.EntityId).Should().Equal(active.Id, draft.Id);
+        planEntries.Should().OnlyContain(e => e.Action == AuditAction.Update && e.Meta == meta);
+        planEntries[0].Before.Should().Be(AuditObject.Of(("slots", AuditArray.Of(
+            CyclePlanAudit.Slot(new CyclePlanSlot(task.Id, 0, 1, null)), CyclePlanAudit.Slot(new CyclePlanSlot(task.Id, 2, 5, null))))));
+        planEntries[0].After.Should().Be(AuditObject.Of(("slots", AuditArray.Of())));
+    }
+
+    [Fact]
+    public async Task Delete_asksTheBadgeUseCaseToDropTheTaskFromItsRules_afterThePlansAndTheTask_inTheSameAction()
+    {
+        var world = new TaskWorld();
+        var room = world.Room("Badkamer");
+        var task = world.Seed("Wegwerpklus", room.Id);
+        world.SeedPlan("Actief", true, new CyclePlanSlot(task.Id, 0, 1, null));
+
+        var result = await world.Service.DeleteAsync(TaskWorld.Planner, task.Id, Ct);
+
+        result.IsT0.Should().BeTrue();
+        world.BadgeRules.Calls.Should().Equal(task.Id);
+        world.Audit.Entries.Select(e => e.Entity).Should().Equal(AuditEntity.CyclePlan, AuditEntity.Task, AuditEntity.Badge);
+    }
+
+    [Fact]
+    public async Task Delete_ofAnUnknownTask_isNotFound_andWritesNothing()
+    {
+        var world = new TaskWorld();
+        var room = world.Room("Badkamer");
+        world.Seed("Blijft", room.Id);
+
+        var result = await world.Service.DeleteAsync(TaskWorld.Planner, UnknownTaskId, Ct);
+
+        result.IsT1.Should().BeTrue();
+        world.TaskStore.Items.Should().ContainSingle();
+        world.TaskStore.Writes.Should().Be(0);
+        world.Audit.Entries.Should().BeEmpty();
+        world.BadgeRules.Calls.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Delete_ofTheSameTaskTwice_isNotFoundTheSecondTime_andWritesNothingMore()
+    {
+        var world = new TaskWorld();
+        var room = world.Room("Badkamer");
+        var task = world.Seed("Wegwerpklus", room.Id);
+        await world.Service.DeleteAsync(TaskWorld.Planner, task.Id, Ct);
+        var entries = world.Audit.Entries.Count;
+
+        var again = await world.Service.DeleteAsync(TaskWorld.Planner, task.Id, Ct);
+
+        again.IsT1.Should().BeTrue();
+        world.Audit.Entries.Should().HaveCount(entries);
+        world.BadgeRules.Calls.Should().ContainSingle();
+    }
+
+    [Theory]
+    [InlineData("nope")]
+    [InlineData("0123456789abcdef0123456")]
+    [InlineData("")]
+    public async Task Delete_withAMalformedId_isAValidationErrorOnId_withoutATransaction(string id)
+    {
+        var world = new TaskWorld();
+
+        var result = await world.Service.DeleteAsync(TaskWorld.Planner, id, Ct);
+
+        result.AsT2.Errors["id"].Should().Equal("invalid_object_id");
+        world.Transactions.Aborts.Should().Be(0);
+        NothingWritten(world);
+    }
+
+    [Fact]
+    public async Task Delete_whenTheBadgeRulesCannotBeChanged_rollsTheTaskAndThePlansBack()
+    {
+        var world = new TaskWorld();
+        var room = world.Room("Badkamer");
+        var task = world.Seed("Wegwerpklus", room.Id);
+        var plan = world.SeedPlan("Actief", true, new CyclePlanSlot(task.Id, 0, 1, null));
+        world.BadgeRules.Failure = new PortError("badges down");
+
+        var result = await world.Service.DeleteAsync(TaskWorld.Planner, task.Id, Ct);
+
+        result.AsT4.Message.Should().Be("badges down");
+        world.TaskStore.Items.Should().ContainSingle();
+        world.PlanStore.Items.Single().Slots.Should().Equal(plan.Slots);
+        world.Audit.Entries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Delete_whenTheAuditEntryCannotBeWritten_rollsTheDeleteBack()
+    {
+        var world = new TaskWorld();
+        var room = world.Room("Badkamer");
+        var task = world.Seed("Wegwerpklus", room.Id);
+        world.SeedPlan("Actief", true, new CyclePlanSlot(task.Id, 0, 1, null));
+        world.Audit.Failure = new PortError("audit down");
+
+        var result = await world.Service.DeleteAsync(TaskWorld.Planner, task.Id, Ct);
+
+        result.AsT4.Message.Should().Be("audit down");
+        world.TaskStore.Items.Should().ContainSingle();
+        world.PlanStore.Items.Single().Slots.Should().ContainSingle();
+        world.BadgeRules.Calls.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Delete_whenTheTransactionConflicts_returnsTheConflict()
+    {
+        var world = new TaskWorld();
+        var room = world.Room("Badkamer");
+        var task = world.Seed("Wegwerpklus", room.Id);
+        world.Transactions.ConflictInsteadOfRunning = new ConflictError("write_conflict", "busy");
+
+        var result = await world.Service.DeleteAsync(TaskWorld.Planner, task.Id, Ct);
+
+        result.AsT3.Code.Should().Be("write_conflict");
+        world.TaskStore.Items.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task Delete_whenTheStoreFails_isAPortError()
+    {
+        var world = new TaskWorld();
+        var room = world.Room("Badkamer");
+        var task = world.Seed("Wegwerpklus", room.Id);
+        world.TaskStore.FailWrites = true;
+
+        var result = await world.Service.DeleteAsync(TaskWorld.Planner, task.Id, Ct);
+
+        result.AsT4.Message.Should().Be("fake write failure");
         world.Audit.Entries.Should().BeEmpty();
     }
 }

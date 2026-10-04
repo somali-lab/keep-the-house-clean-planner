@@ -59,6 +59,10 @@ internal sealed class FakeCyclePlanStore : ForStoringCyclePlans
         Task.FromResult<OneOf<CyclePlan, NotFound, PortError>>(
             Failure is { } failure ? failure : plan is null ? new NotFound() : plan);
 
+    public Task<OneOf<IReadOnlyList<CyclePlan>, PortError>> ListHoldingTaskAsync(string taskId, CancellationToken cancellationToken) =>
+        Task.FromResult<OneOf<IReadOnlyList<CyclePlan>, PortError>>(
+            Failure is { } failure ? failure : OneOf<IReadOnlyList<CyclePlan>, PortError>.FromT0([.. Ordered.Where(p => p.Slots.Any(s => s.TaskId == taskId))]));
+
     public Task<OneOf<long, PortError>> CountAsync(CancellationToken cancellationToken) =>
         Task.FromResult<OneOf<long, PortError>>(Failure is { } failure ? failure : Items.Count);
 

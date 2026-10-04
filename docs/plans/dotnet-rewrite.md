@@ -261,6 +261,7 @@ Each phase ends in something demonstrable. Slices are small enough for one pull 
 - [x] 6.3 Scheduler and the manual job endpoints. Port the nightly and manual-run cases of `generation.test.ts`, `points-reconcile.test.ts`, `points-bonuses.test.ts` and `badges.test.ts` that were deferred in phases 3 and 4. (Done in two parts: 6.3a the scheduler, the generation and retention jobs and their endpoints, 6.3b the morning message job and endpoint, the `due` summary of the generation answer and the nightly and manual-run cases of the points tests; the badge step is part of the reconciliation since 4.5.)
 - [x] 6.4 PDF sheets with QuestPDF (§3.10). Port `pdf-export.test.ts`.
 - [x] 6.5 JSON export and import with the confirmation and acknowledgement rules. Port `transfer.test.ts`.
+- [x] 6.6 Delete a task (`DELETE /api/v2/tasks/{id}`) with the cascade into plans and badge rules. Port the delete scenario of `tasks.test.ts` and the `task_deleted` scenario of `badges.test.ts` that was deferred in phase 4.
 
 ### Phase 7 — Web app to v2 (D4)
 

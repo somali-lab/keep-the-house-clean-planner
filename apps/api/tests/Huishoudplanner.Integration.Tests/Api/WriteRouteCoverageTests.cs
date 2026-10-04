@@ -153,6 +153,15 @@ public sealed class WriteRouteCoverageTests(AuditCoverageHarness h) : IClassFixt
         }, "occurrence", "delete", Idempotent: true),
 
         new("PATCH /api/v2/tasks/{id}", Kind.Audited, Fixed(h => new(HttpMethod.Patch, $"/api/v2/tasks/{h.Twice}", new { durationMinutes = 20 }, h.Planner)), "task", "update", Idempotent: true),
+        new("DELETE /api/v2/tasks/{id}", Kind.Audited, async h =>
+        {
+            // A task that a plan holds and a badge rule names: the delete cascades into both, in one transaction.
+            var task = await CreateAsync(h, "/api/v2/tasks", new { name = "Verwijderklus", roomId = h.Room, intervalKey = "1w", durationMinutes = 15 }, h.Planner);
+            var plan = await CreateAsync(h, "/api/v2/cycle-plans", new { name = "Plan met verwijderklus" }, h.Planner);
+            await DoAsync(h, HttpMethod.Put, $"/api/v2/cycle-plans/{plan}/slots", new { slots = new[] { new { taskId = task, weekIndex = 0, weekday = 2, assigneeId = (string?)null } } }, h.Planner);
+            await CreateAsync(h, "/api/v2/badges", new { name = "Verwijderbadge", rule = new { type = "executions", taskIds = new[] { task }, threshold = 3 } }, h.Admin);
+            return new(HttpMethod.Delete, $"/api/v2/tasks/{task}", null, h.Planner);
+        }, "task", "delete", Idempotent: true), // a second delete is a 404 and writes nothing
         new("POST /api/v2/rooms/{id}/tasks/bulk", Kind.Audited, Fixed(h => new(HttpMethod.Post, $"/api/v2/rooms/{h.Room}/tasks/bulk", new { op = "reassign", defaultAssigneeId = h.P2.Id }, h.Planner)), "task", "assign", Idempotent: true),
         new("PATCH /api/v2/settings", Kind.Audited, Fixed(h => new(HttpMethod.Patch, "/api/v2/settings", new { promoteThreshold = 4 }, h.Admin)), "settings", "update", Idempotent: true),
 

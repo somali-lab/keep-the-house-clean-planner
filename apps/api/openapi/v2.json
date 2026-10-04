@@ -807,7 +807,7 @@
           "Tasks"
         ],
         "summary": "Changes a task, or deactivates one with active=false (planners).",
-        "description": "A change that changes nothing writes and audits nothing. A change of the default assignee is audited as its own assign entry. Changed references are checked like on create. Answers 404 not_found for an unknown task.",
+        "description": "A change that changes nothing writes and audits nothing. A change of the default assignee is audited as its own assign entry. points: null resets the points to the default for the duration (a reset that changes nothing is a no-op). Changed references are checked like on create. Answers 404 not_found for an unknown task.",
         "operationId": "updateTask",
         "parameters": [
           {
@@ -836,6 +836,86 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/TaskResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Tasks"
+        ],
+        "summary": "Deletes a task for good (planners).",
+        "description": "Normally a task is deactivated instead. The delete removes the task's slots from every plan that holds one (each such plan gets an update entry with the removed slots and meta reason task_delete) and the task from the badge rules that name it (a rule left without tasks is deactivated; reason task_deleted), all in one transaction, and records a delete entry that keeps the removed fields. Occurrences, points and history stay: they carry their own snapshot. Answers 404 not_found for an unknown task, which changes nothing, and 400 validation_error on id for a malformed id.",
+        "operationId": "deleteTask",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskDeletedResponse"
                 }
               }
             }
@@ -11190,6 +11270,17 @@
           }
         }
       },
+      "TaskDeletedResponse": {
+        "required": [
+          "deleted"
+        ],
+        "type": "object",
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          }
+        }
+      },
       "TaskLimits": {
         "type": "object",
         "properties": {
@@ -11706,6 +11797,7 @@
               "integer",
               "string"
             ],
+            "description": "A whole number from 0 to 1000. Left out: unchanged. null: reset to the default for the duration the task has after the change (one point per minute, at least 1 and at most 1000).",
             "format": "int32"
           },
           "defaultAssigneeId": {

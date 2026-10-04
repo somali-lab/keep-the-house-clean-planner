@@ -28,6 +28,9 @@ public interface ForStoringCyclePlans
     /// <summary>The oldest plan (the default plan), or <see cref="NotFound"/> when there are no plans.</summary>
     Task<OneOf<CyclePlan, NotFound, PortError>> FindDefaultAsync(CancellationToken cancellationToken);
 
+    /// <summary>Every plan that holds at least one slot of the task, oldest first (a task that is deleted leaves them all).</summary>
+    Task<OneOf<IReadOnlyList<CyclePlan>, PortError>> ListHoldingTaskAsync(string taskId, CancellationToken cancellationToken);
+
     Task<OneOf<long, PortError>> CountAsync(CancellationToken cancellationToken);
 
     /// <summary>Stores a new plan (manual, not a draft, no proposal); the store assigns the id and sets both timestamps to the <c>CreatedAt</c> of the new plan.</summary>

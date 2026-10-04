@@ -58,6 +58,22 @@ public sealed class CyclePlanAuditTests
     }
 
     [Fact]
+    public void A_task_delete_entry_lists_the_removed_slots_with_the_reason_and_the_task_in_meta()
+    {
+        var first = new CyclePlanSlot(Task, 0, 3, null);
+        var second = new CyclePlanSlot(Task, 2, 5, Anna);
+
+        var entry = CyclePlanAudit.ForTaskDelete(Actor, PlanId, Task, new SlotDiff([], [first, second], []));
+
+        entry.Entity.Should().Be(AuditEntity.CyclePlan);
+        entry.EntityId.Should().Be(PlanId);
+        entry.Action.Should().Be(AuditAction.Update);
+        entry.Before.Should().Be(AuditObject.Of(("slots", AuditArray.Of(CyclePlanAudit.Slot(first), CyclePlanAudit.Slot(second)))));
+        entry.After.Should().Be(AuditObject.Of(("slots", AuditArray.Of())));
+        entry.Meta.Should().Be(AuditObject.Of(("reason", "task_delete"), ("taskId", new AuditObjectId(Task))));
+    }
+
+    [Fact]
     public void A_slot_entry_lists_removed_then_changed_before_and_added_then_changed_after()
     {
         var removed = new CyclePlanSlot(Task, 0, 3, null);

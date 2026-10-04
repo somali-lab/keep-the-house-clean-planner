@@ -22,8 +22,8 @@ namespace Huishoudplanner.Integration.Tests.Api;
 /// Ports apps/server/test/tasks.test.ts (create with defaults and audit, validation, references, settings intervals, update and its
 /// audit, assign entries, list filters, bulk deactivate and reassign) and the task side of interval-change.test.ts, and adds the v2
 /// behaviour: planner policy, paging, no-op and rollback, Node-shaped documents. Ported in slice 3.1 (see TaskOccurrenceEffectsTests): the room snapshot of upcoming
-/// occurrences on a room change and the effect of an interval change on occurrences and generation. Not ported (deferred):
-/// DELETE (arrives with the plans and badges it cascades into). Real HTTP pipeline and real MongoDB replica set.
+/// occurrences on a room change and the effect of an interval change on occurrences and generation. DELETE is in TaskDeleteEndpointTests (slice 6.6).
+/// Real HTTP pipeline and real MongoDB replica set.
 /// </summary>
 public sealed class TaskEndpointTests : IDisposable
 {
@@ -400,6 +400,41 @@ public sealed class TaskEndpointTests : IDisposable
     }
 
     [Fact]
+    public async Task Patch_withNullPoints_resetsThemToTheDefaultForTheDuration_audited_andRepeatingItIsANoOp()
+    {
+        var room = await SeedRoomAsync("Badkamer");
+        var task = await NewTask(room, extra: new { points = 99 });
+        var id = task.GetProperty("id").GetString()!;
+
+        var (response, body) = await Patch($"/api/v2/tasks/{id}", new { points = (int?)null });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK, body.ToString());
+        body.GetProperty("points").GetInt32().Should().Be(30);
+        var entries = await TaskAudit("update");
+        Same(entries.Should().ContainSingle().Subject["before"].AsBsonDocument, new BsonDocument { { "points", 99 } });
+        Same(entries[0]["after"].AsBsonDocument, new BsonDocument { { "points", 30 } });
+
+        var again = await Patch($"/api/v2/tasks/{id}", new { points = (int?)null });
+        again.Response.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await TaskAudit("update")).Should().HaveCount(1);
+
+        var withDuration = await Patch($"/api/v2/tasks/{id}", new { points = (int?)null, durationMinutes = 45 });
+        withDuration.Body.GetProperty("points").GetInt32().Should().Be(45);
+    }
+
+    [Fact]
+    public async Task Patch_withNullForAnotherNumberField_isStillAValidationError()
+    {
+        var room = await SeedRoomAsync("Badkamer");
+        var id = (await NewTask(room)).GetProperty("id").GetString()!;
+
+        var (response, body) = await Patch($"/api/v2/tasks/{id}", new { durationMinutes = (int?)null });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        body.GetProperty("errors").TryGetProperty("durationMinutes", out _).Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Patch_ofTheDefaultAssignee_isLoggedAsAssign_andNotAsUpdate()
     {
         var room = await SeedRoomAsync("Badkamer");
@@ -755,7 +790,7 @@ public sealed class TaskEndpointTests : IDisposable
             .Where(e => e.RoutePattern.RawText is { } p && (p.StartsWith("/api/v2/tasks", StringComparison.Ordinal) || p.EndsWith("/tasks/bulk", StringComparison.Ordinal)))
             .ToList();
 
-        endpoints.Should().HaveCount(4);
+        endpoints.Should().HaveCount(5);
         foreach (var endpoint in endpoints)
         {
             var methods = endpoint.Metadata.GetMetadata<HttpMethodMetadata>()!.HttpMethods;
