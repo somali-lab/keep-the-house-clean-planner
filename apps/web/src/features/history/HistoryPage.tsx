@@ -4,6 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { useFilterReset } from '@/components/FilterReset';
 import { EmptyState } from '@/components/EmptyState';
+import { LoadMore, retryPaged } from '@/components/LoadMore';
 import { NativeSelect } from '@/components/NativeSelect';
 import { PageHeader } from '@/components/PageHeader';
 import { Badge } from '@/components/ui/badge';
@@ -267,7 +268,7 @@ export function HistoryPage() {
         <p role="status" className="text-muted-foreground">
           {t('app.loading')}
         </p>
-      ) : feed.isError ? (
+      ) : feed.isError && !feed.data ? (
         <p role="alert" className="rounded-xl bg-destructive/10 p-4 text-destructive">
           {t('app.error')}
         </p>
@@ -302,12 +303,15 @@ export function HistoryPage() {
         </ol>
       )}
 
-      {feed.hasNextPage && (
-        <div className="mt-6 flex justify-center">
-          <Button type="button" variant="outline" onClick={() => void feed.fetchNextPage()} disabled={feed.isFetchingNextPage}>
-            {t('history.loadMore')}
-          </Button>
-        </div>
+      {feed.data && (
+        <LoadMore
+          count={entries.length}
+          hasNextPage={feed.hasNextPage}
+          isFetchingNextPage={feed.isFetchingNextPage}
+          onLoadMore={() => void feed.fetchNextPage()}
+          error={feed.isError}
+          onRetry={retryPaged(feed)}
+        />
       )}
     </section>
   );

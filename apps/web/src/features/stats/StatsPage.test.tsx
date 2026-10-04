@@ -535,7 +535,7 @@ describe('StatsPage: points', () => {
     expect([...pointsUrls(fetchMock)].sort()).toEqual([
       '/api/v2/points/balances',
       '/api/v2/points/balances?from=2026-09-14&to=2026-09-20',
-      '/api/v2/points/entries?personId=a00000000000000000000001&from=2026-09-14&to=2026-09-20&limit=500',
+      '/api/v2/points/entries?personId=a00000000000000000000001&from=2026-09-14&to=2026-09-20&limit=100',
     ]);
     // The week comes from the calendar of the server (today only), not from arithmetic in the page.
     expect(fetchMock.mock.calls.map(([u]) => String(u))).toContain('/api/v2/calendar?from=2026-09-16&to=2026-09-16');
@@ -554,6 +554,68 @@ describe('StatsPage: points', () => {
     expect(await screen.findByText('Bram de Vries heeft in deze periode geen punten verdiend.')).toBeInTheDocument();
   });
 
+  it('loads the ledger page by page: the first page only, the next cursor on request, and a new person starts over', async () => {
+    const [one, two] = ENTRIES[ANNA.id]!.entries;
+    const fetchMock = setup(WORKLOAD, {
+      ...pointsRoutes(),
+      '/api/v2/points/entries': (_init: RequestInit | undefined, url: string) => {
+        const query = new URL(url, 'http://x').searchParams;
+        if (query.get('personId') !== ANNA.id) return page([]);
+        return query.get('cursor') === 'c1' ? page([two!]) : { items: [one!], nextCursor: 'c1' };
+      },
+    });
+    renderWithProviders(<StatsPage now={NOW} />);
+    await selectStatsTab('Punten');
+    const table = await screen.findByRole('table', { name: 'Posten van Anna' });
+    expect(within(table).getAllByRole('row').slice(1).map((row) => row.textContent)).toEqual(['16 september 2026Ramen lappen+5']);
+    const entryUrls = () => pointsUrls(fetchMock).filter((url) => url.startsWith('/api/v2/points/entries'));
+    expect(entryUrls()).toEqual(['/api/v2/points/entries?personId=a00000000000000000000001&from=2026-09-14&to=2026-09-20&limit=100']);
+    expect(screen.getByText('1 getoond')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Meer laden' }));
+    await waitFor(() => expect(within(table).getAllByRole('row').slice(1)).toHaveLength(2));
+    expect(entryUrls().at(-1)).toBe('/api/v2/points/entries?personId=a00000000000000000000001&from=2026-09-14&to=2026-09-20&limit=100&cursor=c1');
+    expect(entryUrls()).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: 'Meer laden' })).not.toBeInTheDocument();
+    expect(screen.getByText('Alles geladen (2)')).toBeInTheDocument();
+
+    // The balances are the server's totals and do not wait for the entries.
+    expect(pointsUrls(fetchMock)).toContain('/api/v2/points/balances?from=2026-09-14&to=2026-09-20');
+
+    fireEvent.change(screen.getByLabelText('Toon posten van'), { target: { value: BRAM.id } });
+    expect(await screen.findByText('Bram de Vries heeft in deze periode geen punten verdiend.')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Toon posten van'), { target: { value: ANNA.id } });
+    await waitFor(() => expect(entryUrls().at(-1)).not.toContain('cursor='));
+  });
+
+  it('keeps the loaded entries when the next page fails and retries the same cursor', async () => {
+    const [one, two] = ENTRIES[ANNA.id]!.entries;
+    let failNext = true;
+    const fetchMock = setup(WORKLOAD, {
+      ...pointsRoutes(),
+      '/api/v2/points/entries': (_init: RequestInit | undefined, url: string) => {
+        const query = new URL(url, 'http://x').searchParams;
+        if (query.get('personId') !== ANNA.id) return page([]);
+        if (query.get('cursor') !== 'c1') return { items: [one!], nextCursor: 'c1' };
+        return failNext ? problem(500, 'boom') : page([two!]);
+      },
+    });
+    renderWithProviders(<StatsPage now={NOW} />);
+    await selectStatsTab('Punten');
+    const table = await screen.findByRole('table', { name: 'Posten van Anna' });
+    fireEvent.click(screen.getByRole('button', { name: 'Meer laden' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Meer laden is mislukt.');
+    expect(within(table).getAllByRole('row').slice(1)).toHaveLength(1);
+
+    failNext = false;
+    fireEvent.click(within(alert).getByRole('button', { name: 'Opnieuw proberen' }));
+    await waitFor(() => expect(within(table).getAllByRole('row').slice(1)).toHaveLength(2));
+    const cursorUrl = '/api/v2/points/entries?personId=a00000000000000000000001&from=2026-09-14&to=2026-09-20&limit=100&cursor=c1';
+    expect(pointsUrls(fetchMock).filter((url) => url.includes('cursor='))).toEqual([cursorUrl, cursorUrl]);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('follows the period control: the weeks and cycles aligned with the other reports', async () => {
     const fetchMock = setup(WORKLOAD, pointsRoutes());
     renderWithProviders(<StatsPage now={NOW} />);
@@ -566,7 +628,7 @@ describe('StatsPage: points', () => {
     await waitFor(() => expect(pointsUrls(fetchMock)).toContain('/api/v2/points/balances?from=2026-09-14&to=2026-10-11'));
     await waitFor(() =>
       expect(pointsUrls(fetchMock)).toContain(
-        '/api/v2/points/entries?personId=a00000000000000000000001&from=2026-09-14&to=2026-10-11&limit=500',
+        '/api/v2/points/entries?personId=a00000000000000000000001&from=2026-09-14&to=2026-10-11&limit=100',
       ),
     );
   });

@@ -1,8 +1,7 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiV2, unwrap } from '../../api/index.ts';
 import { toInt } from '../../api/occurrence.ts';
 import { releaseRequestKey, requestKeyFor } from '../../api/requestKey.ts';
-import { collectPages } from '../../api/v2/paging.ts';
 import type { components } from '../../api/v2/schema';
 
 // keepPreviousData: a refetch holds the previous render instead of flashing a loader.
@@ -288,24 +287,25 @@ export function useAllTimeBalances(enabled = true) {
   });
 }
 
-/** The most the server returns in one page of ledger entries (`limit` 1 to 500). */
-const ENTRIES_PAGE_SIZE = 500;
+/** One page of ledger entries: a person can earn entries for years, so the list is loaded page by page. */
+export const ENTRIES_PAGE_SIZE = 100;
 
+/** The entries of one person in the range, newest first, one page at a time. */
 export function usePointsEntries(personId: string | null, range: { from: string; to: string } | null) {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: ['points', 'entries', personId, range?.from, range?.to],
-    queryFn: async (): Promise<PointEntry[]> => {
-      const items = await collectPages(async (cursor) =>
-        (
-          await unwrap(
-            apiV2.GET('/api/v2/points/entries', {
-              params: { query: { personId: personId!, from: range!.from, to: range!.to, limit: String(ENTRIES_PAGE_SIZE), cursor } },
-            }),
-          )
-        ).data,
+    initialPageParam: undefined as string | undefined,
+    queryFn: async ({ pageParam }) => {
+      const { data } = await unwrap(
+        apiV2.GET('/api/v2/points/entries', {
+          params: {
+            query: { personId: personId!, from: range!.from, to: range!.to, limit: String(ENTRIES_PAGE_SIZE), ...(pageParam ? { cursor: pageParam } : {}) },
+          },
+        }),
       );
-      return items.map(toPointEntry);
+      return { items: data.items.map(toPointEntry), nextCursor: data.nextCursor };
     },
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     enabled: personId !== null && range !== null,
     placeholderData: keepPreviousData,
   });
