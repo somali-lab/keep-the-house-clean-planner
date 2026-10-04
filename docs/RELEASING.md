@@ -83,6 +83,10 @@ The image currently targets `linux/amd64`, matching the Proxmox VM deployment ta
 
 The release that introduced extra executions and one-off tasks (ADR-0009) replaces the unique occurrence index on `(cycleId, taskId, plannedDate)` with one that only covers generated occurrences, and it writes data that older images cannot read (`taskId: null`, `recordedDone`, `requestId`, export `schemaVersion: 2`). Once extra executions share a slot, an older image can no longer rebuild its full unique index, so it fails on startup. Rolling back to an image from before that release therefore requires restoring a pre-upgrade export or database backup first. Take a JSON export (Settings, Data) or a database dump before upgrading, and keep it until the new version has proven itself.
 
+## Parallel run of the .NET rewrite
+
+Until the switch release, the .NET application is verified next to the Node application on a copy of the production data, with the Compose profile `parallel`, a database copy script and a parity script. The procedure, the verification checklist, the switch and the rollback are in [PARALLEL-RUN.md](PARALLEL-RUN.md); the switch release itself (the Dockerfile replaced, `BREAKING CHANGE` footer) is slice 8.3 of the [rewrite plan](plans/dotnet-rewrite.md).
+
 ## One-time GitHub settings
 
 In **Settings → Actions → General → Workflow permissions**, enable **Allow GitHub Actions to create and approve pull requests**. The workflow declares only the permissions needed to create the release pull request, GitHub Release, and GHCR package.

@@ -203,6 +203,10 @@ docker compose exec mongo mongosh --quiet --eval "rs.initiate({ _id: 'rs0', memb
 
 To go back to a standalone MongoDB, restore the pre-conversion backup into a fresh volume instead of editing the replica set configuration.
 
+### Parallel run of the .NET rewrite
+
+While the .NET rewrite is on the `next` branch, the Compose profile `parallel` adds `app-next`: the .NET image on `APP_NEXT_PORT` (default `3001`) against a copy of the database named `huishoudplanner_next` on the same MongoDB. It sends no notification and makes no AI call unless `NEXT_NOTIFY_TYPE`, `NEXT_NOTIFY_URL`, `NEXT_NOTIFY_TOKEN` or `NEXT_AI_API_KEY` opt in, and a plain `docker compose up` does not start it. `scripts/parallel-copy-db.ts` copies the database and `scripts/parallel-parity.ts` compares the two applications over HTTP; the whole procedure, the checklist and the rollback are in [Parallel run](docs/PARALLEL-RUN.md).
+
 A full JSON export and import are also available under **Settings → Data**. Imports are validated before replacing the current data. The export includes the badge definitions with their pictures and the redemptions; the points and badge awards are rebuilt from the imported work. Importing an older file that would remove existing redemptions or badges first asks you to confirm that.
 
 ## Optional integrations
