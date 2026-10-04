@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { useSettings } from '../../api/queries.ts';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
 import { getLanguage } from '../../i18n/runtime.ts';
-import { dayKeyInZone } from '../today/todayModel.ts';
+import { dayKeyInZone } from '@/lib/dayKey';
 import { useCycles } from './api.ts';
 import {
   exportUrl,

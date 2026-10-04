@@ -11,7 +11,7 @@ import { useProfile } from '../../identity/index.ts';
 import { usePersistedFilter } from '../../hooks/usePersistedFilter.ts';
 import { useOccurrences } from '../today/api.ts';
 import { RecordWorkDialog } from '../today/RecordWorkDialog.tsx';
-import { addDaysKey, dayKeyInZone } from '../today/todayModel.ts';
+import { addDays, dayKeyInZone } from '@/lib/dayKey';
 import {
   compactDate,
   datedWeekday,
@@ -32,7 +32,7 @@ export function MobileTasksPage({ now }: { now?: Date }) {
   const [hiddenRoomIds, setHiddenRoomIds, resetRooms] = usePersistedFilter<string[]>('mobileTasks.rooms', profile?._id ?? null, []);
   useFilterReset(() => { resetWeeks(); resetRooms(); }, weeks !== 1 || hiddenRoomIds.length > 0);
   const from = dayKeyInZone(now ?? new Date(), settings.data?.timezone ?? 'Europe/Amsterdam');
-  const to = addDaysKey(from, weeks * 7 - 1);
+  const to = addDays(from, weeks * 7 - 1);
   const cycleWeek = settings.data ? weekIndexFor(from, settings.data.cycleAnchorDate) + 1 : null;
   const occurrences = useOccurrences(from, to, settings.isSuccess);
   const rows = useMemo(() => {
@@ -154,8 +154,8 @@ export function MobileTasksPage({ now }: { now?: Date }) {
       ) : (
         <div className="grid gap-5">
           {Array.from({ length: weeks }, (_, block) => {
-            const blockStart = addDaysKey(from, block * 7);
-            const blockEnd = addDaysKey(blockStart, 6);
+            const blockStart = addDays(from, block * 7);
+            const blockEnd = addDays(blockStart, 6);
             const inBlock = (items: TaskOverviewRow[]) => items.filter((row) => row.periodStart === blockStart);
             const mine = inBlock(visible.mine);
             const unassigned = inBlock(visible.unassigned);

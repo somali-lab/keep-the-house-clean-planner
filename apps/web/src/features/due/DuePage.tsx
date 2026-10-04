@@ -15,7 +15,7 @@ import { useProfile } from '../../identity/index.ts';
 import { shortDate } from '../today/OccurrenceItem.tsx';
 import { CompletionChoiceDialog, useAssigneeChoice } from '../today/CompletionChoiceDialog.tsx';
 import { RecordWorkDialog } from '../today/RecordWorkDialog.tsx';
-import { dayKeyInZone } from '../today/todayModel.ts';
+import { dayKeyInZone } from '@/lib/dayKey';
 import { useDue, useDueActions, type DueItemView } from './api.ts';
 
 const MONTHS = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];

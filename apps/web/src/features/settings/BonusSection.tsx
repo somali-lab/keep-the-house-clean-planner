@@ -12,7 +12,7 @@ import { api, ApiRequestError } from '../../api/index.ts';
 import { queryKeys } from '../../api/queries.ts';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
-import { dayKeyInZone } from '../today/todayModel.ts';
+import { dayKeyInZone } from '@/lib/dayKey';
 import { Field, FormActions, FormMessage, listRowClass, SettingsCardHeader, settingsCardClass } from './SettingsCard.tsx';
 
 type Message = { kind: 'status' | 'alert'; text: string } | null;

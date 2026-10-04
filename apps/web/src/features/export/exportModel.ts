@@ -1,6 +1,6 @@
 import type { Cycle } from '@huishoudplanner/shared';
 import type { Language } from '../../i18n/runtime.ts';
-import { addDaysKey } from '../today/todayModel.ts';
+import { addDays } from '@/lib/dayKey';
 
 type CycleRange = Pick<Cycle, 'startDate' | 'endDate'>;
 
@@ -21,7 +21,7 @@ export function isoWeekLabel(dayKey: string): string {
 
 export function mondayOfDay(dayKey: string): string {
   const weekday = utcDate(dayKey).getUTCDay();
-  return addDaysKey(dayKey, -((weekday + 6) % 7));
+  return addDays(dayKey, -((weekday + 6) % 7));
 }
 
 export function isGenerated(dayKey: string, cycles: CycleRange[]): boolean {
@@ -40,14 +40,14 @@ export const WEEK_OPTION_COUNT = 12;
 export function weekOptions(todayKey: string, count = WEEK_OPTION_COUNT): WeekOption[] {
   const first = mondayOfDay(todayKey);
   return Array.from({ length: count }, (_, i) => {
-    const monday = addDaysKey(first, i * 7);
-    return { label: isoWeekLabel(monday), monday, sunday: addDaysKey(monday, 6) };
+    const monday = addDays(first, i * 7);
+    return { label: isoWeekLabel(monday), monday, sunday: addDays(monday, 6) };
   });
 }
 
 /** Every week of the range must lie in a generated cycle (cycles align with Monday-based weeks). */
 export function rangeGenerated(startMonday: string, weeks: number, cycles: CycleRange[]): boolean {
-  return Array.from({ length: weeks }, (_, i) => addDaysKey(startMonday, i * 7)).every((m) => isGenerated(m, cycles));
+  return Array.from({ length: weeks }, (_, i) => addDays(startMonday, i * 7)).every((m) => isGenerated(m, cycles));
 }
 
 export type ExportRange = 'day' | '1' | '2' | '4' | 'due';
