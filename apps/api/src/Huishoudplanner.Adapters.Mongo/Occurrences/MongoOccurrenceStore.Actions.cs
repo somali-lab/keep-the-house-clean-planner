@@ -52,6 +52,8 @@ internal sealed partial class MongoOccurrenceStore
             filter.Add("status", OccurrenceNames.ToWire(status));
         }
 
+        var descending = query.Order == OccurrenceOrder.Descending;
+        var beyond = descending ? "$lt" : "$gt";
         var clauses = new BsonArray { filter };
         if (query.After is { } after)
         {
@@ -59,9 +61,9 @@ internal sealed partial class MongoOccurrenceStore
             var id = ObjectIdConverter.Parse(after.Id);
             clauses.Add(new BsonDocument("$or", new BsonArray
             {
-                new BsonDocument("date", new BsonDocument("$gt", date)),
-                new BsonDocument { { "date", date }, { "taskNameSnapshot", new BsonDocument("$gt", after.TaskName) } },
-                new BsonDocument { { "date", date }, { "taskNameSnapshot", after.TaskName }, { "_id", new BsonDocument("$gt", id) } },
+                new BsonDocument("date", new BsonDocument(beyond, date)),
+                new BsonDocument { { "date", date }, { "taskNameSnapshot", new BsonDocument(beyond, after.TaskName) } },
+                new BsonDocument { { "date", date }, { "taskNameSnapshot", after.TaskName }, { "_id", new BsonDocument(beyond, id) } },
             }));
         }
 
@@ -69,8 +71,11 @@ internal sealed partial class MongoOccurrenceStore
         {
             var combined = new BsonDocument("$and", clauses);
             var find = MongoTransactionContext.Session is { } session ? occurrences.Find(session, combined) : occurrences.Find(combined);
+            var sort = descending
+                ? Builders<BsonDocument>.Sort.Descending("date").Descending("taskNameSnapshot").Descending("_id")
+                : Builders<BsonDocument>.Sort.Ascending("date").Ascending("taskNameSnapshot").Ascending("_id");
             var documents = await find
-                .Sort(Builders<BsonDocument>.Sort.Ascending("date").Ascending("taskNameSnapshot").Ascending("_id"))
+                .Sort(sort)
                 .Limit(query.Take)
                 .ToListAsync(cancellationToken)
                 .ConfigureAwait(false);

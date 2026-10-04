@@ -30,26 +30,31 @@ namespace Huishoudplanner.Application.Tests.Generation
                 return Task.FromResult<OneOf<IReadOnlyList<Occurrence>, PortError>>(failure);
             }
 
-            IReadOnlyList<Occurrence> page = [.. Items
+            var matching = Items
                 .Where(o => o.Date >= query.From && o.Date < query.ToExclusive)
                 .Where(o => query.AssigneeId is null || o.AssigneeId == query.AssigneeId)
-                .Where(o => query.Status is null || o.Status == query.Status)
-                .OrderBy(o => o.Date).ThenBy(o => o.TaskNameSnapshot, StringComparer.Ordinal).ThenBy(o => o.Id, StringComparer.Ordinal)
-                .Where(o => query.After is null || After(o, query.After))
+                .Where(o => query.Status is null || o.Status == query.Status);
+            var descending = query.Order == OccurrenceOrder.Descending;
+            var ordered = descending
+                ? matching.OrderByDescending(o => o.Date).ThenByDescending(o => o.TaskNameSnapshot, StringComparer.Ordinal).ThenByDescending(o => o.Id, StringComparer.Ordinal)
+                : matching.OrderBy(o => o.Date).ThenBy(o => o.TaskNameSnapshot, StringComparer.Ordinal).ThenBy(o => o.Id, StringComparer.Ordinal);
+            IReadOnlyList<Occurrence> page = [.. ordered
+                .Where(o => query.After is null || Compare(o, query.After) * (descending ? -1 : 1) > 0)
                 .Take(query.Take)];
             return Task.FromResult<OneOf<IReadOnlyList<Occurrence>, PortError>>(OneOf<IReadOnlyList<Occurrence>, PortError>.FromT0(page));
         }
 
-        private static bool After(Occurrence o, OccurrenceCursor cursor)
+        /// <summary>Positive when the occurrence sorts after the cursor in ascending order.</summary>
+        private static int Compare(Occurrence o, OccurrenceCursor cursor)
         {
             var byDate = o.Date.CompareTo(cursor.Date);
             if (byDate != 0)
             {
-                return byDate > 0;
+                return byDate;
             }
 
             var byName = string.CompareOrdinal(o.TaskNameSnapshot, cursor.TaskName);
-            return byName != 0 ? byName > 0 : string.CompareOrdinal(o.Id, cursor.Id) > 0;
+            return byName != 0 ? byName : string.CompareOrdinal(o.Id, cursor.Id);
         }
 
         public Task<OneOf<Occurrence, NotFound, OccurrenceStateChanged, PortError>> UpdateAsync(
