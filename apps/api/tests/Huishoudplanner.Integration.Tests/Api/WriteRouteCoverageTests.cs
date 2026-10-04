@@ -215,6 +215,11 @@ public sealed class WriteRouteCoverageTests(AuditCoverageHarness h) : IClassFixt
             status.Should().Be(HttpStatusCode.Created, booked.ToString());
             return new(HttpMethod.Delete, $"/api/v2/points/redemptions/{booked.GetProperty("id").GetString()}", null, h.P1);
         }, "points", "delete", Idempotent: true), // a second undo is a 404 and writes nothing
+        new("POST /api/v2/badges", Kind.Audited, Fixed(h => new(HttpMethod.Post, "/api/v2/badges", new { name = "Schoonmaker", rule = new { type = "executions", taskIds = new[] { h.Weekly }, threshold = 1 } }, h.Admin)), "badge", "create"), // the awards the new badge earns are derived state, audited by the one badgeAward summary entry of the evaluation that follows
+        new("PATCH /api/v2/badges/{id}", Kind.Audited, async h => new(HttpMethod.Patch, $"/api/v2/badges/{await CreateAsync(h, "/api/v2/badges", new { name = "Poetser", rule = new { type = "executions", taskIds = new[] { h.Weekly }, threshold = 50 } }, h.Admin)}", new { name = "Poetskoning", rule = new { type = "executions", taskIds = new[] { h.Weekly }, threshold = 1 } }, h.Admin), "badge", "update", Idempotent: true),
+        new("DELETE /api/v2/badges/{id}", Kind.Audited, async h => new(HttpMethod.Delete, $"/api/v2/badges/{await CreateAsync(h, "/api/v2/badges", new { name = "Tijdelijk", rule = new { type = "executions", taskIds = new[] { h.Weekly }, threshold = 1 } }, h.Admin)}", null, h.Admin), "badge", "delete", Idempotent: true),
+        new("POST /api/v2/badges/examples", Kind.Audited, Fixed(h => new(HttpMethod.Post, "/api/v2/badges/examples", new { language = "nl" }, h.Admin)), "badge", "create", Idempotent: true),
+
         new("DELETE /api/v2/stats", Kind.Audited, Fixed(h => new(HttpMethod.Delete, "/api/v2/stats", null, h.Admin)), "settings", "reset", Covers: [MongoCollections.Occurrences, MongoCollections.Tasks, MongoCollections.Cycles]), // one summary entry stands for every document the reset touches // not idempotent by design (as in Node): a reset that finds nothing to reset still records its counts as one audit entry
 
         // The only deliberately unaudited writes. Both only ever delete audit entries; neither may touch other state.

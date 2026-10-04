@@ -1,4 +1,5 @@
 using Huishoudplanner.Domain.Audit;
+using Huishoudplanner.Domain.Badges;
 using Huishoudplanner.Domain.Calendar;
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Generation;
@@ -24,7 +25,8 @@ public sealed class StatisticsService(
     ForResettingStatistics resetter,
     ForRunningTransactions transactions,
     ForRecordingAudit audit,
-    TimeProvider time) : IStatisticsService
+    TimeProvider time,
+    IBadgeAwardService badges) : IStatisticsService
 {
     /// <summary>The most calendar weeks a period may span (<c>statsCyclesQuerySchema</c>: <c>weeks</c> 1 to 3).</summary>
     public const int MaxWeeks = 3;
@@ -186,6 +188,13 @@ public sealed class StatisticsService(
     {
         ArgumentNullException.ThrowIfNull(actor);
         var ran = await transactions.RunAsync(ct => ResetInTransactionAsync(actor, before, ct), cancellationToken).ConfigureAwait(false);
+        if (ran.IsT0 && ran.AsT0.IsT0)
+        {
+            // The awards follow the history they are derived from (ADR-0014): they are rebuilt from what remains, after the reset has committed.
+            // A failure there is logged and never fails the reset; the next reconciliation repairs the awards.
+            await badges.ReconcileSafelyAsync(AuditActor.From(actor), BadgeEvalTrigger.Reset, null, cancellationToken).ConfigureAwait(false);
+        }
+
         return ran.Match<OneOf<StatisticsResetResult, BeforeInFuture, SettingsMissing, ConflictError, PortError>>(
             outcome => outcome.Match<OneOf<StatisticsResetResult, BeforeInFuture, SettingsMissing, ConflictError, PortError>>(
                 result => result, future => future, missing => missing, error => error),

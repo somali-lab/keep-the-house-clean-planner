@@ -111,6 +111,14 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         return this;
     }
 
+    /// <summary>Counts the read commands of the application's MongoDB client (see <see cref="ReadCounter"/>); the production client is untouched without it.</summary>
+    public ApiFactory WithReadCounter(ReadCounter counter)
+    {
+        ArgumentNullException.ThrowIfNull(counter);
+        overrides.Add(services => services.AddSingleton<IMongoClientSettingsCustomizer>(new ReadCounterCustomizer(counter)));
+        return this;
+    }
+
     /// <summary>Replaces the registration of a driven port with a fake.</summary>
     public ApiFactory WithPort<TPort>(TPort fake)
         where TPort : class

@@ -55,6 +55,10 @@ public sealed class EndpointPolicyAuditTests
         ["POST /api/v2/occurrences"] = AuthorizationPolicies.ActorPolicy,
         ["POST /api/v2/occurrences/one-off"] = AuthorizationPolicies.ActorPolicy,
         ["POST /api/v2/occurrences/{id}/retraction"] = AuthorizationPolicies.ActorPolicy,
+        ["POST /api/v2/badges"] = AuthorizationPolicies.AdminPolicy,
+        ["POST /api/v2/badges/examples"] = AuthorizationPolicies.AdminPolicy,
+        ["PATCH /api/v2/badges/{id}"] = AuthorizationPolicies.AdminPolicy,
+        ["DELETE /api/v2/badges/{id}"] = AuthorizationPolicies.AdminPolicy,
 
         ["POST /api/v2/cycle-plans/{id}/activation"] = AuthorizationPolicies.PlannerPolicy,
         ["POST /api/v2/ai/test"] = AuthorizationPolicies.PlannerPolicy,
@@ -134,6 +138,20 @@ public sealed class EndpointPolicyAuditTests
         var due = EndpointsOf(factory).Single(e => e.RoutePattern.RawText == "/api/v2/due");
 
         due.Metadata.GetOrderedMetadata<IAuthorizeData>().Should().BeEmpty("routes/due.ts has no guard");
+    }
+
+    [Theory]
+    [InlineData("/api/v2/badges")]
+    [InlineData("/api/v2/badges/awards")]
+    [InlineData("/api/v2/badges/progress")]
+    [InlineData("/api/v2/badges/{id}/image")]
+    public void TheBadgeReads_stayOpenLikeTheNodeRoutes(string route)
+    {
+        using var factory = ApiFactory.WithoutDatabase();
+
+        var read = EndpointsOf(factory).Single(e => e.RoutePattern.RawText == route && e.Metadata.GetMetadata<HttpMethodMetadata>()!.HttpMethods.Contains(HttpMethods.Get));
+
+        read.Metadata.GetOrderedMetadata<IAuthorizeData>().Should().BeEmpty("routes/badges.ts reads need no profile");
     }
 
     [Theory]

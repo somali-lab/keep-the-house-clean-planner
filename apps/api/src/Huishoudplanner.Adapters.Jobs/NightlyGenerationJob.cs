@@ -10,7 +10,7 @@ namespace Huishoudplanner.Adapters.Jobs;
 /// The nightly run at 03:00 (requirements 4.10), attributed to the system: the generation of the current and the next cycle, followed by the
 /// reconciliation of the points ledger (<see cref="INightlyService"/>, ADR-0011), which repairs drift between an occurrence and its entry within a
 /// day. A reconciliation that fails is logged by the use case and never fails the run. The bonus step (slice 4.2) and the badge step (slice 4.5)
-/// join the same reconciliation. The name stays <c>nightly-generation</c>, the stable tag of the run counter; the manual generation of the planners
+/// are part of the same reconciliation. The name stays <c>nightly-generation</c>, the stable tag of the run counter; the manual generation of the planners
 /// is a separate trigger that never reconciles.
 /// </summary>
 public sealed partial class NightlyGenerationJob(ILogger<NightlyGenerationJob> logger) : IJob

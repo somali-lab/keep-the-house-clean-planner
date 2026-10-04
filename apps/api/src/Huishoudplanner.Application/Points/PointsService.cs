@@ -1,4 +1,5 @@
 using Huishoudplanner.Domain.Audit;
+using Huishoudplanner.Domain.Badges;
 using Huishoudplanner.Domain.Calendar;
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Occurrences;
@@ -13,8 +14,8 @@ namespace Huishoudplanner.Application.Points;
 
 /// <summary>
 /// The points ledger use cases (requirements 4.12, ADR-0011): the live sync of one execution entry, the reconciliation of the whole ledger and
-/// the two reads. Port of <c>domain/points.ts</c> for the execution entries and the bonuses; the redemptions (4.3) and the badge step
-/// (4.5) join the same reconciliation later.
+/// the two reads. Port of <c>domain/points.ts</c> for the execution entries and the bonuses; the badge awards (4.5, <see cref="IBadgeAwardService"/>) are
+/// evaluated after every sync and as the last, third transaction of the reconciliation.
 /// </summary>
 /// <remarks>
 /// <para>The Node server serialised every ledger write in one in-process queue because it had no transactions. Here every write is one transaction
@@ -33,12 +34,16 @@ public sealed class PointsService(
     ForRunningTransactions transactions,
     ForRecordingAudit audit,
     TimeProvider time,
-    ReconcileGate gate) : IPointsService, IExecutionPointsService
+    ReconcileGate gate,
+    IBadgeAwardService badges) : IPointsService, IExecutionPointsService
 {
     private const int UserPageSize = 200;
 
     /// <summary>The start of the message when the bonus step failed after the execution part of the run was committed.</summary>
     public const string BonusStepFailed = "points.bonus_step_failed: the execution entries are reconciled, the bonus step failed. ";
+
+    /// <summary>The start of the message when the badge step failed after the execution entries and the bonuses were committed.</summary>
+    public const string BadgeStepFailed = "points.badge_step_failed: the execution entries and the bonuses are reconciled, the badge step failed. ";
 
     // ---- reads
 
@@ -148,6 +153,66 @@ public sealed class PointsService(
     /// </summary>
     private async Task<TransactionOutcome<OneOf<SyncOutcome, PortError>>> SyncCoreAsync(AuditActor actor, string occurrenceId, PointsSyncReason reason, CancellationToken ct)
     {
+        var occurrenceRead = await occurrences.FindAsync(occurrenceId, ct).ConfigureAwait(false);
+        if (occurrenceRead.IsT2)
+        {
+            return Abort<SyncOutcome>(occurrenceRead.AsT2);
+        }
+
+        var storedRead = await entries.FindByKeyAsync(ExecutionPoints.Key(occurrenceId), ct).ConfigureAwait(false);
+        if (storedRead.IsT2)
+        {
+            return Abort<SyncOutcome>(storedRead.AsT2);
+        }
+
+        var occurrence = occurrenceRead.IsT0 ? occurrenceRead.AsT0 : null;
+        var before = storedRead.IsT0 ? storedRead.AsT0 : null;
+        var ledger = await SyncLedgerAsync(actor, occurrenceId, reason, occurrence, before, ct).ConfigureAwait(false);
+        // The badges do not need the settings, so they are evaluated also when the ledger could not be dated. A failure never fails the sync (ADR-0014).
+        if (ledger.ShouldCommit && BadgeScopeOf(occurrence, before, reason) is { } scope)
+        {
+            await badges.EvaluateAfterExecutionAsync(actor, scope, reason, ct).ConfigureAwait(false);
+        }
+
+        return ledger;
+    }
+
+    /// <summary>
+    /// Whose badges an execution sync can have changed (ADR-0014): the person the execution is credited to now and the one its ledger entry belonged
+    /// to. An undo, a retract or a correction of work that earned no ledger entry does not say who held it before, so then everybody is evaluated.
+    /// The task is known from the occurrence, or from the ledger entry of an occurrence that is gone. <see langword="null"/> when nobody is affected.
+    /// </summary>
+    private static BadgeEvaluationScope? BadgeScopeOf(Occurrence? occurrence, PointEntry? stored, PointsSyncReason reason)
+    {
+        var people = new HashSet<string>(StringComparer.Ordinal);
+        if (stored is not null)
+        {
+            people.Add(stored.PersonId);
+        }
+
+        if (occurrence is { Status: OccurrenceStatus.Done } && (occurrence.CompletedBy ?? occurrence.AssigneeId) is { } credited)
+        {
+            people.Add(credited);
+        }
+
+        var everybody = stored is null && reason is not (PointsSyncReason.Complete or PointsSyncReason.Recorded);
+        if (!everybody && people.Count == 0)
+        {
+            return null;
+        }
+
+        IReadOnlyCollection<string>? scoped = everybody ? null : people;
+        return occurrence is not null
+            ? new BadgeEvaluationScope(scoped, true, occurrence.TaskId)
+            : stored is not null
+                ? new BadgeEvaluationScope(scoped, true, stored.TaskId)
+                : new BadgeEvaluationScope(scoped);
+    }
+
+    /// <summary>The ledger part of the sync: makes the single entry match the occurrence, with one audit entry per real change.</summary>
+    private async Task<TransactionOutcome<OneOf<SyncOutcome, PortError>>> SyncLedgerAsync(
+        AuditActor actor, string occurrenceId, PointsSyncReason reason, Occurrence? occurrence, PointEntry? stored, CancellationToken ct)
+    {
         var read = await settings.GetAsync(ct).ConfigureAwait(false);
         if (read.IsT2)
         {
@@ -161,21 +226,8 @@ public sealed class PointsService(
         }
 
         var zone = DayKeys.FindZone(read.AsT0.Timezone);
-        var occurrenceRead = await occurrences.FindAsync(occurrenceId, ct).ConfigureAwait(false);
-        if (occurrenceRead.IsT2)
-        {
-            return Abort<SyncOutcome>(occurrenceRead.AsT2);
-        }
-
         var key = ExecutionPoints.Key(occurrenceId);
-        var storedRead = await entries.FindByKeyAsync(key, ct).ConfigureAwait(false);
-        if (storedRead.IsT2)
-        {
-            return Abort<SyncOutcome>(storedRead.AsT2);
-        }
-
-        var stored = storedRead.IsT0 ? storedRead.AsT0 : null;
-        var expected = occurrenceRead.IsT0 ? ExecutionPoints.Expect(ExecutionSource.From(occurrenceRead.AsT0), zone).Fields : null;
+        var expected = occurrence is not null ? ExecutionPoints.Expect(ExecutionSource.From(occurrence), zone).Fields : null;
         var now = Now();
 
         if (expected is null)
@@ -255,6 +307,11 @@ public sealed class PointsService(
             // The execution part is committed. The bonus step is a second transaction: when it fails the caller gets the failure, and the
             // execution entries, the defaulted task points and the snapshots stay as they are (a partial success, repaired by the next run).
             var bonusRan = await transactions.RunAsync(ct => BonusCoreAsync(actor, trigger, ct), cancellationToken).ConfigureAwait(false);
+
+            // The badge step (ADR-0014) is a third transaction, after the bonuses it counts. It runs also when the bonus step failed, and a failure of
+            // either is returned only now: the executions and the bonuses that were committed stay, whatever the badges do.
+            var badgeRan = await badges.ReconcileAsync(actor, BadgeTriggers.From(trigger), null, cancellationToken).ConfigureAwait(false);
+
             if (!bonusRan.TryPickT0(out var bonusInner, out var bonusRunFailure))
             {
                 return bonusRunFailure.Match<OneOf<PointsRecomputeResult, ConflictError, PortError>>(
@@ -265,6 +322,13 @@ public sealed class PointsService(
             if (!bonusInner.TryPickT0(out var bonus, out var bonusFailure))
             {
                 return new PortError(BonusStepFailed + bonusFailure.Message);
+            }
+
+            if (!badgeRan.TryPickT0(out _, out var badgeFailure))
+            {
+                return badgeFailure.Match<OneOf<PointsRecomputeResult, ConflictError, PortError>>(
+                    conflict => conflict,
+                    error => new PortError(BadgeStepFailed + error.Message));
             }
 
             var skipped = new HashSet<string>(execution.SkippedIds, StringComparer.Ordinal);
