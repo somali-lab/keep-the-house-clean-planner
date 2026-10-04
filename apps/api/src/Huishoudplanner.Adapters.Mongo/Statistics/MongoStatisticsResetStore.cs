@@ -87,7 +87,7 @@ internal sealed class MongoStatisticsResetStore : ForResettingStatistics
                 var reopenedTasks = await tasks.UpdateManyAsync(
                     session,
                     new BsonDocument("lastCompletedAt", new BsonDocument("$ne", BsonNull.Value)),
-                    new BsonDocument("$set", new BsonDocument { { "lastCompletedAt", BsonNull.Value }, { "updatedAt", now } }),
+                    EntityVersioning.Raise(new BsonDocument("$set", new BsonDocument { { "lastCompletedAt", BsonNull.Value }, { "updatedAt", now } })),
                     cancellationToken: cancellationToken).ConfigureAwait(false);
                 resetTasks = reopenedTasks.ModifiedCount;
             }
@@ -114,7 +114,7 @@ internal sealed class MongoStatisticsResetStore : ForResettingStatistics
                 await settings.UpdateOneAsync(
                     session,
                     new BsonDocument("_id", SettingsDocument.SingletonId),
-                    new BsonDocument("$set", new BsonDocument { { "bonusFloor", plan.BonusFloor.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) }, { "updatedAt", now } }),
+                    EntityVersioning.Raise(new BsonDocument("$set", new BsonDocument { { "bonusFloor", plan.BonusFloor.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) }, { "updatedAt", now } })),
                     cancellationToken: cancellationToken).ConfigureAwait(false);
             }
 

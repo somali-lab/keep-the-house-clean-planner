@@ -1,4 +1,5 @@
 using Huishoudplanner.Domain.Audit;
+using Huishoudplanner.Domain.Concurrency;
 using Huishoudplanner.Domain.Due;
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Ports.Driven;
@@ -37,16 +38,22 @@ internal sealed class FakeSettingsStore(HouseholdSettings? initial) : ForStoring
             Document is null ? new SettingsMissing() : Document);
     }
 
-    public Task<OneOf<HouseholdSettings, SettingsMissing, PortError>> UpdateAsync(SettingsChanges changes, CancellationToken cancellationToken)
+    public Task<OneOf<HouseholdSettings, SettingsMissing, PortError, PreconditionFailed>> UpdateAsync(
+        SettingsChanges changes, CancellationToken cancellationToken, int? expectedVersion = null)
     {
         if (Document is null)
         {
-            return Task.FromResult<OneOf<HouseholdSettings, SettingsMissing, PortError>>(new SettingsMissing());
+            return Task.FromResult<OneOf<HouseholdSettings, SettingsMissing, PortError, PreconditionFailed>>(new SettingsMissing());
+        }
+
+        if (EntityVersion.Check(expectedVersion, Document.Version) is { } stale)
+        {
+            return Task.FromResult<OneOf<HouseholdSettings, SettingsMissing, PortError, PreconditionFailed>>(stale);
         }
 
         Writes++;
-        Document = changes.ApplyTo(Document) with { UpdatedAt = writeTime };
-        return Task.FromResult<OneOf<HouseholdSettings, SettingsMissing, PortError>>(Document);
+        Document = changes.ApplyTo(Document) with { UpdatedAt = writeTime, Version = Document.Version + 1 };
+        return Task.FromResult<OneOf<HouseholdSettings, SettingsMissing, PortError, PreconditionFailed>>(Document);
     }
 
     public Task<OneOf<bool, PortError>> InsertIfMissingAsync(HouseholdSettings settings, CancellationToken cancellationToken)

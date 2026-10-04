@@ -33,9 +33,9 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import type { components } from '../../api/v2/schema';
-import { api, apiV2, ApiRequestError, unwrap } from '../../api/index.ts';
+import { apiV2, ApiRequestError, ifMatch, isStaleEntity, removeFromList, replaceInList, unwrap } from '../../api/index.ts';
 import { queryKeys, useSettings } from '../../api/queries.ts';
-import { useLimits, useRooms, useTasks, type Task } from '../../api/v2/queries.ts';
+import { tasksKey, toTask, useLimits, useRooms, useTasks, type Task } from '../../api/v2/queries.ts';
 import { format, t } from '../../i18n/nl.ts';
 import { getLanguage } from '../../i18n/runtime.ts';
 import { Avatar } from '../../identity/Avatar.tsx';
@@ -109,24 +109,51 @@ export function TasksPage() {
       [queryKeys.tasks, ['due'], ['occurrences']].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
     );
 
+  // A write on a task carries the version of the task as the person saw it (ADR-0022). When it is stale (412) nothing was written: read
+  // the list again, so that the next save carries the stored version, and leave the person's edit where it is.
+  const rereadTask = async (id: string): Promise<Task | undefined> => {
+    await invalidateTasks();
+    return queryClient.getQueryData<Task[]>(tasksKey)?.find((task) => task.id === id);
+  };
+
   const saveTask = useMutation({
-    mutationFn: async ({ id, input }: { id?: string; input: TaskBody }) => {
+    mutationFn: async ({ task, input }: { task?: Task; input: TaskBody }) => {
       // The body is complete as the API documents it; `points` is left out when the server should default it.
       const body = input as unknown as UpdateTaskRequest;
-      return id
-        ? (await unwrap(apiV2.PATCH('/api/v2/tasks/{id}', { params: { path: { id } }, body }))).data
+      return task
+        ? (await unwrap(apiV2.PATCH('/api/v2/tasks/{id}', { params: { path: { id: task.id }, header: ifMatch(task) }, body }))).data
         : (await unwrap(apiV2.POST('/api/v2/tasks', { body: body as unknown as CreateTaskRequest }))).data;
     },
-    onSuccess: async () => {
+    onSuccess: async (saved, { task }) => {
+      if (task) replaceInList(queryClient, tasksKey, toTask(saved as Schemas['TaskResponse']));
       setEditing(null);
       await invalidateTasks();
+    },
+    onError: async (error, { task }) => {
+      if (!task || !isStaleEntity(error)) return;
+      const fresh = await rereadTask(task.id);
+      // Only the version (and the baseline of the form) moves on; the form keeps what the person typed.
+      if (fresh) setEditing((current) => (current?.mode === 'edit' && current.task.id === fresh.id ? { mode: 'edit', task: fresh } : current));
     },
   });
 
   const setActive = useMutation({
-    mutationFn: async ({ id, active }: { id: string; active: boolean }) =>
-      (await unwrap(apiV2.PATCH('/api/v2/tasks/{id}', { params: { path: { id } }, body: { active } as unknown as UpdateTaskRequest }))).data,
-    onSuccess: invalidateTasks,
+    mutationFn: async ({ task, active }: { task: Task; active: boolean }) =>
+      (
+        await unwrap(
+          apiV2.PATCH('/api/v2/tasks/{id}', {
+            params: { path: { id: task.id }, header: ifMatch(task) },
+            body: { active } as unknown as UpdateTaskRequest,
+          }),
+        )
+      ).data,
+    onSuccess: async (saved) => {
+      replaceInList(queryClient, tasksKey, toTask(saved));
+      await invalidateTasks();
+    },
+    onError: async (error, { task }) => {
+      if (isStaleEntity(error)) await rereadTask(task.id);
+    },
   });
 
   const bulk = useMutation({
@@ -142,15 +169,22 @@ export function TasksPage() {
     onSuccess: invalidateTasks,
   });
 
-  // The v2 API deactivates tasks but cannot delete them yet (the delete needs the plans and badges), so this stays on the Node client.
   const removeTask = useMutation({
-    mutationFn: async (id: string) => (await api.delete<{ deleted: boolean }>(`/api/tasks/${id}`)).data,
-    onSuccess: async () => {
+    mutationFn: async (task: Task) =>
+      (await unwrap(apiV2.DELETE('/api/v2/tasks/{id}', { params: { path: { id: task.id }, header: ifMatch(task) } }))).data,
+    onSuccess: async (_deleted, task) => {
+      removeFromList<Task>(queryClient, tasksKey, task.id);
       setDeleting(null);
       await Promise.all([
         invalidateTasks(),
         queryClient.invalidateQueries({ queryKey: ['cycle-plans'] }),
       ]);
+    },
+    onError: async (error, task) => {
+      if (!isStaleEntity(error)) return;
+      const fresh = await rereadTask(task.id);
+      // The dialog asks again for the task as it is now; a task that is gone needs no delete.
+      setDeleting((current) => (current?.id === task.id ? (fresh ?? null) : current));
     },
   });
 
@@ -188,7 +222,7 @@ export function TasksPage() {
 
   const submit = (values: TaskFormValues) => {
     saveTask.mutate({
-      id: editing?.mode === 'edit' ? editing.task.id : undefined,
+      task: editing?.mode === 'edit' ? editing.task : undefined,
       input: toTaskInput(values),
     });
   };
@@ -294,24 +328,38 @@ export function TasksPage() {
               <DialogTitle>{format('tasks.deleteConfirmTitle', { name: deleting.name })}</DialogTitle>
               <DialogDescription>{t('tasks.deleteConfirmBody')}</DialogDescription>
             </DialogHeader>
-            {removeTask.isError && <p role="alert" className="text-sm text-destructive">{t('tasks.deleteError')}</p>}
+            {removeTask.isError && (
+              <p role="alert" className="text-sm text-destructive">
+                {isStaleEntity(removeTask.error) ? t('app.staleEntity') : t('tasks.deleteError')}
+              </p>
+            )}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setDeleting(null)}>{t('common.cancel')}</Button>
-              <Button type="button" variant="destructive" disabled={removeTask.isPending} onClick={() => removeTask.mutate(deleting.id)}>
+              <Button type="button" variant="destructive" disabled={removeTask.isPending} onClick={() => removeTask.mutate(deleting)}>
                 <Trash2 aria-hidden="true" />{t('tasks.delete')}
               </Button>
             </DialogFooter>
           </DialogContent>
         )}
       </Dialog>
-      {saveTask.isError &&
-        !(
-          saveTask.error instanceof ApiRequestError && saveTask.error.code === 'validation_error'
-        ) && (
-          <p role="alert" className="rounded-xl bg-destructive/10 p-4 text-destructive">
-            {t('app.error')}
-          </p>
-        )}
+      {saveTask.isError && isStaleEntity(saveTask.error) && (
+        <p role="alert" className="rounded-xl bg-destructive/10 p-4 text-destructive">
+          {t('app.staleEntity')}
+        </p>
+      )}
+      {setActive.isError && isStaleEntity(setActive.error) && (
+        <p role="alert" className="rounded-xl bg-destructive/10 p-4 text-destructive">
+          {t('app.staleEntity')}
+        </p>
+      )}
+      {((saveTask.isError &&
+        !isStaleEntity(saveTask.error) &&
+        !(saveTask.error instanceof ApiRequestError && saveTask.error.code === 'validation_error')) ||
+        (setActive.isError && !isStaleEntity(setActive.error))) && (
+        <p role="alert" className="rounded-xl bg-destructive/10 p-4 text-destructive">
+          {t('app.error')}
+        </p>
+      )}
 
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="flex min-w-0 flex-col gap-6">
@@ -341,7 +389,7 @@ export function TasksPage() {
                 saveTask.reset();
                 setEditing({ mode: 'edit', task });
               }}
-              onToggleActive={(task) => setActive.mutate({ id: task.id, active: !task.active })}
+              onToggleActive={(task) => setActive.mutate({ task, active: !task.active })}
               onDelete={setDeleting}
               onBulkDeactivate={() => {
                 if (

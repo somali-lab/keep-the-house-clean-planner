@@ -178,7 +178,8 @@ public sealed class SettingsBonusEndpointTests(MongoContainerFixture mongo)
             h.Patch(Bonuses($$"""{ "weekDone": {{weekDone}}, "weekOnTime": 3, "cycleDone": 20, "cycleOnTime": 10 }"""))));
 
         var statuses = answers.Select(a => a.StatusCode).ToList();
-        statuses.Should().OnlyContain(s => s == HttpStatusCode.OK || s == HttpStatusCode.Conflict);
+        // Every writer sends the ETag it read, so the losers are told 412 before the schedule compare-and-set is reached (ADR-0022).
+        statuses.Should().OnlyContain(s => s == HttpStatusCode.OK || s == HttpStatusCode.Conflict || s == HttpStatusCode.PreconditionFailed);
         statuses.Should().Contain(HttpStatusCode.OK);
         foreach (var conflict in answers.Where(a => a.StatusCode == HttpStatusCode.Conflict))
         {

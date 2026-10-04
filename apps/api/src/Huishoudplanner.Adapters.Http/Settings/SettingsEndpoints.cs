@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Huishoudplanner.Adapters.Http.Concurrency;
 using Huishoudplanner.Adapters.Http.Identity;
 using Huishoudplanner.Adapters.Http.OpenApi;
 using Huishoudplanner.Adapters.Http.Problems;
@@ -18,19 +19,24 @@ public static class SettingsEndpoints
         ArgumentNullException.ThrowIfNull(routes);
 
         // Open like the Node read: no policy, no actor needed.
-        routes.MapGet("/api/v2/settings", async (ISettingsService settings, ILoggerFactory loggers, CancellationToken cancellationToken) =>
+        routes.MapGet("/api/v2/settings", async (HttpContext http, ISettingsService settings, ILoggerFactory loggers, CancellationToken cancellationToken) =>
             {
                 var result = await settings.GetAsync(cancellationToken);
                 return result.Match(
-                    view => Results.Ok(SettingsResponse.From(view)),
+                    view =>
+                    {
+                        ETags.Set(http.Response, view.Settings.Version);
+                        return Results.Ok(SettingsResponse.From(view));
+                    },
                     missing => ProblemResults.From(missing),
                     error => ProblemResults.From(error, Logger(loggers)));
             })
             .WithName("getSettings")
             .WithTags(OpenApiSetup.SettingsTag)
             .WithSummary("Returns the household settings.")
-            .WithDescription("Missing optional values are delivered as their defaults: no bonus schedule, EUR, 0 cents per point and automatic reward goals. The bonus schedule rows carry startsInFuture and bonusesInForce holds the amounts in force today, so the client computes nothing. The AI API key is never part of the settings.")
+            .WithDescription("Missing optional values are delivered as their defaults: no bonus schedule, EUR, 0 cents per point and automatic reward goals. The bonus schedule rows carry startsInFuture and bonusesInForce holds the amounts in force today, so the client computes nothing. The AI API key is never part of the settings. The ETag header carries the version of the settings; send it as If-Match when you change them.")
             .Produces<SettingsResponse>(StatusCodes.Status200OK)
+            .ReturnsETag()
             .ProducesProblem(StatusCodes.Status500InternalServerError);
 
         routes.MapPatch("/api/v2/settings", async (HttpContext http, ISettingsService settings, ILoggerFactory loggers, CancellationToken cancellationToken) =>
@@ -49,9 +55,13 @@ public static class SettingsEndpoints
                 }
 
                 // The policy guarantees an actor; the check only keeps the compiler honest.
-                var result = await settings.UpdateAsync(actor!, patch!, cancellationToken);
+                var result = await settings.UpdateAsync(actor!, patch!, cancellationToken, http.GetIfMatch());
                 return result.Match(
-                    view => Results.Ok(SettingsResponse.From(view)),
+                    view =>
+                    {
+                        ETags.Set(http.Response, view.Settings.Version);
+                        return Results.Ok(SettingsResponse.From(view));
+                    },
                     invalid => ProblemResults.From(invalid),
                     inUse => ProblemResults.Problem(
                         StatusCodes.Status409Conflict,
@@ -60,15 +70,18 @@ public static class SettingsEndpoints
                         new Dictionary<string, object?> { ["keys"] = inUse.Keys }),
                     conflict => ProblemResults.From(conflict),
                     missing => ProblemResults.From(missing),
-                    error => ProblemResults.From(error, Logger(loggers)));
+                    error => ProblemResults.From(error, Logger(loggers)),
+                    stale => ProblemResults.From(stale));
             })
             .RequireAdmin()
+            .RequireIfMatch()
             .Accepts<UpdateSettingsRequest>("application/json")
             .WithName("updateSettings")
             .WithTags(OpenApiSetup.SettingsTag)
             .WithSummary("Changes the given settings (administrators only).")
-            .WithDescription("Every field is optional and only the given ones change; a patch that changes nothing writes and audits nothing. periodBonuses sets the four bonus amounts from today on: the server writes a schedule row, and a client never sends the schedule. Amounts, currency, cents per point and goals equal to the ones in force change nothing. Removing an interval that tasks use is 409 interval_in_use (with the blocked keys in keys); when concurrent writers keep winning a schedule write the answer is 409 bonus_schedule_conflict. The timezone, the week start and the AI API key cannot be set.")
+            .WithDescription("Every field is optional and only the given ones change; a patch that changes nothing writes and audits nothing. periodBonuses sets the four bonus amounts from today on: the server writes a schedule row, and a client never sends the schedule. Amounts, currency, cents per point and goals equal to the ones in force change nothing. Removing an interval that tasks use is 409 interval_in_use (with the blocked keys in keys). Needs If-Match with the ETag of the settings you read: another version is 412 precondition_failed (also for a change that would change nothing, and before every other check), and a change that changes nothing keeps the version. A caller that holds the current ETag therefore never meets bonus_schedule_conflict, which remains as the second defence: 409 when the bonus schedule is written against a schedule that changed in between and the write keeps losing to concurrent ones. The timezone, the week start and the AI API key cannot be set.")
             .Produces<SettingsResponse>(StatusCodes.Status200OK)
+            .ReturnsETag()
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status403Forbidden)

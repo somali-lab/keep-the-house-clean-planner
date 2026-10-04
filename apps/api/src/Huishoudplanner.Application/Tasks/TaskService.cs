@@ -1,5 +1,6 @@
 using Huishoudplanner.Domain.Audit;
 using Huishoudplanner.Domain.Calendar;
+using Huishoudplanner.Domain.Concurrency;
 using Huishoudplanner.Domain.CyclePlans;
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Identity;
@@ -67,6 +68,17 @@ public sealed class TaskService(
             error => error);
     }
 
+    public async Task<OneOf<HouseholdTask, NotFound, ValidationErrors, PortError>> GetAsync(string id, CancellationToken cancellationToken)
+    {
+        if (!TaskRules.IsId(id))
+        {
+            return ValidationErrors.For("id", "invalid_object_id");
+        }
+
+        var found = await tasks.FindAsync(id, cancellationToken).ConfigureAwait(false);
+        return found.Match<OneOf<HouseholdTask, NotFound, ValidationErrors, PortError>>(task => task, notFound => notFound, error => error);
+    }
+
     public async Task<OneOf<HouseholdTask, ValidationErrors, ConflictError, PortError>> CreateAsync(Actor actor, CreateTaskCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(actor);
@@ -119,7 +131,8 @@ public sealed class TaskService(
             error => TransactionOutcome.Abort<OneOf<HouseholdTask, ValidationErrors, PortError>>(error));
     }
 
-    public async Task<OneOf<HouseholdTask, NotFound, ValidationErrors, ConflictError, PortError>> UpdateAsync(Actor actor, string id, TaskPatch patch, CancellationToken cancellationToken)
+    public async Task<OneOf<HouseholdTask, NotFound, ValidationErrors, ConflictError, PortError, PreconditionFailed>> UpdateAsync(
+        Actor actor, string id, TaskPatch patch, CancellationToken cancellationToken, int? expectedVersion = null)
     {
         ArgumentNullException.ThrowIfNull(actor);
         ArgumentNullException.ThrowIfNull(patch);
@@ -138,17 +151,18 @@ public sealed class TaskService(
             Name = patch.Name?.Trim(),
             Tags = patch.Tags is null ? null : TaskRules.NormaliseTags(patch.Tags),
         };
-        var ran = await transactions.RunAsync(ct => UpdateInTransactionAsync(actor, id, normalised, ct), cancellationToken).ConfigureAwait(false);
-        return ran.Match<OneOf<HouseholdTask, NotFound, ValidationErrors, ConflictError, PortError>>(
-            outcome => outcome.Match<OneOf<HouseholdTask, NotFound, ValidationErrors, ConflictError, PortError>>(
-                task => task, notFound => notFound, errors => errors, error => error),
+        var ran = await transactions.RunAsync(ct => UpdateInTransactionAsync(actor, id, normalised, expectedVersion, ct), cancellationToken).ConfigureAwait(false);
+        return ran.Match<OneOf<HouseholdTask, NotFound, ValidationErrors, ConflictError, PortError, PreconditionFailed>>(
+            outcome => outcome.Match<OneOf<HouseholdTask, NotFound, ValidationErrors, ConflictError, PortError, PreconditionFailed>>(
+                task => task, notFound => notFound, errors => errors, error => error, stale => stale),
             conflict => conflict,
             error => error);
     }
 
-    private async Task<TransactionOutcome<OneOf<HouseholdTask, NotFound, ValidationErrors, PortError>>> UpdateInTransactionAsync(Actor actor, string id, TaskPatch patch, CancellationToken ct)
+    private async Task<TransactionOutcome<OneOf<HouseholdTask, NotFound, ValidationErrors, PortError, PreconditionFailed>>> UpdateInTransactionAsync(
+        Actor actor, string id, TaskPatch patch, int? expectedVersion, CancellationToken ct)
     {
-        static TransactionOutcome<OneOf<HouseholdTask, NotFound, ValidationErrors, PortError>> Abort(OneOf<HouseholdTask, NotFound, ValidationErrors, PortError> value) =>
+        static TransactionOutcome<OneOf<HouseholdTask, NotFound, ValidationErrors, PortError, PreconditionFailed>> Abort(OneOf<HouseholdTask, NotFound, ValidationErrors, PortError, PreconditionFailed> value) =>
             TransactionOutcome.Abort(value);
 
         // As in the Node server, the references are checked before the task is looked up.
@@ -174,22 +188,24 @@ public sealed class TaskService(
             return Abort(findError);
         }
 
+        // The precondition is checked before the no-op rule: a stale If-Match on a patch that changes nothing is still a 412.
+        if (EntityVersion.Check(expectedVersion, before.Version) is { } stale)
+        {
+            return Abort(stale);
+        }
+
         var after = Apply(before, patch);
         var changes = ChangeSet.Between(TaskAudit.Fields(before), TaskAudit.Fields(after));
         if (changes.IsNoOp)
         {
-            return TransactionOutcome.Commit<OneOf<HouseholdTask, NotFound, ValidationErrors, PortError>>(before);
+            return TransactionOutcome.Commit<OneOf<HouseholdTask, NotFound, ValidationErrors, PortError, PreconditionFailed>>(before);
         }
 
-        var updated = await tasks.UpdateAsync(id, ChangesBetween(before, after), time.GetUtcNow(), ct).ConfigureAwait(false);
-        if (updated.TryPickT1(out var gone, out var updatedRest))
+        var updated = await tasks.UpdateAsync(id, ChangesBetween(before, after), time.GetUtcNow(), ct, expectedVersion).ConfigureAwait(false);
+        if (!updated.TryPickT0(out var task, out var updateFailure))
         {
-            return Abort(gone);
-        }
-
-        if (updatedRest.TryPickT1(out var updateError, out var task))
-        {
-            return Abort(updateError);
+            return Abort(updateFailure.Match<OneOf<HouseholdTask, NotFound, ValidationErrors, PortError, PreconditionFailed>>(
+                notFound => notFound, error => error, failed => failed));
         }
 
         var recorded = await RecordAsync(TaskAudit.ForChange(AuditActor.From(actor), id, changes), ct).ConfigureAwait(false);
@@ -207,7 +223,7 @@ public sealed class TaskService(
             }
         }
 
-        return TransactionOutcome.Commit<OneOf<HouseholdTask, NotFound, ValidationErrors, PortError>>(task);
+        return TransactionOutcome.Commit<OneOf<HouseholdTask, NotFound, ValidationErrors, PortError, PreconditionFailed>>(task);
     }
 
     /// <summary>
@@ -240,7 +256,8 @@ public sealed class TaskService(
         return updated.Match<OneOf<Success, PortError>>(_ => new Success(), error => error);
     }
 
-    public async Task<OneOf<Success, NotFound, ValidationErrors, ConflictError, PortError>> DeleteAsync(Actor actor, string id, CancellationToken cancellationToken)
+    public async Task<OneOf<Success, NotFound, ValidationErrors, ConflictError, PortError, PreconditionFailed>> DeleteAsync(
+        Actor actor, string id, CancellationToken cancellationToken, int? expectedVersion = null)
     {
         ArgumentNullException.ThrowIfNull(actor);
         if (!TaskRules.IsId(id))
@@ -248,10 +265,10 @@ public sealed class TaskService(
             return ValidationErrors.For("id", "invalid_object_id");
         }
 
-        var ran = await transactions.RunAsync(ct => DeleteInTransactionAsync(actor, id, ct), cancellationToken).ConfigureAwait(false);
-        return ran.Match<OneOf<Success, NotFound, ValidationErrors, ConflictError, PortError>>(
-            outcome => outcome.Match<OneOf<Success, NotFound, ValidationErrors, ConflictError, PortError>>(
-                done => done, notFound => notFound, conflict => conflict, error => error),
+        var ran = await transactions.RunAsync(ct => DeleteInTransactionAsync(actor, id, expectedVersion, ct), cancellationToken).ConfigureAwait(false);
+        return ran.Match<OneOf<Success, NotFound, ValidationErrors, ConflictError, PortError, PreconditionFailed>>(
+            outcome => outcome.Match<OneOf<Success, NotFound, ValidationErrors, ConflictError, PortError, PreconditionFailed>>(
+                done => done, notFound => notFound, conflict => conflict, error => error, stale => stale),
             conflict => conflict,
             error => error);
     }
@@ -261,9 +278,10 @@ public sealed class TaskService(
     /// server ran them one after the other): the plans, the task, then the badge rules, whose use case joins this transaction. Occurrences stay as
     /// they are.
     /// </summary>
-    private async Task<TransactionOutcome<OneOf<Success, NotFound, ConflictError, PortError>>> DeleteInTransactionAsync(Actor actor, string id, CancellationToken ct)
+    private async Task<TransactionOutcome<OneOf<Success, NotFound, ConflictError, PortError, PreconditionFailed>>> DeleteInTransactionAsync(
+        Actor actor, string id, int? expectedVersion, CancellationToken ct)
     {
-        static TransactionOutcome<OneOf<Success, NotFound, ConflictError, PortError>> Abort(OneOf<Success, NotFound, ConflictError, PortError> value) =>
+        static TransactionOutcome<OneOf<Success, NotFound, ConflictError, PortError, PreconditionFailed>> Abort(OneOf<Success, NotFound, ConflictError, PortError, PreconditionFailed> value) =>
             TransactionOutcome.Abort(value);
 
         var found = await tasks.FindAsync(id, ct).ConfigureAwait(false);
@@ -275,6 +293,11 @@ public sealed class TaskService(
         if (foundRest.TryPickT1(out var findError, out var task))
         {
             return Abort(findError);
+        }
+
+        if (EntityVersion.Check(expectedVersion, task.Version) is { } stale)
+        {
+            return Abort(stale);
         }
 
         var actorForAudit = AuditActor.From(actor);
@@ -294,14 +317,10 @@ public sealed class TaskService(
             }
 
             var replaced = await plans.ReplaceSlotsAsync(plan.Id, remaining, time.GetUtcNow(), ct).ConfigureAwait(false);
-            if (replaced.TryPickT1(out var gone, out var replacedRest))
+            if (!replaced.TryPickT0(out _, out var replaceFailure))
             {
-                return Abort(gone);
-            }
-
-            if (replacedRest.TryPickT1(out var replaceError, out _))
-            {
-                return Abort(replaceError);
+                return Abort(replaceFailure.Match<OneOf<Success, NotFound, ConflictError, PortError, PreconditionFailed>>(
+                    notFound => notFound, error => error, _ => new PortError("tasks.delete: an unconditional plan write reported a version conflict.")));
             }
 
             var recordedPlan = await audit.RecordAsync(CyclePlanAudit.ForTaskDelete(actorForAudit, plan.Id, task.Id, diff), ct).ConfigureAwait(false);
@@ -311,15 +330,11 @@ public sealed class TaskService(
             }
         }
 
-        var deleted = await tasks.DeleteAsync(task.Id, ct).ConfigureAwait(false);
-        if (deleted.TryPickT1(out var vanished, out var deletedRest))
+        var deleted = await tasks.DeleteAsync(task.Id, ct, expectedVersion).ConfigureAwait(false);
+        if (!deleted.TryPickT0(out _, out var deleteFailure))
         {
-            return Abort(vanished);
-        }
-
-        if (deletedRest.TryPickT1(out var deleteError, out _))
-        {
-            return Abort(deleteError);
+            return Abort(deleteFailure.Match<OneOf<Success, NotFound, ConflictError, PortError, PreconditionFailed>>(
+                notFound => notFound, error => error, failed => failed));
         }
 
         var recorded = await audit.RecordAsync(TaskAudit.ForDelete(actorForAudit, task), ct).ConfigureAwait(false);
@@ -330,7 +345,7 @@ public sealed class TaskService(
 
         var rules = await badges.RemoveTaskFromRulesAsync(actor, task.Id, ct).ConfigureAwait(false);
         return rules.Match(
-            _ => TransactionOutcome.Commit<OneOf<Success, NotFound, ConflictError, PortError>>(new Success()),
+            _ => TransactionOutcome.Commit<OneOf<Success, NotFound, ConflictError, PortError, PreconditionFailed>>(new Success()),
             rejected => Abort(new PortError("tasks.delete: the badge rules rejected the task id: " + string.Join(", ", rejected.Errors.Keys))),
             conflict => Abort(conflict),
             error => Abort(error));
@@ -411,14 +426,10 @@ public sealed class TaskService(
             }
 
             var updated = await tasks.UpdateAsync(before.Id, ChangesBetween(before, after), time.GetUtcNow(), ct).ConfigureAwait(false);
-            if (updated.TryPickT1(out var gone, out var updatedRest))
+            if (!updated.TryPickT0(out _, out var updateFailure))
             {
-                return Abort(gone);
-            }
-
-            if (updatedRest.TryPickT1(out var updateError, out _))
-            {
-                return Abort(updateError);
+                return Abort(updateFailure.Match<OneOf<int, NotFound, ValidationErrors, PortError>>(
+                    notFound => notFound, error => error, _ => new PortError("tasks.bulk: an unconditional write reported a version conflict.")));
             }
 
             var recorded = await RecordAsync(TaskAudit.ForChange(actorForAudit, before.Id, changes), ct).ConfigureAwait(false);

@@ -1,3 +1,4 @@
+using Huishoudplanner.Adapters.Http.Concurrency;
 using Huishoudplanner.Adapters.Http.Identity;
 using Huishoudplanner.Adapters.Http.Problems;
 using Huishoudplanner.Domain.Identity;
@@ -46,6 +47,7 @@ public static class RedemptionEndpoints
 
         routes.MapDelete(Path + "/{id}", UndoAsync)
             .RequireActor()
+            .WithoutIfMatch("Takes back a booked ledger entry; a ledger entry is an event that is never edited, and a second undo is a 404 that writes nothing.")
             .WithName("undoRedemption")
             .WithTags(PointsEndpoints.PointsTag)
             .WithSummary("Takes a redemption back.")

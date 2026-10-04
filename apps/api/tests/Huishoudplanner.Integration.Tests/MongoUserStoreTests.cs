@@ -155,7 +155,7 @@ public sealed class MongoUserStoreTests(MongoContainerFixture mongo) : IAsyncLif
         var user = (await store.InsertAsync(Anna(), Now, Ct)).AsT0;
 
         var stored = await users.Find(Builders<BsonDocument>.Filter.Eq("_id", ObjectId.Parse(user.Id))).FirstAsync(Ct);
-        stored.Names.Should().Equal("_id", "name", "color", "active", "role", "unavailableWeekdays", "dailyBudgetMinutes", "maxDailyMinutes", "browserNotifications", "createdAt", "updatedAt");
+        stored.Names.Should().Equal("_id", "name", "color", "active", "role", "unavailableWeekdays", "dailyBudgetMinutes", "maxDailyMinutes", "browserNotifications", "createdAt", "updatedAt", "version");
         stored["unavailableWeekdays"].AsBsonArray.Select(d => d.BsonType).Should().OnlyContain(t => t == BsonType.Int32);
         stored["browserNotifications"].ToJson().Should().Be(BsonDocument.Parse("{ enabled: false, times: [] }").ToJson());
         stored["createdAt"].ToUniversalTime().Should().Be(Now.UtcDateTime);
@@ -324,7 +324,7 @@ public sealed class MongoUserStoreTests(MongoContainerFixture mongo) : IAsyncLif
             (await dead.CountAsync(Ct)).Match(_ => "", e => e.Message),
             (await dead.CountOtherActiveAdminsAsync(id, Ct)).Match(_ => "", e => e.Message),
             (await dead.InsertAsync(Anna(), Now, Ct)).Match(_ => "", e => e.Message),
-            (await dead.UpdateAsync(id, new UserPatch(Name: "X"), Now, Ct)).Match(_ => "", _ => "", e => e.Message),
+            (await dead.UpdateAsync(id, new UserPatch(Name: "X"), Now, Ct)).Match(_ => "", _ => "", e => e.Message, _ => ""),
         };
 
         results.Should().OnlyContain(m => m.StartsWith("users.", StringComparison.Ordinal) && !m.Contains("127.0.0.1", StringComparison.Ordinal));

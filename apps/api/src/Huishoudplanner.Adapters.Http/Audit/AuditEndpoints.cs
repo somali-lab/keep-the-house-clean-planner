@@ -1,3 +1,4 @@
+using Huishoudplanner.Adapters.Http.Concurrency;
 using Huishoudplanner.Adapters.Http.Identity;
 using Huishoudplanner.Adapters.Http.OpenApi;
 using Huishoudplanner.Adapters.Http.Problems;
@@ -29,6 +30,7 @@ public static class AuditEndpoints
 
         routes.MapDelete(Path, ClearAsync)
             .RequireAdmin()
+            .WithoutIfMatch("Clears the whole history; there is no single entity to version.")
             .WithName("clearAuditLog")
             .WithTags(OpenApiSetup.AuditTag)
             .WithSummary("Clears the complete history (administrators).")

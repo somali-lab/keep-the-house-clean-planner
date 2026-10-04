@@ -86,6 +86,8 @@ public sealed class TaskDeleteEndpointTests(MongoContainerFixture mongo)
         var only = await h.AddBadgeAsync(new { name = "Eén taak", rule = Executions([h.Toilet], 1) });
         var bothId = Str(both, "id");
         var onlyId = Str(only, "id");
+        var badgeStore = h.Database.GetCollection<BsonDocument>("badges");
+        var (bothBefore, onlyBefore) = (await badgeStore.VersionAsync(ObjectId.Parse(bothId)), await badgeStore.VersionAsync(ObjectId.Parse(onlyId)));
         (await h.CompleteAtAsync(BadgeHarness.Wednesday, await h.OccurrenceAsync("2026-09-16", h.Toilet))).Status.Should().Be(HttpStatusCode.OK);
         (await h.HoldersAsync(onlyId)).Keys.Should().Equal("p1");
 
@@ -103,6 +105,8 @@ public sealed class TaskDeleteEndpointTests(MongoContainerFixture mongo)
         (await h.HoldersAsync(onlyId)).Should().BeEmpty();
         var updates = (await h.AuditAsync("badge")).Where(e => e["action"].AsString == "update").ToList();
         updates.Should().HaveCount(2);
+        (await badgeStore.VersionAsync(ObjectId.Parse(bothId))).Should().BeGreaterThan(bothBefore, "removing the task from the rule changed the badge");
+        (await badgeStore.VersionAsync(ObjectId.Parse(onlyId))).Should().BeGreaterThan(onlyBefore, "switching the rule off changed the badge");
         updates.Should().OnlyContain(e => ReasonOf(e) == "task_deleted" && e["meta"]["taskId"].AsObjectId.ToString() == h.Toilet);
         (await h.AuditAsync("badgeAward")).Should().Contain(e => e["action"].AsString == "recompute" && e["meta"]["trigger"].AsString == "badge");
 

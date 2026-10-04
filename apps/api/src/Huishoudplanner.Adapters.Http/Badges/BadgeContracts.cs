@@ -9,7 +9,7 @@ public sealed record BadgeRuleResponse(string Type, [property: JsonIgnore(Condit
 /// <summary>Where the stored picture of a badge is served from, and what identifies its bytes; the bytes themselves are never in a badge.</summary>
 public sealed record BadgeImageResponse(string ContentType, int Size, string Hash, string Url);
 
-/// <summary>A badge as the API shows it.</summary>
+/// <summary>A badge as the API shows it. <c>version</c> is the concurrency version of the badge (the number inside its ETag).</summary>
 public sealed record BadgeResponse(
     string Id,
     string Name,
@@ -19,7 +19,8 @@ public sealed record BadgeResponse(
     string? ExampleKey,
     BadgeImageResponse? Image,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt)
+    DateTimeOffset UpdatedAt,
+    int Version)
 {
     internal static BadgeResponse From(Badge badge)
     {
@@ -30,7 +31,7 @@ public sealed record BadgeResponse(
         var image = badge.Image is { } info
             ? new BadgeImageResponse(info.ContentType.ContentType(), info.Size, info.Hash, $"/api/v2/badges/{badge.Id}/image?v={info.Version}")
             : null;
-        return new BadgeResponse(badge.Id, badge.Name, badge.Description, rule, badge.Active, badge.ExampleKey, image, badge.CreatedAt, badge.UpdatedAt);
+        return new BadgeResponse(badge.Id, badge.Name, badge.Description, rule, badge.Active, badge.ExampleKey, image, badge.CreatedAt, badge.UpdatedAt, badge.Version);
     }
 }
 

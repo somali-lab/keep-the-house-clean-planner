@@ -1,5 +1,6 @@
 using Huishoudplanner.Domain.Audit;
 using Huishoudplanner.Domain.Calendar;
+using Huishoudplanner.Domain.Concurrency;
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Identity;
 using Huishoudplanner.Domain.Ports.Driven;
@@ -33,8 +34,8 @@ public sealed class SettingsService(
             error => error);
     }
 
-    public async Task<OneOf<SettingsView, ValidationErrors, IntervalInUse, ConflictError, SettingsMissing, PortError>> UpdateAsync(
-        Actor actor, SettingsPatch patch, CancellationToken cancellationToken)
+    public async Task<OneOf<SettingsView, ValidationErrors, IntervalInUse, ConflictError, SettingsMissing, PortError, PreconditionFailed>> UpdateAsync(
+        Actor actor, SettingsPatch patch, CancellationToken cancellationToken, int? expectedVersion = null)
     {
         ArgumentNullException.ThrowIfNull(actor);
         ArgumentNullException.ThrowIfNull(patch);
@@ -44,25 +45,26 @@ public sealed class SettingsService(
         }
 
         var run = await transactions
-            .RunAsync(token => UpdateInTransactionAsync(actor, patch, token), cancellationToken)
+            .RunAsync(token => UpdateInTransactionAsync(actor, patch, expectedVersion, token), cancellationToken)
             .ConfigureAwait(false);
-        return run.Match<OneOf<SettingsView, ValidationErrors, IntervalInUse, ConflictError, SettingsMissing, PortError>>(
-            outcome => outcome.Match<OneOf<SettingsView, ValidationErrors, IntervalInUse, ConflictError, SettingsMissing, PortError>>(
+        return run.Match<OneOf<SettingsView, ValidationErrors, IntervalInUse, ConflictError, SettingsMissing, PortError, PreconditionFailed>>(
+            outcome => outcome.Match<OneOf<SettingsView, ValidationErrors, IntervalInUse, ConflictError, SettingsMissing, PortError, PreconditionFailed>>(
                 view => view,
                 inUse => inUse,
                 missing => missing,
-                error => error),
+                error => error,
+                stale => stale),
             conflict => patch.PeriodBonuses is not null && conflict.Code == RunnerConflictCode
                 ? new ConflictError("bonus_schedule_conflict", "The bonus amounts were changed by someone else; reload and try again.")
                 : conflict,
             error => error);
     }
 
-    private async Task<TransactionOutcome<OneOf<SettingsView, IntervalInUse, SettingsMissing, PortError>>> UpdateInTransactionAsync(
-        Actor actor, SettingsPatch patch, CancellationToken cancellationToken)
+    private async Task<TransactionOutcome<OneOf<SettingsView, IntervalInUse, SettingsMissing, PortError, PreconditionFailed>>> UpdateInTransactionAsync(
+        Actor actor, SettingsPatch patch, int? expectedVersion, CancellationToken cancellationToken)
     {
-        static TransactionOutcome<OneOf<SettingsView, IntervalInUse, SettingsMissing, PortError>> Abort(
-            OneOf<SettingsView, IntervalInUse, SettingsMissing, PortError> value) => TransactionOutcome.Abort(value);
+        static TransactionOutcome<OneOf<SettingsView, IntervalInUse, SettingsMissing, PortError, PreconditionFailed>> Abort(
+            OneOf<SettingsView, IntervalInUse, SettingsMissing, PortError, PreconditionFailed> value) => TransactionOutcome.Abort(value);
 
         var read = await store.GetAsync(cancellationToken).ConfigureAwait(false);
         if (read.TryPickT1(out var missing, out var rest))
@@ -73,6 +75,12 @@ public sealed class SettingsService(
         if (rest.TryPickT1(out var readError, out var current))
         {
             return Abort(readError);
+        }
+
+        // The generic precondition comes first: a stale If-Match is a 412 whatever the patch says, also when it would change nothing.
+        if (EntityVersion.Check(expectedVersion, current.Version) is { } stale)
+        {
+            return Abort(stale);
         }
 
         var blocked = await BlockedIntervalsAsync(current, patch, cancellationToken).ConfigureAwait(false);
@@ -93,18 +101,14 @@ public sealed class SettingsService(
             SettingsAudit.ToAudit(changes.ApplyTo(current), scheduleChanged));
         if (change.IsNoOp)
         {
-            return TransactionOutcome.Commit<OneOf<SettingsView, IntervalInUse, SettingsMissing, PortError>>(ViewOf(current));
+            return TransactionOutcome.Commit<OneOf<SettingsView, IntervalInUse, SettingsMissing, PortError, PreconditionFailed>>(ViewOf(current));
         }
 
-        var written = await store.UpdateAsync(changes, cancellationToken).ConfigureAwait(false);
-        if (written.TryPickT1(out var vanished, out var writtenRest))
+        var written = await store.UpdateAsync(changes, cancellationToken, expectedVersion).ConfigureAwait(false);
+        if (!written.TryPickT0(out var updated, out var writeFailure))
         {
-            return Abort(vanished);
-        }
-
-        if (writtenRest.TryPickT1(out var writeError, out var updated))
-        {
-            return Abort(writeError);
+            return Abort(writeFailure.Match<OneOf<SettingsView, IntervalInUse, SettingsMissing, PortError, PreconditionFailed>>(
+                missing => missing, error => error, failed => failed));
         }
 
         var recorded = await audit
@@ -113,7 +117,7 @@ public sealed class SettingsService(
                 cancellationToken)
             .ConfigureAwait(false);
         return recorded.Match(
-            _ => TransactionOutcome.Commit<OneOf<SettingsView, IntervalInUse, SettingsMissing, PortError>>(ViewOf(updated)),
+            _ => TransactionOutcome.Commit<OneOf<SettingsView, IntervalInUse, SettingsMissing, PortError, PreconditionFailed>>(ViewOf(updated)),
             error => Abort(error));
     }
 

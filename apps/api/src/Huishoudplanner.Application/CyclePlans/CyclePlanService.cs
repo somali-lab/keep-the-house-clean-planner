@@ -1,4 +1,5 @@
 using Huishoudplanner.Domain.Audit;
+using Huishoudplanner.Domain.Concurrency;
 using Huishoudplanner.Domain.CyclePlans;
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Generation;
@@ -133,7 +134,8 @@ public sealed class CyclePlanService(
 
     // ---- update
 
-    public async Task<OneOf<CyclePlan, NotFound, ValidationErrors, ConflictError, PortError>> UpdateAsync(Actor actor, string id, CyclePlanPatch patch, CancellationToken cancellationToken)
+    public async Task<OneOf<CyclePlan, NotFound, ValidationErrors, ConflictError, PortError, PreconditionFailed>> UpdateAsync(
+        Actor actor, string id, CyclePlanPatch patch, CancellationToken cancellationToken, int? expectedVersion = null)
     {
         ArgumentNullException.ThrowIfNull(actor);
         ArgumentNullException.ThrowIfNull(patch);
@@ -148,16 +150,18 @@ public sealed class CyclePlanService(
         }
 
         var normalised = patch with { Name = patch.Name?.Trim() };
-        var ran = await transactions.RunAsync(ct => UpdateInTransactionAsync(actor, id.ToLowerInvariant(), normalised, ct), cancellationToken).ConfigureAwait(false);
-        return ran.Match<OneOf<CyclePlan, NotFound, ValidationErrors, ConflictError, PortError>>(
-            outcome => outcome.Match<OneOf<CyclePlan, NotFound, ValidationErrors, ConflictError, PortError>>(plan => plan, notFound => notFound, error => error),
+        var ran = await transactions.RunAsync(ct => UpdateInTransactionAsync(actor, id.ToLowerInvariant(), normalised, expectedVersion, ct), cancellationToken).ConfigureAwait(false);
+        return ran.Match<OneOf<CyclePlan, NotFound, ValidationErrors, ConflictError, PortError, PreconditionFailed>>(
+            outcome => outcome.Match<OneOf<CyclePlan, NotFound, ValidationErrors, ConflictError, PortError, PreconditionFailed>>(
+                plan => plan, notFound => notFound, error => error, stale => stale),
             conflict => conflict,
             error => error);
     }
 
-    private async Task<TransactionOutcome<OneOf<CyclePlan, NotFound, PortError>>> UpdateInTransactionAsync(Actor actor, string id, CyclePlanPatch patch, CancellationToken ct)
+    private async Task<TransactionOutcome<OneOf<CyclePlan, NotFound, PortError, PreconditionFailed>>> UpdateInTransactionAsync(
+        Actor actor, string id, CyclePlanPatch patch, int? expectedVersion, CancellationToken ct)
     {
-        static TransactionOutcome<OneOf<CyclePlan, NotFound, PortError>> Abort(OneOf<CyclePlan, NotFound, PortError> value) => TransactionOutcome.Abort(value);
+        static TransactionOutcome<OneOf<CyclePlan, NotFound, PortError, PreconditionFailed>> Abort(OneOf<CyclePlan, NotFound, PortError, PreconditionFailed> value) => TransactionOutcome.Abort(value);
 
         var found = await plans.FindAsync(id, ct).ConfigureAwait(false);
         if (found.TryPickT1(out var notFound, out var rest))
@@ -170,36 +174,38 @@ public sealed class CyclePlanService(
             return Abort(findError);
         }
 
+        // The precondition is checked before the no-op rule: a stale If-Match on a patch that changes nothing is still a 412.
+        if (EntityVersion.Check(expectedVersion, before.Version) is { } stale)
+        {
+            return Abort(stale);
+        }
+
         var after = before with { Name = patch.Name ?? before.Name, WeekThemes = patch.WeekThemes ?? before.WeekThemes };
         var change = ChangeSet.Between(CyclePlanAudit.Fields(before), CyclePlanAudit.Fields(after));
         if (change.IsNoOp)
         {
-            return TransactionOutcome.Commit<OneOf<CyclePlan, NotFound, PortError>>(before);
+            return TransactionOutcome.Commit<OneOf<CyclePlan, NotFound, PortError, PreconditionFailed>>(before);
         }
 
         var changes = new PlanMetaChanges(
             after.Name != before.Name ? after.Name : null,
             after.WeekThemes.SequenceEqual(before.WeekThemes, StringComparer.Ordinal) ? null : after.WeekThemes);
-        var updated = await plans.UpdateMetaAsync(id, changes, time.GetUtcNow(), ct).ConfigureAwait(false);
-        if (updated.TryPickT1(out var gone, out var updatedRest))
+        var updated = await plans.UpdateMetaAsync(id, changes, time.GetUtcNow(), ct, expectedVersion).ConfigureAwait(false);
+        if (!updated.TryPickT0(out var plan, out var updateFailure))
         {
-            return Abort(gone);
-        }
-
-        if (updatedRest.TryPickT1(out var updateError, out var plan))
-        {
-            return Abort(updateError);
+            return Abort(updateFailure.Match<OneOf<CyclePlan, NotFound, PortError, PreconditionFailed>>(notFound => notFound, error => error, failed => failed));
         }
 
         var recorded = await audit.RecordAsync(change.ToEntry(AuditActor.From(actor), AuditEntity.CyclePlan, id, AuditAction.Update), ct).ConfigureAwait(false);
         return recorded.Match(
-            _ => TransactionOutcome.Commit<OneOf<CyclePlan, NotFound, PortError>>(plan),
+            _ => TransactionOutcome.Commit<OneOf<CyclePlan, NotFound, PortError, PreconditionFailed>>(plan),
             error => Abort(error));
     }
 
     // ---- delete
 
-    public async Task<OneOf<Success, NotFound, ValidationErrors, ConflictError, PortError>> DeleteAsync(Actor actor, string id, CancellationToken cancellationToken)
+    public async Task<OneOf<Success, NotFound, ValidationErrors, ConflictError, PortError, PreconditionFailed>> DeleteAsync(
+        Actor actor, string id, CancellationToken cancellationToken, int? expectedVersion = null)
     {
         ArgumentNullException.ThrowIfNull(actor);
         if (!CyclePlanRules.IsId(id))
@@ -207,17 +213,18 @@ public sealed class CyclePlanService(
             return ValidationErrors.For("id", "invalid_object_id");
         }
 
-        var ran = await transactions.RunAsync(ct => DeleteInTransactionAsync(actor, id.ToLowerInvariant(), ct), cancellationToken).ConfigureAwait(false);
-        return ran.Match<OneOf<Success, NotFound, ValidationErrors, ConflictError, PortError>>(
-            outcome => outcome.Match<OneOf<Success, NotFound, ValidationErrors, ConflictError, PortError>>(
-                success => success, notFound => notFound, conflict => conflict, error => error),
+        var ran = await transactions.RunAsync(ct => DeleteInTransactionAsync(actor, id.ToLowerInvariant(), expectedVersion, ct), cancellationToken).ConfigureAwait(false);
+        return ran.Match<OneOf<Success, NotFound, ValidationErrors, ConflictError, PortError, PreconditionFailed>>(
+            outcome => outcome.Match<OneOf<Success, NotFound, ValidationErrors, ConflictError, PortError, PreconditionFailed>>(
+                success => success, notFound => notFound, conflict => conflict, error => error, stale => stale),
             conflict => conflict,
             error => error);
     }
 
-    private async Task<TransactionOutcome<OneOf<Success, NotFound, ConflictError, PortError>>> DeleteInTransactionAsync(Actor actor, string id, CancellationToken ct)
+    private async Task<TransactionOutcome<OneOf<Success, NotFound, ConflictError, PortError, PreconditionFailed>>> DeleteInTransactionAsync(
+        Actor actor, string id, int? expectedVersion, CancellationToken ct)
     {
-        static TransactionOutcome<OneOf<Success, NotFound, ConflictError, PortError>> Abort(OneOf<Success, NotFound, ConflictError, PortError> value) => TransactionOutcome.Abort(value);
+        static TransactionOutcome<OneOf<Success, NotFound, ConflictError, PortError, PreconditionFailed>> Abort(OneOf<Success, NotFound, ConflictError, PortError, PreconditionFailed> value) => TransactionOutcome.Abort(value);
 
         var found = await plans.FindAsync(id, ct).ConfigureAwait(false);
         if (found.TryPickT1(out var notFound, out var rest))
@@ -228,6 +235,11 @@ public sealed class CyclePlanService(
         if (rest.TryPickT1(out var findError, out var plan))
         {
             return Abort(findError);
+        }
+
+        if (EntityVersion.Check(expectedVersion, plan.Version) is { } stale)
+        {
+            return Abort(stale);
         }
 
         var oldest = await plans.FindDefaultAsync(ct).ConfigureAwait(false);
@@ -242,27 +254,22 @@ public sealed class CyclePlanService(
             return Abort(conflict);
         }
 
-        var deleted = await plans.DeleteAsync(id, ct).ConfigureAwait(false);
-        if (deleted.TryPickT1(out var gone, out var deletedRest))
+        var deleted = await plans.DeleteAsync(id, ct, expectedVersion).ConfigureAwait(false);
+        if (!deleted.TryPickT0(out _, out var deleteFailure))
         {
-            return Abort(gone);
-        }
-
-        if (deletedRest.TryPickT1(out var deleteError, out _))
-        {
-            return Abort(deleteError);
+            return Abort(deleteFailure.Match<OneOf<Success, NotFound, ConflictError, PortError, PreconditionFailed>>(notFound => notFound, error => error, failed => failed));
         }
 
         var recorded = await audit.RecordAsync(CyclePlanAudit.ForDelete(AuditActor.From(actor), plan), ct).ConfigureAwait(false);
         return recorded.Match(
-            _ => TransactionOutcome.Commit<OneOf<Success, NotFound, ConflictError, PortError>>(new Success()),
+            _ => TransactionOutcome.Commit<OneOf<Success, NotFound, ConflictError, PortError, PreconditionFailed>>(new Success()),
             error => Abort(error));
     }
 
     // ---- slots
 
-    public async Task<OneOf<PlanSlotsSaved, NotFound, ValidationErrors, InvalidPlan, ConflictError, PortError, SettingsMissing>> ReplaceSlotsAsync(
-        Actor actor, string id, IReadOnlyList<CyclePlanSlot> slots, CancellationToken cancellationToken, AuditObject? meta = null)
+    public async Task<OneOf<PlanSlotsSaved, NotFound, ValidationErrors, InvalidPlan, ConflictError, PortError, SettingsMissing, PreconditionFailed>> ReplaceSlotsAsync(
+        Actor actor, string id, IReadOnlyList<CyclePlanSlot> slots, CancellationToken cancellationToken, AuditObject? meta = null, int? expectedVersion = null)
     {
         ArgumentNullException.ThrowIfNull(actor);
         ArgumentNullException.ThrowIfNull(slots);
@@ -277,18 +284,18 @@ public sealed class CyclePlanService(
         }
 
         var normalised = CyclePlanRules.Normalise(slots);
-        var ran = await transactions.RunAsync(ct => ReplaceSlotsInTransactionAsync(actor, id.ToLowerInvariant(), normalised, meta, ct), cancellationToken).ConfigureAwait(false);
-        return ran.Match<OneOf<PlanSlotsSaved, NotFound, ValidationErrors, InvalidPlan, ConflictError, PortError, SettingsMissing>>(
-            outcome => outcome.Match<OneOf<PlanSlotsSaved, NotFound, ValidationErrors, InvalidPlan, ConflictError, PortError, SettingsMissing>>(
-                saved => saved, notFound => notFound, rejected => rejected, error => error, missing => missing),
+        var ran = await transactions.RunAsync(ct => ReplaceSlotsInTransactionAsync(actor, id.ToLowerInvariant(), normalised, meta, expectedVersion, ct), cancellationToken).ConfigureAwait(false);
+        return ran.Match<OneOf<PlanSlotsSaved, NotFound, ValidationErrors, InvalidPlan, ConflictError, PortError, SettingsMissing, PreconditionFailed>>(
+            outcome => outcome.Match<OneOf<PlanSlotsSaved, NotFound, ValidationErrors, InvalidPlan, ConflictError, PortError, SettingsMissing, PreconditionFailed>>(
+                saved => saved, notFound => notFound, rejected => rejected, error => error, missing => missing, stale => stale),
             conflict => conflict,
             error => error);
     }
 
-    private async Task<TransactionOutcome<OneOf<PlanSlotsSaved, NotFound, InvalidPlan, PortError, SettingsMissing>>> ReplaceSlotsInTransactionAsync(
-        Actor actor, string id, IReadOnlyList<CyclePlanSlot> slots, AuditObject? meta, CancellationToken ct)
+    private async Task<TransactionOutcome<OneOf<PlanSlotsSaved, NotFound, InvalidPlan, PortError, SettingsMissing, PreconditionFailed>>> ReplaceSlotsInTransactionAsync(
+        Actor actor, string id, IReadOnlyList<CyclePlanSlot> slots, AuditObject? meta, int? expectedVersion, CancellationToken ct)
     {
-        static TransactionOutcome<OneOf<PlanSlotsSaved, NotFound, InvalidPlan, PortError, SettingsMissing>> Abort(OneOf<PlanSlotsSaved, NotFound, InvalidPlan, PortError, SettingsMissing> value) => TransactionOutcome.Abort(value);
+        static TransactionOutcome<OneOf<PlanSlotsSaved, NotFound, InvalidPlan, PortError, SettingsMissing, PreconditionFailed>> Abort(OneOf<PlanSlotsSaved, NotFound, InvalidPlan, PortError, SettingsMissing, PreconditionFailed> value) => TransactionOutcome.Abort(value);
 
         var found = await plans.FindAsync(id, ct).ConfigureAwait(false);
         if (found.TryPickT1(out var notFound, out var rest))
@@ -299,6 +306,11 @@ public sealed class CyclePlanService(
         if (rest.TryPickT1(out var findError, out var before))
         {
             return Abort(findError);
+        }
+
+        if (EntityVersion.Check(expectedVersion, before.Version) is { } stale)
+        {
+            return Abort(stale);
         }
 
         var read = await references.ReadAsync(ct).ConfigureAwait(false);
@@ -318,15 +330,11 @@ public sealed class CyclePlanService(
         var plan = before;
         if (!diff.IsEmpty)
         {
-            var replaced = await plans.ReplaceSlotsAsync(id, next, time.GetUtcNow(), ct).ConfigureAwait(false);
-            if (replaced.TryPickT1(out var gone, out var replacedRest))
+            var replaced = await plans.ReplaceSlotsAsync(id, next, time.GetUtcNow(), ct, expectedVersion).ConfigureAwait(false);
+            if (!replaced.TryPickT0(out plan, out var replaceFailure))
             {
-                return Abort(gone);
-            }
-
-            if (replacedRest.TryPickT1(out var replaceError, out plan))
-            {
-                return Abort(replaceError);
+                return Abort(replaceFailure.Match<OneOf<PlanSlotsSaved, NotFound, InvalidPlan, PortError, SettingsMissing, PreconditionFailed>>(
+                    notFound => notFound, error => error, failed => failed));
             }
 
             var recorded = await audit.RecordAsync(CyclePlanAudit.ForSlots(AuditActor.From(actor), id, diff, meta), ct).ConfigureAwait(false);
@@ -366,7 +374,7 @@ public sealed class CyclePlanService(
             synchronized = replacement.AsT0;
         }
 
-        return TransactionOutcome.Commit<OneOf<PlanSlotsSaved, NotFound, InvalidPlan, PortError, SettingsMissing>>(
+        return TransactionOutcome.Commit<OneOf<PlanSlotsSaved, NotFound, InvalidPlan, PortError, SettingsMissing, PreconditionFailed>>(
             new PlanSlotsSaved(plan, validation.Warnings, validation.Summary, synchronized));
     }
 

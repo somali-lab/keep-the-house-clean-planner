@@ -31,7 +31,8 @@ public sealed class TransferEndpointTests(TransferWorld world) : IClassFixture<T
 
     private static async Task<long> CountAsync(IMongoDatabase database, string name) => await database.GetCollection<BsonDocument>(name).CountDocumentsAsync(All, cancellationToken: Ct);
 
-    private static string Canonical(IEnumerable<BsonDocument> docs) => string.Join("\n", docs.Select(d => d.ToJson(new MongoDB.Bson.IO.JsonWriterSettings { OutputMode = MongoDB.Bson.IO.JsonOutputMode.RelaxedExtendedJson })));
+    /// <summary>The documents as text without the concurrency <c>version</c>: an import gives its own versions (ADR-0022), everything else must come back identical.</summary>
+    private static string Canonical(IEnumerable<BsonDocument> docs) => string.Join("\n", docs.Select(d => new BsonDocument(d.Elements.Where(e => e.Name != "version")).ToJson(new MongoDB.Bson.IO.JsonWriterSettings { OutputMode = MongoDB.Bson.IO.JsonOutputMode.RelaxedExtendedJson })));
 
     /// <summary>The import entries and the ledger rebuild entry are the only new audit entries (ADR-0011).</summary>
     private static IEnumerable<BsonDocument> WithoutImports(IEnumerable<BsonDocument> entries) =>
@@ -140,6 +141,26 @@ public sealed class TransferEndpointTests(TransferWorld world) : IClassFixture<T
     }
 
     // ---- import
+
+    [Fact]
+    public async Task Import_givesTheImportedDocumentsAVersionAboveTheHighestOfTheCollectionItReplaces()
+    {
+        using var target = new TransferTarget(world.Mongo);
+        var (first, _) = await target.ImportAsync(world.Export);
+        first.Should().Be(HttpStatusCode.OK);
+        var afterFirst = await SnapshotOfAsync(target.Database);
+
+        var (second, _) = await target.ImportAsync(world.Export);
+
+        second.Should().Be(HttpStatusCode.OK);
+        var afterSecond = await SnapshotOfAsync(target.Database);
+        foreach (var name in new[] { "users", "rooms", "tasks", "cyclePlans", "badges", "settings" })
+        {
+            var before = afterFirst[name].Select(d => d.GetValue("version", 0).ToInt32()).ToList();
+            var now = afterSecond[name].Select(d => d.GetValue("version", 0).ToInt32()).ToList();
+            now.Should().OnlyContain(v => v == before.DefaultIfEmpty(0).Max() + 1, $"{name}: an ETag read before the second import never matches an imported document");
+        }
+    }
 
     [Fact]
     public async Task Import_roundTripsIntoAnEmptyDatabase_withIdenticalData()

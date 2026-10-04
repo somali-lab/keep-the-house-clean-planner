@@ -158,7 +158,7 @@ public sealed class UsersApiTests(MongoContainerFixture mongo)
         var body = await UsersHost.Json(await host.Send(HttpMethod.Post, "/api/v2/users", host.AdminId, new { name = "Anna", color = "#16a34a", role = "planner" }));
 
         var stored = await host.StoredUser(body.GetProperty("id").GetString()!);
-        stored.Names.Should().Equal("_id", "name", "color", "active", "role", "unavailableWeekdays", "dailyBudgetMinutes", "maxDailyMinutes", "browserNotifications", "createdAt", "updatedAt");
+        stored.Names.Should().Equal("_id", "name", "color", "active", "role", "unavailableWeekdays", "dailyBudgetMinutes", "maxDailyMinutes", "browserNotifications", "createdAt", "updatedAt", "version");
         stored["role"].AsString.Should().Be("planner");
         stored["dailyBudgetMinutes"]["weekday"].BsonType.Should().Be(BsonType.Int32);
         stored["createdAt"].BsonType.Should().Be(BsonType.DateTime);

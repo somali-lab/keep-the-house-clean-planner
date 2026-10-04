@@ -220,7 +220,7 @@ public sealed class TaskEndpointTests : IDisposable
         var body = await NewTask(room, extra: new { defaultAssigneeId = person, notes = "n", tags = ATags });
 
         var stored = await Tasks.Find(new BsonDocument("_id", ObjectId.Parse(body.GetProperty("id").GetString()))).SingleAsync(Ct);
-        stored.Names.Should().Equal("_id", "name", "roomId", "intervalKey", "durationMinutes", "points", "defaultAssigneeId", "notes", "tags", "active", "lastCompletedAt", "createdAt", "updatedAt");
+        stored.Names.Should().Equal("_id", "name", "roomId", "intervalKey", "durationMinutes", "points", "defaultAssigneeId", "notes", "tags", "active", "lastCompletedAt", "createdAt", "updatedAt", "version");
         stored["roomId"].IsObjectId.Should().BeTrue();
         stored["defaultAssigneeId"].AsObjectId.ToString().Should().Be(person);
         stored["durationMinutes"].IsInt32.Should().BeTrue();
@@ -790,7 +790,7 @@ public sealed class TaskEndpointTests : IDisposable
             .Where(e => e.RoutePattern.RawText is { } p && (p.StartsWith("/api/v2/tasks", StringComparison.Ordinal) || p.EndsWith("/tasks/bulk", StringComparison.Ordinal)))
             .ToList();
 
-        endpoints.Should().HaveCount(5);
+        endpoints.Should().HaveCount(6);
         foreach (var endpoint in endpoints)
         {
             var methods = endpoint.Metadata.GetMetadata<HttpMethodMetadata>()!.HttpMethods;

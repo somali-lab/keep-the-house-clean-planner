@@ -226,7 +226,7 @@ namespace Huishoudplanner.Application.Tests.Tasks
             }
 
             LastCompletedWrites++;
-            Items[index] = Items[index] with { LastCompletedAt = lastCompletedAt, UpdatedAt = updatedAt };
+            Items[index] = Items[index] with { LastCompletedAt = lastCompletedAt, UpdatedAt = updatedAt, Version = Items[index].Version + 1 };
             return Task.FromResult<OneOf<Success, NotFound, PortError>>(new Success());
         }
     }

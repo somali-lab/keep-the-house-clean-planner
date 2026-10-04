@@ -77,7 +77,7 @@ public sealed class MongoBadgeStoresTests(MongoContainerFixture mongo)
         var inserted = (await InTransaction(h, ct => badges.InsertAsync(Draft("Dweilkampioen", rule, "example:mop", Png()), ct))).AsT0;
 
         var document = await h.Badges.Find(new BsonDocument("_id", ObjectId.Parse(inserted.Id))).SingleAsync(Ct);
-        document.Names.Should().BeEquivalentTo("_id", "name", "description", "rule", "active", "exampleKey", "image", "createdAt", "updatedAt");
+        document.Names.Should().BeEquivalentTo("_id", "name", "description", "rule", "active", "exampleKey", "image", "createdAt", "updatedAt", "version");
         document["rule"]["taskIds"].AsBsonArray.Select(v => v.AsObjectId.ToString()).Should().Equal(new[] { h.Mop, h.Toilet }.Order(StringComparer.Ordinal));
         (document["rule"]["type"].AsString, document["rule"]["threshold"].AsInt32, document["exampleKey"].AsString).Should().Be(("minutes", 60, "example:mop"));
         document["image"]["data"].AsBsonBinaryData.Bytes.Should().Equal(Png().Bytes);

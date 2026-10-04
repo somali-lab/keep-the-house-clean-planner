@@ -38,7 +38,8 @@ internal static class SettingsDocument
             CentsPerPoint: document.TryGetValue("centsPerPoint", out var cents) && cents.IsNumeric ? cents.ToInt32() : null,
             RewardGoals: Optional(document, "rewardGoals", g => new RewardGoals(NullableInt(g, "weekPoints"), NullableInt(g, "cyclePoints"))),
             CreatedAt: Instant(document, "createdAt"),
-            UpdatedAt: Instant(document, "updatedAt"));
+            UpdatedAt: Instant(document, "updatedAt"),
+            Version: EntityVersioning.VersionOf(document));
     }
 
     /// <summary>The whole document of a new installation: the fields in the order of the Node server, optional fields only when set.</summary>
@@ -67,6 +68,7 @@ internal static class SettingsDocument
         AddIf(document, "rewardGoals", settings.RewardGoals is { } goals ? Goals(goals) : null);
         document.Add("createdAt", new BsonDateTime(settings.CreatedAt.UtcDateTime));
         document.Add("updatedAt", new BsonDateTime(settings.UpdatedAt.UtcDateTime));
+        document.Add(EntityVersioning.Field, settings.Version);
         return document;
     }
 

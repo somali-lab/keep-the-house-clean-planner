@@ -47,7 +47,8 @@ public sealed record UserResponse(
     [property: Description("Ceiling for one single day.")] DailyMinutesResponse MaxDailyMinutes,
     BrowserNotificationsResponse BrowserNotifications,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt)
+    DateTimeOffset UpdatedAt,
+    [property: Description("The concurrency version of the person (the number inside its ETag); send the ETag as If-Match when you change the person.")] int Version)
 {
     public static UserResponse From(User user)
     {
@@ -63,7 +64,8 @@ public sealed record UserResponse(
             new DailyMinutesResponse(user.MaxDailyMinutes.Weekday, user.MaxDailyMinutes.Weekend),
             new BrowserNotificationsResponse(user.BrowserNotifications.Enabled, [.. user.BrowserNotifications.Times]),
             user.CreatedAt,
-            user.UpdatedAt);
+            user.UpdatedAt,
+            user.Version);
     }
 }
 

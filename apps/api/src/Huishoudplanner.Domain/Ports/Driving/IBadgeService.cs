@@ -16,17 +16,26 @@ public interface IBadgeService
     /// <summary>A page of badges, oldest first, optionally only active or only inactive ones. A bad <c>limit</c> or cursor is a <see cref="ValidationErrors"/>.</summary>
     Task<OneOf<BadgeList, ValidationErrors, PortError>> ListAsync(bool? active, int? limit, string? cursor, CancellationToken cancellationToken);
 
+    /// <summary>One badge; <see cref="NotFound"/> for an unknown id, a <see cref="ValidationErrors"/> on <c>id</c> for a malformed one.</summary>
+    Task<OneOf<Badge, NotFound, ValidationErrors, PortError>> GetAsync(string id, CancellationToken cancellationToken);
+
     /// <summary>
     /// Creates a badge. Tasks that do not exist are dropped from the rule; a rule that named tasks and names none of them that exist is a
     /// <see cref="ValidationErrors"/> on <c>rule.taskIds</c> (<c>unknown_task</c>). At most 100 badges can exist (<see cref="BadgeLimitReached"/>).
     /// </summary>
     Task<OneOf<Badge, ValidationErrors, BadgeLimitReached, ConflictError, PortError>> CreateAsync(Actor actor, CreateBadgeCommand command, CancellationToken cancellationToken);
 
-    /// <summary>Changes the given fields. A patch that changes nothing writes and audits nothing and returns the badge as it is.</summary>
-    Task<OneOf<Badge, NotFound, ValidationErrors, ConflictError, PortError>> UpdateAsync(Actor actor, string id, BadgePatch patch, CancellationToken cancellationToken);
+    /// <summary>
+    /// Changes the given fields. A patch that changes nothing writes and audits nothing and returns the badge as it is. <paramref name="expectedVersion"/> is the
+    /// version the caller read (<c>If-Match</c>, ADR-0022): another version is a <see cref="PreconditionFailed"/>, also for a patch that would change nothing;
+    /// <see langword="null"/> skips the check.
+    /// </summary>
+    Task<OneOf<Badge, NotFound, ValidationErrors, ConflictError, PortError, PreconditionFailed>> UpdateAsync(
+        Actor actor, string id, BadgePatch patch, CancellationToken cancellationToken, int? expectedVersion = null);
 
-    /// <summary>Deletes a badge; its awards are withdrawn by the evaluation that follows.</summary>
-    Task<OneOf<Success, NotFound, ValidationErrors, ConflictError, PortError>> DeleteAsync(Actor actor, string id, CancellationToken cancellationToken);
+    /// <summary>Deletes a badge; its awards are withdrawn by the evaluation that follows. Another <paramref name="expectedVersion"/> than the stored one is a <see cref="PreconditionFailed"/>.</summary>
+    Task<OneOf<Success, NotFound, ValidationErrors, ConflictError, PortError, PreconditionFailed>> DeleteAsync(
+        Actor actor, string id, CancellationToken cancellationToken, int? expectedVersion = null);
 
     /// <summary>
     /// Adds the example badges that do not exist yet, idempotent by their stable key. The tasks of an example are found among the active tasks by

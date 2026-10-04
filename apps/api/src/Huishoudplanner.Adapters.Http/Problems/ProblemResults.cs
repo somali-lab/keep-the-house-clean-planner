@@ -30,6 +30,25 @@ public static partial class ProblemResults
         return Problem(StatusCodes.Status403Forbidden, error.Code ?? ProblemTypes.PermissionDenied, error.Detail);
     }
 
+    /// <summary>
+    /// 412: the <c>If-Match</c> version is not the stored one (ADR-0022). The response carries the current <c>ETag</c>, so a client can fetch
+    /// nothing more than the entity itself before it retries.
+    /// </summary>
+    public static IResult From(PreconditionFailed error) =>
+        new WithETag(
+            error.CurrentVersion,
+            Problem(
+                StatusCodes.Status412PreconditionFailed,
+                ProblemTypes.PreconditionFailed,
+                "The entity was changed by someone else after you read it; read it again and retry."));
+
+    /// <summary>428: an entity write without <c>If-Match</c> (ADR-0022).</summary>
+    public static IResult PreconditionRequired() =>
+        Problem(
+            StatusCodes.Status428PreconditionRequired,
+            ProblemTypes.PreconditionRequired,
+            "Send the ETag of the version you read in the If-Match header.");
+
     public static IResult From(SettingsMissing _) =>
         Problem(StatusCodes.Status500InternalServerError, ProblemTypes.SettingsMissing, "The installation has no settings yet.");
 
@@ -53,6 +72,17 @@ public static partial class ProblemResults
         ArgumentNullException.ThrowIfNull(logger);
         LogPortError(logger, error.Message);
         return Problem(StatusCodes.Status500InternalServerError, ProblemTypes.InternalError, UnexpectedErrorDetail);
+    }
+
+    /// <summary>A result with the <c>ETag</c> header set before it runs.</summary>
+    private sealed class WithETag(int version, IResult inner) : IResult
+    {
+        public Task ExecuteAsync(HttpContext httpContext)
+        {
+            ArgumentNullException.ThrowIfNull(httpContext);
+            Concurrency.ETags.Set(httpContext.Response, version);
+            return inner.ExecuteAsync(httpContext);
+        }
     }
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Port error became a 500: {Reason}")]

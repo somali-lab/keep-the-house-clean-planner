@@ -72,15 +72,13 @@ public sealed class SettingsSeedService(
         var changes = new SettingsChanges { Intervals = intervals };
         var change = ChangeSet.Between(SettingsAudit.ToAudit(current), SettingsAudit.ToAudit(changes.ApplyTo(current)));
         var written = await store.UpdateAsync(changes, cancellationToken).ConfigureAwait(false);
-        if (written.TryPickT2(out var writeError, out var rest))
+        if (!written.TryPickT0(out _, out var writeFailure))
         {
-            return TransactionOutcome.Abort<OneOf<SettingsSeedResult, PortError>>(writeError);
-        }
-
-        if (rest.IsT1)
-        {
-            // The document vanished between the read and the write; the next start seeds it.
-            return TransactionOutcome.Abort<OneOf<SettingsSeedResult, PortError>>(new PortError("settings.vanished: the settings disappeared while seeding."));
+            // A missing document vanished between the read and the write (the next start seeds it); an unconditional write has no version to conflict with.
+            return TransactionOutcome.Abort<OneOf<SettingsSeedResult, PortError>>(writeFailure.Match<PortError>(
+                _ => new PortError("settings.vanished: the settings disappeared while seeding."),
+                error => error,
+                _ => new PortError("settings.seed: an unconditional write reported a version conflict.")));
         }
 
         var entry = change.ToEntry(AuditActor.System, AuditEntity.Settings, SettingsIds.Singleton, AuditAction.Update);

@@ -11,6 +11,8 @@ public static class ProblemTypes
     public const string SettingsMissing = "settings_missing";
     public const string ProfileRequired = "profile_required";
     public const string PermissionDenied = "permission_denied";
+    public const string PreconditionFailed = "precondition_failed";
+    public const string PreconditionRequired = "precondition_required";
 
     public static string UrnFor(string code) => Prefix + code;
 
@@ -23,8 +25,10 @@ public static class ProblemTypes
         StatusCodes.Status404NotFound => NotFound,
         StatusCodes.Status405MethodNotAllowed => "method_not_allowed",
         StatusCodes.Status409Conflict => "conflict",
+        StatusCodes.Status412PreconditionFailed => PreconditionFailed,
         StatusCodes.Status415UnsupportedMediaType => "unsupported_media_type",
         StatusCodes.Status422UnprocessableEntity => "unprocessable_entity",
+        StatusCodes.Status428PreconditionRequired => PreconditionRequired,
         StatusCodes.Status500InternalServerError => InternalError,
         StatusCodes.Status503ServiceUnavailable => "service_unavailable",
         _ => $"http_{status}",

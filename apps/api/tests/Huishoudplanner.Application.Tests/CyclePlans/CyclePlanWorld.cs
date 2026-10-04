@@ -8,6 +8,7 @@ using FixedClock = Huishoudplanner.Application.Tests.Rooms.FixedClock;
 using Huishoudplanner.Application.Tests.Settings;
 using Huishoudplanner.Application.Tests.Tasks;
 using Huishoudplanner.Application.Tests.Users;
+using Huishoudplanner.Domain.Concurrency;
 using Huishoudplanner.Domain.CyclePlans;
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Identity;
@@ -70,7 +71,7 @@ internal sealed class FakeCyclePlanStore : ForStoringCyclePlans
     {
         Writes++;
         var stored = new CyclePlan(
-            NextId(), plan.Name, plan.Active, plan.Slots, plan.WeekThemes, false, PlanSources.Manual, null, null, false, plan.CreatedAt, plan.CreatedAt);
+            NextId(), plan.Name, plan.Active, plan.Slots, plan.WeekThemes, false, PlanSources.Manual, null, null, false, plan.CreatedAt, plan.CreatedAt, 1);
         Items.Add(stored);
         return Task.FromResult<OneOf<CyclePlan, PortError>>(stored);
     }
@@ -79,39 +80,52 @@ internal sealed class FakeCyclePlanStore : ForStoringCyclePlans
     {
         Writes++;
         var stored = new CyclePlan(
-            NextId(), proposal.Name, false, proposal.Slots, proposal.WeekThemes, true, PlanSources.Ai, proposal.ProposalId, proposal.Rationale, false, proposal.CreatedAt, proposal.CreatedAt);
+            NextId(), proposal.Name, false, proposal.Slots, proposal.WeekThemes, true, PlanSources.Ai, proposal.ProposalId, proposal.Rationale, false, proposal.CreatedAt, proposal.CreatedAt, 1);
         Items.Add(stored);
         return Task.FromResult<OneOf<CyclePlan, PortError>>(stored);
     }
 
-    public Task<OneOf<CyclePlan, NotFound, PortError>> UpdateMetaAsync(string id, PlanMetaChanges changes, DateTimeOffset updatedAt, CancellationToken cancellationToken) =>
-        Replace(id, p => p with { Name = changes.Name ?? p.Name, WeekThemes = changes.WeekThemes ?? p.WeekThemes, UpdatedAt = updatedAt });
+    public Task<OneOf<CyclePlan, NotFound, PortError, PreconditionFailed>> UpdateMetaAsync(
+        string id, PlanMetaChanges changes, DateTimeOffset updatedAt, CancellationToken cancellationToken, int? expectedVersion = null) =>
+        Replace(id, expectedVersion, p => p with { Name = changes.Name ?? p.Name, WeekThemes = changes.WeekThemes ?? p.WeekThemes, UpdatedAt = updatedAt });
 
-    public Task<OneOf<CyclePlan, NotFound, PortError>> ReplaceSlotsAsync(string id, IReadOnlyList<CyclePlanSlot> slots, DateTimeOffset updatedAt, CancellationToken cancellationToken) =>
-        Replace(id, p => p with { Slots = slots, UpdatedAt = updatedAt });
+    public Task<OneOf<CyclePlan, NotFound, PortError, PreconditionFailed>> ReplaceSlotsAsync(
+        string id, IReadOnlyList<CyclePlanSlot> slots, DateTimeOffset updatedAt, CancellationToken cancellationToken, int? expectedVersion = null) =>
+        Replace(id, expectedVersion, p => p with { Slots = slots, UpdatedAt = updatedAt });
 
-    private Task<OneOf<CyclePlan, NotFound, PortError>> Replace(string id, Func<CyclePlan, CyclePlan> change)
+    private Task<OneOf<CyclePlan, NotFound, PortError, PreconditionFailed>> Replace(string id, int? expectedVersion, Func<CyclePlan, CyclePlan> change)
     {
         var index = Items.FindIndex(p => p.Id == id);
         if (index < 0)
         {
-            return Task.FromResult<OneOf<CyclePlan, NotFound, PortError>>(new NotFound());
+            return Task.FromResult<OneOf<CyclePlan, NotFound, PortError, PreconditionFailed>>(new NotFound());
+        }
+
+        if (EntityVersion.Check(expectedVersion, Items[index].Version) is { } stale)
+        {
+            return Task.FromResult<OneOf<CyclePlan, NotFound, PortError, PreconditionFailed>>(stale);
         }
 
         Writes++;
-        Items[index] = change(Items[index]);
-        return Task.FromResult<OneOf<CyclePlan, NotFound, PortError>>(Items[index]);
+        Items[index] = change(Items[index]) with { Version = Items[index].Version + 1 };
+        return Task.FromResult<OneOf<CyclePlan, NotFound, PortError, PreconditionFailed>>(Items[index]);
     }
 
-    public Task<OneOf<Success, NotFound, PortError>> DeleteAsync(string id, CancellationToken cancellationToken)
+    public Task<OneOf<Success, NotFound, PortError, PreconditionFailed>> DeleteAsync(string id, CancellationToken cancellationToken, int? expectedVersion = null)
     {
+        var current = Items.FirstOrDefault(p => p.Id == id);
+        if (current is not null && EntityVersion.Check(expectedVersion, current.Version) is { } stale)
+        {
+            return Task.FromResult<OneOf<Success, NotFound, PortError, PreconditionFailed>>(stale);
+        }
+
         var removed = Items.RemoveAll(p => p.Id == id);
         if (removed > 0)
         {
             Writes++;
         }
 
-        return Task.FromResult<OneOf<Success, NotFound, PortError>>(removed > 0 ? new Success() : new NotFound());
+        return Task.FromResult<OneOf<Success, NotFound, PortError, PreconditionFailed>>(removed > 0 ? new Success() : new NotFound());
     }
 }
 

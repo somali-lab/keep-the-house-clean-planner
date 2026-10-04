@@ -8,9 +8,9 @@ const keuken = makeRoomV2({ id: 'r1', name: 'Keuken', sortOrder: 10 });
 const badkamer = makeRoomV2({ id: 'r2', name: 'Badkamer', sortOrder: 20 });
 
 const tasks = [
-  makeTaskV2({ id: 't1', name: 'Vloer dweilen', roomId: 'r1', intervalKey: '1w', durationMinutes: 20 }),
-  makeTaskV2({ id: 't2', name: 'Aanrecht', roomId: 'r1', intervalKey: 'daily', durationMinutes: 5, defaultAssigneeId: ANNA._id }),
-  makeTaskV2({ id: 't3', name: 'Douche', roomId: 'r2', intervalKey: '2wk', durationMinutes: 30 }),
+  makeTaskV2({ id: 't1', name: 'Vloer dweilen', roomId: 'r1', intervalKey: '1w', durationMinutes: 20, version: 2 }),
+  makeTaskV2({ id: 't2', name: 'Aanrecht', roomId: 'r1', intervalKey: 'daily', durationMinutes: 5, defaultAssigneeId: ANNA._id, version: 3 }),
+  makeTaskV2({ id: 't3', name: 'Douche', roomId: 'r2', intervalKey: '2wk', durationMinutes: 30, version: 5 }),
   makeTaskV2({ id: 't4', name: 'Oude klus', roomId: 'r2', active: false }),
 ];
 
@@ -30,6 +30,11 @@ function setup(extraRoutes: Record<string, unknown> = {}) {
 function bodyOf(fetchMock: ReturnType<typeof mockApi>, method: string, url: string): unknown {
   const call = fetchMock.mock.calls.find(([u, init]) => u === url && (init as RequestInit | undefined)?.method === method);
   return call ? JSON.parse(String((call[1] as RequestInit).body)) : undefined;
+}
+
+function headerOf(fetchMock: ReturnType<typeof mockApi>, method: string, url: string, name: string): string | undefined {
+  const call = fetchMock.mock.calls.find(([u, init]) => u === url && (init as RequestInit | undefined)?.method === method);
+  return call ? ((call[1] as RequestInit).headers as Record<string, string>)[name] : undefined;
 }
 
 async function expandAllRooms() {
@@ -260,14 +265,168 @@ describe('TasksPage — actions', () => {
     });
   });
 
-  it('permanently deletes a task after confirmation', async () => {
-    // The v2 API deactivates tasks but cannot delete them yet, so the permanent delete stays on the Node client.
-    const fetchMock = setup({ 'DELETE /api/tasks/t3': { deleted: true } });
+  it('permanently deletes a task after confirmation, with the version of the list item as If-Match', async () => {
+    const fetchMock = setup({ 'DELETE /api/v2/tasks/t3': { deleted: true } });
     renderWithProviders(<TasksPage />);
     await expandAllRooms();
     fireEvent.click(await screen.findByRole('button', { name: 'Douche verwijderen' }));
     expect(screen.getByRole('heading', { name: 'Douche definitief verwijderen?' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Taak verwijderen' }));
-    await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => url === '/api/tasks/t3' && (init as RequestInit)?.method === 'DELETE')).toBe(true));
+    await waitFor(() => expect(headerOf(fetchMock, 'DELETE', '/api/v2/tasks/t3', 'if-match')).toBe('"5"'));
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Douche definitief verwijderen?' })).not.toBeInTheDocument());
+  });
+});
+
+const STALE_MESSAGE = 'Deze gegevens zijn intussen door iemand anders gewijzigd. Controleer je wijziging en sla opnieuw op.';
+
+function staleAnswer(version: number) {
+  return () =>
+    new Response(
+      JSON.stringify({ type: 'urn:huishoudplanner:problem:precondition_failed', title: 'Precondition Failed', status: 412, detail: 'stale', traceId: 't' }),
+      { status: 412, headers: { 'Content-Type': 'application/problem+json', ETag: `"${version}"` } },
+    );
+}
+
+const sentWith = (fetchMock: ReturnType<typeof mockApi>, method: string, url: string) =>
+  fetchMock.mock.calls
+    .filter(([u, init]) => u === url && (init as RequestInit | undefined)?.method === method)
+    .map(([, init]) => ({
+      ifMatch: ((init as RequestInit).headers as Record<string, string>)['if-match'],
+      body: (init as RequestInit).body ? JSON.parse(String((init as RequestInit).body)) : undefined,
+    }));
+
+const listReads = (fetchMock: ReturnType<typeof mockApi>) =>
+  fetchMock.mock.calls.filter(([url]) => url === '/api/v2/tasks?limit=200').length;
+
+describe('TasksPage — If-Match', () => {
+  it('sends the version of the list item with a save', async () => {
+    const fetchMock = setup({ 'PATCH /api/v2/tasks/t3': makeTaskV2({ id: 't3', name: 'Douche', roomId: 'r2', version: 6 }) });
+    renderWithProviders(<TasksPage />);
+    await expandAllRooms();
+    fireEvent.click(await screen.findByRole('button', { name: 'Douche bewerken' }));
+    const form = screen.getByRole('form', { name: 'Douche bewerken' });
+    fireEvent.change(within(form).getByLabelText('Standaard uitvoerder'), { target: { value: BRAM._id } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Opslaan' }));
+    await waitFor(() => expect(headerOf(fetchMock, 'PATCH', '/api/v2/tasks/t3', 'if-match')).toBe('"5"'));
+  });
+
+  it('sends the version of the list item with an activation and a deactivation', async () => {
+    const fetchMock = setup({
+      'PATCH /api/v2/tasks/t4': makeTaskV2({ id: 't4', name: 'Oude klus', roomId: 'r2', version: 2 }),
+      'PATCH /api/v2/tasks/t1': makeTaskV2({ id: 't1', name: 'Vloer dweilen', roomId: 'r1', active: false, version: 3 }),
+    });
+    renderWithProviders(<TasksPage />);
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Toon inactieve taken' }));
+    await expandAllRooms();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Oude klus activeren' }));
+    await waitFor(() => expect(headerOf(fetchMock, 'PATCH', '/api/v2/tasks/t4', 'if-match')).toBe('"1"'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Vloer dweilen deactiveren' }));
+    await waitFor(() => expect(headerOf(fetchMock, 'PATCH', '/api/v2/tasks/t1', 'if-match')).toBe('"2"'));
+  });
+
+  it('uses the version of the answer for the next save, so a second save needs no re-read', async () => {
+    let stored = tasks.map((task) => ({ ...task }));
+    const fetchMock = setup({
+      '/api/v2/tasks': () => page(stored),
+      'PATCH /api/v2/tasks/t1': (init: RequestInit | undefined) => {
+        const body = JSON.parse(String(init?.body)) as { active: boolean };
+        stored = stored.map((task) => (task.id === 't1' ? { ...task, active: body.active, version: task.version + 1 } : task));
+        return stored.find((task) => task.id === 't1');
+      },
+    });
+    renderWithProviders(<TasksPage />);
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Toon inactieve taken' }));
+    await expandAllRooms();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Vloer dweilen deactiveren' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Vloer dweilen activeren' }));
+
+    await waitFor(() => expect(sentWith(fetchMock, 'PATCH', '/api/v2/tasks/t1').map((call) => call.ifMatch)).toEqual(['"2"', '"3"']));
+  });
+
+  it('keeps the unsaved edit on a 412, reads the list again and saves with the new version once the person saves again', async () => {
+    let list = tasks;
+    let patches = 0;
+    const fetchMock = setup({
+      '/api/v2/tasks': () => page(list),
+      'PATCH /api/v2/tasks/t3': () => {
+        patches += 1;
+        if (patches > 1) return makeTaskV2({ id: 't3', name: 'Douche (nieuw)', roomId: 'r2', defaultAssigneeId: BRAM._id, version: 7 });
+        list = list.map((task) => (task.id === 't3' ? { ...task, name: 'Douche (nieuw)', version: 6 } : task));
+        return staleAnswer(6)();
+      },
+    });
+    renderWithProviders(<TasksPage />);
+    await expandAllRooms();
+    fireEvent.click(await screen.findByRole('button', { name: 'Douche bewerken' }));
+    const form = screen.getByRole('form', { name: 'Douche bewerken' });
+    fireEvent.change(within(form).getByLabelText('Standaard uitvoerder'), { target: { value: BRAM._id } });
+    const readsBefore = listReads(fetchMock);
+    fireEvent.click(within(form).getByRole('button', { name: 'Opslaan' }));
+
+    expect(await screen.findByText(STALE_MESSAGE)).toBeInTheDocument();
+    await waitFor(() => expect(listReads(fetchMock)).toBeGreaterThan(readsBefore));
+    // The edit is still there, in the same open form.
+    const kept = await screen.findByRole('form', { name: /bewerken/ });
+    expect(within(kept).getByLabelText('Standaard uitvoerder')).toHaveValue(BRAM._id);
+
+    fireEvent.click(within(kept).getByRole('button', { name: 'Opslaan' }));
+    await waitFor(() => expect(patches).toBe(2));
+    const sent = sentWith(fetchMock, 'PATCH', '/api/v2/tasks/t3');
+    expect(sent.map((call) => call.ifMatch)).toEqual(['"5"', '"6"']);
+    expect(sent[1]!.body).toMatchObject({ defaultAssigneeId: BRAM._id });
+    await waitFor(() => expect(screen.queryByRole('form')).not.toBeInTheDocument());
+    expect(screen.queryByText(STALE_MESSAGE)).not.toBeInTheDocument();
+  });
+
+  it('says so and reads the list again when a deactivation is stale', async () => {
+    const fetchMock = setup({ 'PATCH /api/v2/tasks/t1': staleAnswer(9) });
+    renderWithProviders(<TasksPage />);
+    await expandAllRooms();
+    const readsBefore = listReads(fetchMock);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Vloer dweilen deactiveren' }));
+
+    expect(await screen.findByText(STALE_MESSAGE)).toBeInTheDocument();
+    await waitFor(() => expect(listReads(fetchMock)).toBeGreaterThan(readsBefore));
+  });
+
+  it('keeps the delete dialog open on a 412, with the message, and deletes with the new version when confirmed again', async () => {
+    let list = tasks;
+    let deletes = 0;
+    const fetchMock = setup({
+      '/api/v2/tasks': () => page(list),
+      'DELETE /api/v2/tasks/t3': () => {
+        deletes += 1;
+        if (deletes > 1) return { deleted: true };
+        list = list.map((task) => (task.id === 't3' ? { ...task, version: 8 } : task));
+        return staleAnswer(8)();
+      },
+    });
+    renderWithProviders(<TasksPage />);
+    await expandAllRooms();
+    fireEvent.click(await screen.findByRole('button', { name: 'Douche verwijderen' }));
+    const readsBefore = listReads(fetchMock);
+    fireEvent.click(screen.getByRole('button', { name: 'Taak verwijderen' }));
+
+    expect(await screen.findByText(STALE_MESSAGE)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Douche definitief verwijderen?' })).toBeInTheDocument();
+    await waitFor(() => expect(listReads(fetchMock)).toBeGreaterThan(readsBefore));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Taak verwijderen' }));
+    await waitFor(() => expect(deletes).toBe(2));
+    expect(sentWith(fetchMock, 'DELETE', '/api/v2/tasks/t3').map((call) => call.ifMatch)).toEqual(['"5"', '"8"']);
+  });
+
+  it('treats a 428 as a plain error, not as a stale edit', async () => {
+    setup({ 'PATCH /api/v2/tasks/t1': () => problem(428, 'precondition_required') });
+    renderWithProviders(<TasksPage />);
+    await expandAllRooms();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Vloer dweilen deactiveren' }));
+
+    expect(await screen.findByText('Er ging iets mis.')).toBeInTheDocument();
+    expect(screen.queryByText(STALE_MESSAGE)).not.toBeInTheDocument();
   });
 });

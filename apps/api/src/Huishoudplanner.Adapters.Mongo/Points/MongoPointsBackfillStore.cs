@@ -154,7 +154,7 @@ internal sealed class MongoPointsBackfillStore : ForBackfillingPoints
 
             var models = missing.Select(task => (WriteModel<BsonDocument>)new UpdateOneModel<BsonDocument>(
                 new BsonDocument { { "_id", task["_id"] }, { "$or", MissingPoints["$or"] } },
-                new BsonDocument("$set", new BsonDocument("points", TaskPoints.DefaultForDuration(task.TryGetValue("durationMinutes", out var minutes) && minutes.IsNumeric ? minutes.ToDouble() : 1))))).ToList();
+                EntityVersioning.Raise(new BsonDocument("$set", new BsonDocument("points", TaskPoints.DefaultForDuration(task.TryGetValue("durationMinutes", out var minutes) && minutes.IsNumeric ? minutes.ToDouble() : 1)))))).ToList();
             var result = await tasks.BulkWriteAsync(session, models, cancellationToken: cancellationToken).ConfigureAwait(false);
             return new DefaultedTasks([.. missing.Select(t => ObjectIdConverter.ToHex(t["_id"].AsObjectId))], (int)Math.Min(result.ModifiedCount, int.MaxValue));
         }

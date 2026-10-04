@@ -39,11 +39,20 @@ public interface ForStoringCyclePlans
     /// <summary>Stores an AI draft (inactive, <c>draft: true</c>, <c>source: ai</c>, with proposal id and rationale); the store assigns the id and sets both timestamps to the <c>CreatedAt</c> of the proposal.</summary>
     Task<OneOf<CyclePlan, PortError>> InsertProposalAsync(NewPlanProposal proposal, CancellationToken cancellationToken);
 
-    /// <summary>Sets the given fields and <c>updatedAt</c>; returns the plan as stored afterwards.</summary>
-    Task<OneOf<CyclePlan, NotFound, PortError>> UpdateMetaAsync(string id, PlanMetaChanges changes, DateTimeOffset updatedAt, CancellationToken cancellationToken);
+    /// <summary>
+    /// Sets the given fields and <c>updatedAt</c>, raises the version by one in the same write, and returns the plan as stored afterwards. With an
+    /// <paramref name="expectedVersion"/> the write is conditional on the stored version (<see cref="PreconditionFailed"/> when it differs, nothing written).
+    /// </summary>
+    Task<OneOf<CyclePlan, NotFound, PortError, PreconditionFailed>> UpdateMetaAsync(
+        string id, PlanMetaChanges changes, DateTimeOffset updatedAt, CancellationToken cancellationToken, int? expectedVersion = null);
 
-    /// <summary>Replaces all slots (as given, in order) and sets <c>updatedAt</c>; returns the plan as stored afterwards.</summary>
-    Task<OneOf<CyclePlan, NotFound, PortError>> ReplaceSlotsAsync(string id, IReadOnlyList<CyclePlanSlot> slots, DateTimeOffset updatedAt, CancellationToken cancellationToken);
+    /// <summary>
+    /// Replaces all slots (as given, in order), sets <c>updatedAt</c> and raises the version by one; returns the plan as stored afterwards. Conditional on
+    /// <paramref name="expectedVersion"/> like <see cref="UpdateMetaAsync"/>.
+    /// </summary>
+    Task<OneOf<CyclePlan, NotFound, PortError, PreconditionFailed>> ReplaceSlotsAsync(
+        string id, IReadOnlyList<CyclePlanSlot> slots, DateTimeOffset updatedAt, CancellationToken cancellationToken, int? expectedVersion = null);
 
-    Task<OneOf<Success, NotFound, PortError>> DeleteAsync(string id, CancellationToken cancellationToken);
+    /// <summary>Deletes the plan; with an <paramref name="expectedVersion"/> the delete is conditional on the stored version (<see cref="PreconditionFailed"/> when it differs).</summary>
+    Task<OneOf<Success, NotFound, PortError, PreconditionFailed>> DeleteAsync(string id, CancellationToken cancellationToken, int? expectedVersion = null);
 }

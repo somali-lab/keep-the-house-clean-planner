@@ -28,6 +28,11 @@ public interface ForStoringUsers
     /// <summary>Stores a new, active user with notifications off; the store assigns the id and sets both timestamps to <paramref name="now"/>.</summary>
     Task<OneOf<User, PortError>> InsertAsync(NewUser user, DateTimeOffset now, CancellationToken cancellationToken);
 
-    /// <summary>Sets the members of <paramref name="patch"/> that are not null, and <c>updatedAt</c>. Nothing else of the document changes.</summary>
-    Task<OneOf<Success, NotFound, PortError>> UpdateAsync(string userId, UserPatch patch, DateTimeOffset now, CancellationToken cancellationToken);
+    /// <summary>
+    /// Sets the members of <paramref name="patch"/> that are not null, and <c>updatedAt</c>, and raises the version by one in the same write. Nothing else of
+    /// the document changes. With an <paramref name="expectedVersion"/> the write is conditional on the stored version (<see cref="PreconditionFailed"/> when it
+    /// differs, nothing written).
+    /// </summary>
+    Task<OneOf<Success, NotFound, PortError, PreconditionFailed>> UpdateAsync(
+        string userId, UserPatch patch, DateTimeOffset now, CancellationToken cancellationToken, int? expectedVersion = null);
 }

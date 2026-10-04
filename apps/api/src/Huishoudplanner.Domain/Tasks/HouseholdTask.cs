@@ -7,6 +7,7 @@ namespace Huishoudplanner.Domain.Tasks;
 /// A recurring piece of household work (requirements 3, <c>tasks</c>). <see cref="Points"/> is the value in force: a task stored
 /// before points existed reads as the default for its duration (ADR-0011). <see cref="DefaultAssigneeId"/> is <see langword="null"/>
 /// for "anyone". <see cref="Id"/>, <see cref="RoomId"/> and <see cref="DefaultAssigneeId"/> are 24 character hexadecimal ids.
+/// <see cref="Version"/> is the optimistic concurrency version of the document (<see cref="Concurrency.EntityVersion"/>, ADR-0022).
 /// </summary>
 public sealed record HouseholdTask(
     string Id,
@@ -21,14 +22,15 @@ public sealed record HouseholdTask(
     IReadOnlyList<string> Tags,
     DateTimeOffset? LastCompletedAt,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt)
+    DateTimeOffset UpdatedAt,
+    int Version = 0)
 {
     public bool Equals(HouseholdTask? other) =>
         other is not null &&
         Id == other.Id && Name == other.Name && RoomId == other.RoomId && IntervalKey == other.IntervalKey &&
         DurationMinutes == other.DurationMinutes && Points == other.Points && DefaultAssigneeId == other.DefaultAssigneeId &&
         Active == other.Active && Notes == other.Notes && Tags.SequenceEqual(other.Tags, StringComparer.Ordinal) &&
-        LastCompletedAt == other.LastCompletedAt && CreatedAt == other.CreatedAt && UpdatedAt == other.UpdatedAt;
+        LastCompletedAt == other.LastCompletedAt && CreatedAt == other.CreatedAt && UpdatedAt == other.UpdatedAt && Version == other.Version;
 
     public override int GetHashCode() => HashCode.Combine(Id, Name, RoomId, IntervalKey);
 }

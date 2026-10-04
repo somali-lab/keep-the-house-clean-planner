@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { toInt } from '../occurrence.ts';
 import { apiV2 } from '../index.ts';
+import type { components } from './schema';
 import { unwrap } from './client.ts';
 import { collectPages } from './paging.ts';
 
@@ -89,6 +90,8 @@ export interface Room {
   virtual: boolean;
   createdAt: string;
   updatedAt: string;
+  /** The version of the document: the ETag of a write on it is `"<version>"` (ADR-0022). */
+  version: number;
 }
 
 /** A task as `GET /api/v2/tasks` answers it; the points are always the value in force. */
@@ -106,6 +109,8 @@ export interface Task {
   lastCompletedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /** The version of the document: the ETag of a write on it is `"<version>"` (ADR-0022). */
+  version: number;
 }
 
 /** The most the server returns in one page of rooms or tasks (`limit` 1 to 200). */
@@ -116,22 +121,32 @@ const LIST_PAGE_SIZE = 200;
 export const roomsKey = ['rooms', 'v2'] as const;
 export const tasksKey = ['tasks', 'v2'] as const;
 
+type RoomResponse = components['schemas']['RoomResponse'];
+type TaskResponse = components['schemas']['TaskResponse'];
+
+/** A room as the server answers it, the numbers as numbers. */
+export const toRoom = (room: RoomResponse): Room => ({ ...room, sortOrder: toInt(room.sortOrder), version: toInt(room.version) });
+
+/** A task as the server answers it (a list item or the answer of a write), the numbers as numbers. */
+export const toTask = (task: TaskResponse): Task => ({
+  ...task,
+  durationMinutes: toInt(task.durationMinutes),
+  points: toInt(task.points),
+  version: toInt(task.version),
+});
+
 export async function fetchRooms(): Promise<Room[]> {
   const rooms = await collectPages(async (cursor) =>
     (await unwrap(apiV2.GET('/api/v2/rooms', { params: { query: { limit: String(LIST_PAGE_SIZE), cursor } } }))).data,
   );
-  return rooms.map((room) => ({ ...room, sortOrder: toInt(room.sortOrder) }));
+  return rooms.map(toRoom);
 }
 
 export async function fetchTasks(): Promise<Task[]> {
   const tasks = await collectPages(async (cursor) =>
     (await unwrap(apiV2.GET('/api/v2/tasks', { params: { query: { limit: String(LIST_PAGE_SIZE), cursor } } }))).data,
   );
-  return tasks.map((task) => ({
-    ...task,
-    durationMinutes: toInt(task.durationMinutes),
-    points: toInt(task.points),
-  }));
+  return tasks.map(toTask);
 }
 
 /** All rooms, inactive ones included. */

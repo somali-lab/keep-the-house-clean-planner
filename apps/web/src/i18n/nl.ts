@@ -8,6 +8,7 @@ export const nl = {
   'app.name': 'Keep the House Clean',
   'app.loading': 'Laden…',
   'app.error': 'Er ging iets mis.',
+  'app.staleEntity': 'Deze gegevens zijn intussen door iemand anders gewijzigd. Controleer je wijziging en sla opnieuw op.',
   'app.version': 'Versie {version}',
   'about.title': 'Over Keep the House Clean',
   'about.description': 'Versie en projectinformatie van deze installatie.',

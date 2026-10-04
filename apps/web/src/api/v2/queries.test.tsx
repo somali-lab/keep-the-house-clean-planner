@@ -52,10 +52,10 @@ describe('useCalendar', () => {
 });
 
 describe('useRooms and useTasks', () => {
-  const room = (id: string, extra = {}) => ({ id, name: `Kamer ${id}`, sortOrder: '10', active: true, virtual: false, createdAt: 'x', updatedAt: 'x', ...extra });
+  const room = (id: string, extra = {}) => ({ id, name: `Kamer ${id}`, sortOrder: '10', active: true, virtual: false, createdAt: 'x', updatedAt: 'x', version: '3', ...extra });
   const task = (id: string, extra = {}) => ({
     id, name: `Taak ${id}`, roomId: 'r1', intervalKey: '1w', durationMinutes: '20', points: '15', defaultAssigneeId: null,
-    active: true, notes: '', tags: [], lastCompletedAt: null, createdAt: 'x', updatedAt: 'x', ...extra,
+    active: true, notes: '', tags: [], lastCompletedAt: null, createdAt: 'x', updatedAt: 'x', version: 4, ...extra,
   });
 
   it('reads every page of the rooms and maps the numbers', async () => {
@@ -69,7 +69,7 @@ describe('useRooms and useTasks', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(result.current.data!.map((r) => r.id)).toEqual(['r1', 'r2', 'r3']);
-    expect(result.current.data![0]).toMatchObject({ sortOrder: 10, active: true });
+    expect(result.current.data![0]).toMatchObject({ sortOrder: 10, active: true, version: 3 });
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['/api/v2/rooms?limit=200', '/api/v2/rooms?limit=200&cursor=c2']);
   });
 
@@ -83,7 +83,7 @@ describe('useRooms and useTasks', () => {
     const { result } = renderHook(() => useTasks(), { wrapper: wrapperFor() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(result.current.data!.map((t) => [t.id, t.durationMinutes, t.points])).toEqual([['t1', 20, 15], ['t2', 20, 0]]);
+    expect(result.current.data!.map((t) => [t.id, t.durationMinutes, t.points, t.version])).toEqual([['t1', 20, 15, 4], ['t2', 20, 0, 4]]);
     expect(fetchMock.mock.calls[0]![0]).toBe('/api/v2/tasks?limit=200');
   });
 

@@ -60,7 +60,9 @@ public sealed record RewardGoals(int? WeekPoints, int? CyclePoints)
 
 /// <summary>
 /// The settings document. A missing optional value is <see langword="null"/> here and means its default for the API
-/// (<see cref="SettingsDefaults"/>): the stored document is kept as the Node server wrote it.
+/// (<see cref="SettingsDefaults"/>): the stored document is kept as the Node server wrote it. <see cref="Version"/> is the optimistic concurrency
+/// version of the document (<see cref="Concurrency.EntityVersion"/>, ADR-0022); it rises with every real change of the settings, also a dismissed
+/// promote suggestion, but not with the activation guard counter, which is no part of the settings.
 /// </summary>
 public sealed record HouseholdSettings(
     DateOnly CycleAnchorDate,
@@ -80,4 +82,5 @@ public sealed record HouseholdSettings(
     int? CentsPerPoint,
     RewardGoals? RewardGoals,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    int Version = 0);

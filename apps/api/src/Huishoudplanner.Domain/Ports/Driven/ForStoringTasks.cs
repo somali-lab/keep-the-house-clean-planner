@@ -29,8 +29,12 @@ public interface ForStoringTasks
 
     Task<OneOf<HouseholdTask, PortError>> InsertAsync(NewTask task, CancellationToken cancellationToken);
 
-    /// <summary>Sets the given fields and <c>updatedAt</c>; returns the task as stored afterwards.</summary>
-    Task<OneOf<HouseholdTask, NotFound, PortError>> UpdateAsync(string id, TaskChanges changes, DateTimeOffset updatedAt, CancellationToken cancellationToken);
+    /// <summary>
+    /// Sets the given fields and <c>updatedAt</c>, raises the version by one in the same write, and returns the task as stored afterwards. With an
+    /// <paramref name="expectedVersion"/> the write is conditional on the stored version (<see cref="PreconditionFailed"/> when it differs,
+    /// nothing written); <see langword="null"/> writes unconditionally (flows without a client precondition).
+    /// </summary>
+    Task<OneOf<HouseholdTask, NotFound, PortError, PreconditionFailed>> UpdateAsync(string id, TaskChanges changes, DateTimeOffset updatedAt, CancellationToken cancellationToken, int? expectedVersion = null);
 
     /// <summary>The number of tasks, active or inactive, that belong to the room (a room that tasks use cannot be deleted).</summary>
     Task<OneOf<int, PortError>> CountInRoomAsync(string roomId, CancellationToken cancellationToken);
@@ -39,14 +43,15 @@ public interface ForStoringTasks
     Task<OneOf<IReadOnlyList<string>, PortError>> GetIntervalKeysInUseAsync(CancellationToken cancellationToken);
 
     /// <summary>
-    /// Sets the denormalised <c>lastCompletedAt</c> (and <c>updatedAt</c>), <see langword="null"/> clears it. Written together with an audit entry by
+    /// Sets the denormalised <c>lastCompletedAt</c> (and <c>updatedAt</c>, and raises the version), <see langword="null"/> clears it. Written together with an audit entry by
     /// the occurrence use cases, and only when the value changes.
     /// </summary>
     Task<OneOf<Success, NotFound, PortError>> SetLastCompletedAtAsync(string id, DateTimeOffset? lastCompletedAt, DateTimeOffset updatedAt, CancellationToken cancellationToken);
 
     /// <summary>
     /// Permanently removes the task; <see cref="NotFound"/> when it is gone (or the id is no id). Written together with its audit entry, and
-    /// after the task has left the plans and badge rules that name it. Occurrences, ledger entries and history keep their own snapshot.
+    /// after the task has left the plans and badge rules that name it. Occurrences, ledger entries and history keep their own snapshot. With an
+    /// <paramref name="expectedVersion"/> the delete is conditional on the stored version (<see cref="PreconditionFailed"/> when it differs).
     /// </summary>
-    Task<OneOf<Success, NotFound, PortError>> DeleteAsync(string id, CancellationToken cancellationToken);
+    Task<OneOf<Success, NotFound, PortError, PreconditionFailed>> DeleteAsync(string id, CancellationToken cancellationToken, int? expectedVersion = null);
 }

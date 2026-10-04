@@ -24,7 +24,10 @@ public sealed record BadgeImageData(byte[] Bytes, BadgeImageType ContentType, st
     public BadgeImageInfo Info => new(ContentType, Bytes.Length, Hash);
 }
 
-/// <summary>A badge definition (requirements 3 <c>badges</c>, 4.13). The rule names its tasks once, as sorted lower case ids.</summary>
+/// <summary>
+/// A badge definition (requirements 3 <c>badges</c>, 4.13). The rule names its tasks once, as sorted lower case ids. <see cref="Version"/> is the optimistic
+/// concurrency version of the document (<see cref="Concurrency.EntityVersion"/>, ADR-0022).
+/// </summary>
 public sealed record Badge(
     string Id,
     string Name,
@@ -34,7 +37,8 @@ public sealed record Badge(
     string? ExampleKey,
     BadgeImageInfo? Image,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    int Version = 0);
 
 /// <summary>A badge as the store is asked to create it. The store assigns the id.</summary>
 public sealed record NewBadge(string Name, string Description, BadgeRule Rule, bool Active, string? ExampleKey, BadgeImageData? Image, DateTimeOffset CreatedAt);

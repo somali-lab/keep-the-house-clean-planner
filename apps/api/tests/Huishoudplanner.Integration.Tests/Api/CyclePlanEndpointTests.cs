@@ -580,7 +580,7 @@ public sealed class CyclePlanEndpointTests : IDisposable
         await PutSlots(planId, SlotBody(twice, 1, 1, null), SlotBody(weekly, 0, 0, p1), SlotBody(weekly, 0, 1, null));
 
         var stored = await Plans.Find(new BsonDocument("_id", ObjectId.Parse(planId))).SingleAsync(Ct);
-        stored.Names.Should().Equal("_id", "name", "active", "slots", "weekThemes", "draft", "source", "proposalId", "rationale", "discarded", "createdAt", "updatedAt");
+        stored.Names.Should().Equal("_id", "name", "active", "slots", "weekThemes", "draft", "source", "proposalId", "rationale", "discarded", "createdAt", "updatedAt", "version");
         var slots = stored["slots"].AsBsonArray.Select(s => s.AsBsonDocument).ToList();
         slots.Select(s => (s["weekIndex"].ToInt32(), s["weekday"].ToInt32())).Should().Equal((0, 1), (0, 0), (1, 1));
         slots[1].Names.Should().Equal("taskId", "weekIndex", "weekday", "assigneeId", "sortOrder");

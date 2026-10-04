@@ -376,6 +376,8 @@ public sealed class PromoteEndpointTests(MongoContainerFixture mongo)
         await a.MoveAsync(0, "2026-09-23");
         var second = await a.MoveAsync(1, "2026-10-21");
 
+        var settingsCollection = a.H.Database.GetCollection<BsonDocument>("settings");
+        var versionBefore = await settingsCollection.VersionAsync(FilterDefinition<BsonDocument>.Empty);
         var (status, body) = await a.DismissAsync(a.Dismissal(second));
 
         status.Should().Be(HttpStatusCode.OK, body.ToString());
@@ -385,6 +387,7 @@ public sealed class PromoteEndpointTests(MongoContainerFixture mongo)
         (stored["planId"].AsObjectId.ToString(), stored["lastEvidenceId"].AsObjectId.ToString(), stored["toAssigneeId"].IsBsonNull).Should().Be((a.PlanId, second, true));
         var entries = await a.H.AuditAsync("settings", "update", Builders<BsonDocument>.Filter.Exists("after.dismissedPromotions"));
         entries.Should().ContainSingle().Which["source"].AsString.Should().Be("ui");
+        (await settingsCollection.VersionAsync(FilterDefinition<BsonDocument>.Empty)).Should().BeGreaterThan(versionBefore, "the dismissal changed the settings, so a stale ETag of the settings is refused afterwards");
     }
 
     [Fact]

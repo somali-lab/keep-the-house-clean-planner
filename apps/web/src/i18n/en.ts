@@ -2,6 +2,7 @@ export const en = {
   "app.name": "Keep the House Clean",
   "app.loading": "Loading...",
   "app.error": "Something went wrong.",
+  "app.staleEntity": "This was changed by someone else in the meantime. Review your change and save again.",
   "app.version": "Version {version}",
   "about.title": "About Keep the House Clean",
   "about.description": "Version and project information for this installation.",

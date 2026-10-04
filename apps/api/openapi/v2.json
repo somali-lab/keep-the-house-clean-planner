@@ -137,6 +137,14 @@
         "responses": {
           "201": {
             "description": "Created",
+            "headers": {
+              "ETag": {
+                "description": "The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -179,17 +187,94 @@
       }
     },
     "/api/v2/users/{id}": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Reads one person.",
+        "description": "Needs no profile. The ETag header carries the version of the person; send it as If-Match when you change the person or set their browser notifications. Answers 404 not_found for an unknown person and 400 validation_error on id for a malformed id.",
+        "operationId": "getUser",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "ETag": {
+                "description": "The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
       "patch": {
         "tags": [
           "Users"
         ],
         "summary": "Changes a person, or deactivates one with active=false.",
-        "description": "Administrators only. A change that alters nothing writes and audits nothing. 409 last_admin when the last active administrator would be deactivated or demoted.",
+        "description": "Administrators only. A change that alters nothing writes and audits nothing. 409 last_admin when the last active administrator would be deactivated or demoted. Needs If-Match with the ETag of the person you read: another version is 412 precondition_failed (also for a change that would change nothing), and a change that changes nothing keeps the version.",
         "operationId": "updateUser",
         "parameters": [
           {
             "name": "id",
             "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "The ETag of the version you read, exactly as the server sent it (a version number in double quotes). Missing: 428 precondition_required; not the stored version: 412 precondition_failed with the current ETag; malformed, weak or *: 400 validation_error.",
             "required": true,
             "schema": {
               "type": "string"
@@ -207,8 +292,36 @@
           "required": true
         },
         "responses": {
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "200": {
             "description": "OK",
+            "headers": {
+              "ETag": {
+                "description": "The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -276,12 +389,21 @@
           "Users"
         ],
         "summary": "Sets the browser notification moments of a person.",
-        "description": "A person sets their own moments, an administrator anyone's (403 permission_denied otherwise). The complete setting replaces the stored one; an equal setting writes and audits nothing.",
+        "description": "A person sets their own moments, an administrator anyone's (403 permission_denied otherwise, which the use case decides after the header check: a request without If-Match is 428 first). The complete setting replaces the stored one; an equal setting writes and audits nothing. The setting is a field of the person, so it needs If-Match with the ETag of the person (GET /users/{id}); another version is 412 precondition_failed, and a setting that changes nothing keeps the version.",
         "operationId": "setUserBrowserNotifications",
         "parameters": [
           {
             "name": "id",
             "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "The ETag of the version you read, exactly as the server sent it (a version number in double quotes). Missing: 428 precondition_required; not the stored version: 412 precondition_failed with the current ETag; malformed, weak or *: 400 validation_error.",
             "required": true,
             "schema": {
               "type": "string"
@@ -299,8 +421,36 @@
           "required": true
         },
         "responses": {
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "200": {
             "description": "OK",
+            "headers": {
+              "ETag": {
+                "description": "The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -436,6 +586,14 @@
         "responses": {
           "201": {
             "description": "Created",
+            "headers": {
+              "ETag": {
+                "description": "The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -488,17 +646,94 @@
       }
     },
     "/api/v2/rooms/{id}": {
+      "get": {
+        "tags": [
+          "Rooms"
+        ],
+        "summary": "Reads one room.",
+        "description": "The ETag header carries the version of the room; send it as If-Match when you change or delete the room. Answers 404 not_found for an unknown room and 400 validation_error on id for a malformed id.",
+        "operationId": "getRoom",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "ETag": {
+                "description": "The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
       "patch": {
         "tags": [
           "Rooms"
         ],
         "summary": "Changes a room (administrators).",
-        "description": "Renames, reorders, deactivates or marks the room virtual. A change that changes nothing writes and audits nothing. Answers 404 not_found for an unknown room.",
+        "description": "Renames, reorders, deactivates or marks the room virtual. A change that changes nothing writes and audits nothing. Answers 404 not_found for an unknown room. Needs If-Match with the ETag of the room you read: another version is 412 precondition_failed (also for a change that would change nothing), and a change that changes nothing keeps the version.",
         "operationId": "updateRoom",
         "parameters": [
           {
             "name": "id",
             "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "The ETag of the version you read, exactly as the server sent it (a version number in double quotes). Missing: 428 precondition_required; not the stored version: 412 precondition_failed with the current ETag; malformed, weak or *: 400 validation_error.",
             "required": true,
             "schema": {
               "type": "string"
@@ -516,8 +751,36 @@
           "required": true
         },
         "responses": {
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "200": {
             "description": "OK",
+            "headers": {
+              "ETag": {
+                "description": "The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -583,7 +846,7 @@
           "Rooms"
         ],
         "summary": "Deletes a room that holds no tasks (administrators).",
-        "description": "A room that still holds tasks, active or inactive, cannot be deleted: 409 room_in_use with the number of tasks in the taskCount extension. Answers 404 not_found for an unknown room.",
+        "description": "A room that still holds tasks, active or inactive, cannot be deleted: 409 room_in_use with the number of tasks in the taskCount extension. Answers 404 not_found for an unknown room. Needs If-Match with the ETag of the room you read; another version is 412 precondition_failed and nothing is deleted.",
         "operationId": "deleteRoom",
         "parameters": [
           {
@@ -593,9 +856,38 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "The ETag of the version you read, exactly as the server sent it (a version number in double quotes). Missing: 428 precondition_required; not the stored version: 412 precondition_failed with the current ETag; malformed, weak or *: 400 validation_error.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "200": {
             "description": "OK",
             "content": {
@@ -750,6 +1042,14 @@
         "responses": {
           "201": {
             "description": "Created",
+            "headers": {
+              "ETag": {
+                "description": "The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -802,17 +1102,94 @@
       }
     },
     "/api/v2/tasks/{id}": {
+      "get": {
+        "tags": [
+          "Tasks"
+        ],
+        "summary": "Reads one task.",
+        "description": "Needs no profile. The ETag header carries the version of the task; send it as If-Match when you change or delete the task. Answers 404 not_found for an unknown task and 400 validation_error on id for a malformed id.",
+        "operationId": "getTask",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "ETag": {
+                "description": "The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
       "patch": {
         "tags": [
           "Tasks"
         ],
         "summary": "Changes a task, or deactivates one with active=false (planners).",
-        "description": "A change that changes nothing writes and audits nothing. A change of the default assignee is audited as its own assign entry. points: null resets the points to the default for the duration (a reset that changes nothing is a no-op). Changed references are checked like on create. Answers 404 not_found for an unknown task.",
+        "description": "A change that changes nothing writes and audits nothing. A change of the default assignee is audited as its own assign entry. points: null resets the points to the default for the duration (a reset that changes nothing is a no-op). Changed references are checked like on create. Answers 404 not_found for an unknown task. Needs If-Match with the ETag of the task you read: another version is 412 precondition_failed (also for a change that would change nothing), and a change that changes nothing keeps the version.",
         "operationId": "updateTask",
         "parameters": [
           {
             "name": "id",
             "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "The ETag of the version you read, exactly as the server sent it (a version number in double quotes). Missing: 428 precondition_required; not the stored version: 412 precondition_failed with the current ETag; malformed, weak or *: 400 validation_error.",
             "required": true,
             "schema": {
               "type": "string"
@@ -830,8 +1207,36 @@
           "required": true
         },
         "responses": {
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "200": {
             "description": "OK",
+            "headers": {
+              "ETag": {
+                "description": "The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -897,7 +1302,7 @@
           "Tasks"
         ],
         "summary": "Deletes a task for good (planners).",
-        "description": "Normally a task is deactivated instead. The delete removes the task's slots from every plan that holds one (each such plan gets an update entry with the removed slots and meta reason task_delete) and the task from the badge rules that name it (a rule left without tasks is deactivated; reason task_deleted), all in one transaction, and records a delete entry that keeps the removed fields. Occurrences, points and history stay: they carry their own snapshot. Answers 404 not_found for an unknown task, which changes nothing, and 400 validation_error on id for a malformed id.",
+        "description": "Normally a task is deactivated instead. The delete removes the task's slots from every plan that holds one (each such plan gets an update entry with the removed slots and meta reason task_delete) and the task from the badge rules that name it (a rule left without tasks is deactivated; reason task_deleted), all in one transaction, and records a delete entry that keeps the removed fields. Occurrences, points and history stay: they carry their own snapshot. Answers 404 not_found for an unknown task, which changes nothing, and 400 validation_error on id for a malformed id. Needs If-Match with the ETag of the task you read; another version is 412 precondition_failed and nothing is deleted.",
         "operationId": "deleteTask",
         "parameters": [
           {
@@ -907,9 +1312,38 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "The ETag of the version you read, exactly as the server sent it (a version number in double quotes). Missing: 428 precondition_required; not the stored version: 412 precondition_failed with the current ETag; malformed, weak or *: 400 validation_error.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "200": {
             "description": "OK",
             "content": {
@@ -1822,6 +2256,14 @@
         "responses": {
           "201": {
             "description": "Created",
+            "headers": {
+              "ETag": {
+                "description": "The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -1889,11 +2331,19 @@
           "Cycle plans"
         ],
         "summary": "The active cycle plan.",
-        "description": "Needs no profile. Answers 404 not_found when no plan is active.",
+        "description": "Needs no profile. The ETag header carries the version of the plan. Answers 404 not_found when no plan is active.",
         "operationId": "getActiveCyclePlan",
         "responses": {
           "200": {
             "description": "OK",
+            "headers": {
+              "ETag": {
+                "description": "The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -1931,7 +2381,7 @@
           "Cycle plans"
         ],
         "summary": "One cycle plan.",
-        "description": "Needs no profile. Answers 404 not_found for an unknown plan.",
+        "description": "Needs no profile. The ETag header carries the version of the plan; send it as If-Match when you change, delete or save the slots of the plan. Answers 404 not_found for an unknown plan.",
         "operationId": "getCyclePlan",
         "parameters": [
           {
@@ -1946,6 +2396,14 @@
         "responses": {
           "200": {
             "description": "OK",
+            "headers": {
+              "ETag": {
+                "description": "The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -1991,12 +2449,21 @@
           "Cycle plans"
         ],
         "summary": "Renames a plan or sets its week themes (planners).",
-        "description": "A change that changes nothing writes and audits nothing. Answers 404 not_found for an unknown plan.",
+        "description": "A change that changes nothing writes and audits nothing. Answers 404 not_found for an unknown plan. Needs If-Match with the ETag of the plan you read: another version is 412 precondition_failed (also for a change that would change nothing), and a change that changes nothing keeps the version.",
         "operationId": "updateCyclePlan",
         "parameters": [
           {
             "name": "id",
             "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "The ETag of the version you read, exactly as the server sent it (a version number in double quotes). Missing: 428 precondition_required; not the stored version: 412 precondition_failed with the current ETag; malformed, weak or *: 400 validation_error.",
             "required": true,
             "schema": {
               "type": "string"
@@ -2014,8 +2481,36 @@
           "required": true
         },
         "responses": {
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "200": {
             "description": "OK",
+            "headers": {
+              "ETag": {
+                "description": "The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -2081,7 +2576,7 @@
           "Cycle plans"
         ],
         "summary": "Deletes a plan that is neither the default nor the active plan (planners).",
-        "description": "The oldest plan is the default plan: 409 default_plan. The active plan: 409 active_plan. Answers 404 not_found for an unknown plan. The deleted plan is audited.",
+        "description": "The oldest plan is the default plan: 409 default_plan. The active plan: 409 active_plan. Answers 404 not_found for an unknown plan. The deleted plan is audited. Needs If-Match with the ETag of the plan you read; another version is 412 precondition_failed and nothing is deleted.",
         "operationId": "deleteCyclePlan",
         "parameters": [
           {
@@ -2091,9 +2586,38 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "The ETag of the version you read, exactly as the server sent it (a version number in double quotes). Missing: 428 precondition_required; not the stored version: 412 precondition_failed with the current ETag; malformed, weak or *: 400 validation_error.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "200": {
             "description": "OK",
             "content": {
@@ -2232,12 +2756,21 @@
           "Cycle plans"
         ],
         "summary": "Replaces all slots of a plan (planners).",
-        "description": "The plan is validated first: a plan that breaks a hard rule (unknown or inactive task or person, unavailable assignee, the same task twice on one day) is refused with 422 invalid_plan, carrying errors, issues, warnings and summary, and nothing is written. Otherwise the plan is saved and returned with the warnings and the summary. The audit entry holds only the added, removed and changed slots; saving what is stored writes and audits nothing. Saving the slots of the ACTIVE plan always synchronises the upcoming occurrences in the same transaction (the open generated occurrences from today to the end of the next cycle are replaced; done, skipped, moved and ad-hoc ones stay): the replacement is reported in synchronized and audited with the system as source and the saving profile as actor. Saving a draft plan changes no occurrences and answers synchronized null. Answers 500 settings_missing when the installation has no settings.",
+        "description": "The plan is validated first: a plan that breaks a hard rule (unknown or inactive task or person, unavailable assignee, the same task twice on one day) is refused with 422 invalid_plan, carrying errors, issues, warnings and summary, and nothing is written. Otherwise the plan is saved and returned with the warnings and the summary. The audit entry holds only the added, removed and changed slots; saving what is stored writes and audits nothing. Saving the slots of the ACTIVE plan always synchronises the upcoming occurrences in the same transaction (the open generated occurrences from today to the end of the next cycle are replaced; done, skipped, moved and ad-hoc ones stay): the replacement is reported in synchronized and audited with the system as source and the saving profile as actor. Saving a draft plan changes no occurrences and answers synchronized null. Answers 500 settings_missing when the installation has no settings. The slots are part of the plan, so the save needs If-Match with the ETag of the plan you read (GET /cycle-plans/{id}): another version is 412 precondition_failed, checked before the validation and also for slots that are already stored; the answer carries the new ETag of the plan (a save that stores nothing new keeps it).",
         "operationId": "replaceCyclePlanSlots",
         "parameters": [
           {
             "name": "id",
             "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "The ETag of the version you read, exactly as the server sent it (a version number in double quotes). Missing: 428 precondition_required; not the stored version: 412 precondition_failed with the current ETag; malformed, weak or *: 400 validation_error.",
             "required": true,
             "schema": {
               "type": "string"
@@ -2255,8 +2788,36 @@
           "required": true
         },
         "responses": {
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "200": {
             "description": "OK",
+            "headers": {
+              "ETag": {
+                "description": "The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -4691,6 +5252,14 @@
         "responses": {
           "201": {
             "description": "Created",
+            "headers": {
+              "ETag": {
+                "description": "The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -4711,6 +5280,312 @@
           },
           "403": {
             "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/badges/{id}": {
+      "get": {
+        "tags": [
+          "Badges"
+        ],
+        "summary": "Reads one badge.",
+        "description": "Needs no profile. The ETag header carries the version of the badge; send it as If-Match when you change or delete the badge. Answers 404 not_found for an unknown badge and 400 validation_error on id for a malformed id.",
+        "operationId": "getBadge",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "ETag": {
+                "description": "The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadgeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Badges"
+        ],
+        "summary": "Changes a badge (administrators).",
+        "description": "Every field is optional; image: null removes the picture and a new image replaces it. A change that changes nothing writes and audits nothing. A change of the rule or the active flag evaluates the awards again. Answers 404 not_found for an unknown badge. Needs If-Match with the ETag of the badge you read: another version is 412 precondition_failed (also for a change that would change nothing), and a change that changes nothing keeps the version.",
+        "operationId": "updateBadge",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "The ETag of the version you read, exactly as the server sent it (a version number in double quotes). Missing: 428 precondition_required; not the stored version: 412 precondition_failed with the current ETag; malformed, weak or *: 400 validation_error.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBadgeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "headers": {
+              "ETag": {
+                "description": "The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadgeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Badges"
+        ],
+        "summary": "Deletes a badge (administrators).",
+        "description": "The awards of the badge are withdrawn with it. Answers 404 not_found for an unknown badge. Needs If-Match with the ETag of the badge you read; another version is 412 precondition_failed and nothing is deleted.",
+        "operationId": "deleteBadge",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "The ETag of the version you read, exactly as the server sent it (a version number in double quotes). Missing: 428 precondition_required; not the stored version: 412 precondition_failed with the current ETag; malformed, weak or *: 400 validation_error.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadgeDeletedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -4977,178 +5852,6 @@
           },
           "404": {
             "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v2/badges/{id}": {
-      "patch": {
-        "tags": [
-          "Badges"
-        ],
-        "summary": "Changes a badge (administrators).",
-        "description": "Every field is optional; image: null removes the picture and a new image replaces it. A change that changes nothing writes and audits nothing. A change of the rule or the active flag evaluates the awards again. Answers 404 not_found for an unknown badge.",
-        "operationId": "updateBadge",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateBadgeRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BadgeResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "Badges"
-        ],
-        "summary": "Deletes a badge (administrators).",
-        "description": "The awards of the badge are withdrawn with it. Answers 404 not_found for an unknown badge.",
-        "operationId": "deleteBadge",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BadgeDeletedResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -5900,11 +6603,19 @@
           "Settings"
         ],
         "summary": "Returns the household settings.",
-        "description": "Missing optional values are delivered as their defaults: no bonus schedule, EUR, 0 cents per point and automatic reward goals. The bonus schedule rows carry startsInFuture and bonusesInForce holds the amounts in force today, so the client computes nothing. The AI API key is never part of the settings.",
+        "description": "Missing optional values are delivered as their defaults: no bonus schedule, EUR, 0 cents per point and automatic reward goals. The bonus schedule rows carry startsInFuture and bonusesInForce holds the amounts in force today, so the client computes nothing. The AI API key is never part of the settings. The ETag header carries the version of the settings; send it as If-Match when you change them.",
         "operationId": "getSettings",
         "responses": {
           "200": {
             "description": "OK",
+            "headers": {
+              "ETag": {
+                "description": "The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -5930,8 +6641,19 @@
           "Settings"
         ],
         "summary": "Changes the given settings (administrators only).",
-        "description": "Every field is optional and only the given ones change; a patch that changes nothing writes and audits nothing. periodBonuses sets the four bonus amounts from today on: the server writes a schedule row, and a client never sends the schedule. Amounts, currency, cents per point and goals equal to the ones in force change nothing. Removing an interval that tasks use is 409 interval_in_use (with the blocked keys in keys); when concurrent writers keep winning a schedule write the answer is 409 bonus_schedule_conflict. The timezone, the week start and the AI API key cannot be set.",
+        "description": "Every field is optional and only the given ones change; a patch that changes nothing writes and audits nothing. periodBonuses sets the four bonus amounts from today on: the server writes a schedule row, and a client never sends the schedule. Amounts, currency, cents per point and goals equal to the ones in force change nothing. Removing an interval that tasks use is 409 interval_in_use (with the blocked keys in keys). Needs If-Match with the ETag of the settings you read: another version is 412 precondition_failed (also for a change that would change nothing, and before every other check), and a change that changes nothing keeps the version. A caller that holds the current ETag therefore never meets bonus_schedule_conflict, which remains as the second defence: 409 when the bonus schedule is written against a schedule that changed in between and the write keeps losing to concurrent ones. The timezone, the week start and the AI API key cannot be set.",
         "operationId": "updateSettings",
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "The ETag of the version you read, exactly as the server sent it (a version number in double quotes). Missing: 428 precondition_required; not the stored version: 412 precondition_failed with the current ETag; malformed, weak or *: 400 validation_error.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -5943,8 +6665,36 @@
           "required": true
         },
         "responses": {
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "200": {
             "description": "OK",
+            "headers": {
+              "ETag": {
+                "description": "The strong validator of the entity's current version (a version number in double quotes); send it as If-Match on the next write.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -6961,7 +7711,8 @@
           "exampleKey",
           "image",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "version"
         ],
         "type": "object",
         "properties": {
@@ -7003,6 +7754,14 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "version": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },
@@ -7961,7 +8720,8 @@
           "rationale",
           "discarded",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "version"
         ],
         "type": "object",
         "properties": {
@@ -8017,6 +8777,14 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "version": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },
@@ -10974,7 +11742,8 @@
           "active",
           "virtual",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "version"
         ],
         "type": "object",
         "properties": {
@@ -11005,6 +11774,14 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "version": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },
@@ -11029,7 +11806,8 @@
           "centsPerPoint",
           "rewardGoals",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "version"
         ],
         "type": "object",
         "properties": {
@@ -11143,6 +11921,15 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "version": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "The concurrency version of the settings (the number inside their ETag); send the ETag as If-Match when you change the settings.",
+            "format": "int32"
           }
         }
       },
@@ -11389,7 +12176,8 @@
           "tags",
           "lastCompletedAt",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "version"
         ],
         "type": "object",
         "properties": {
@@ -11453,6 +12241,14 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "version": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },
@@ -12020,7 +12816,8 @@
           "maxDailyMinutes",
           "browserNotifications",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "version"
         ],
         "type": "object",
         "properties": {
@@ -12069,6 +12866,15 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "version": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "The concurrency version of the person (the number inside its ETag); send the ETag as If-Match when you change the person.",
+            "format": "int32"
           }
         }
       },

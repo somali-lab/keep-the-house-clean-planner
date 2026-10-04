@@ -20,6 +20,8 @@ public static class PlanSources
 /// <summary>
 /// A four-week plan (requirements 3, <c>cyclePlans</c>). Exactly one plan is active; the oldest plan is the default plan. A plan from
 /// the AI flow also carries a proposal id and a rationale per week; <see cref="Draft"/> and <see cref="Discarded"/> belong to that flow.
+/// <see cref="Version"/> is the optimistic concurrency version of the document (<see cref="Concurrency.EntityVersion"/>, ADR-0022); it also rises when
+/// the plan is activated or deactivated, or loses a slot because its task was deleted.
 /// </summary>
 public sealed record CyclePlan(
     string Id,
@@ -33,12 +35,13 @@ public sealed record CyclePlan(
     IReadOnlyList<string>? Rationale,
     bool Discarded,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt)
+    DateTimeOffset UpdatedAt,
+    int Version = 0)
 {
     public bool Equals(CyclePlan? other) =>
         other is not null &&
         Id == other.Id && Name == other.Name && Active == other.Active && Draft == other.Draft && Source == other.Source &&
-        ProposalId == other.ProposalId && Discarded == other.Discarded && CreatedAt == other.CreatedAt && UpdatedAt == other.UpdatedAt &&
+        ProposalId == other.ProposalId && Discarded == other.Discarded && CreatedAt == other.CreatedAt && UpdatedAt == other.UpdatedAt && Version == other.Version &&
         Slots.SequenceEqual(other.Slots) && WeekThemes.SequenceEqual(other.WeekThemes, StringComparer.Ordinal) &&
         (Rationale is null ? other.Rationale is null : other.Rationale is not null && Rationale.SequenceEqual(other.Rationale, StringComparer.Ordinal));
 
