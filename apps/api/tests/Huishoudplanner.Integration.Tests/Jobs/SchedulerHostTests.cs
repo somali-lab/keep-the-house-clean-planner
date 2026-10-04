@@ -31,7 +31,7 @@ public sealed class SchedulerHostTests
     }
 
     [Fact]
-    public void An_enabled_scheduler_has_both_jobs_at_their_times_in_the_household_timezone_and_one_hosted_service_for_all_of_them()
+    public void An_enabled_scheduler_without_a_channel_has_both_nightly_jobs_at_their_times_in_the_household_timezone_and_one_hosted_service_for_all_of_them()
     {
         using var factory = ApiFactory.WithoutDatabase()
             .WithSetting("DISABLE_SCHEDULER", "false")
@@ -44,6 +44,29 @@ public sealed class SchedulerHostTests
         scheduler.NextRunOf("nightly-generation").Should().Be(new DateTimeOffset(2026, 9, 14, 1, 0, 0, TimeSpan.Zero));
         scheduler.NextRunOf("audit-retention").Should().Be(new DateTimeOffset(2026, 9, 14, 1, 45, 0, TimeSpan.Zero));
         factory.Services.GetServices<IHostedService>().OfType<JobSchedulerService>().Should().ContainSingle();
+    }
+
+    [Fact]
+    public void The_morning_message_is_only_scheduled_with_a_notification_channel_at_0730_household_time()
+    {
+        using var ntfy = ApiFactory.WithoutDatabase()
+            .WithSetting("DISABLE_SCHEDULER", "false")
+            .WithSetting("TZ_APP", "Europe/Amsterdam")
+            .WithSetting("NOTIFY_TYPE", "ntfy")
+            .WithSetting("NOTIFY_URL", "https://ntfy.example/huis")
+            .WithPort<TimeProvider>(new FakeTimeProvider(Night));
+        using var homeAssistant = ApiFactory.WithoutDatabase()
+            .WithSetting("DISABLE_SCHEDULER", "false")
+            .WithSetting("NOTIFY_TYPE", "homeassistant")
+            .WithSetting("NOTIFY_URL", "http://ha.local/api/webhook/huis");
+        using var none = ApiFactory.WithoutDatabase().WithSetting("DISABLE_SCHEDULER", "false").WithSetting("NOTIFY_TYPE", "none");
+
+        var withNtfy = SchedulerOf(ntfy);
+
+        withNtfy.JobNames.Should().Equal("nightly-generation", "audit-retention", "morning-notify");
+        withNtfy.NextRunOf("morning-notify").Should().Be(new DateTimeOffset(2026, 9, 14, 5, 30, 0, TimeSpan.Zero));
+        SchedulerOf(homeAssistant).JobNames.Should().Contain("morning-notify");
+        SchedulerOf(none).JobNames.Should().NotContain("morning-notify");
     }
 
     [Fact]

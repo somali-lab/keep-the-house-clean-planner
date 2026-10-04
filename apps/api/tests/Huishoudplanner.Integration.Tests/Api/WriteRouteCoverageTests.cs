@@ -187,6 +187,7 @@ public sealed class WriteRouteCoverageTests(AuditCoverageHarness h) : IClassFixt
         new("POST /api/v2/ai/test", Kind.ReadOnly, Fixed(h => new(HttpMethod.Post, "/api/v2/ai/test", new { aiProvider = new { type = "mock" } }, h.Planner))),
         new("POST /api/v2/ai/suggest-tasks", Kind.ReadOnly, Fixed(h => new(HttpMethod.Post, "/api/v2/ai/suggest-tasks", new { roomId = h.Room }, h.Planner))),
         new("POST /api/v2/ai/explain", Kind.ReadOnly, Fixed(h => new(HttpMethod.Post, "/api/v2/ai/explain", new { planId = h.ActivePlan }, h.Planner))),
+        new("POST /api/v2/jobs/morning-notify", Kind.ReadOnly, Fixed(h => new(HttpMethod.Post, "/api/v2/jobs/morning-notify", null, h.Planner))), // sends through the notification channel (none in the coverage host) and writes nothing
         new("POST /api/v2/cycle-plans/{id}/validation", Kind.ReadOnly, Fixed(h => new(HttpMethod.Post, $"/api/v2/cycle-plans/{h.ActivePlan}/validation", null, h.Planner))),
         new("POST /api/v2/cycle-plans/validation", Kind.ReadOnly, Fixed(h => new(HttpMethod.Post, "/api/v2/cycle-plans/validation", new { slots = new object[] { new { taskId = h.Weekly, weekIndex = 0, weekday = 1, assigneeId = h.P1.Id } } }, h.Planner))),
 

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Identity;
 using Huishoudplanner.Domain.Ports.Driven;
 using Huishoudplanner.Integration.Tests.Fixtures;
@@ -13,7 +14,8 @@ namespace Huishoudplanner.Integration.Tests.Api;
 /// The manual job endpoints (<c>jobs.ts</c> of the Node server) on the real host and a real MongoDB replica set: planners start generation
 /// and audit retention, a manual run is attributed to the requesting profile, and the answers have the shapes of the Node server. Ports the
 /// manual-run case of audit-retention.test.ts ("can be started manually by a planner") and the manual generation of generation.test.ts.
-/// Deferred to 6.3b: <c>/jobs/morning-notify</c> (needs the due list of slice 3.4) and the <c>due</c> summary of the generation answer (3.4).
+/// Slice 6.3b adds the <c>due</c> summary of the generation answer and <c>/jobs/morning-notify</c> (the morning cases of notify.test.ts), with a recording
+/// notification channel in place of ntfy or Home Assistant.
 /// </summary>
 public sealed class JobEndpointTests(MongoContainerFixture mongo)
 {
@@ -96,6 +98,157 @@ public sealed class JobEndpointTests(MongoContainerFixture mongo)
         var response = await client.SendAsync(request, Ct);
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task The_generation_answer_carries_the_due_summary_of_the_due_list()
+    {
+        using var h = new GenerationHarness(mongo);
+        var room = await h.SeedRoomAsync("Badkamer");
+        await h.NewTaskAsync("Badkamer", room, "1w");
+
+        var (status, body) = await h.SendAsync(HttpMethod.Post, "/api/v2/jobs/generation");
+        var due = await h.SendAsync(HttpMethod.Get, "/api/v2/due", withProfile: false);
+
+        status.Should().Be(HttpStatusCode.OK, body.ToString());
+        var summary = body.GetProperty("due");
+        summary.EnumerateObject().Select(p => p.Name).Should().Equal("due", "overdue");
+        summary.GetProperty("due").GetInt32().Should().Be(due.Body.GetProperty("summary").GetProperty("due").GetInt32());
+        summary.GetProperty("overdue").GetInt32().Should().Be(due.Body.GetProperty("summary").GetProperty("overdue").GetInt32());
+    }
+
+    [Fact]
+    public async Task A_task_that_was_last_done_months_ago_counts_as_overdue_in_the_generation_answer()
+    {
+        using var h = new GenerationHarness(mongo);
+        var room = await h.SeedRoomAsync("Badkamer");
+        var task = await h.NewTaskAsync("Badkamer", room, "1w");
+        await h.Tasks.UpdateOneAsync(
+            new BsonDocument("_id", ObjectId.Parse(task)),
+            new BsonDocument("$set", new BsonDocument("lastCompletedAt", new BsonDateTime(new DateTime(2026, 7, 1, 8, 0, 0, DateTimeKind.Utc)))),
+            cancellationToken: Ct);
+
+        var (_, body) = await h.SendAsync(HttpMethod.Post, "/api/v2/jobs/generation");
+
+        body.GetProperty("due").GetProperty("overdue").GetInt32().Should().Be(1);
+    }
+
+    // ---- morning notification
+
+    /// <summary>Wednesday 16 September 2026: one task for Anna today, one for anyone today, one for Bram tomorrow.</summary>
+    private async Task<(GenerationHarness H, string Anna, string Bram)> ArrangeMorningAsync(RecordingNotifier notifier)
+    {
+        var h = new GenerationHarness(mongo, "2026-09-16T05:30:00.000Z", notifier);
+        var anna = await h.SeedPersonAsync("Anna");
+        var bram = await h.SeedPersonAsync("Bram");
+        var room = await h.SeedRoomAsync("Keuken");
+        var plan = await h.ActivePlanIdAsync();
+        var aanrecht = await h.NewTaskAsync("Aanrecht", room, "1w");
+        var oven = await h.NewTaskAsync("Oven", room, "1w");
+        await h.StoreSlotsAsync(plan, (aanrecht, 0, 3, anna), (oven, 0, 3, null), (aanrecht, 0, 4, bram));
+        (await h.SendAsync(HttpMethod.Post, "/api/v2/jobs/generation")).Status.Should().Be(HttpStatusCode.OK);
+        return (h, anna, bram);
+    }
+
+    [Fact]
+    public async Task The_morning_notification_sends_one_message_per_active_person_and_answers_the_counts()
+    {
+        var notifier = new RecordingNotifier();
+        var (h, anna, bram) = await ArrangeMorningAsync(notifier);
+        using var _ = h;
+        var active = (int)await h.Database.GetCollection<BsonDocument>("users").CountDocumentsAsync(new BsonDocument("active", true), cancellationToken: Ct);
+        var overdue = (await h.SendAsync(HttpMethod.Get, "/api/v2/due", withProfile: false)).Body.GetProperty("summary").GetProperty("overdue").GetInt32();
+
+        var (status, body) = await h.SendAsync(HttpMethod.Post, "/api/v2/jobs/morning-notify");
+
+        status.Should().Be(HttpStatusCode.OK, body.ToString());
+        body.EnumerateObject().Select(p => p.Name).Should().Equal("status", "date", "sent", "failed", "quiet");
+        body.GetProperty("status").GetString().Should().Be("done");
+        body.GetProperty("date").GetString().Should().Be("2026-09-16");
+        body.GetProperty("sent").GetInt32().Should().Be(active);
+        body.GetProperty("failed").GetInt32().Should().Be(0);
+        body.GetProperty("quiet").GetInt32().Should().Be(0);
+        var forAnna = notifier.Sent.Single(m => (string)m.Data["userId"]! == anna);
+        forAnna.Data.Should().Contain(new Dictionary<string, object?>
+        {
+            ["kind"] = "morning", ["date"] = "2026-09-16", ["openToday"] = 1, ["openTodayAnyone"] = 1, ["overdue"] = overdue,
+        });
+        forAnna.Body.Should().StartWith("Goedemorgen Anna! Vandaag staan er 1 taak voor je klaar en 1 taak voor wie dan ook.");
+        notifier.Sent.Single(m => (string)m.Data["userId"]! == bram).Data.Should().Contain(new Dictionary<string, object?> { ["openToday"] = 0, ["openTodayAnyone"] = 1 });
+    }
+
+    [Fact]
+    public async Task The_morning_notification_writes_no_audit_entry()
+    {
+        var (h, _, _) = await ArrangeMorningAsync(new RecordingNotifier());
+        using var _ = h;
+        var audited = await h.AuditLog.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: Ct);
+
+        await h.SendAsync(HttpMethod.Post, "/api/v2/jobs/morning-notify");
+
+        (await h.AuditLog.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: Ct)).Should().Be(audited);
+    }
+
+    [Fact]
+    public async Task A_refused_delivery_is_counted_as_failed_and_the_answer_is_still_200()
+    {
+        var notifier = new RecordingNotifier { Refusal = new PortError("ntfy answered 503") };
+        var (h, _, _) = await ArrangeMorningAsync(notifier);
+        using var _ = h;
+
+        var (status, body) = await h.SendAsync(HttpMethod.Post, "/api/v2/jobs/morning-notify");
+
+        status.Should().Be(HttpStatusCode.OK);
+        body.GetProperty("status").GetString().Should().Be("done");
+        body.GetProperty("sent").GetInt32().Should().Be(0);
+        body.GetProperty("failed").GetInt32().Should().Be(notifier.Sent.Count).And.BeGreaterThan(0);
+    }
+
+    [Fact]
+    public async Task Without_a_notification_channel_the_morning_notification_answers_disabled_and_sends_nothing()
+    {
+        using var h = new GenerationHarness(mongo);
+
+        var (status, body) = await h.SendAsync(HttpMethod.Post, "/api/v2/jobs/morning-notify");
+
+        status.Should().Be(HttpStatusCode.OK);
+        body.GetProperty("status").GetString().Should().Be("disabled");
+        body.GetProperty("date").ValueKind.Should().Be(JsonValueKind.Null);
+        (body.GetProperty("sent").GetInt32(), body.GetProperty("failed").GetInt32(), body.GetProperty("quiet").GetInt32()).Should().Be((0, 0, 0));
+    }
+
+    [Fact]
+    public async Task A_person_with_nothing_to_report_is_counted_as_quiet_and_gets_no_message()
+    {
+        var notifier = new RecordingNotifier();
+        using var h = new GenerationHarness(mongo, "2026-09-16T05:30:00.000Z", notifier);
+        await h.SeedPersonAsync("Anna");
+
+        var (_, body) = await h.SendAsync(HttpMethod.Post, "/api/v2/jobs/morning-notify");
+
+        body.GetProperty("sent").GetInt32().Should().Be(0);
+        body.GetProperty("quiet").GetInt32().Should().BeGreaterThan(0);
+        notifier.Sent.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task The_morning_notification_needs_a_planner_an_administrator_may_start_it_and_nobody_without_a_profile()
+    {
+        using var h = new GenerationHarness(mongo);
+        var anonymous = await h.SendAsync(HttpMethod.Post, "/api/v2/jobs/morning-notify", withProfile: false);
+        var admin = await h.SendAsync(HttpMethod.Post, "/api/v2/jobs/morning-notify", asAdmin: true);
+
+        anonymous.Status.Should().Be(HttpStatusCode.BadRequest);
+        anonymous.Body.GetProperty("type").GetString().Should().EndWith("profile_required");
+        admin.Status.Should().Be(HttpStatusCode.OK);
+
+        var users = new FakeUserDirectory();
+        var member = users.Add(Role.Member);
+        using var factory = ApiFactory.ForMongo(mongo).WithoutSeeding().WithPort<ForFindingUsers>(users);
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v2/jobs/morning-notify");
+        request.Headers.Add("X-Profile-Id", member.Id);
+        (await client.SendAsync(request, Ct)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
     // ---- audit retention
