@@ -1,7 +1,7 @@
-import type { OccurrenceView } from '@huishoudplanner/shared';
+import type { Occurrence } from '../../api/index.ts';
 import { describe, expect, it } from 'vitest';
 import { applyLanguage } from '../../i18n/runtime.ts';
-import { makeOccurrence } from '../../test/render.tsx';
+import { makeOccurrenceV2 } from '../../test/render.tsx';
 import {
   buildNotificationContent,
   GRACE_MS,
@@ -135,7 +135,7 @@ describe('buildNotificationContent', () => {
   const ME = 'a00000000000000000000001';
   const OTHER = 'b00000000000000000000002';
   const TODAY = '2026-09-16';
-  const occ = (id: string, overrides: Partial<OccurrenceView>) => makeOccurrence({ _id: id, assigneeId: ME, ...overrides });
+  const occ = (id: string, overrides: Partial<Occurrence>) => makeOccurrenceV2({ id, assigneeId: ME, ...overrides });
 
   it('sends nothing on an empty day', () => {
     expect(buildNotificationContent([], ME, TODAY)).toBeNull();

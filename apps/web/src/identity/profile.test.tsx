@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../App.tsx';
-import { api, apiV2, unwrap } from '../api/index.ts';
+import { apiV2, unwrap } from '../api/index.ts';
 import { ANNA, BRAM, makeUser, mockApi, storeProfile, testQueryClient, page } from '../test/fixtures.ts';
 import { setViewportWidth } from '../test/setup.ts';
 import { initials } from './Avatar.tsx';
@@ -58,17 +58,6 @@ describe('profile selection', () => {
     expect(await screen.findByRole('heading', { name: 'Wie ben jij?' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Anna/ })).not.toBeInTheDocument();
     await waitFor(() => expect(window.localStorage.getItem('huishoudplanner.profileId')).toBeNull());
-  });
-
-  it('sends the chosen profile with API requests', async () => {
-    const fetchMock = mockApi({ '/api/v2/users': page([ANNA, BRAM]), 'POST /api/ping': { ok: true } });
-    storeProfile(BRAM.id);
-    renderApp();
-    await screen.findByTestId('current-profile');
-
-    await api.post('/api/ping');
-    const call = fetchMock.mock.calls.find(([url]) => url === '/api/ping')!;
-    expect((call[1] as RequestInit).headers).toMatchObject({ 'X-Profile-Id': BRAM.id, 'X-Client': 'web' });
   });
 
   it('reads the people from /api/v2/users and sends the chosen profile on v2 requests too', async () => {

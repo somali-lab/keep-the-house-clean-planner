@@ -1,12 +1,13 @@
-import type { Room, Slot, Task } from '@huishoudplanner/shared';
+import type { Room, Task } from '../../api/v2/queries.ts';
 import type { Interval, User } from '../../api/v2/household.ts';
+import type { PlanSlot } from './api.ts';
 import { CheckCircle2, CircleDashed, Scale, TriangleAlert } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { cn } from '@/lib/utils';
 import { format, t } from '../../i18n/nl.ts';
 
 interface AllocationOverviewProps {
-  slots: Slot[];
+  slots: PlanSlot[];
   tasks: Task[];
   users: User[];
   rooms: Room[];
@@ -45,7 +46,7 @@ function gapText(minimum: number, maximum: number): string {
 }
 
 export function spacingRows(
-  slots: Slot[],
+  slots: PlanSlot[],
   tasks: Task[],
   intervals: Interval[],
   rooms: Room[],
@@ -53,20 +54,20 @@ export function spacingRows(
   const requiredByInterval = new Map(
     intervals.map((interval) => [interval.key, interval.perCycle]),
   );
-  const roomNames = new Map(rooms.map((room) => [room._id, room.name]));
+  const roomNames = new Map(rooms.map((room) => [room.id, room.name]));
   const intervalLabels = new Map(intervals.map((interval) => [interval.key, interval.label]));
 
   return tasks.flatMap<SpacingRow>((task) => {
     const required = requiredByInterval.get(task.intervalKey);
     if (required === null || required === undefined || required <= 1) return [];
 
-    const taskSlots = slots.filter((slot) => slot.taskId === task._id);
+    const taskSlots = slots.filter((slot) => slot.taskId === task.id);
     const ideal = CYCLE_DAYS / required;
     const expectedGap = gapText(Math.floor(ideal), Math.ceil(ideal));
     if (taskSlots.length !== required) {
       return [
         {
-          taskId: task._id,
+          taskId: task.id,
           name: task.name,
           roomName: roomNames.get(task.roomId) ?? t('tasks.unknownRoom'),
           intervalLabel: intervalLabels.get(task.intervalKey) ?? task.intervalKey,
@@ -94,7 +95,7 @@ export function spacingRows(
 
     return [
       {
-        taskId: task._id,
+        taskId: task.id,
         name: task.name,
         roomName: roomNames.get(task.roomId) ?? t('tasks.unknownRoom'),
         intervalLabel: intervalLabels.get(task.intervalKey) ?? task.intervalKey,
@@ -109,12 +110,12 @@ export function spacingRows(
 }
 
 export function allocationRows(
-  slots: Slot[],
+  slots: PlanSlot[],
   tasks: Task[],
   users: User[],
   budgetMultiplier = 1,
 ): AllocationRow[] {
-  const minutesByTask = new Map(tasks.map((task) => [task._id, task.durationMinutes]));
+  const minutesByTask = new Map(tasks.map((task) => [task.id, task.durationMinutes]));
   const totals = new Map<string, { weekday: number; weekend: number }>();
 
   for (const slot of slots) {

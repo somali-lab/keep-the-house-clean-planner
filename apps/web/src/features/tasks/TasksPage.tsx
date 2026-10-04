@@ -34,7 +34,6 @@ import {
 import { cn } from '@/lib/utils';
 import type { components } from '../../api/v2/schema';
 import { apiV2, ApiRequestError, ifMatch, isStaleEntity, removeFromList, replaceInList, unwrap } from '../../api/index.ts';
-import { queryKeys } from '../../api/queries.ts';
 import { useSettings } from '../../api/v2/household.ts';
 import { tasksKey, toTask, useLimits, useRooms, useTasks, type Task } from '../../api/v2/queries.ts';
 import { format, t } from '../../i18n/nl.ts';
@@ -43,6 +42,7 @@ import { Avatar } from '../../identity/Avatar.tsx';
 import { useProfile } from '../../identity/index.ts';
 import { usePersistedFilter } from '../../hooks/usePersistedFilter.ts';
 import { AiPage } from '../ai/AiPage.tsx';
+import { tasksPdfUrl } from '../export/exportModel.ts';
 import { groupTasksByRoom, type RoomGroup } from './groupTasks.ts';
 import { TaskForm } from './TaskForm.tsx';
 import {
@@ -108,7 +108,7 @@ export function TasksPage() {
   // The tasks key is the prefix of the v2 query too; a changed task also changes the due list and the plan of the days.
   const invalidateTasks = () =>
     Promise.all(
-      [queryKeys.tasks, ['due'], ['occurrences']].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+      [tasksKey, ['due'], ['occurrences']].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
     );
 
   // A write on a task carries the version of the task as the person saw it (ADR-0022). When it is stale (412) nothing was written: read
@@ -285,7 +285,7 @@ export function TasksPage() {
               {t('tasks.new')}
             </Button>
             <Button asChild variant="outline">
-              <a href={getLanguage() === 'en' ? '/api/export/pdf/tasks?language=en' : '/api/export/pdf/tasks'} download>
+              <a href={tasksPdfUrl(getLanguage())} download>
                 <FileDown aria-hidden="true" />
                 {t('tasks.exportPdf')}
               </a>

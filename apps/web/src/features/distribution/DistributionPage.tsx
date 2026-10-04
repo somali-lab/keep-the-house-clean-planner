@@ -6,13 +6,13 @@ import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { panelTabsListClass, panelTabsTriggerClass, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useRooms, useTasks } from '../../api/queries.ts';
+import { useRooms, useTasks } from '../../api/v2/queries.ts';
 import { useSettings } from '../../api/v2/household.ts';
 import { t } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
 import { usePersistedFilter } from '../../hooks/usePersistedFilter.ts';
 import { AllocationOverview } from '../planner/AllocationOverview.tsx';
-import { usePlansV1 as usePlans } from '../planner/plansV1.ts';
+import { usePlans } from '../planner/api.ts';
 
 export function DistributionPage() {
   const plans = usePlans();
@@ -41,7 +41,7 @@ export function DistributionPage() {
 
   const visiblePlans = plans.data.filter((plan) => !plan.discarded);
   const plan =
-    visiblePlans.find((item) => item._id === selectedPlanId) ??
+    visiblePlans.find((item) => item.id === selectedPlanId) ??
     visiblePlans.find((item) => item.active) ??
     visiblePlans[0];
   const actions = plan ? (
@@ -49,11 +49,11 @@ export function DistributionPage() {
       <Label htmlFor="distribution-plan">{t('planner.plan')}</Label>
       <NativeSelect
         id="distribution-plan"
-        value={plan._id}
+        value={plan.id}
         onChange={(event) => setSelectedPlanId(event.target.value)}
       >
         {visiblePlans.map((item) => (
-          <option key={item._id} value={item._id}>
+          <option key={item.id} value={item.id}>
             {item.name} {item.active ? t('planner.activeSuffix') : ''}
           </option>
         ))}

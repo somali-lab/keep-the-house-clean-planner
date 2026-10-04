@@ -1,4 +1,4 @@
-import { toDayKey } from '@huishoudplanner/shared/time';
+import { dayKeyInZone } from '@/lib/dayKey';
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { useSettings } from '../../api/v2/household.ts';
@@ -35,7 +35,7 @@ export async function deliverMoment(
     const claim = await claimMoment(key);
     if (!claim) return;
     try {
-      const todayKey = toDayKey(new Date(), timezone);
+      const todayKey = dayKeyInZone(new Date(), timezone);
       const occurrences = await fetchOpenOccurrences(queryClient, personId, todayKey);
       const content = buildNotificationContent(occurrences, personId, todayKey);
       if (!claim.holds()) return;
@@ -81,7 +81,7 @@ export function useBrowserNotifications(personId: string, times: readonly string
       if (document.visibilityState === 'visible') arm();
     };
 
-    pruneClaims(toDayKey(new Date(), timezone));
+    pruneClaims(dayKeyInZone(new Date(), timezone));
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('pageshow', arm);
     arm();

@@ -29,7 +29,7 @@ export const BRAM = makeUser({ id: 'b00000000000000000000002', name: 'Bram de Vr
 export type RouteHandler = unknown | ((init: RequestInit | undefined, url: string) => unknown);
 
 /**
- * What a handler sees of a request. The generated client (openapi-fetch) hands fetch a `Request`; the v1 client a url
+ * What a handler sees of a request. The generated client (openapi-fetch) hands fetch a `Request`; a plain call a url
  * and an init. Both are reduced to a path with its query, and an init with the method, headers and text body.
  */
 export async function describeRequest(

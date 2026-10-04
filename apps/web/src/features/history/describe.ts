@@ -1,4 +1,4 @@
-import type { AuditEntry } from '@huishoudplanner/shared';
+import type { AuditEntry } from './auditModel.ts';
 import { format, hasMessage, t, type MessageKey } from '../../i18n/nl.ts';
 import { getLocale } from '../../i18n/runtime.ts';
 import { bonusText } from '../stats/bonusText.ts';
@@ -18,6 +18,10 @@ export interface NameLookup {
   /** Badge id → name, so an award reads as the badge it is about (ADR-0014). */
   badges?: Map<string, string>;
   timezone: string;
+  /** The ISO week number of a day from the calendar of the server, or null while that is not known; labels the week bonuses. */
+  weekOf?: (dayKey: string) => number | null;
+  /** The length of a cycle in days from the limits of the server; labels the cycle bonuses. */
+  cycleDays?: number;
 }
 
 type Json = Record<string, unknown>;
@@ -85,6 +89,8 @@ export function entityName(entry: AuditEntry, names: NameLookup): string {
     case 'points':
       // An update only lists what changed, so the title also travels in the meta.
       return str(after.titleSnapshot) ?? str(before.titleSnapshot) ?? str(entry.meta?.titleSnapshot) ?? unknown;
+    default:
+      return unknown;
   }
 }
 
@@ -208,7 +214,7 @@ function bonusChangeLines(meta: Json, names: NameLookup): string[] {
   const changes = Array.isArray(meta.bonusChanges) ? meta.bonusChanges.filter(isRecord) : [];
   const lines = changes.map((change) => {
     const key = str(change.key) ?? '';
-    const label = bonusLabelOfKey(key);
+    const label = bonusLabelOfKey(key, names);
     return format(change.change === 'removed' ? 'history.action.bonusRemoved' : 'history.action.bonusCreated', {
       person: formatValue('personId', change.personId, names),
       amount: typeof change.amount === 'number' ? change.amount : '?',
@@ -303,7 +309,13 @@ export function describeEntry(entry: AuditEntry, names: NameLookup): string[] {
 
   switch (entry.action) {
     case 'create':
-      return [format('history.action.create', { actor, type: t(`history.entity.${entry.entity}` as MessageKey), entity })];
+      return [
+        format('history.action.create', {
+          actor,
+          type: hasMessage(`history.entity.${entry.entity}`) ? t(`history.entity.${entry.entity}` as MessageKey) : entry.entity,
+          entity,
+        }),
+      ];
     case 'update':
       return updateLines(entry, names, actor, entity);
     case 'delete':
@@ -355,6 +367,8 @@ export function describeEntry(entry: AuditEntry, names: NameLookup): string[] {
       return [format('history.action.reset', { actor })];
     case 'recompute':
       return [format('history.action.recompute', { actor }), ...bonusChangeLines(meta, names)];
+    default:
+      return updateLines(entry, names, actor, entity);
   }
 }
 

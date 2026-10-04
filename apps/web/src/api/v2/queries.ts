@@ -113,28 +113,27 @@ export interface CalendarDay {
 
 export const calendarKey = (from: string, to: string) => ['calendar', from, to] as const;
 
+/** Cycle index, week index and ISO week of every day from `from` to `to` (both included), by day key. */
+export async function fetchCalendar(from: string, to: string): Promise<Map<string, CalendarDay>> {
+  const { data } = await unwrap(apiV2.GET('/api/v2/calendar', { params: { query: { from, to } } }));
+  return new Map(
+    data.days.map((day) => [
+      day.dayKey,
+      {
+        dayKey: day.dayKey,
+        weekday: toInt(day.weekday),
+        cycleIndex: toInt(day.cycleIndex),
+        weekIndex: toInt(day.weekIndex),
+        isoWeek: day.isoWeek,
+        weekStart: day.weekStart,
+      },
+    ]),
+  );
+}
+
 /** Cycle index, week index and ISO week of every day from `from` to `to` (both included). */
 export function useCalendar(from: string, to: string, enabled = true) {
-  return useQuery({
-    queryKey: calendarKey(from, to),
-    enabled,
-    queryFn: async (): Promise<Map<string, CalendarDay>> => {
-      const { data } = await unwrap(apiV2.GET('/api/v2/calendar', { params: { query: { from, to } } }));
-      return new Map(
-        data.days.map((day) => [
-          day.dayKey,
-          {
-            dayKey: day.dayKey,
-            weekday: toInt(day.weekday),
-            cycleIndex: toInt(day.cycleIndex),
-            weekIndex: toInt(day.weekIndex),
-            isoWeek: day.isoWeek,
-            weekStart: day.weekStart,
-          },
-        ]),
-      );
-    },
-  });
+  return useQuery({ queryKey: calendarKey(from, to), enabled, queryFn: () => fetchCalendar(from, to) });
 }
 
 /** A room as `GET /api/v2/rooms` answers it. */
@@ -172,7 +171,7 @@ export interface Task {
 /** The most the server returns in one page of rooms or tasks (`limit` 1 to 200). */
 const LIST_PAGE_SIZE = 200;
 
-// The keys start with the ones the Node-client queries use, so an invalidation of `['rooms']` or `['tasks']`
+// The keys start with `rooms` and `tasks`, so an invalidation of `['rooms']` or `['tasks']`
 // (settings, planner, history, the task and room mutations) refreshes these as well.
 export const roomsKey = ['rooms', 'v2'] as const;
 export const tasksKey = ['tasks', 'v2'] as const;

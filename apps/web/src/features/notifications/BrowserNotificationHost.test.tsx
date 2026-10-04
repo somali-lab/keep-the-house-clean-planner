@@ -1,7 +1,7 @@
 import { act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ANNA, BRAM, makeUser, mockApi, storeProfile, testQueryClient, page } from '../../test/fixtures.ts';
-import { makeOccurrence, makeSettings, renderWithProviders } from '../../test/render.tsx';
+import { makeOccurrenceV2, makeSettings, renderWithProviders } from '../../test/render.tsx';
 import { BrowserNotificationHost, deliverMoment } from './BrowserNotificationHost.tsx';
 import { CLAIM_STALE_MS, claimKey } from './notificationClaim.ts';
 
@@ -34,8 +34,8 @@ const ME = makeUser({
   browserNotifications: { enabled: true, times: ['10:00'] },
 });
 const TODAY = '2026-09-16';
-const OPEN_TODAY = makeOccurrence({ _id: 'e00000000000000000000001', assigneeId: ME.id, date: TODAY, taskNameSnapshot: 'Afwassen' });
-const OPEN_OVERDUE = makeOccurrence({ _id: 'e00000000000000000000002', assigneeId: ME.id, date: '2026-09-14', taskNameSnapshot: 'Dweilen' });
+const OPEN_TODAY = makeOccurrenceV2({ id: 'e00000000000000000000001', assigneeId: ME.id, date: TODAY, taskNameSnapshot: 'Afwassen' });
+const OPEN_OVERDUE = makeOccurrenceV2({ id: 'e00000000000000000000002', assigneeId: ME.id, date: '2026-09-14', taskNameSnapshot: 'Dweilen' });
 
 beforeEach(stubNotification);
 afterEach(() => vi.useRealTimers());
@@ -44,12 +44,12 @@ describe('deliverMoment', () => {
   const moment = { dayKey: TODAY, time: '10:00', at: new Date('2026-09-16T08:00:00Z') };
   const tabs = () => ({ queryClient: testQueryClient(), inFlight: new Set<string>() });
   const occurrencesCalls = (fetchMock: ReturnType<typeof mockApi>) =>
-    fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/api/occurrences')).length;
+    fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/api/v2/occurrences')).length;
 
   beforeEach(() => vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-09-16T08:00:30Z') }));
 
   it('shows one summary when two tabs reach the same moment', async () => {
-    const fetchMock = mockApi({ '/api/occurrences': [OPEN_TODAY, OPEN_OVERDUE] });
+    const fetchMock = mockApi({ '/api/v2/occurrences': page([OPEN_TODAY, OPEN_OVERDUE]) });
     // Two tabs share localStorage but have their own query client and in-flight set.
     await Promise.all([
       deliverMoment(ME.id, 'Europe/Amsterdam', moment, tabs()),
@@ -64,12 +64,12 @@ describe('deliverMoment', () => {
     ]);
     expect(occurrencesCalls(fetchMock)).toBe(1);
     expect(String(fetchMock.mock.calls[0]![0])).toBe(
-      `/api/occurrences?from=2026-07-22&to=${TODAY}&status=open&assigneeId=${ME.id}`,
+      `/api/v2/occurrences?from=2026-07-22&to=${TODAY}&status=open&assigneeId=${ME.id}&limit=500`,
     );
   });
 
   it('does not repeat a moment that was already delivered', async () => {
-    const fetchMock = mockApi({ '/api/occurrences': [OPEN_TODAY] });
+    const fetchMock = mockApi({ '/api/v2/occurrences': page([OPEN_TODAY]) });
     await deliverMoment(ME.id, 'Europe/Amsterdam', moment, tabs());
     await deliverMoment(ME.id, 'Europe/Amsterdam', moment, tabs());
     expect(shown).toHaveLength(1);
@@ -77,15 +77,30 @@ describe('deliverMoment', () => {
   });
 
   it('sends nothing when the person has nothing open, and does not look again', async () => {
-    const fetchMock = mockApi({ '/api/occurrences': [] });
+    const fetchMock = mockApi({ '/api/v2/occurrences': page([]) });
     await deliverMoment(ME.id, 'Europe/Amsterdam', moment, tabs());
     await deliverMoment(ME.id, 'Europe/Amsterdam', moment, tabs());
     expect(shown).toEqual([]);
     expect(occurrencesCalls(fetchMock)).toBe(1);
   });
 
+  it('follows the cursor of the occurrence list and counts the open tasks of every page', async () => {
+    const second = makeOccurrenceV2({ id: 'e00000000000000000000003', assigneeId: ME.id, date: TODAY, taskNameSnapshot: 'Boodschappen' });
+    const fetchMock = mockApi({
+      '/api/v2/occurrences': (_init: RequestInit | undefined, url: string) =>
+        url.includes('cursor=c1') ? page([second]) : { items: [OPEN_TODAY], nextCursor: 'c1' },
+    });
+    await deliverMoment(ME.id, 'Europe/Amsterdam', moment, tabs());
+    expect(shown[0]!.title).toBe('Keep the House Clean: 2 taken vandaag');
+    expect(shown[0]!.body).toBe('Afwassen, Boodschappen');
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
+      `/api/v2/occurrences?from=2026-07-22&to=${TODAY}&status=open&assigneeId=${ME.id}&limit=500`,
+      `/api/v2/occurrences?from=2026-07-22&to=${TODAY}&status=open&assigneeId=${ME.id}&limit=500&cursor=c1`,
+    ]);
+  });
+
   it('claims nothing without permission, so granting it within the grace period still delivers', async () => {
-    const fetchMock = mockApi({ '/api/occurrences': [OPEN_TODAY] });
+    const fetchMock = mockApi({ '/api/v2/occurrences': page([OPEN_TODAY]) });
     permission = 'default';
     await deliverMoment(ME.id, 'Europe/Amsterdam', moment, tabs());
     expect(shown).toEqual([]);
@@ -97,9 +112,9 @@ describe('deliverMoment', () => {
 
   it('lets another tab deliver when the tab holding the claim hangs, and keeps the hung tab silent', async () => {
     let calls = 0;
-    let release: (value: unknown[]) => void = () => undefined;
-    const hung = new Promise<unknown[]>((resolve) => (release = resolve));
-    mockApi({ '/api/occurrences': () => (++calls === 1 ? hung : [OPEN_TODAY]) });
+    let release: (value: unknown) => void = () => undefined;
+    const hung = new Promise<unknown>((resolve) => (release = resolve));
+    mockApi({ '/api/v2/occurrences': () => (++calls === 1 ? hung : page([OPEN_TODAY])) });
 
     const hungTab = deliverMoment(ME.id, 'Europe/Amsterdam', moment, tabs());
     await vi.waitFor(() => expect(calls).toBe(1));
@@ -112,7 +127,7 @@ describe('deliverMoment', () => {
     await deliverMoment(ME.id, 'Europe/Amsterdam', moment, tabs());
     expect(shown).toHaveLength(1);
 
-    release([OPEN_TODAY]);
+    release(page([OPEN_TODAY]));
     await hungTab;
     expect(shown).toHaveLength(1);
   });
@@ -120,9 +135,9 @@ describe('deliverMoment', () => {
   it('gives the moment back when the lookup fails, so the next check retries', async () => {
     let failing = true;
     mockApi({
-      '/api/occurrences': () => {
+      '/api/v2/occurrences': () => {
         if (failing) throw new Error('offline');
-        return [OPEN_TODAY];
+        return page([OPEN_TODAY]);
       },
     });
     await deliverMoment(ME.id, 'Europe/Amsterdam', moment, tabs());
@@ -142,7 +157,7 @@ describe('BrowserNotificationHost', () => {
     const fetchMock = mockApi({
       '/api/v2/users': page([profile, BRAM]),
       '/api/v2/settings': makeSettings(),
-      '/api/occurrences': [OPEN_TODAY],
+      '/api/v2/occurrences': page([OPEN_TODAY]),
     });
     renderWithProviders(<BrowserNotificationHost />);
     return fetchMock;
@@ -168,7 +183,7 @@ describe('BrowserNotificationHost', () => {
     act(() => void document.dispatchEvent(new Event('visibilitychange')));
     await advance(1_000);
     expect(shown).toEqual([]);
-    expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith('/api/occurrences'))).toBe(false);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith('/api/v2/occurrences'))).toBe(false);
   });
 
   it('delivers a moment within the grace period when the tab is restored', async () => {
@@ -189,7 +204,7 @@ describe('BrowserNotificationHost', () => {
       await advance(120_000);
       expect(shown).toEqual([]);
       expect(fetchMock.mock.calls.some(([url]) => String(url) === '/api/v2/settings')).toBe(false);
-      expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith('/api/occurrences'))).toBe(false);
+      expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith('/api/v2/occurrences'))).toBe(false);
     } finally {
       Reflect.deleteProperty(window, 'isSecureContext');
     }
@@ -212,7 +227,7 @@ describe('BrowserNotificationHost', () => {
     const fetchMock = setup(makeUser({ ...ANNA, browserNotifications: { enabled: false, times: ['10:00'] } }));
     await advance(60_000);
     expect(shown).toEqual([]);
-    expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith('/api/occurrences'))).toBe(false);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith('/api/v2/occurrences'))).toBe(false);
     expect(fetchMock.mock.calls.some(([url]) => String(url) === '/api/v2/settings')).toBe(false);
   });
 });

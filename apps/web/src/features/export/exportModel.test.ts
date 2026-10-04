@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { exportUrl, isGenerated, isoWeekLabel, mondayOfDay, rangeGenerated, weekOptions } from './exportModel.ts';
+import { exportUrl, isGenerated, isoWeekLabel, mondayOfDay, rangeGenerated, tasksPdfUrl, weekOptions } from './exportModel.ts';
 
 const cycles = [
   { startDate: '2026-09-14', endDate: '2026-10-11' },
@@ -45,22 +45,30 @@ describe('exportUrl', () => {
   const base = { startWeek: '2026-W39', date: '2026-09-16', orientation: 'landscape' as const, totals: true };
 
   it('builds week URLs; orientation only applies to two weeks', () => {
-    expect(exportUrl({ ...base, range: '2' })).toBe('/api/export/pdf?fromWeek=2026-W39&weeks=2&orientation=landscape&totals=true');
-    expect(exportUrl({ ...base, range: '4' })).toBe('/api/export/pdf?fromWeek=2026-W39&weeks=4&orientation=portrait&totals=true');
+    expect(exportUrl({ ...base, range: '2' })).toBe('/api/v2/export/pdf/schedule?fromWeek=2026-W39&weeks=2&orientation=landscape&totals=true');
+    expect(exportUrl({ ...base, range: '4' })).toBe('/api/v2/export/pdf/schedule?fromWeek=2026-W39&weeks=4&orientation=portrait&totals=true');
   });
 
   it('builds day and due URLs', () => {
-    expect(exportUrl({ ...base, range: 'day' })).toBe('/api/export/pdf/day?date=2026-09-16');
-    expect(exportUrl({ ...base, range: 'due' })).toBe('/api/export/pdf/due');
+    expect(exportUrl({ ...base, range: 'day' })).toBe('/api/v2/export/pdf/day?date=2026-09-16');
+    expect(exportUrl({ ...base, range: 'due' })).toBe('/api/v2/export/pdf/due');
   });
 
   it('passes English through to every PDF endpoint', () => {
     expect(exportUrl({ ...base, range: '2', language: 'en' })).toContain('language=en');
     expect(exportUrl({ ...base, range: 'day', language: 'en' })).toBe(
-      '/api/export/pdf/day?date=2026-09-16&language=en',
+      '/api/v2/export/pdf/day?date=2026-09-16&language=en',
     );
     expect(exportUrl({ ...base, range: 'due', language: 'en' })).toBe(
-      '/api/export/pdf/due?language=en',
+      '/api/v2/export/pdf/due?language=en',
     );
+  });
+});
+
+describe('tasksPdfUrl', () => {
+  it('addresses the task list sheet, in English on request', () => {
+    expect(tasksPdfUrl()).toBe('/api/v2/export/pdf/tasks');
+    expect(tasksPdfUrl('nl')).toBe('/api/v2/export/pdf/tasks');
+    expect(tasksPdfUrl('en')).toBe('/api/v2/export/pdf/tasks?language=en');
   });
 });

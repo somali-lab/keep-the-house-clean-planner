@@ -153,8 +153,6 @@ export const slotsBody = (slots: readonly PlanSlot[]): Schemas['PlanSlotBody'][]
 
 /** The most the server returns in one page of plans (`limit` 1 to 200). */
 const LIST_PAGE_SIZE = 200;
-
-// The plans of the Node client live under `['cycle-plans']` (Distribution and History still read them); this key starts with it, so an
 // invalidation of `['cycle-plans']` (tasks, activation) refreshes both.
 export const planKeys = {
   all: ['cycle-plans', 'v2'] as const,

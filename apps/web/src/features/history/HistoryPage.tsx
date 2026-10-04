@@ -1,4 +1,4 @@
-import type { AuditEntity, AuditEntry } from '@huishoudplanner/shared';
+import type { AuditEntity, AuditEntry } from './auditModel.ts';
 import { ArrowLeft, Bot, Clock, Filter, History, Sparkles, Trash2, UserRound } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
@@ -18,15 +18,15 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useRooms, useTasks } from '../../api/queries.ts';
+import { useRooms, useTasks } from '../../api/v2/queries.ts';
 import { useSettings, useUsers } from '../../api/v2/household.ts';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
 import { getLocale } from '../../i18n/runtime.ts';
 import { useBadges } from '../badges/api.ts';
 import { Avatar } from '../../identity/Avatar.tsx';
 import { useProfile } from '../../identity/index.ts';
-import { usePlansV1 as usePlans } from '../planner/plansV1.ts';
-import { useAuditFeed, useClearAudit, type AuditFilters } from './api.ts';
+import { usePlans } from '../planner/api.ts';
+import { useAuditFeed, useBonusKeyContext, useClearAudit, type AuditFilters } from './api.ts';
 import { collectOccurrenceNames, describeEntry, entityName, SYSTEM_ACTOR_ID, type NameLookup } from './describe.ts';
 
 const ENTITY_TYPES: AuditEntity[] = ['task', 'cyclePlan', 'occurrence', 'user', 'room', 'settings', 'cycle', 'points', 'badge', 'badgeAward', 'import'];
@@ -89,21 +89,28 @@ export function HistoryPage() {
   const settings = useSettings();
   const badges = useBadges();
   const clearAudit = useClearAudit();
+  // A failure of an earlier try must not greet the next one.
+  const openClear = (open: boolean) => {
+    clearAudit.reset();
+    setConfirmClear(open);
+  };
 
   const entries: AuditEntry[] = useMemo(() => feed.data?.pages.flatMap((p) => p.items) ?? [], [feed.data]);
+  const bonusKeys = useBonusKeyContext(entries);
 
   const names: NameLookup = useMemo(
     () => ({
       users: new Map((users.data ?? []).map((u) => [u.id, u.name])),
-      tasks: new Map((tasks.data ?? []).map((task) => [task._id, task.name])),
-      rooms: new Map((rooms.data ?? []).map((r) => [r._id, r.name])),
-      plans: new Map((plans.data ?? []).map((p) => [p._id, p.name])),
+      tasks: new Map((tasks.data ?? []).map((task) => [task.id, task.name])),
+      rooms: new Map((rooms.data ?? []).map((r) => [r.id, r.name])),
+      plans: new Map((plans.data ?? []).map((p) => [p.id, p.name])),
       intervals: new Map((settings.data?.intervals ?? []).map((i) => [i.key, i.label])),
       occurrences: collectOccurrenceNames(entries),
       badges: new Map((badges.data ?? []).map((badge) => [badge.id, badge.name])),
       timezone: settings.data?.timezone ?? 'Europe/Amsterdam',
+      ...bonusKeys,
     }),
-    [users.data, tasks.data, rooms.data, plans.data, settings.data, badges.data, entries],
+    [users.data, tasks.data, rooms.data, plans.data, settings.data, badges.data, entries, bonusKeys],
   );
 
   const setFilter = (key: string, value: string) => {
@@ -163,7 +170,7 @@ export function HistoryPage() {
               variant="outline"
               className="text-destructive hover:text-destructive"
               disabled={entries.length === 0 || clearAudit.isPending}
-              onClick={() => setConfirmClear(true)}
+              onClick={() => openClear(true)}
             >
               <Trash2 aria-hidden="true" />
               {t('history.clear')}
@@ -172,14 +179,14 @@ export function HistoryPage() {
         }
       />
 
-      <Dialog open={confirmClear} onOpenChange={setConfirmClear}>
+      <Dialog open={confirmClear} onOpenChange={openClear}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t('history.clearConfirmTitle')}</DialogTitle>
             <DialogDescription>{t('history.clearConfirmBody')}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => setConfirmClear(false)}>
+            <Button type="button" variant="ghost" onClick={() => openClear(false)}>
               {t('common.cancel')}
             </Button>
             <Button
@@ -269,7 +276,7 @@ export function HistoryPage() {
       ) : (
         <ol className="history-list ml-4 flex flex-col gap-3 border-l-2 border-dashed border-border pl-8">
           {entries.map((entry) => (
-            <li key={entry._id} className="relative flex items-start gap-4 rounded-2xl border bg-card px-5 py-4 shadow-sm">
+            <li key={entry.id} className="relative flex items-start gap-4 rounded-2xl border bg-card px-5 py-4 shadow-sm">
               <div className="absolute top-3.5 -left-[51px]">{actorAvatar(entry)}</div>
               <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                 <div className="flex flex-col gap-0.5 leading-snug">
