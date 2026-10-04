@@ -1,4 +1,4 @@
-import { createTask, expect, generateCycles, openAs, planOn, test, TODAY } from './fixtures.ts';
+import { actOn, createTask, expect, generateCycles, occurrencesOn, openAs, planOn, test, TODAY } from './fixtures.ts';
 
 test('an administrator can correct and remove an incorrect completion', async ({ page, app }) => {
   const anna = await app.user('Anna');
@@ -8,14 +8,11 @@ test('an administrator can correct and remove an incorrect completion', async ({
     room: 'Keuken',
     intervalKey: '1w',
     durationMinutes: 20,
-    defaultAssigneeId: anna._id,
+    defaultAssigneeId: anna.id,
   });
   await generateCycles(app, anna);
   const occurrence = await planOn(app, anna, task, TODAY, anna);
-  await app.api('PATCH', `/api/occurrences/${occurrence._id}`, {
-    as: anna,
-    body: { action: 'complete' },
-  });
+  await actOn(app, anna, occurrence, 'complete');
 
   await openAs(page, app, anna, '/manage/completions');
   const row = page.getByRole('listitem').filter({ hasText: 'Kattenmandjes' });
@@ -23,7 +20,7 @@ test('an administrator can correct and remove an incorrect completion', async ({
   await row.getByRole('button', { name: 'Kattenmandjes bewerken' }).click();
 
   const edit = page.getByRole('dialog', { name: 'Kattenmandjes bewerken' });
-  await edit.getByLabel('Uitgevoerd door').selectOption(bram._id);
+  await edit.getByLabel('Uitgevoerd door').selectOption(bram.id);
   await edit.getByRole('button', { name: 'Opslaan' }).click();
   await expect(page.getByRole('status')).toHaveText('De gereedmelding is bijgewerkt.');
   await expect(row).toContainText('Bram');
@@ -34,8 +31,7 @@ test('an administrator can correct and remove an incorrect completion', async ({
   await remove.getByRole('button', { name: 'Definitief verwijderen' }).click();
 
   await expect(row).toBeHidden();
-  const remaining = await app.api<{ _id: string }[]>('GET', `/api/occurrences?from=${TODAY}&to=${TODAY}`);
-  expect(remaining.some((item) => item._id === occurrence._id)).toBe(false);
+  await expect.poll(async () => (await occurrencesOn(app, TODAY)).some((item) => item.id === occurrence.id)).toBe(false);
 });
 
 test('the sidebar icon for a long nav label stays visible instead of being squeezed to zero width', async ({

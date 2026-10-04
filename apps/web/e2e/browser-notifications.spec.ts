@@ -28,7 +28,7 @@ async function stubNotifications(context: BrowserContext, profile: ApiUser) {
       }
       Object.defineProperty(window, 'Notification', { configurable: true, writable: true, value: FakeNotification });
     },
-    { shownKey: SHOWN_KEY, profileId: profile._id },
+    { shownKey: SHOWN_KEY, profileId: profile.id },
   );
 }
 
@@ -48,9 +48,11 @@ async function openToday(page: Page, app: AppServer) {
 }
 
 async function configureMoment(app: AppServer, person: ApiUser) {
-  await app.api('PUT', `/api/users/${person._id}/browser-notifications`, {
+  const { version } = await app.api<{ version: number }>('GET', `/api/v2/users/${person.id}`);
+  await app.api('PUT', `/api/v2/users/${person.id}/browser-notifications`, {
     as: person,
     body: { enabled: true, times: ['10:00'] },
+    ifMatch: version,
   });
 }
 
@@ -80,7 +82,7 @@ test('two open tabs show one notification for a configured moment', async ({ pag
     title: 'Keep the House Clean: 2 taken vandaag',
     body: 'Afwassen, Stofzuigen',
   });
-  expect(await claimKeys(second)).toEqual([`khc.notified.${anna._id}.${TODAY}.10:00`]);
+  expect(await claimKeys(second)).toEqual([`khc.notified.${anna.id}.${TODAY}.10:00`]);
 
   // Later checks inside the grace period, in either tab, do not repeat it.
   await Promise.all([page.clock.fastForward(120_000), second.clock.fastForward(120_000)]);
@@ -102,7 +104,7 @@ test('an empty day shows no notification', async ({ page, context, app }) => {
   await Promise.all([page.clock.fastForward(60_000), second.clock.fastForward(60_000)]);
 
   // The moment was handled (claimed) but there was nothing to report.
-  await expect.poll(() => claimKeys(page)).toEqual([`khc.notified.${anna._id}.${TODAY}.10:00`]);
+  await expect.poll(() => claimKeys(page)).toEqual([`khc.notified.${anna.id}.${TODAY}.10:00`]);
   await page.waitForTimeout(500);
   expect(await shownNotifications(page)).toEqual([]);
   expect(await shownNotifications(second)).toEqual([]);

@@ -1,9 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * E2E against the built web app, served by the real server with NODE_ENV=test
- * and APP_FAKE_NOW. Every test starts its own server on its own database
- * (see e2e/fixtures.ts), so tests never share state.
+ * E2E against the built web app, served by the real .NET host (published by e2e/globalSetup.ts) with
+ * ASPNETCORE_ENVIRONMENT=test and APP_FAKE_NOW, on a throwaway MongoDB replica set in Docker. Every test
+ * starts its own host process on its own database (see e2e/fixtures.ts), so tests never share state.
  */
 export default defineConfig({
   testDir: './e2e',

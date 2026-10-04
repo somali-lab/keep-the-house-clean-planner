@@ -28,10 +28,10 @@ test('check off, undo, skip, complete for someone else, take over, and see histo
   await page.getByRole('button', { name: 'Afvinken: Afwassen' }).click();
   const snackbar = page.locator('.snackbar');
   await expect(snackbar).toContainText('"Afwassen" afgevinkt.');
-  await expect.poll(async () => (await statusOf(tasks.afwassen._id))?.status).toBe('done');
+  await expect.poll(async () => (await statusOf(tasks.afwassen.id))?.status).toBe('done');
   await snackbar.getByRole('button', { name: 'Ongedaan maken' }).click();
   await expect(mine).toContainText('Afwassen');
-  await expect.poll(async () => (await statusOf(tasks.afwassen._id))?.status).toBe('open');
+  await expect.poll(async () => (await statusOf(tasks.afwassen.id))?.status).toBe('open');
 
   // Skip with a reason.
   await page.getByRole('button', { name: 'Meer voor Stofzuigen' }).click();
@@ -45,14 +45,14 @@ test('check off, undo, skip, complete for someone else, take over, and see histo
   await page.getByRole('button', { name: 'Afvinken: Planten water geven' }).click();
   await page.getByRole('button', { name: 'Namens Bram afvinken' }).click();
   await expect(finished).toContainText('Gedaan door Bram');
-  await expect.poll(async () => (await statusOf(tasks.planten._id))?.completedBy).toBe(bram._id);
+  await expect.poll(async () => (await statusOf(tasks.planten.id))?.completedBy).toBe(bram.id);
 
   // Take over a task that was assigned to Bram while checking it off.
   await page.getByRole('button', { name: 'Afvinken: Dweilen' }).click();
   await expect(page.getByRole('alertdialog')).toContainText('Deze taak staat op naam van Bram');
   await page.getByRole('button', { name: 'Ik heb de taak overgenomen' }).click();
-  await expect.poll(async () => (await statusOf(tasks.dweilen._id))?.assigneeId).toBe(anna._id);
-  await expect.poll(async () => (await statusOf(tasks.dweilen._id))?.completedBy).toBe(anna._id);
+  await expect.poll(async () => (await statusOf(tasks.dweilen.id))?.assigneeId).toBe(anna.id);
+  await expect.poll(async () => (await statusOf(tasks.dweilen.id))?.completedBy).toBe(anna.id);
 
   await page.getByRole('button', { name: 'Instellingen en beheer openen' }).click();
   await page.getByRole('navigation', { name: 'Hoofdmenu' }).getByRole('link', { name: 'Geschiedenis' }).click();

@@ -1,4 +1,4 @@
-import { createTask, expect, generateCycles, openAs, planOn, test, TODAY } from './fixtures.ts';
+import { actOn, createTask, expect, generateCycles, openAs, planOn, test, TODAY } from './fixtures.ts';
 
 /** Monday 21 September 2026, 03:00 in Amsterdam: the week of Monday 14 September ended at midnight. */
 const NEXT_MONDAY = '2026-09-21T01:00:00.000Z';
@@ -20,29 +20,29 @@ test('an administrator sets the bonuses; after the week ends the Points tab show
   await card.getByLabel('Week: alles op tijd').fill('3');
   await card.getByRole('button', { name: 'Bonussen opslaan' }).click();
   await expect(card.getByRole('status')).toHaveText('Opgeslagen.');
-  await expect(card.getByText(/^Deze bedragen gelden voor de week van 14-09-2026 en de cyclus van \d{2}-\d{2}-\d{4} en alles daarna\.$/)).toBeVisible();
-  const settings = await app.api<{ bonusSchedule: unknown[] }>('GET', '/api/settings');
-  expect(settings.bonusSchedule).toEqual([{ from: TODAY, weekDone: 5, weekOnTime: 3, cycleDone: 0, cycleOnTime: 0 }]);
+  await expect(card.getByText('Deze bedragen gelden sinds 16-09-2026 en voor alles daarna.')).toBeVisible();
+  const settings = await app.api<{ bonusSchedule: unknown[] }>('GET', '/api/v2/settings');
+  expect(settings.bonusSchedule).toEqual([expect.objectContaining({ from: TODAY, weekDone: 5, weekOnTime: 3, cycleDone: 0, cycleOnTime: 0 })]);
 
   // Anna finishes everything planned for her this week.
   for (const task of [stofzuigen, dweilen]) {
     const occurrence = await planOn(app, anna, task, TODAY, anna);
-    await app.api('PATCH', `/api/occurrences/${occurrence._id}`, { as: anna, body: { action: 'complete' } });
+    await actOn(app, anna, occurrence, 'complete');
   }
   // Bram does one task and skips the other, so he has not done everything.
   const done = await planOn(app, anna, ramen, TODAY, bram);
-  await app.api('PATCH', `/api/occurrences/${done._id}`, { as: bram, body: { action: 'complete' } });
+  await actOn(app, bram, done, 'complete');
   const skipped = await planOn(app, anna, afwassen, TODAY, bram);
-  await app.api('PATCH', `/api/occurrences/${skipped._id}`, { as: bram, body: { action: 'skip', reason: 'Geen tijd' } });
+  await actOn(app, bram, skipped, 'skip', { reason: 'Geen tijd' });
 
   // While the week is running nothing is paid, however complete it is already.
   const balancesOf = async () =>
-    (await app.api<{ balances: { personId: string; points: number; bonusPoints: number }[] }>('GET', '/api/points/balances?from=2026-09-14&to=2026-09-20')).balances;
+    (await app.api<{ balances: { personId: string; points: number; bonusPoints: number }[] }>('GET', '/api/v2/points/balances?from=2026-09-14&to=2026-09-20')).balances;
   expect((await balancesOf()).map((balance) => balance.bonusPoints)).toEqual([0, 0]);
 
   // The server restarts on Monday 03:00 with a fixed clock; the reconciliation at startup finalises the week.
   await app.restart(NEXT_MONDAY);
-  const annaBalance = (await balancesOf()).find((balance) => balance.personId === anna._id);
+  const annaBalance = (await balancesOf()).find((balance) => balance.personId === anna.id);
   expect(annaBalance).toMatchObject({ bonusPoints: 8, points: 30 + 20 + 8 });
 
   await openAs(page, app, anna, '/manage/statistics');

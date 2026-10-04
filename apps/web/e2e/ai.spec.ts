@@ -2,7 +2,7 @@ import { createTask, expect, openAs, test } from './fixtures.ts';
 
 test('AI with the mock provider: drafts open in plan management, one is deleted and another is activated through the preview', async ({ page, app }) => {
   const anna = await app.user('Anna');
-  await app.api('PATCH', '/api/settings', { as: anna, body: { aiProvider: { type: 'mock' } } });
+  await app.edit('/api/v2/settings', { aiProvider: { type: 'mock' } }, { as: anna });
   await createTask(app, anna, { name: 'Afwassen', room: 'Keuken', intervalKey: '1w', durationMinutes: 15 });
   await createTask(app, anna, { name: 'Stofzuigen', room: 'Woonkamer', intervalKey: '1w', durationMinutes: 20 });
 

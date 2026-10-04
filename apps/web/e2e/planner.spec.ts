@@ -1,7 +1,7 @@
 import { expect, mouseDrag, openAs, test } from './fixtures.ts';
 
 interface ApiPlan {
-  _id: string;
+  id: string;
   active: boolean;
   slots: { taskId: string; weekIndex: number; weekday: number; assigneeId: string | null }[];
 }
@@ -10,7 +10,7 @@ test('create a task, place it by dragging, get refused on an unavailable day, an
   const anna = await app.user('Anna');
   const bram = await app.user('Bram');
   // Bram cannot do Tuesdays (0 = Sunday … 6 = Saturday).
-  await app.api('PATCH', `/api/users/${bram._id}`, { as: anna, body: { unavailableWeekdays: [2] } });
+  await app.edit(`/api/v2/users/${bram.id}`, { unavailableWeekdays: [2] }, { as: anna });
 
   await openAs(page, app, anna, '/manage/tasks');
   await page.getByRole('button', { name: 'Nieuwe taak' }).click();
@@ -28,20 +28,20 @@ test('create a task, place it by dragging, get refused on an unavailable day, an
   await page.getByRole('button', { name: 'Woonkamer uitklappen' }).click();
   await expect(page.getByRole('region', { name: 'Woonkamer' })).toContainText('Ramen zemen');
 
-  const task = (await app.api<{ _id: string; name: string }[]>('GET', '/api/tasks')).find((t) => t.name === 'Ramen zemen')!;
+  const task = (await app.list<{ id: string; name: string }>('/api/v2/tasks')).find((t) => t.name === 'Ramen zemen')!;
 
   await page.getByRole('navigation', { name: 'Hoofdmenu' }).getByRole('link', { name: 'Planner' }).click();
   // Work on a copy, so there is something to activate.
   await page.getByRole('button', { name: 'Plannen beheren' }).click();
   await page.getByRole('button', { name: 'Kopie maken' }).click();
 
-  const poolItem = page.getByTestId(`pool-${task._id}`);
-  await mouseDrag(page, poolItem, page.getByTestId(`cell:0:2:${bram._id}`));
+  const poolItem = page.getByTestId(`pool-${task.id}`);
+  await mouseDrag(page, poolItem, page.getByTestId(`cell:0:2:${bram.id}`));
   await expect(page.getByRole('alert')).toContainText('Bram kan niet op dinsdag. "Ramen zemen" is niet geplaatst.');
-  await expect(page.getByTestId(`cell:0:2:${bram._id}`)).not.toContainText('Ramen zemen');
+  await expect(page.getByTestId(`cell:0:2:${bram.id}`)).not.toContainText('Ramen zemen');
 
-  await mouseDrag(page, poolItem, page.getByTestId(`cell:0:2:${anna._id}`));
-  await expect(page.getByTestId(`cell:0:2:${anna._id}`)).toContainText('Ramen zemen');
+  await mouseDrag(page, poolItem, page.getByTestId(`cell:0:2:${anna.id}`));
+  await expect(page.getByTestId(`cell:0:2:${anna.id}`)).toContainText('Ramen zemen');
   await expect(poolItem).toBeHidden();
   await expect(page.getByText('Opgeslagen', { exact: true })).toBeVisible();
 
@@ -53,6 +53,6 @@ test('create a task, place it by dragging, get refused on an unavailable day, an
   await activationDialog.getByRole('button', { name: 'Activeren' }).click();
   await expect(page.getByText('Plan geactiveerd.')).toBeVisible();
 
-  const active = (await app.api<ApiPlan[]>('GET', '/api/cycle-plans')).find((p) => p.active)!;
-  expect(active.slots).toEqual([expect.objectContaining({ taskId: task._id, weekIndex: 0, weekday: 2, assigneeId: anna._id })]);
+  const active = (await app.list<ApiPlan>('/api/v2/cycle-plans')).find((p) => p.active)!;
+  expect(active.slots).toEqual([expect.objectContaining({ taskId: task.id, weekIndex: 0, weekday: 2, assigneeId: anna.id })]);
 });

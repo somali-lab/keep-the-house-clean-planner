@@ -1,4 +1,4 @@
-import { createTask, expect, generateCycles, openAs, planOn, test, TODAY } from './fixtures.ts';
+import { actOn, createTask, expect, generateCycles, openAs, planOn, test, TODAY } from './fixtures.ts';
 import type { ApiUser, AppServer } from './server.ts';
 
 interface Balance {
@@ -10,8 +10,8 @@ interface Balance {
 }
 
 async function balanceOf(app: AppServer, person: ApiUser): Promise<Balance | undefined> {
-  const { balances } = await app.api<{ balances: Balance[] }>('GET', '/api/points/balances?from=2026-09-14&to=2026-09-20');
-  return balances.find((balance) => balance.personId === person._id);
+  const { balances } = await app.api<{ balances: Balance[] }>('GET', '/api/v2/points/balances?from=2026-09-14&to=2026-09-20');
+  return balances.find((balance) => balance.personId === person.id);
 }
 
 test('someone earns points, an administrator sets 10 cents per point, then they redeem part of the balance and undo it the same day', async ({ page, app }) => {
@@ -20,7 +20,7 @@ test('someone earns points, an administrator sets 10 cents per point, then they 
   const schoonmaak = await createTask(app, anna, { name: 'Grote schoonmaak', room: 'Woonkamer', intervalKey: '1w', durationMinutes: 10 });
   await generateCycles(app, anna);
   const occurrence = await planOn(app, anna, schoonmaak, TODAY, anna);
-  await app.api('PATCH', `/api/occurrences/${occurrence._id}`, { as: anna, body: { action: 'complete' } });
+  await actOn(app, anna, occurrence, 'complete');
   await expect.poll(async () => (await balanceOf(app, anna))?.points).toBe(10);
 
   // The administrator sets what a point is worth in the settings.
@@ -32,7 +32,7 @@ test('someone earns points, an administrator sets 10 cents per point, then they 
   await expect(card.getByText(/1 punt = €\s0,10/)).toBeVisible();
   await card.getByRole('button', { name: 'Puntenwaarde opslaan' }).click();
   await expect(card.getByRole('status')).toHaveText('Opgeslagen.');
-  expect(await app.api('GET', '/api/settings')).toMatchObject({ currencyCode: 'EUR', centsPerPoint: 10 });
+  expect(await app.api('GET', '/api/v2/settings')).toMatchObject({ currencyCode: 'EUR', centsPerPoint: 10 });
 
   // The Points tab shows the balance and what it is worth.
   await openAs(page, app, anna, '/manage/statistics');

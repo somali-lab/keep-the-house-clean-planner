@@ -22,13 +22,13 @@ export const MOBILE = { viewport: { width: 375, height: 812 }, isMobile: true, h
 export async function openAs(page: Page, app: AppServer, profile: ApiUser | null, path = '/') {
   await page.clock.setFixedTime(new Date(app.now));
   if (profile) {
-    await page.addInitScript((id) => window.localStorage.setItem('huishoudplanner.profileId', id), profile._id);
+    await page.addInitScript((id) => window.localStorage.setItem('huishoudplanner.profileId', id), profile.id);
   }
   await page.goto(`${app.baseURL}${path}`);
 }
 
 export interface ApiTask {
-  _id: string;
+  id: string;
   name: string;
 }
 
@@ -37,14 +37,14 @@ export async function createTask(
   as: ApiUser,
   input: { name: string; room: string; intervalKey: string; durationMinutes: number; defaultAssigneeId?: string | null },
 ): Promise<ApiTask> {
-  const rooms = await app.api<{ _id: string; name: string }[]>('GET', '/api/rooms');
+  const rooms = await app.list<{ id: string; name: string }>('/api/v2/rooms');
   const room = rooms.find((r) => r.name === input.room);
   if (!room) throw new Error(`no room named ${input.room}`);
-  return app.api<ApiTask>('POST', '/api/tasks', {
+  return app.api<ApiTask>('POST', '/api/v2/tasks', {
     as,
     body: {
       name: input.name,
-      roomId: room._id,
+      roomId: room.id,
       intervalKey: input.intervalKey,
       durationMinutes: input.durationMinutes,
       defaultAssigneeId: input.defaultAssigneeId ?? null,
@@ -54,28 +54,43 @@ export async function createTask(
 
 /** Generates the current and next cycle (the scheduler is off in E2E). */
 export async function generateCycles(app: AppServer, as: ApiUser) {
-  await app.api('POST', '/api/jobs/generation', { as });
+  await app.api('POST', '/api/v2/jobs/generation', { as });
 }
 
-/** Puts a task on a day as an ad-hoc occurrence. */
+/** Puts a task on a day as an ad-hoc occurrence (planned, not done; every call is its own request, so its own record). */
 export async function planOn(app: AppServer, as: ApiUser, task: ApiTask, date: string, assignee: ApiUser | null) {
-  return app.api<{ _id: string }>('POST', '/api/occurrences', {
+  return app.api<{ id: string }>('POST', '/api/v2/occurrences', {
     as,
-    body: { taskId: task._id, date, assigneeId: assignee?._id ?? null },
+    body: { taskId: task.id, date, assigneeId: assignee?.id ?? null, requestId: crypto.randomUUID() },
   });
 }
 
 export interface ApiOccurrence {
-  _id: string;
-  taskId: string;
+  id: string;
+  taskId: string | null;
+  taskNameSnapshot: string;
+  roomNameSnapshot: string | null;
   date: string;
   assigneeId: string | null;
   status: 'open' | 'done' | 'skipped';
   completedBy: string | null;
+  origin: 'generated' | 'adhoc';
+  recordedDone: boolean;
 }
 
 export async function occurrencesOn(app: AppServer, date: string) {
-  return app.api<ApiOccurrence[]>('GET', `/api/occurrences?from=${date}&to=${date}`);
+  return app.list<ApiOccurrence>(`/api/v2/occurrences?from=${date}&to=${date}`);
+}
+
+/** The intent endpoints of an occurrence (they take no If-Match). */
+export async function actOn(
+  app: AppServer,
+  as: ApiUser,
+  occurrence: { id: string },
+  action: 'complete' | 'uncomplete' | 'skip',
+  body: Record<string, unknown> = {},
+) {
+  return app.api<ApiOccurrence>('POST', `/api/v2/occurrences/${occurrence.id}/${action}`, { as, body });
 }
 
 async function centre(locator: Locator) {

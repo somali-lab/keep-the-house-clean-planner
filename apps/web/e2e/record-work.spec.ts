@@ -3,7 +3,7 @@ import { createTask, expect, generateCycles, MOBILE, openAs, test, TODAY } from 
 test.use(MOBILE);
 
 interface ApiRecord {
-  _id: string;
+  id: string;
   taskId: string | null;
   taskNameSnapshot: string;
   roomNameSnapshot?: string | null;
@@ -14,8 +14,9 @@ interface ApiRecord {
 }
 
 interface ApiPlan {
-  _id: string;
+  id: string;
   active: boolean;
+  version: number;
 }
 
 interface ApiPreview {
@@ -27,8 +28,8 @@ test('record two extra executions and a one-off task, undo one, and keep both ki
   const anna = await app.user('Anna');
   const task = await createTask(app, anna, { name: 'Stofzuigen', room: 'Woonkamer', intervalKey: '1w', durationMinutes: 20 });
   await generateCycles(app, anna);
-  const recordsToday = () => app.api<ApiRecord[]>('GET', `/api/occurrences?from=${TODAY}&to=${TODAY}`);
-  const extrasOf = async () => (await recordsToday()).filter((o) => o.taskId === task._id && o.origin === 'adhoc');
+  const recordsToday = () => app.list<ApiRecord>(`/api/v2/occurrences?from=${TODAY}&to=${TODAY}`);
+  const extrasOf = async () => (await recordsToday()).filter((o) => o.taskId === task.id && o.origin === 'adhoc');
   const oneOffs = async () => (await recordsToday()).filter((o) => o.taskId === null);
 
   await openAs(page, app, anna, '/today');
@@ -49,7 +50,7 @@ test('record two extra executions and a one-off task, undo one, and keep both ki
   await record(chooseTask, 'dblclick');
   await expect(finished).toContainText('Stofzuigen');
   await expect.poll(async () => (await extrasOf()).length).toBe(1);
-  expect((await extrasOf())[0]).toMatchObject({ recordedDone: true, status: 'done', completedBy: anna._id });
+  expect((await extrasOf())[0]).toMatchObject({ recordedDone: true, status: 'done', completedBy: anna.id });
 
   // A deliberate second execution of the same task on the same day is a second record.
   await record(chooseTask);
@@ -57,7 +58,7 @@ test('record two extra executions and a one-off task, undo one, and keep both ki
   await expect(finished.getByText('Extra')).toHaveCount(2);
 
   // The one-off task never gets a task record.
-  const taskCount = (await app.api<unknown[]>('GET', '/api/tasks')).length;
+  const taskCount = (await app.list('/api/v2/tasks')).length;
   await record(async () => {
     await dialog.getByRole('radio', { name: 'Eenmalige taak (komt niet in de takenlijst)' }).check();
     await dialog.getByLabel('Naam van de klus').fill('Gordijnen ophangen');
@@ -67,7 +68,7 @@ test('record two extra executions and a one-off task, undo one, and keep both ki
   await expect(finished).toContainText('Gordijnen ophangen');
   await expect.poll(async () => (await oneOffs()).length).toBe(1);
   expect((await oneOffs())[0]).toMatchObject({ taskNameSnapshot: 'Gordijnen ophangen', roomNameSnapshot: 'Woonkamer', recordedDone: true, status: 'done' });
-  expect(await app.api<unknown[]>('GET', '/api/tasks')).toHaveLength(taskCount);
+  expect(await app.list('/api/v2/tasks')).toHaveLength(taskCount);
 
   // Undo one extra execution: the record is deleted, not reopened.
   await finished.getByRole('button', { name: 'Stofzuigen ongedaan maken' }).first().click();
@@ -83,21 +84,22 @@ test('record two extra executions and a one-off task, undo one, and keep both ki
   expect(await oneOffs()).toHaveLength(1);
 
   // Activate another plan through its preview: ad-hoc work is listed as preserved and survives.
-  const [source] = (await app.api<ApiPlan[]>('GET', '/api/cycle-plans')).filter((p) => p.active);
-  const copy = await app.api<ApiPlan>('POST', '/api/cycle-plans', { as: anna, body: { name: 'Tweede plan', copyFromId: source!._id } });
-  await app.api('PUT', `/api/cycle-plans/${copy._id}/slots`, {
+  const [source] = (await app.list<ApiPlan>('/api/v2/cycle-plans')).filter((p) => p.active);
+  const copy = await app.api<ApiPlan>('POST', '/api/v2/cycle-plans', { as: anna, body: { name: 'Tweede plan', copyFromId: source!.id } });
+  await app.api('PUT', `/api/v2/cycle-plans/${copy.id}/slots`, {
     as: anna,
-    body: { slots: [{ taskId: task._id, weekIndex: 0, weekday: 3, assigneeId: anna._id }] },
+    body: { slots: [{ taskId: task.id, weekIndex: 0, weekday: 3, assigneeId: anna.id }] },
+    ifMatch: copy.version,
   });
-  const preview = await app.api<ApiPreview>('GET', `/api/cycle-plans/${copy._id}/activation-preview`, { as: anna });
+  const preview = await app.api<ApiPreview>('GET', `/api/v2/cycle-plans/${copy.id}/activation-preview`, { as: anna });
   expect(preview.preserved.adhoc.map((item) => item.taskName).sort()).toEqual(['Gordijnen ophangen', 'Stofzuigen']);
   expect(preview.preserved.adhoc.some((item) => item.taskId === null)).toBe(true);
-  await app.api('POST', `/api/cycle-plans/${copy._id}/activate`, { as: anna, body: { previewToken: preview.previewToken } });
+  await app.api('POST', `/api/v2/cycle-plans/${copy.id}/activation`, { as: anna, body: { previewToken: preview.previewToken } });
 
   const after = await recordsToday();
   expect(after.filter((o) => o.origin === 'adhoc' && o.recordedDone).map((o) => o.taskNameSnapshot).sort()).toEqual(['Gordijnen ophangen', 'Stofzuigen']);
   // The slot of the new plan is generated next to the extra execution on the same day.
-  expect(after.filter((o) => o.taskId === task._id && o.origin === 'generated')).toHaveLength(1);
+  expect(after.filter((o) => o.taskId === task.id && o.origin === 'generated')).toHaveLength(1);
 
   await page.reload();
   await expect(finished).toContainText('Gordijnen ophangen');
@@ -119,7 +121,7 @@ test('plan an extra execution and a one-off task for a later day, one of them fr
   const anna = await app.user('Anna');
   const task = await createTask(app, anna, { name: 'Stofzuigen', room: 'Woonkamer', intervalKey: '1w', durationMinutes: 20 });
   await generateCycles(app, anna);
-  const records = (date: string) => app.api<ApiRecord[]>('GET', `/api/occurrences?from=${date}&to=${date}`);
+  const records = (date: string) => app.list<ApiRecord>(`/api/v2/occurrences?from=${date}&to=${date}`);
 
   await openAs(page, app, anna, '/today');
   const dialog = page.getByRole('dialog', { name: 'Extra taak' });
@@ -136,8 +138,8 @@ test('plan an extra execution and a one-off task for a later day, one of them fr
   const snackbar = page.locator('.snackbar');
   await expect(snackbar).toContainText('"Stofzuigen" is ingepland op do 17-09.');
   await expect(snackbar.getByRole('button', { name: 'Ongedaan maken' })).toHaveCount(0);
-  await expect.poll(async () => (await records('2026-09-17')).filter((o) => o.taskId === task._id && o.origin === 'adhoc').length).toBe(1);
-  expect((await records('2026-09-17')).find((o) => o.taskId === task._id && o.origin === 'adhoc')).toMatchObject({ status: 'open' });
+  await expect.poll(async () => (await records('2026-09-17')).filter((o) => o.taskId === task.id && o.origin === 'adhoc').length).toBe(1);
+  expect((await records('2026-09-17')).find((o) => o.taskId === task.id && o.origin === 'adhoc')).toMatchObject({ status: 'open' });
 
   // It is open work on that day.
   await page.getByRole('button', { name: 'Morgen', exact: true }).click();
@@ -158,7 +160,7 @@ test('plan an extra execution and a one-off task for a later day, one of them fr
   await expect(page.getByRole('region', { name: 'Nog niet toegewezen' })).toContainText('Gordijnen ophangen');
   await expect.poll(async () => (await records('2026-09-18')).filter((o) => o.taskId === null).length).toBe(1);
   expect((await records('2026-09-18')).find((o) => o.taskId === null)).toMatchObject({ status: 'open', taskNameSnapshot: 'Gordijnen ophangen' });
-  expect(await app.api<unknown[]>('GET', '/api/tasks')).toHaveLength(1);
+  expect(await app.list('/api/v2/tasks')).toHaveLength(1);
 
   // The day after tomorrow shows it as open work that nobody has picked up yet.
   await page.goto(`${app.baseURL}/today`);
