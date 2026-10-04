@@ -1,20 +1,43 @@
 using System.Globalization;
 using System.Text.Json.Serialization;
 using Huishoudplanner.Adapters.Http.CyclePlans;
+using Huishoudplanner.Adapters.Http.Due;
 using Huishoudplanner.Domain.Audit;
+using Huishoudplanner.Domain.Due;
 using Huishoudplanner.Domain.Generation;
+using Huishoudplanner.Domain.Notifications;
 
 namespace Huishoudplanner.Adapters.Http.Jobs;
 
 /// <summary>
 /// What a manual generation run did: its id (the same id the audit entries of the run carry in <c>meta.runId</c>), how many open generated occurrences
-/// it removed because they no longer matched the active plan, and what it generated for the current and the next cycle. The <c>due</c> summary of the
-/// Node server (<c>{ due, overdue }</c>) joins this answer with the due list of slice 3.4.
+/// it removed because they no longer matched the active plan, what it generated for the current and the next cycle, and the <c>due</c> summary
+/// (<c>{ due, overdue }</c>) of the due list after the run.
 /// </summary>
-public sealed record GenerationRunResponse(string RunId, int Removed, IReadOnlyList<GenerationResultResponse> Generated)
+public sealed record GenerationRunResponse(string RunId, int Removed, IReadOnlyList<GenerationResultResponse> Generated, DueSummaryResponse Due)
 {
-    internal static GenerationRunResponse From(GenerationRun run) =>
-        new(run.RunId, run.Removed, [.. run.Generated.Select(GenerationResultResponse.From)]);
+    internal static GenerationRunResponse From(GenerationRun run, DueSummary due) =>
+        new(run.RunId, run.Removed, [.. run.Generated.Select(GenerationResultResponse.From)], new DueSummaryResponse(due.Due, due.Overdue));
+}
+
+/// <summary>
+/// What a morning notification run did: <c>status</c> is <c>disabled</c> (no notification channel, nothing sent), <c>done</c> or <c>error</c> (the data could not
+/// be read, nothing sent); <c>date</c> is the household day (null unless done), <c>sent</c> and <c>failed</c> count the deliveries and <c>quiet</c> the people with
+/// nothing to report.
+/// </summary>
+public sealed record MorningNotifyResponse(string Status, DateOnly? Date, int Sent, int Failed, int Quiet)
+{
+    internal static MorningNotifyResponse From(MorningResult result) => new(
+        result.Status switch
+        {
+            MorningStatus.Disabled => "disabled",
+            MorningStatus.Error => "error",
+            _ => "done",
+        },
+        result.Date,
+        result.Sent,
+        result.Failed,
+        result.Quiet);
 }
 
 /// <summary>

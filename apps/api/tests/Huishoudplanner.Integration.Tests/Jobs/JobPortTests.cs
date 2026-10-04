@@ -2,6 +2,7 @@ using Huishoudplanner.Adapters.Jobs;
 using Huishoudplanner.Domain.Audit;
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Generation;
+using Huishoudplanner.Domain.Notifications;
 using Huishoudplanner.Domain.Points;
 using Huishoudplanner.Domain.Ports.Driving;
 using Huishoudplanner.Integration.Tests.Fixtures;
@@ -88,6 +89,30 @@ public sealed class JobPortTests
 
         outcome.Should().Be(JobOutcome.Failed);
         logs.Entries.Should().ContainSingle(e => e.Level == LogLevel.Error).Which.Message.Should().NotContain("secret");
+    }
+
+    [Theory]
+    [InlineData(MorningStatus.Done, JobOutcome.Succeeded)]
+    [InlineData(MorningStatus.Disabled, JobOutcome.Skipped)]
+    [InlineData(MorningStatus.Error, JobOutcome.Failed)]
+    public async Task The_morning_job_maps_the_status_of_the_use_case_to_its_outcome(MorningStatus status, JobOutcome expected)
+    {
+        var morning = new Mock<IMorningNotifyService>();
+        morning.Setup(m => m.RunAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new MorningResult(status, null, 0, 0, 0));
+        using var services = Services(s => s.AddSingleton(morning.Object));
+        var job = new MorningNotifyJob(new RecordingNotifier());
+
+        var outcome = await job.RunAsync(services, Ct);
+
+        outcome.Should().Be(expected);
+        (job.Name, job.Schedule).Should().Be(("morning-notify", "30 7 * * *"));
+    }
+
+    [Fact]
+    public void The_morning_job_is_only_enabled_with_a_notification_channel()
+    {
+        new MorningNotifyJob(new RecordingNotifier(enabled: true)).Enabled.Should().BeTrue();
+        new MorningNotifyJob(new RecordingNotifier(enabled: false)).Enabled.Should().BeFalse();
     }
 
     [Fact]

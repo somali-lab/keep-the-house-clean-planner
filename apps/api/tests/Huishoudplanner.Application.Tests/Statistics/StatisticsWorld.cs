@@ -41,7 +41,7 @@ internal sealed class StatisticsWorld
         Reader = new FakeReader();
         Resetter = new FakeResetter(Audit);
         Transactions = new FakeTransactions(Audit);
-        Service = new StatisticsService(SettingsStore.Object, CycleStore.Object, Reader, Resetter, Transactions, Audit, new FixedClock(Now));
+        Service = new StatisticsService(SettingsStore.Object, CycleStore.Object, Reader, Resetter, Transactions, Audit, new FixedClock(Now), Badges);
         SettingsStore.Setup(s => s.GetAsync(It.IsAny<CancellationToken>())).Returns(() => Task.FromResult<OneOf<HouseholdSettings, SettingsMissing, PortError>>(SettingsFailure is { } f ? f : Settings is null ? new SettingsMissing() : Settings));
         CycleStore.Setup(c => c.ListAsync(It.IsAny<CycleCursor?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .Returns((CycleCursor? after, int take, CancellationToken _) =>
@@ -63,6 +63,8 @@ internal sealed class StatisticsWorld
     public FakeResetter Resetter { get; }
 
     public FakeAudit Audit { get; } = new();
+
+    public Badges.RecordingBadgeAwards Badges { get; } = new();
 
     public FakeTransactions Transactions { get; }
 

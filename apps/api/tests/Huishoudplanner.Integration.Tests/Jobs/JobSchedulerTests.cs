@@ -1,4 +1,5 @@
 using Huishoudplanner.Adapters.Jobs;
+using Huishoudplanner.Integration.Tests.Fixtures;
 
 namespace Huishoudplanner.Integration.Tests.Jobs;
 
@@ -41,6 +42,35 @@ public sealed class JobSchedulerTests
         scheduler.NextRunOf("nightly-generation").Should().Be(Utc("2026-09-14T01:00:00Z"));
         scheduler.NextRunOf("audit-retention").Should().Be(Utc("2026-09-14T01:45:00Z"));
         scheduler.NextDue.Should().Be(Utc("2026-09-14T01:00:00Z"));
+    }
+
+    [Fact]
+    public void A_job_that_is_not_enabled_is_not_scheduled_and_an_enabled_morning_job_runs_at_0730()
+    {
+        using var rig = new JobsRig(Utc("2026-09-14T00:00:00Z"));
+        var morning = new RecordingJob(MorningNotifyJob.JobName, MorningNotifyJob.CronSchedule);
+        var off = new MorningNotifyJob(new RecordingNotifier(enabled: false));
+        var on = new MorningNotifyJob(new RecordingNotifier());
+
+        rig.Scheduler(true, off).JobNames.Should().BeEmpty();
+        var scheduler = rig.Scheduler(true, on, morning);
+
+        scheduler.JobNames.Should().Equal("morning-notify", "morning-notify");
+        scheduler.NextRunOf("morning-notify").Should().Be(Utc("2026-09-14T05:30:00Z")); // 07:30 in Amsterdam (CEST)
+    }
+
+    [Theory]
+    [InlineData("2026-03-28T12:00:00Z", "2026-03-29T05:30:00Z")] // the day the spring change happens: 07:30 is CEST (UTC+2)
+    [InlineData("2026-03-27T12:00:00Z", "2026-03-28T06:30:00Z")] // the day before it is CET (UTC+1)
+    [InlineData("2026-10-24T12:00:00Z", "2026-10-25T06:30:00Z")] // the day the autumn change happens: 07:30 is CET again
+    [InlineData("2026-10-23T12:00:00Z", "2026-10-24T05:30:00Z")]
+    public void The_morning_message_keeps_its_local_time_across_the_daylight_saving_changes(string now, string expected)
+    {
+        using var rig = new JobsRig(Utc(now));
+
+        var scheduler = rig.Scheduler(true, new MorningNotifyJob(new RecordingNotifier()));
+
+        scheduler.NextRunOf("morning-notify").Should().Be(Utc(expected));
     }
 
     [Fact]

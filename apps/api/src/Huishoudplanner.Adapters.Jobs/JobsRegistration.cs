@@ -20,6 +20,7 @@ public static class JobsRegistration
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, JobSchedulerService>());
         services.AddJob<NightlyGenerationJob>();
         services.AddJob<AuditRetentionJob>();
+        services.AddJob<MorningNotifyJob>();
         return services;
     }
 

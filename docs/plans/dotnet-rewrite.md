@@ -241,11 +241,11 @@ Each phase ends in something demonstrable. Slices are small enough for one pull 
 
 ### Phase 4 — Points, bonuses, badges
 
-- [ ] 4.1 Points ledger as projection, reconciliation (startup and nightly), recompute endpoint (ADR-0011). Port `points.test.ts`, `points-api.test.ts`, `points-reconcile.test.ts`.
-- [ ] 4.2 Week and cycle bonuses (ADR-0012). Port `points-bonuses.test.ts`.
-- [ ] 4.3 Redemptions with balance check, lock and idempotency. Port `points-redemptions.test.ts`.
-- [ ] 4.4 Progress and reward meter values (§4.3). Port `points-progress.test.ts`.
-- [ ] 4.5 Badges: definitions, images, examples, awards, progress (ADR-0014). Port `badges.test.ts`.
+- [x] 4.1 Points ledger as projection, reconciliation (startup and nightly), recompute endpoint (ADR-0011). Port `points.test.ts`, `points-api.test.ts`, `points-reconcile.test.ts`.
+- [x] 4.2 Week and cycle bonuses (ADR-0012). Port `points-bonuses.test.ts`.
+- [x] 4.3 Redemptions with balance check, lock and idempotency. Port `points-redemptions.test.ts`.
+- [x] 4.4 Progress and reward meter values (§4.3). Port `points-progress.test.ts`.
+- [x] 4.5 Badges: definitions, images, examples, awards, progress (ADR-0014). Port `badges.test.ts`.
 
 ### Phase 5 — Statistics, history, promotion
 
@@ -257,8 +257,8 @@ Each phase ends in something demonstrable. Slices are small enough for one pull 
 ### Phase 6 — Assistance, notifications, jobs, exports
 
 - [x] 6.1 AI port and providers (§3.9), prompt info, test, propose, rebalance, suggest tasks, explain, with the one re-prompt. Port `ai-assist.test.ts`, `ai-draft.test.ts`, `ai-proposals.test.ts`, `ai-providers.test.ts`, `ai-anthropic.test.ts`. (Done in two parts: 6.1a the port and the providers, 6.1b the use cases and endpoints. The activation of an AI draft in `ai-draft.test.ts` belongs to 2.4.)
-- [ ] 6.2 Notifications: ntfy and Home Assistant adapters, morning message. Port `notify.test.ts`.
-- [ ] 6.3 Scheduler and the manual job endpoints. Port the nightly and manual-run cases of `generation.test.ts`, `points-reconcile.test.ts`, `points-bonuses.test.ts` and `badges.test.ts` that were deferred in phases 3 and 4.
+- [x] 6.2 Notifications: ntfy and Home Assistant adapters, morning message. Port `notify.test.ts`. (Done in two parts: the adapters and the morning text in 6.2, the morning use case, job and endpoint in 6.3b.)
+- [x] 6.3 Scheduler and the manual job endpoints. Port the nightly and manual-run cases of `generation.test.ts`, `points-reconcile.test.ts`, `points-bonuses.test.ts` and `badges.test.ts` that were deferred in phases 3 and 4. (Done in two parts: 6.3a the scheduler, the generation and retention jobs and their endpoints, 6.3b the morning message job and endpoint, the `due` summary of the generation answer and the nightly and manual-run cases of the points tests; the badge step is part of the reconciliation since 4.5.)
 - [x] 6.4 PDF sheets with QuestPDF (§3.10). Port `pdf-export.test.ts`.
 - [ ] 6.5 JSON export and import with the confirmation and acknowledgement rules. Port `transfer.test.ts`. (Built except one step: the rebuild of the badge awards after an import and the deferred import step of `badges.test.ts` need the badge award service of the badges slice; the import already clears the awards and runs the points reconciliation with the import trigger. Tick when that step is done.)
 
