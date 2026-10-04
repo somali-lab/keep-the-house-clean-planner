@@ -241,11 +241,11 @@ Each phase ends in something demonstrable. Slices are small enough for one pull 
 
 ### Phase 4 — Points, bonuses, badges
 
-- [ ] 4.1 Points ledger as projection, reconciliation (startup and nightly), recompute endpoint (ADR-0011). Port `points.test.ts`, `points-api.test.ts`, `points-reconcile.test.ts`.
-- [ ] 4.2 Week and cycle bonuses (ADR-0012). Port `points-bonuses.test.ts`.
-- [ ] 4.3 Redemptions with balance check, lock and idempotency. Port `points-redemptions.test.ts`.
-- [ ] 4.4 Progress and reward meter values (§4.3). Port `points-progress.test.ts`.
-- [ ] 4.5 Badges: definitions, images, examples, awards, progress (ADR-0014). Port `badges.test.ts`.
+- [x] 4.1 Points ledger as projection, reconciliation (startup and nightly), recompute endpoint (ADR-0011). Port `points.test.ts`, `points-api.test.ts`, `points-reconcile.test.ts`.
+- [x] 4.2 Week and cycle bonuses (ADR-0012). Port `points-bonuses.test.ts`.
+- [x] 4.3 Redemptions with balance check, lock and idempotency. Port `points-redemptions.test.ts`.
+- [x] 4.4 Progress and reward meter values (§4.3). Port `points-progress.test.ts`.
+- [x] 4.5 Badges: definitions, images, examples, awards, progress (ADR-0014). Port `badges.test.ts`.
 
 ### Phase 5 — Statistics, history, promotion
 

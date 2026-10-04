@@ -13,6 +13,7 @@ using Huishoudplanner.Domain.Ports.Driving;
 using Huishoudplanner.Adapters.Http.Rooms;
 using Huishoudplanner.Host.Ai;
 using Huishoudplanner.Host.Audit;
+using Huishoudplanner.Host.Badges;
 using Huishoudplanner.Host.Configuration;
 using Huishoudplanner.Host.Startup;
 using Huishoudplanner.Host.Users;
@@ -64,6 +65,7 @@ public static class CompositionExtensions
         services.AddNotifications();
         services.AddAuditLog();
         services.AddPoints();
+        services.AddBadges();
         services.AddRewardProgress();
         services.AddStatistics();
         services.AddJobs();
@@ -87,6 +89,7 @@ public static class CompositionExtensions
         app.MapGeneration();
         app.MapOccurrences();
         app.MapPoints();
+        app.MapBadges();
         app.MapRewardProgress();
         app.MapAuditEndpoints();
         app.MapStatistics();

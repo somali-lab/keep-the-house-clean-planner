@@ -437,6 +437,8 @@ internal sealed class PointsWorld
 
     public ReconcileGate Gate { get; } = new();
 
+    public Badges.RecordingBadgeAwards Badges { get; } = new();
+
     public PointsService Service { get; }
 
     public PointsWorld()
@@ -452,7 +454,8 @@ internal sealed class PointsWorld
             Transactions,
             Occ.Audit,
             Occ.Clock,
-            Gate);
+            Gate,
+            Badges);
         foreach (var task in Occ.TaskStore.Items)
         {
             Backfill.Tasks.Add(new TaskPointValue(task.Id, task.Points, task.DurationMinutes));
