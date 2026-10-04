@@ -534,6 +534,32 @@ public sealed class PointsBonusEndpointTests(MongoContainerFixture mongo)
         (await Floor()).Should().Be("2026-09-22");
     }
 
+    [Fact]
+    public async Task Floor_isMovedByAResetThatRemovesNothing_soLateWorkInAWeekThatBeganBeforeTodayEarnsNoBonus()
+    {
+        await using var h = await BonusHarness.StartAsync(mongo);
+        var monday = await h.OccurrenceAsync("2026-09-14");
+        var tuesday = await h.OccurrenceAsync("2026-09-15");
+        // Monday's task is dragged to Thursday, so on Tuesday morning nothing lies before today and nothing is done: the reset removes nothing.
+        await h.PostAsync("2026-09-14T08:00:00.000Z", monday, "reschedule", new { date = "2026-09-17" });
+
+        var reset = await h.AtAsync("2026-09-15T06:00:00.000Z", HttpMethod.Delete, "/api/v2/stats", null, h.Admin);
+
+        reset.EnumerateObject().Should().OnlyContain(p => p.Value.GetInt32() == 0);
+        (await h.Settings.Find(FilterDefinition<BsonDocument>.Empty).SingleAsync(Ct))["bonusFloor"].AsString.Should().Be("2026-09-15");
+        await h.CompleteAsync("2026-09-15T07:00:00.000Z", tuesday, h.P2);
+        await h.CompleteAsync("2026-09-17T07:00:00.000Z", monday, h.P1);
+
+        // The week began on 14 September, before the floor, so it pays nothing.
+        await h.ReconcileAtAsync("2026-09-21T01:00:00.000Z");
+        (await h.BonusesAsync()).Should().BeEmpty();
+
+        // Without the floor the same history would pay the week.
+        await h.Settings.UpdateOneAsync(FilterDefinition<BsonDocument>.Empty, new BsonDocument("$unset", new BsonDocument("bonusFloor", string.Empty)), cancellationToken: Ct);
+        await h.ReconcileAtAsync("2026-09-21T02:00:00.000Z");
+        (await h.BonusesAsync()).Should().Contain("bonus_week_done p1 2026-09-14 5");
+    }
+
     // ---- writing the bonuses
 
     [Fact]
