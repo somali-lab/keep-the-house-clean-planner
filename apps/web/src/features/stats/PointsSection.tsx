@@ -1,6 +1,6 @@
 import { Award, Gift, HandCoins, Undo2 } from 'lucide-react';
 import { useId, useState } from 'react';
-import { LoadMore } from '@/components/LoadMore';
+import { LoadMore, retryPaged } from '@/components/LoadMore';
 import { NativeSelect } from '@/components/NativeSelect';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -200,85 +200,87 @@ export function PointsSection({ period, now }: { period: StatsPeriod; now?: Date
               ))}
             </NativeSelect>
           </div>
-          {entries.isError ? (
+          {entries.isError && (!entries.data || entries.isPlaceholderData) ? (
             <p role="alert" className="rounded-xl bg-destructive/10 p-4 text-destructive">
               {t('stats.points.error')}
             </p>
           ) : loadedEntries && windowCalendar.data && !entries.isPlaceholderData && loadedEntries.length > 0 ? (
             <div>
               <div className="overflow-x-auto">
-              <table className={statsTableClass}>
-                <caption>{format('stats.points.entries', { name: nameOf(personId) })}</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">{t('stats.points.date')}</th>
-                    <th scope="col">{t('stats.points.task')}</th>
-                    <th scope="col">{t('stats.points.amount')}</th>
-                    {hasRedemptions && <th scope="col">{t('stats.points.actions')}</th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {loadedEntries.map((entry) => {
-                    const bonus = entry.periodStart === null ? null : bonusLabel(entry, weekOf(entry.periodStart));
-                    const redemption = entry.kind === 'redemption';
-                    return (
-                    <tr key={entry.id}>
-                      <th scope="row" className="whitespace-nowrap">
-                        {longDate(entry.date)}
-                      </th>
-                      <td>
-                        {redemption ? (
-                          <span className="inline-flex items-center gap-2 font-semibold">
-                            <HandCoins className="size-4 shrink-0 text-primary" aria-hidden="true" />
-                            {entry.note ? format('stats.points.redemptionNote', { note: entry.note }) : t('stats.points.redemption')}
-                          </span>
-                        ) : bonus ? (
-                          <span className="inline-flex items-center gap-2 font-semibold">
-                            <Gift className="size-4 shrink-0 text-primary" aria-hidden="true" />
-                            {bonusText(bonus)}
-                          </span>
-                        ) : (
-                          entry.titleSnapshot
-                        )}
-                      </td>
-                      <td className="font-bold tabular-nums">
-                        {entry.amount > 0 ? `+${entry.amount}` : entry.amount}
-                        {redemption && (entry.centsPerPointSnapshot ?? 0) > 0 && (
-                          <span className="font-normal text-muted-foreground">
-                            {' '}
-                            ({money(-entry.amount * (entry.centsPerPointSnapshot ?? 0), entry.currencyCodeSnapshot ?? currencyCode)})
-                          </span>
-                        )}
-                      </td>
-                      {hasRedemptions && (
+                <table className={statsTableClass}>
+                  <caption>{format('stats.points.entries', { name: nameOf(personId) })}</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">{t('stats.points.date')}</th>
+                      <th scope="col">{t('stats.points.task')}</th>
+                      <th scope="col">{t('stats.points.amount')}</th>
+                      {hasRedemptions && <th scope="col">{t('stats.points.actions')}</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loadedEntries.map((entry) => {
+                      const bonus = entry.periodStart === null ? null : bonusLabel(entry, weekOf(entry.periodStart));
+                      const redemption = entry.kind === 'redemption';
+                      return (
+                      <tr key={entry.id}>
+                        <th scope="row" className="whitespace-nowrap">
+                          {longDate(entry.date)}
+                        </th>
                         <td>
-                          {canUndoRedemption(entry, profile, todayKey) && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="rounded-full"
-                              disabled={undo.isPending}
-                              aria-label={format('stats.points.undoLabel', { amount: -entry.amount })}
-                              onClick={() => undoRedemption(entry.id)}
-                            >
-                              <Undo2 aria-hidden="true" />
-                              {t('stats.points.undo')}
-                            </Button>
+                          {redemption ? (
+                            <span className="inline-flex items-center gap-2 font-semibold">
+                              <HandCoins className="size-4 shrink-0 text-primary" aria-hidden="true" />
+                              {entry.note ? format('stats.points.redemptionNote', { note: entry.note }) : t('stats.points.redemption')}
+                            </span>
+                          ) : bonus ? (
+                            <span className="inline-flex items-center gap-2 font-semibold">
+                              <Gift className="size-4 shrink-0 text-primary" aria-hidden="true" />
+                              {bonusText(bonus)}
+                            </span>
+                          ) : (
+                            entry.titleSnapshot
                           )}
                         </td>
-                      )}
-                    </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                        <td className="font-bold tabular-nums">
+                          {entry.amount > 0 ? `+${entry.amount}` : entry.amount}
+                          {redemption && (entry.centsPerPointSnapshot ?? 0) > 0 && (
+                            <span className="font-normal text-muted-foreground">
+                              {' '}
+                              ({money(-entry.amount * (entry.centsPerPointSnapshot ?? 0), entry.currencyCodeSnapshot ?? currencyCode)})
+                            </span>
+                          )}
+                        </td>
+                        {hasRedemptions && (
+                          <td>
+                            {canUndoRedemption(entry, profile, todayKey) && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="rounded-full"
+                                disabled={undo.isPending}
+                                aria-label={format('stats.points.undoLabel', { amount: -entry.amount })}
+                                onClick={() => undoRedemption(entry.id)}
+                              >
+                                <Undo2 aria-hidden="true" />
+                                {t('stats.points.undo')}
+                              </Button>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
               <LoadMore
                 count={loadedEntries.length}
                 hasNextPage={entries.hasNextPage}
                 isFetchingNextPage={entries.isFetchingNextPage}
                 onLoadMore={() => void entries.fetchNextPage()}
+                error={entries.isError}
+                onRetry={retryPaged(entries)}
               />
             </div>
           ) : (

@@ -427,6 +427,8 @@ export const en = {
   "history.filter.from": "From",
   "history.filter.to": "To",
   "paging.loadMore": "Load more",
+  "paging.error": "Loading more failed.",
+  "paging.retry": "Try again",
   "paging.shown": "{count} shown",
   "paging.allLoaded": "All loaded ({count})",
   "history.empty": "No changes found.",

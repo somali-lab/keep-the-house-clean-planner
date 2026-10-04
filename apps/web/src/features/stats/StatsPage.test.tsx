@@ -588,6 +588,34 @@ describe('StatsPage: points', () => {
     await waitFor(() => expect(entryUrls().at(-1)).not.toContain('cursor='));
   });
 
+  it('keeps the loaded entries when the next page fails and retries the same cursor', async () => {
+    const [one, two] = ENTRIES[ANNA.id]!.entries;
+    let failNext = true;
+    const fetchMock = setup(WORKLOAD, {
+      ...pointsRoutes(),
+      '/api/v2/points/entries': (_init: RequestInit | undefined, url: string) => {
+        const query = new URL(url, 'http://x').searchParams;
+        if (query.get('personId') !== ANNA.id) return page([]);
+        if (query.get('cursor') !== 'c1') return { items: [one!], nextCursor: 'c1' };
+        return failNext ? problem(500, 'boom') : page([two!]);
+      },
+    });
+    renderWithProviders(<StatsPage now={NOW} />);
+    await selectStatsTab('Punten');
+    const table = await screen.findByRole('table', { name: 'Posten van Anna' });
+    fireEvent.click(screen.getByRole('button', { name: 'Meer laden' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Meer laden is mislukt.');
+    expect(within(table).getAllByRole('row').slice(1)).toHaveLength(1);
+
+    failNext = false;
+    fireEvent.click(within(alert).getByRole('button', { name: 'Opnieuw proberen' }));
+    await waitFor(() => expect(within(table).getAllByRole('row').slice(1)).toHaveLength(2));
+    const cursorUrl = '/api/v2/points/entries?personId=a00000000000000000000001&from=2026-09-14&to=2026-09-20&limit=100&cursor=c1';
+    expect(pointsUrls(fetchMock).filter((url) => url.includes('cursor='))).toEqual([cursorUrl, cursorUrl]);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('follows the period control: the weeks and cycles aligned with the other reports', async () => {
     const fetchMock = setup(WORKLOAD, pointsRoutes());
     renderWithProviders(<StatsPage now={NOW} />);

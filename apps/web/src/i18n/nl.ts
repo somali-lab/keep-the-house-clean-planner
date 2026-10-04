@@ -482,6 +482,8 @@ export const nl = {
   'history.filter.from': 'Vanaf',
   'history.filter.to': 'Tot en met',
   'paging.loadMore': 'Meer laden',
+  'paging.error': 'Meer laden is mislukt.',
+  'paging.retry': 'Opnieuw proberen',
   'paging.shown': '{count} getoond',
   'paging.allLoaded': 'Alles geladen ({count})',
   'history.empty': 'Geen wijzigingen gevonden.',

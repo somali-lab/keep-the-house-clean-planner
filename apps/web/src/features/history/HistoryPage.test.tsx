@@ -128,6 +128,26 @@ describe('HistoryPage', () => {
     expect(screen.getByText('Alles geladen (5)').closest('[aria-live]')).toHaveAttribute('aria-live', 'polite');
   });
 
+  it('keeps the list when the next page fails and retries the same cursor', async () => {
+    let failNext = true;
+    const fetchMock = setup((_init, url) => {
+      if (!url.includes('cursor=c1')) return { items: PAGE_1, nextCursor: 'c1' };
+      return failNext ? problem(500, 'boom') : { items: PAGE_2, nextCursor: null };
+    });
+    renderWithProviders(<HistoryPage />, { route: '/manage/history' });
+    await screen.findAllByRole('listitem');
+    fireEvent.click(screen.getByRole('button', { name: 'Meer laden' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Meer laden is mislukt.');
+    expect(screen.getAllByRole('listitem')).toHaveLength(4);
+
+    failNext = false;
+    fireEvent.click(within(alert).getByRole('button', { name: 'Opnieuw proberen' }));
+    await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(5));
+    expect(auditUrls(fetchMock)).toEqual(['/api/v2/audit?limit=50', '/api/v2/audit?limit=50&cursor=c1', '/api/v2/audit?limit=50&cursor=c1']);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('starts over on the first page when a filter changes', async () => {
     const fetchMock = setup((_init, url) =>
       url.includes('cursor=c1') ? { items: PAGE_2, nextCursor: null } : { items: PAGE_1, nextCursor: 'c1' },

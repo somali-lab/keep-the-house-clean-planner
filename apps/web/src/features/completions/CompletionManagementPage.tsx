@@ -1,7 +1,7 @@
 import { CheckCircle2, Filter, Pencil, Trash2 } from 'lucide-react';
 import { useId, useMemo, useState } from 'react';
 import { EmptyState } from '@/components/EmptyState';
-import { LoadMore } from '@/components/LoadMore';
+import { LoadMore, retryPaged } from '@/components/LoadMore';
 import { useFilterReset } from '@/components/FilterReset';
 import { NativeSelect } from '@/components/NativeSelect';
 import { PageHeader } from '@/components/PageHeader';
@@ -102,7 +102,7 @@ export function CompletionManagementPage({ now }: { now?: Date }) {
       {message && <p role="status" className="mb-4 rounded-xl bg-success/10 p-4 font-semibold text-success">{message}</p>}
       {completions.isPending || settings.isPending || users.isPending ? (
         <p role="status" className="text-muted-foreground">{t('app.loading')}</p>
-      ) : completions.isError || settings.isError || users.isError ? (
+      ) : (completions.isError && !completions.data) || settings.isError || users.isError ? (
         <p role="alert" className="rounded-xl bg-destructive/10 p-4 text-destructive">{t('app.error')}</p>
       ) : records.length === 0 ? (
         <EmptyState icon={<CheckCircle2 className="size-6" aria-hidden="true" />}>{t('completions.empty')}</EmptyState>
@@ -138,12 +138,14 @@ export function CompletionManagementPage({ now }: { now?: Date }) {
           ))}
         </ul>
       )}
-      {completions.isSuccess && (
+      {completions.data && (
         <LoadMore
           count={records.length}
           hasNextPage={completions.hasNextPage}
           isFetchingNextPage={completions.isFetchingNextPage}
           onLoadMore={() => void completions.fetchNextPage()}
+          error={completions.isError}
+          onRetry={retryPaged(completions)}
         />
       )}
 

@@ -104,6 +104,38 @@ describe('CompletionManagementPage', () => {
     expect(screen.getByRole('button', { name: 'Meer laden' })).toBeInTheDocument();
   });
 
+  it('keeps the list when the next page fails and retries the same cursor', async () => {
+    storeProfile(ANNA.id);
+    const [first, second] = makeRecords();
+    let failNext = true;
+    const fetchMock = mockApi({
+      '/api/v2/users': page([ANNA, BRAM]),
+      '/api/v2/settings': makeSettings(),
+      '/api/v2/occurrences': (_init: RequestInit | undefined, url: string) => {
+        if (!url.includes('cursor=more')) return { items: [first], nextCursor: 'more' };
+        if (failNext) return problem(500, 'boom');
+        return page([second]);
+      },
+    });
+    renderWithProviders(<CompletionManagementPage now={new Date('2026-09-27T12:00:00.000Z')} />);
+    await screen.findByText('Kattenmandjes');
+    fireEvent.click(screen.getByRole('button', { name: 'Meer laden' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Meer laden is mislukt.');
+    expect(screen.getByText('Kattenmandjes')).toBeInTheDocument();
+    expect(screen.queryByText('Er is iets misgegaan.')).not.toBeInTheDocument();
+
+    failNext = false;
+    fireEvent.click(within(alert).getByRole('button', { name: 'Opnieuw proberen' }));
+    expect(await screen.findByText('Badkamer')).toBeInTheDocument();
+    expect(occurrenceUrls(fetchMock).slice(1)).toEqual([
+      '/api/v2/occurrences?from=2026-08-30&to=2026-09-27&status=done&limit=100&order=desc&cursor=more',
+      '/api/v2/occurrences?from=2026-08-30&to=2026-09-27&status=done&limit=100&order=desc&cursor=more',
+    ]);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByText('Alles geladen (2)')).toBeInTheDocument();
+  });
+
   it('refreshes the loaded pages after a deletion, starting again from the first page', async () => {
     storeProfile(ANNA.id);
     const [first, second] = makeRecords();
