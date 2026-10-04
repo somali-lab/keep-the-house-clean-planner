@@ -43,7 +43,9 @@ public static class CompositionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
         services.AddHttpAdapter();
-        services.TryAddSingleton(TimeProvider.System);
+        // The generic host already registers TimeProvider.System, so this must replace it (the last registration wins).
+        services.AddSingleton<TimeProvider>(sp =>
+            sp.GetRequiredService<IOptions<AppOptions>>().Value.FakeNow is { } fakeNow ? new FixedTimeProvider(fakeNow) : TimeProvider.System);
         services.AddSingleton(new AppVersion(CurrentVersion()));
         services.AddScoped<IHealthService, HealthService>();
         services.AddSingleton<IMetaService, MetaService>();
