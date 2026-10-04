@@ -99,6 +99,20 @@ internal sealed class MongoRoomStore : ForStoringRooms
         }
     }
 
+    public async Task<OneOf<long, PortError>> CountAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            return MongoTransactionContext.Session is { } session
+                ? await rooms.CountDocumentsAsync(session, FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken).ConfigureAwait(false)
+                : await rooms.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception e) when (IsFailure(e))
+        {
+            return Failed("count", e);
+        }
+    }
+
     public async Task<OneOf<Room, NotFound, PortError>> FindLastAsync(CancellationToken cancellationToken)
     {
         try

@@ -100,7 +100,7 @@ public sealed class RoomService(
             return TransactionOutcome.Abort<OneOf<Room, PortError>>(insertError);
         }
 
-        var entry = ChangeSet.Between(null, Fields(room)).ToEntry(AuditActor.From(actor), AuditEntity.Room, room.Id, AuditAction.Create);
+        var entry = ChangeSet.Between(null, RoomAuditFields.Of(room)).ToEntry(AuditActor.From(actor), AuditEntity.Room, room.Id, AuditAction.Create);
         return await CommitWithAuditAsync(entry, room, ct).ConfigureAwait(false);
     }
 
@@ -158,7 +158,7 @@ public sealed class RoomService(
             Active = patch.Active ?? before.Active,
             Virtual = patch.Virtual ?? before.Virtual,
         };
-        var changes = ChangeSet.Between(Fields(before), Fields(after));
+        var changes = ChangeSet.Between(RoomAuditFields.Of(before), RoomAuditFields.Of(after));
         if (changes.IsNoOp)
         {
             return TransactionOutcome.Commit<OneOf<Room, NotFound, PortError, PreconditionFailed>>(before);
@@ -239,7 +239,7 @@ public sealed class RoomService(
             return Abort(deleteFailure.Match<OneOf<Success, NotFound, RoomInUse, PortError, PreconditionFailed>>(notFound => notFound, error => error, failed => failed));
         }
 
-        var entry = ChangeSet.Between(Fields(before), null).ToEntry(AuditActor.From(actor), AuditEntity.Room, id, AuditAction.Delete);
+        var entry = ChangeSet.Between(RoomAuditFields.Of(before), null).ToEntry(AuditActor.From(actor), AuditEntity.Room, id, AuditAction.Delete);
         var recorded = await audit.RecordAsync(entry, ct).ConfigureAwait(false);
         return recorded.Match(
             _ => TransactionOutcome.Commit<OneOf<Success, NotFound, RoomInUse, PortError, PreconditionFailed>>(new Success()),
@@ -256,13 +256,6 @@ public sealed class RoomService(
             _ => TransactionOutcome.Commit<OneOf<Room, PortError>>(room),
             error => TransactionOutcome.Abort<OneOf<Room, PortError>>(error));
     }
-
-    /// <summary>The fields an audit entry records for a room: the document without id and timestamps (as the Node server).</summary>
-    private static AuditObject Fields(Room room) => AuditObject.Of(
-        ("name", room.Name),
-        ("sortOrder", room.SortOrder),
-        ("active", room.Active),
-        ("virtual", room.Virtual));
 
     private static ValidationErrors NameRequired() => ValidationErrors.For("name", "must not be empty");
 

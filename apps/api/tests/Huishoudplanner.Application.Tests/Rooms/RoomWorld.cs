@@ -118,6 +118,9 @@ internal sealed class FakeRooms : ForStoringRooms
         return Task.FromResult<OneOf<IReadOnlyList<Room>, PortError>>(OneOf<IReadOnlyList<Room>, PortError>.FromT0(found));
     }
 
+    public Task<OneOf<long, PortError>> CountAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<OneOf<long, PortError>>(Failure is { } failure ? failure : (long)Items.Count);
+
     public Task<OneOf<Room, NotFound, PortError>> FindLastAsync(CancellationToken cancellationToken)
     {
         if (Failure is { } failure)

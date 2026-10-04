@@ -46,6 +46,7 @@ public sealed class RoomEndpointTests : IDisposable
         mongoClient = new MongoClient(mongo.ConnectionString);
         database = mongoClient.GetDatabase(databaseName);
         factory = ApiFactory.ForMongo(mongo, databaseName)
+            .WithoutSeeding()
             .WithPort<ForFindingUsers>(users)
             .WithPort<TimeProvider>(new FixedClock(Now));
         client = factory.CreateClient();
@@ -524,6 +525,7 @@ public sealed class RoomEndpointTests : IDisposable
     public async Task Create_whenTheAuditEntryCannotBeWritten_answers500_andLeavesNoRoomBehind()
     {
         using var failing = ApiFactory.ForMongo(mongo, databaseName)
+            .WithoutSeeding()
             .WithPort<ForFindingUsers>(users)
             .WithPort<ForRecordingAudit>(new FailingAudit());
         using var failingClient = failing.CreateClient();
