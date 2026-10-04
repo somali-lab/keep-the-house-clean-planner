@@ -1,8 +1,12 @@
-import type { Slot } from '@huishoudplanner/shared';
+import { format, t, type MessageKey } from '../../i18n/nl.ts';
+import type { PlanIssue, PlanSlot as Slot } from './api.ts';
+
+/** The weekdays of a plan week as the grid shows them: Monday to Saturday, then Sunday (0). */
+export const WEEKDAYS_MONDAY_FIRST = [1, 2, 3, 4, 5, 6, 0] as const;
 
 /** Minimal shapes the editor needs; API objects satisfy them. */
 export interface EditorTask {
-  _id: string;
+  id: string;
   name: string;
   defaultAssigneeId?: string | null;
 }
@@ -88,7 +92,7 @@ export function applyDrop(
   }
 
   const taskId = source.kind === 'pool' ? source.taskId : moving!.taskId;
-  const task = context.tasks.find((candidate) => candidate._id === taskId);
+  const task = context.tasks.find((candidate) => candidate.id === taskId);
   const taskName = task?.name ?? taskId;
   const targetAssigneeId = target.assigneeId;
 
@@ -147,4 +151,28 @@ export function applyDrop(
       ? slots.map((slot, i) => (i === source.index ? placed : slot))
       : [...slots, placed];
   return { ok: true, slots: next, changed: true };
+}
+
+const HARD_ISSUE_CODES = new Set([
+  'week_index_out_of_range',
+  'weekday_out_of_range',
+  'unknown_task',
+  'inactive_task',
+  'unknown_user',
+  'inactive_user',
+  'assignee_unavailable',
+  'duplicate_task_day',
+]);
+
+/** Plain-language text for a hard error of the server's plan validation; an unknown code falls back to the code itself. */
+export function describePlanIssue(
+  issue: PlanIssue,
+  names: { task(id: string): string; user(id: string): string },
+): string {
+  if (!HARD_ISSUE_CODES.has(issue.code)) return issue.code;
+  return format(`planner.issue.${issue.code}` as MessageKey, {
+    task: issue.taskId ? names.task(issue.taskId) : '',
+    user: issue.userId ? names.user(issue.userId) : '',
+    weekday: issue.weekday === null ? '' : t(`weekdayLong.${issue.weekday}` as MessageKey),
+  });
 }

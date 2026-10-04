@@ -1,9 +1,29 @@
-import type { AiProposalResponse, TaskSuggestion } from '@huishoudplanner/shared';
 import { useMutation, useMutationState, useQueryClient } from '@tanstack/react-query';
-import { api } from '../../api/index.ts';
-import { planKeys } from '../planner/api.ts';
+import { apiV2, unwrap } from '../../api/index.ts';
+import { toInt } from '../../api/occurrence.ts';
+import type { components } from '../../api/v2/schema';
+import { toIssue, planKeys, type PlanIssue } from '../planner/api.ts';
+
+type Schemas = components['schemas'];
 
 const aiGenerationKey = ['ai', 'generation'] as const;
+
+/** A stored AI draft: the plan is an inactive concept, `warnings` are the non-blocking issues of its validation. */
+export interface AiProposal {
+  planId: string;
+  proposalId: string;
+  warnings: PlanIssue[];
+  /** Four sentences, one per week. */
+  rationale: string[];
+}
+
+/** A task the AI suggests for a room. */
+export interface TaskSuggestion {
+  name: string;
+  intervalKey: string;
+  durationMinutes: number;
+  notes: string;
+}
 
 /** Keeps the running AI request visible even when the AI page is unmounted during navigation. */
 export function useAiGenerationStartedAt(): number | null {
@@ -20,28 +40,39 @@ export function useAiActions() {
 
   const propose = useMutation({
     mutationKey: [...aiGenerationKey, 'propose'],
-    mutationFn: async (input: { constraints?: string }) =>
-      (await api.post<AiProposalResponse>('/api/ai/propose-plan', input)).data,
+    // `taskIds` is left out (all active tasks) and so are empty constraints: the parser refuses an explicit null.
+    mutationFn: async (input: { constraints?: string }): Promise<AiProposal> => {
+      const { data } = await unwrap(
+        apiV2.POST('/api/v2/ai/propose-plan', { body: (input.constraints ? { constraints: input.constraints } : {}) as Schemas['ProposePlanRequest'] }),
+      );
+      return { ...data, warnings: data.warnings.map(toIssue) };
+    },
     onSuccess: refreshPlans,
   });
 
   const rebalance = useMutation({
     mutationKey: [...aiGenerationKey, 'rebalance'],
-    mutationFn: async (input: { planId: string; constraints?: string }) =>
-      (await api.post<AiProposalResponse>('/api/ai/rebalance', input)).data,
+    mutationFn: async (input: { planId: string; constraints?: string }): Promise<AiProposal> => {
+      const body = input.constraints ? { planId: input.planId, constraints: input.constraints } : { planId: input.planId };
+      const { data } = await unwrap(apiV2.POST('/api/v2/ai/rebalance', { body: body as Schemas['RebalancePlanRequest'] }));
+      return { ...data, warnings: data.warnings.map(toIssue) };
+    },
     onSuccess: refreshPlans,
   });
 
   const suggestTasks = useMutation({
     mutationKey: [...aiGenerationKey, 'suggest-tasks'],
-    mutationFn: async (roomId: string) =>
-      (await api.post<{ suggestions: TaskSuggestion[] }>('/api/ai/suggest-tasks', { roomId })).data.suggestions,
+    mutationFn: async (roomId: string): Promise<TaskSuggestion[]> =>
+      (await unwrap(apiV2.POST('/api/v2/ai/suggest-tasks', { body: { roomId } }))).data.suggestions.map((s) => ({
+        ...s,
+        durationMinutes: toInt(s.durationMinutes),
+      })),
   });
 
   const explain = useMutation({
     mutationKey: [...aiGenerationKey, 'explain'],
-    mutationFn: async (planId: string) =>
-      (await api.post<{ rationale: string[] }>('/api/ai/explain', { planId })).data.rationale,
+    mutationFn: async (planId: string): Promise<string[]> =>
+      (await unwrap(apiV2.POST('/api/v2/ai/explain', { body: { planId } }))).data.rationale,
   });
 
   return { propose, rebalance, suggestTasks, explain };

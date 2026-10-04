@@ -24,7 +24,7 @@ import { getLocale } from '../../i18n/runtime.ts';
 import { useBadges } from '../badges/api.ts';
 import { Avatar } from '../../identity/Avatar.tsx';
 import { useProfile } from '../../identity/index.ts';
-import { usePlans } from '../planner/api.ts';
+import { usePlansV1 as usePlans } from '../planner/plansV1.ts';
 import { useAuditFeed, useClearAudit, type AuditFilters } from './api.ts';
 import { collectOccurrenceNames, describeEntry, entityName, SYSTEM_ACTOR_ID, type NameLookup } from './describe.ts';
 

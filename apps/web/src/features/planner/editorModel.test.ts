@@ -1,8 +1,9 @@
-import type { Slot } from '@huishoudplanner/shared';
+import type { PlanIssue, PlanSlot as Slot } from './api.ts';
 import { describe, expect, it } from 'vitest';
 import {
   applyDrop,
   cellId,
+  describePlanIssue,
   dragId,
   matchesTaskName,
   parseDragId,
@@ -24,8 +25,8 @@ const ANNA = { _id: 'u1', name: 'Anna', unavailableWeekdays: [2] }; // not on Tu
 const BRAM = { _id: 'u2', name: 'Bram', unavailableWeekdays: [] };
 const context = {
   tasks: [
-    { _id: 't1', name: 'Badkamer', defaultAssigneeId: 'u1' },
-    { _id: 't2', name: 'Stofzuigen' },
+    { id: 't1', name: 'Badkamer', defaultAssigneeId: 'u1' },
+    { id: 't2', name: 'Stofzuigen' },
   ],
   users: [ANNA, BRAM],
 };
@@ -176,5 +177,26 @@ describe('applyDrop', () => {
         context,
       ),
     ).toMatchObject({ ok: true, changed: false });
+  });
+});
+
+describe('describePlanIssue', () => {
+  const issue = (over: Partial<PlanIssue>): PlanIssue => ({
+    code: 'x', slotIndex: null, taskId: null, userId: null, weekIndex: null, weekday: null, period: null,
+    placed: null, required: null, minutes: null, budget: null, ...over,
+  });
+  const names = { task: (id: string) => (id === 't1' ? 'Badkamer' : id), user: (id: string) => (id === 'u1' ? 'Anna' : id) };
+
+  it('names the person, the day and the task of an hard error', () => {
+    expect(describePlanIssue(issue({ code: 'assignee_unavailable', taskId: 't1', userId: 'u1', weekday: 2 }), names)).toBe(
+      'Anna kan niet op dinsdag. "Badkamer" staat daar wel.',
+    );
+    expect(describePlanIssue(issue({ code: 'duplicate_task_day', taskId: 't1', weekday: 3 }), names)).toBe(
+      '"Badkamer" staat op woensdag meer dan één keer in het plan.',
+    );
+  });
+
+  it('falls back to the code of an error it does not know', () => {
+    expect(describePlanIssue(issue({ code: 'something_new' }), names)).toBe('something_new');
   });
 });

@@ -1,4 +1,3 @@
-import type { PromoteSuggestion } from '@huishoudplanner/shared';
 import { Check, Sparkles, X } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -7,7 +6,7 @@ import { ApiRequestError } from '../../api/index.ts';
 import { format, t } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
 import { weekdayName } from '../week/weekModel.ts';
-import { usePromoteActions, usePromoteSuggestions } from './api.ts';
+import { usePromoteActions, usePromoteSuggestions, type PromoteSuggestion } from './api.ts';
 
 /**
  * "Je verplaatst ‘Badkamer’ steeds van dinsdag naar woensdag. Plan aanpassen?"
