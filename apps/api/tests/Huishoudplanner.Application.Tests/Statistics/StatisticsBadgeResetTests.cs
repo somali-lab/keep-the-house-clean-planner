@@ -26,7 +26,7 @@ public sealed class StatisticsBadgeResetTests
     }
 
     [Fact]
-    public async Task Reset_thatRemovesNothing_rebuildsNoAwards()
+    public async Task Reset_thatOnlyMovesTheFloor_rebuildsNoAwards()
     {
         var world = new StatisticsWorld();
         world.Resetter.Result = new StatisticsResetResult(0, 0, 0, 0, 0, 0, 0);
@@ -34,7 +34,8 @@ public sealed class StatisticsBadgeResetTests
         var result = await world.Service.ResetAsync(Admin, null, Ct);
 
         result.IsT0.Should().BeTrue();
-        world.Badges.Reconciles.Should().BeEmpty("the history did not change, so the awards derived from it did not either");
+        world.Audit.Entries.Should().ContainSingle("the floor move is audited");
+        world.Badges.Reconciles.Should().BeEmpty("the history did not change, so the awards derived from it did not either (they never read the floor)");
     }
 
     [Fact]
