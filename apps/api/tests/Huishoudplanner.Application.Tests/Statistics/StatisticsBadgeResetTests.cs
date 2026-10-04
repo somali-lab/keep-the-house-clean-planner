@@ -1,5 +1,6 @@
 using Huishoudplanner.Domain.Audit;
 using Huishoudplanner.Domain.Badges;
+using Huishoudplanner.Domain.Statistics;
 using static Huishoudplanner.Application.Tests.Statistics.StatisticsWorld;
 
 namespace Huishoudplanner.Application.Tests.Statistics;
@@ -22,6 +23,18 @@ public sealed class StatisticsBadgeResetTests
         world.Audit.Entries.Should().ContainSingle("the badge summary is written by the badge evaluation, which is a fake here");
         var call = world.Badges.Reconciles.Should().ContainSingle().Subject;
         (call.Trigger, call.Safely, call.Actor, call.Names).Should().Be((BadgeEvalTrigger.Reset, true, AuditActor.From(Admin), null));
+    }
+
+    [Fact]
+    public async Task Reset_thatRemovesNothing_rebuildsNoAwards()
+    {
+        var world = new StatisticsWorld();
+        world.Resetter.Result = new StatisticsResetResult(0, 0, 0, 0, 0, 0, 0);
+
+        var result = await world.Service.ResetAsync(Admin, null, Ct);
+
+        result.IsT0.Should().BeTrue();
+        world.Badges.Reconciles.Should().BeEmpty("the history did not change, so the awards derived from it did not either");
     }
 
     [Fact]
