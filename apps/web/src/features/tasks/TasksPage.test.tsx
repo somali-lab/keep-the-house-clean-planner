@@ -50,7 +50,7 @@ describe('TasksPage — grouping', () => {
     renderWithProviders(<TasksPage />);
     expect(await screen.findByRole('link', { name: 'Takenlijst als PDF' })).toHaveAttribute(
       'href',
-      '/api/export/pdf/tasks',
+      '/api/v2/export/pdf/tasks',
     );
     expect(screen.getByRole('complementary', { name: 'AI-assistent' })).toBeInTheDocument();
     const sections = await screen.findAllByRole('region');

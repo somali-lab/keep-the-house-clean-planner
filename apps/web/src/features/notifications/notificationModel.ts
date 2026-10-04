@@ -1,5 +1,5 @@
-import type { OccurrenceView } from '@huishoudplanner/shared';
-import { addDays, fromDayKeyTime, toDayKey } from '@huishoudplanner/shared/time';
+import { addDays, dayKeyInZone, fromDayKeyTime } from '@/lib/dayKey';
+import type { Occurrence } from '../../api/index.ts';
 import { format, t } from '../../i18n/nl.ts';
 import { getLocale } from '../../i18n/runtime.ts';
 
@@ -39,7 +39,7 @@ function momentsOnDay(dayKey: string, times: readonly string[], timezone: string
  * Older moments are never caught up.
  */
 export function planNotifications(now: Date, timezone: string, times: readonly string[]): NotificationPlan {
-  const todayKey = toDayKey(now, timezone);
+  const todayKey = dayKeyInZone(now, timezone);
   const moments = [addDays(todayKey, -1), todayKey, addDays(todayKey, 1)]
     .flatMap((dayKey) => momentsOnDay(dayKey, times, timezone))
     .sort((a, b) => a.at.getTime() - b.at.getTime());
@@ -65,7 +65,7 @@ export interface NotificationContent {
   overdue: number;
 }
 
-type OccurrenceLike = Pick<OccurrenceView, 'status' | 'date' | 'assigneeId' | 'taskNameSnapshot'>;
+type OccurrenceLike = Pick<Occurrence, 'status' | 'date' | 'assigneeId' | 'taskNameSnapshot'>;
 
 /**
  * The person's open tasks for today and their overdue ones. Null when there is

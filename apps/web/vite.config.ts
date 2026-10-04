@@ -42,7 +42,10 @@ export default defineConfig({
         runtimeCaching: [
           {
             urlPattern: ({ url, request }) =>
-              request.method === 'GET' && url.pathname.startsWith('/api/') && !url.pathname.startsWith('/api/export/'),
+              request.method === 'GET' &&
+              url.pathname.startsWith('/api/') &&
+              !url.pathname.startsWith('/api/export/') &&
+              !url.pathname.startsWith('/api/v2/export/'),
             handler: 'NetworkFirst',
             options: {
               cacheName: 'api-get',

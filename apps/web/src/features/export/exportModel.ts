@@ -1,6 +1,6 @@
-import type { Cycle } from '@huishoudplanner/shared';
 import type { Language } from '../../i18n/runtime.ts';
 import { addDays } from '@/lib/dayKey';
+import type { Cycle } from './api.ts';
 
 type CycleRange = Pick<Cycle, 'startDate' | 'endDate'>;
 
@@ -65,10 +65,16 @@ export function weeksOf(range: ExportRange): number {
   return range === '1' ? 1 : range === '2' ? 2 : range === '4' ? 4 : 0;
 }
 
+const PDF_BASE = '/api/v2/export/pdf';
+
+/**
+ * The address of a PDF sheet. The sheets need no profile (the endpoints are open), so a plain link downloads them and the browser
+ * streams the file. Optional keys are left out; English is the only language that is named (Dutch is the server default).
+ */
 export function exportUrl(choice: ExportChoice): string {
   const language = choice.language === 'en' ? '&language=en' : '';
-  if (choice.range === 'day') return `/api/export/pdf/day?date=${choice.date}${language}`;
-  if (choice.range === 'due') return choice.language === 'en' ? '/api/export/pdf/due?language=en' : '/api/export/pdf/due';
+  if (choice.range === 'day') return `${PDF_BASE}/day?date=${choice.date}${language}`;
+  if (choice.range === 'due') return choice.language === 'en' ? `${PDF_BASE}/due?language=en` : `${PDF_BASE}/due`;
   const weeks = weeksOf(choice.range);
   const params = new URLSearchParams({
     fromWeek: choice.startWeek,
@@ -77,5 +83,10 @@ export function exportUrl(choice: ExportChoice): string {
     totals: String(choice.totals),
   });
   if (choice.language === 'en') params.set('language', 'en');
-  return `/api/export/pdf?${params.toString()}`;
+  return `${PDF_BASE}/schedule?${params.toString()}`;
+}
+
+/** The list of all tasks, grouped by room. */
+export function tasksPdfUrl(language?: Language): string {
+  return language === 'en' ? `${PDF_BASE}/tasks?language=en` : `${PDF_BASE}/tasks`;
 }

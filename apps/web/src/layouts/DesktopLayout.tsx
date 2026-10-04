@@ -1,4 +1,4 @@
-import type { UserRole } from '@huishoudplanner/shared';
+import type { UserRole } from '../api/v2/household.ts';
 import type { ReactElement } from 'react';
 import { useState } from 'react';
 import {

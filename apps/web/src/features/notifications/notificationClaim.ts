@@ -1,4 +1,4 @@
-import { addDays } from '@huishoudplanner/shared/time';
+import { addDays } from '@/lib/dayKey';
 import type { NotificationMoment } from './notificationModel.ts';
 
 /**

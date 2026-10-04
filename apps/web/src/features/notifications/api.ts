@@ -1,18 +1,31 @@
-import type { OccurrenceView } from '@huishoudplanner/shared';
-import { addDays } from '@huishoudplanner/shared/time';
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { api, apiV2, ifMatch, isStaleEntity, replaceInList, unwrap } from '../../api/index.ts';
+import { apiV2, ifMatch, isStaleEntity, replaceInList, toOccurrence, unwrap, type Occurrence } from '../../api/index.ts';
 import { toUser, usersKey, type User } from '../../api/v2/household.ts';
+import { collectPages } from '../../api/v2/paging.ts';
+import { addDays } from '@/lib/dayKey';
 import { OVERDUE_LOOKBACK_DAYS } from '../today/todayModel.ts';
 
+/** The most the server returns in one page of occurrences (`limit` 1 to 500). */
+const PAGE_SIZE = 500;
+
 /** The person's open occurrences for today and the overdue lookback window, fetched fresh at delivery time. */
-export function fetchOpenOccurrences(queryClient: QueryClient, personId: string, todayKey: string): Promise<OccurrenceView[]> {
+export function fetchOpenOccurrences(queryClient: QueryClient, personId: string, todayKey: string): Promise<Occurrence[]> {
   const from = addDays(todayKey, -OVERDUE_LOOKBACK_DAYS);
   return queryClient.fetchQuery({
     // Starts with 'occurrences' so every occurrence mutation also invalidates it.
     queryKey: ['occurrences', 'notify', personId, from, todayKey],
     queryFn: async () =>
-      (await api.get<OccurrenceView[]>(`/api/occurrences?from=${from}&to=${todayKey}&status=open&assigneeId=${personId}`)).data,
+      (
+        await collectPages(async (cursor) =>
+          (
+            await unwrap(
+              apiV2.GET('/api/v2/occurrences', {
+                params: { query: { from, to: todayKey, status: 'open', assigneeId: personId, limit: String(PAGE_SIZE), cursor } },
+              }),
+            )
+          ).data,
+        )
+      ).map(toOccurrence),
     staleTime: 0,
   });
 }

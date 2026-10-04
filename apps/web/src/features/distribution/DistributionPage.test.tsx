@@ -1,8 +1,8 @@
-import type { CyclePlan, Slot } from '@huishoudplanner/shared';
+import type { CyclePlan, PlanSlot } from '../planner/api.ts';
 import { fireEvent, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { makeUser, mockApi, storeProfile, page } from '../../test/fixtures.ts';
-import { makeRoom, makeSettings, makeTask, renderWithProviders } from '../../test/render.tsx';
+import { makeRoomV2, makeSettings, makeTaskV2, renderWithProviders } from '../../test/render.tsx';
 import { DistributionPage } from './DistributionPage.tsx';
 
 const ANNA = makeUser({ id: 'a00000000000000000000001', name: 'Anna' });
@@ -13,7 +13,7 @@ const slot = (
   weekIndex: number,
   weekday: number,
   assigneeId: string | null,
-): Slot => ({
+): PlanSlot => ({
   taskId,
   weekIndex,
   weekday,
@@ -21,9 +21,9 @@ const slot = (
   sortOrder: 0,
 });
 
-function plan(slots: Slot[]): CyclePlan {
+function plan(slots: PlanSlot[]): CyclePlan {
   return {
-    _id: 'p1',
+    id: 'p1',
     name: 'Standaard',
     active: true,
     slots,
@@ -35,6 +35,7 @@ function plan(slots: Slot[]): CyclePlan {
     discarded: false,
     createdAt: STAMP,
     updatedAt: STAMP,
+    version: 1,
   };
 }
 
@@ -43,10 +44,10 @@ describe('DistributionPage', () => {
     storeProfile(ANNA.id);
     mockApi({
       '/api/v2/users': page([ANNA]),
-      '/api/tasks': [],
-      '/api/rooms': [],
+      '/api/v2/tasks': page([]),
+      '/api/v2/rooms': page([]),
       '/api/v2/settings': makeSettings(),
-      '/api/cycle-plans': [plan([]), { ...plan([]), _id: 'p2', name: 'Zomer', active: false }],
+      '/api/v2/cycle-plans': page([plan([]), { ...plan([]), id: 'p2', name: 'Zomer', active: false }]),
     });
     const first = renderWithProviders(<DistributionPage />);
     const select = await screen.findByLabelText('Plan');
@@ -60,15 +61,15 @@ describe('DistributionPage', () => {
   });
 
   it('shows weekday and weekend minutes per person for the week and cycle', async () => {
-    const weekly = makeTask({
-      _id: 't1',
+    const weekly = makeTaskV2({
+      id: 't1',
       name: 'Wekelijkse taak',
       roomId: 'r1',
       intervalKey: '1w',
       durationMinutes: 40,
     });
-    const small = makeTask({
-      _id: 't2',
+    const small = makeTaskV2({
+      id: 't2',
       name: 'Kleine taak',
       roomId: 'r1',
       intervalKey: '1w',
@@ -77,10 +78,10 @@ describe('DistributionPage', () => {
     storeProfile(ANNA.id);
     mockApi({
       '/api/v2/users': page([ANNA, BRAM]),
-      '/api/tasks': [weekly, small],
-      '/api/rooms': [makeRoom({ _id: 'r1', name: 'Woonkamer' })],
+      '/api/v2/tasks': page([weekly, small]),
+      '/api/v2/rooms': page([makeRoomV2({ id: 'r1', name: 'Woonkamer' })]),
       '/api/v2/settings': makeSettings(),
-      '/api/cycle-plans': [
+      '/api/v2/cycle-plans': page([
         plan([
           slot('t1', 0, 1, ANNA.id),
           slot('t2', 0, 6, ANNA.id),
@@ -88,7 +89,7 @@ describe('DistributionPage', () => {
           slot('t1', 0, 0, BRAM.id),
           slot('t1', 1, 1, BRAM.id),
         ]),
-      ],
+      ]),
     });
     renderWithProviders(<DistributionPage />);
 
@@ -134,8 +135,8 @@ describe('DistributionPage', () => {
   });
 
   it('shows and marks a workload above the configured maximum', async () => {
-    const task = makeTask({
-      _id: 't1',
+    const task = makeTaskV2({
+      id: 't1',
       name: 'Te volle weektaak',
       roomId: 'r1',
       intervalKey: '1w',
@@ -144,10 +145,10 @@ describe('DistributionPage', () => {
     storeProfile(ANNA.id);
     mockApi({
       '/api/v2/users': page([ANNA]),
-      '/api/tasks': [task],
-      '/api/rooms': [makeRoom({ _id: 'r1', name: 'Woonkamer' })],
+      '/api/v2/tasks': page([task]),
+      '/api/v2/rooms': page([makeRoomV2({ id: 'r1', name: 'Woonkamer' })]),
       '/api/v2/settings': makeSettings(),
-      '/api/cycle-plans': [plan([slot('t1', 1, 1, ANNA.id)])],
+      '/api/v2/cycle-plans': page([plan([slot('t1', 1, 1, ANNA.id)])]),
     });
     renderWithProviders(<DistributionPage />);
 
@@ -164,8 +165,8 @@ describe('DistributionPage', () => {
   });
 
   it('keeps the recurring-task spacing assessment on the separate page', async () => {
-    const task = makeTask({
-      _id: 't1',
+    const task = makeTaskV2({
+      id: 't1',
       name: 'Koelkast schoonmaken',
       roomId: 'r1',
       intervalKey: '2wk',
@@ -174,10 +175,10 @@ describe('DistributionPage', () => {
     storeProfile(ANNA.id);
     mockApi({
       '/api/v2/users': page([ANNA, BRAM]),
-      '/api/tasks': [task],
-      '/api/rooms': [makeRoom({ _id: 'r1', name: 'Keuken' })],
+      '/api/v2/tasks': page([task]),
+      '/api/v2/rooms': page([makeRoomV2({ id: 'r1', name: 'Keuken' })]),
       '/api/v2/settings': makeSettings(),
-      '/api/cycle-plans': [plan([slot('t1', 0, 1, ANNA.id), slot('t1', 2, 1, ANNA.id)])],
+      '/api/v2/cycle-plans': page([plan([slot('t1', 0, 1, ANNA.id), slot('t1', 2, 1, ANNA.id)])]),
     });
     renderWithProviders(<DistributionPage />, { route: '/distribution?tab=spacing' });
 
@@ -189,5 +190,34 @@ describe('DistributionPage', () => {
     expect(spacing).toHaveTextContent('Keuken · 1x per 2 weken');
     expect(spacing).toHaveTextContent('werkelijk: 14 dagen');
     expect(spacing).toHaveTextContent('Goed verdeeld');
+  });
+
+  it('reads the plans, tasks and rooms from /api/v2, hides discarded plans and ignores inactive tasks', async () => {
+    storeProfile(ANNA.id);
+    const fetchMock = mockApi({
+      '/api/v2/users': page([ANNA]),
+      '/api/v2/tasks': page([
+        makeTaskV2({ id: 't1', name: 'Actief', roomId: 'r1', durationMinutes: 20 }),
+        makeTaskV2({ id: 't2', name: 'Inactief', roomId: 'r1', durationMinutes: 50, active: false }),
+      ]),
+      '/api/v2/rooms': page([makeRoomV2({ id: 'r1', name: 'Woonkamer' })]),
+      '/api/v2/settings': makeSettings(),
+      '/api/v2/cycle-plans': page([
+        { ...plan([]), id: 'p0', name: 'Weggegooid', discarded: true },
+        plan([slot('t1', 0, 1, ANNA.id), slot('t2', 0, 1, ANNA.id)]),
+      ]),
+    });
+    renderWithProviders(<DistributionPage />);
+
+    const select = await screen.findByLabelText('Plan');
+    expect(within(select).getAllByRole('option').map((option) => option.textContent?.trim())).toEqual(['Standaard (actief)']);
+    const week = within(await screen.findByRole('region', { name: 'Verdeling van het werk' }))
+      .getByRole('heading', { name: 'Week 1' }).parentElement!.parentElement!;
+    expect(within(week).getByText('Anna').parentElement!.parentElement!.parentElement!).toHaveTextContent('20 min totaal');
+    const urls = fetchMock.mock.calls.map(([url]) => String(url));
+    expect(urls).toContain('/api/v2/cycle-plans?limit=200');
+    expect(urls).toContain('/api/v2/tasks?limit=200');
+    expect(urls).toContain('/api/v2/rooms?limit=200');
+    expect(urls.some((url) => /^\/api\/(tasks|rooms|cycle-plans)/.test(url))).toBe(false);
   });
 });

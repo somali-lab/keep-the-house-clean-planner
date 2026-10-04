@@ -9,10 +9,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { apiV2, ApiRequestError, unwrap } from '../../api/index.ts';
-import { queryKeys } from '../../api/queries.ts';
 import { useSettings } from '../../api/v2/household.ts';
 import type { components } from '../../api/v2/schema';
-import { useRooms } from '../../api/v2/queries.ts';
+import { tasksKey, useRooms } from '../../api/v2/queries.ts';
 import { format, t } from '../../i18n/nl.ts';
 import { usePlans } from '../planner/api.ts';
 import { useAiActions, useAiGenerationStartedAt, type AiProposal, type TaskSuggestion } from './api.ts';
@@ -136,7 +135,7 @@ export function AiPage({
         }),
       );
       setAddedSuggestions((names) => [...names, s.name]);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
+      await queryClient.invalidateQueries({ queryKey: tasksKey });
     } catch (error) {
       fail(error);
     }

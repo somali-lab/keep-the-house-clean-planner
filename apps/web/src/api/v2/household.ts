@@ -50,7 +50,7 @@ export const toUser = (user: UserResponse): User => ({
 /** The most the server returns in one page of people (`limit` 1 to 500). */
 const USER_PAGE_SIZE = 500;
 
-// The key starts with the one of the Node client's list, so an invalidation of `['users']` refreshes this one as well.
+// The key starts with `users`, so an invalidation of `['users']` refreshes this one as well.
 export const usersKey = ['users', 'v2'] as const;
 
 export async function fetchUsers(): Promise<User[]> {
@@ -176,7 +176,7 @@ export const toSettings = (settings: SettingsResponse): Settings => ({
   version: toInt(settings.version),
 });
 
-// The key starts with the one of the Node client's read, so an invalidation of `['settings']` refreshes this one as well.
+// The key starts with `settings`, so an invalidation of `['settings']` refreshes this one as well.
 export const settingsKey = ['settings', 'v2'] as const;
 
 export async function fetchSettings(): Promise<Settings> {

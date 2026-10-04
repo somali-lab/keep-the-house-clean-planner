@@ -548,7 +548,7 @@ The fridge is a legitimate output device. The schedule must work without a phone
 
 ### 7.3 Offline behaviour
 
-- The application installs as a PWA and keeps working without a connection for reading and for completing occurrences. Every `GET` under `/api/` except the exports (`/api/export/`) is cached network first: the network answers when it does so within 4 seconds, otherwise the last cached answer is used; the cache holds at most 200 entries for at most 7 days.
+- The application installs as a PWA and keeps working without a connection for reading and for completing occurrences. Every `GET` under `/api/` except the exports (`/api/export/` and `/api/v2/export/`) is cached network first: the network answers when it does so within 4 seconds, otherwise the last cached answer is used; the cache holds at most 200 entries for at most 7 days.
 - Completing, undoing a completion and skipping taken offline are queued and replayed on reconnect, attributed to the profile that was active when the action was taken, not the one active when the queue drains. An action that the server refuses on replay, because the occurrence changed in the meantime, is reported as a conflict. Claiming, assigning, retracting recorded work and creating extra or one-off work need a connection.
 - A new application version prompts the user to reload rather than swapping itself out underneath an open screen.
 

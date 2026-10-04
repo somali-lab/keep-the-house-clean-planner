@@ -1,4 +1,4 @@
-import type { AuditEntry } from '@huishoudplanner/shared';
+import type { AuditEntry } from './auditModel.ts';
 import { describe, expect, it } from 'vitest';
 import { describeEntry, entityName, formatValue, SYSTEM_ACTOR_ID, type NameLookup } from './describe.ts';
 
@@ -23,10 +23,12 @@ const names: NameLookup = {
   occurrences: new Map([['o1', 'Wastafel']]),
   badges: new Map([['b1', 'Toiletjuffrouw']]),
   timezone: 'Europe/Amsterdam',
+  weekOf: (dayKey) => ({ '2026-09-28': 40 })[dayKey as '2026-09-28'] ?? null,
+  cycleDays: 28,
 };
 
 const entry = (overrides: Partial<AuditEntry>): AuditEntry => ({
-  _id: 'e1',
+  id: 'e1',
   at: '2026-09-16T08:00:00.000Z',
   actorId: ANNA,
   entity: 'task',
@@ -35,6 +37,7 @@ const entry = (overrides: Partial<AuditEntry>): AuditEntry => ({
   before: {},
   after: {},
   source: 'ui',
+  meta: null,
   ...overrides,
 });
 
@@ -275,6 +278,14 @@ describe('describeEntry for bonuses', () => {
     expect(describeEntry(recompute({ created: 2 }), names)).toEqual(['Systeem berekende de punten opnieuw']);
   });
 
+  it('shows the key of a bonus whose week the calendar has not answered yet', () => {
+    const lines = describeEntry(
+      recompute({ bonusChanges: [{ key: weekDone, personId: BRAM, amount: 5, change: 'created' }], bonusChangesTotal: 1 }),
+      { ...names, weekOf: () => null },
+    );
+    expect(lines.at(-1)).toBe(`Bram kreeg 5 punten: ${weekDone}`);
+  });
+
   it('shows a change of the bonus schedule as readable rows, before and after', () => {
     const lines = describeEntry(
       entry({
@@ -355,6 +366,14 @@ describe('badges (ADR-0014)', () => {
     expect(lines).toEqual(['Anna wijzigde drempel van Toiletjuffrouw: 10 → 2']);
     expect(describeEntry(entry({ entity: 'badge', entityId: 'b1', action: 'create', after: { name: 'Toiletjuffrouw' } }), names)).toEqual([
       'Anna maakte badge Toiletjuffrouw aan',
+    ]);
+  });
+});
+
+describe('describeEntry for entries this version does not know', () => {
+  it('still reads an entity or an action that a newer server adds', () => {
+    expect(describeEntry(entry({ entity: 'newThing', entityId: 'x1', action: 'frobnicate' }), names)).toEqual([
+      'Anna wijzigde onbekend',
     ]);
   });
 });

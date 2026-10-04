@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addDays, dayKeyInZone, daysBetween } from './dayKey.ts';
+import { addDays, dayKeyInZone, daysBetween, fromDayKeyTime } from './dayKey.ts';
 
 describe('dayKeyInZone', () => {
   it('uses the timezone, not UTC', () => {
@@ -44,5 +44,36 @@ describe('daysBetween', () => {
     expect(daysBetween('2026-10-24', '2026-10-27')).toBe(3);
     expect(daysBetween('2026-09-16', '2026-09-10')).toBe(-6);
     expect(daysBetween('2026-09-16', '2026-09-16')).toBe(0);
+  });
+});
+
+describe('fromDayKeyTime', () => {
+  const zone = 'Europe/Amsterdam';
+
+  it('is the instant a wall-clock time occurs on a day of the timezone', () => {
+    expect(fromDayKeyTime('2026-09-16', '10:00', zone).toISOString()).toBe('2026-09-16T08:00:00.000Z');
+    expect(fromDayKeyTime('2026-01-15', '10:00', zone).toISOString()).toBe('2026-01-15T09:00:00.000Z');
+    expect(fromDayKeyTime('2026-09-16', '00:00', 'UTC').toISOString()).toBe('2026-09-16T00:00:00.000Z');
+    expect(fromDayKeyTime('2026-09-16', '23:59', 'America/New_York').toISOString()).toBe('2026-09-17T03:59:00.000Z');
+  });
+
+  it('keeps the wall clock across the DST changes', () => {
+    expect(fromDayKeyTime('2026-03-28', '12:00', zone).toISOString()).toBe('2026-03-28T11:00:00.000Z');
+    expect(fromDayKeyTime('2026-03-29', '12:00', zone).toISOString()).toBe('2026-03-29T10:00:00.000Z');
+    expect(fromDayKeyTime('2026-10-25', '12:00', zone).toISOString()).toBe('2026-10-25T11:00:00.000Z');
+  });
+
+  it('lands a time the day skips the same distance after the gap', () => {
+    expect(fromDayKeyTime('2026-03-29', '02:30', zone).toISOString()).toBe('2026-03-29T01:30:00.000Z');
+  });
+
+  it('means the first occurrence of an ambiguous time', () => {
+    expect(fromDayKeyTime('2026-10-25', '02:30', zone).toISOString()).toBe('2026-10-25T00:30:00.000Z');
+  });
+
+  it('throws on a value that is not a day key or a time of day', () => {
+    expect(() => fromDayKeyTime('2026-02-30', '10:00', zone)).toThrow(RangeError);
+    expect(() => fromDayKeyTime('2026-09-16', '25:00', zone)).toThrow(RangeError);
+    expect(() => fromDayKeyTime('2026-09-16', '9:00', zone)).toThrow(RangeError);
   });
 });
