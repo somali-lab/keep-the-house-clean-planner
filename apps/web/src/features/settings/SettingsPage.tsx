@@ -1,13 +1,4 @@
-import {
-  DEFAULT_AI_TIMEOUT_SECONDS,
-  MAX_AI_TIMEOUT_SECONDS,
-  MIN_AI_TIMEOUT_SECONDS,
-  type AiProviderSettings,
-  type AiProviderType,
-  type CompletionControl,
-  type Settings,
-} from '@huishoudplanner/shared';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { Bot, CalendarClock, CalendarDays, Circle, Database, LayoutPanelTop, Save, TestTube2, Users, WandSparkles } from 'lucide-react';
 import { useId, useState, type FormEvent } from 'react';
 import { NativeSelect } from '@/components/NativeSelect';
@@ -16,13 +7,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { panelTabsListClass, panelTabsTriggerClass, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { api, ApiRequestError } from '../../api/index.ts';
-import { queryKeys, useSettings } from '../../api/queries.ts';
+import { apiV2, ApiRequestError, unwrap } from '../../api/index.ts';
+import { useSettings, type AiProviderType, type CompletionControl, type Settings } from '../../api/v2/household.ts';
+import { FALLBACK_LIMITS, useLimits } from '../../api/v2/queries.ts';
+import type { components } from '../../api/v2/schema';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
+import { AiPromptsPage } from '../ai-prompts/AiPromptsPage.tsx';
+import { saveErrorText, useUpdateSettings, type SettingsPatch } from './api.ts';
 import { BonusSection } from './BonusSection.tsx';
 import { CalendarSection } from './CalendarSection.tsx';
 import { ConversionSection } from './ConversionSection.tsx';
-import { AiPromptsPage } from '../ai-prompts/AiPromptsPage.tsx';
 import { DataSection } from './DataSection.tsx';
 import { JobsSection } from './JobsSection.tsx';
 import { RewardGoalsSection } from './RewardGoalsSection.tsx';
@@ -33,6 +27,9 @@ import { UsersSection } from './UsersSection.tsx';
 const PROVIDERS: AiProviderType[] = ['none', 'mock', 'anthropic', 'openai-compatible', 'ollama'];
 const NEEDS_ENDPOINT: AiProviderType[] = ['openai-compatible', 'ollama'];
 const NEEDS_MODEL: AiProviderType[] = ['anthropic', 'openai-compatible', 'ollama'];
+
+type AiProviderPatch = NonNullable<SettingsPatch['aiProvider']>;
+
 /** Settings screen: calendar, people, rooms, AI provider and data export/import. */
 export function SettingsPage({ initialTab = 'calendar' }: { initialTab?: 'calendar' | 'people' | 'rooms' | 'interface' | 'ai' | 'jobs' | 'data' }) {
   const settings = useSettings();
@@ -71,14 +68,14 @@ export function SettingsPage({ initialTab = 'calendar' }: { initialTab?: 'calend
         </TabsContent>
         <TabsContent value="people"><UsersSection /></TabsContent>
         <TabsContent value="rooms"><RoomsSection /></TabsContent>
-        <TabsContent value="interface"><CompletionControlForm key={settings.data.updatedAt} settings={settings.data} /></TabsContent>
+        <TabsContent value="interface"><CompletionControlForm settings={settings.data} /></TabsContent>
         <TabsContent value="ai">
           <Tabs defaultValue="provider" className="gap-4">
             <TabsList variant="line" className="w-full justify-start overflow-x-auto border-b pb-2">
               <TabsTrigger value="provider"><Bot />{t('settings.ai.providerTab')}</TabsTrigger>
               <TabsTrigger value="prompts"><WandSparkles />{t('settings.ai.promptsTab')}</TabsTrigger>
             </TabsList>
-            <TabsContent value="provider"><AiProviderForm key={settings.data.updatedAt} settings={settings.data} /></TabsContent>
+            <TabsContent value="provider"><AiProviderForm settings={settings.data} /></TabsContent>
             <TabsContent value="prompts"><AiPromptsPage embedded /></TabsContent>
           </Tabs>
         </TabsContent>
@@ -90,58 +87,55 @@ export function SettingsPage({ initialTab = 'calendar' }: { initialTab?: 'calend
 }
 
 function CompletionControlForm({ settings }: { settings: Settings }) {
-  const queryClient = useQueryClient();
+  const update = useUpdateSettings();
   const [value, setValue] = useState<CompletionControl>(settings.completionControl ?? 'circle');
-  const save = useMutation({
-    mutationFn: async () => api.patch('/api/settings', { completionControl: value }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.settings }),
-  });
   return (
     <form
       className={settingsCardClass}
       aria-label={t('settings.completion.title')}
-      onSubmit={(event) => { event.preventDefault(); save.mutate(); }}
+      onSubmit={(event) => {
+        event.preventDefault();
+        update.mutate({ settings, patch: { completionControl: value } });
+      }}
     >
       <SettingsCardHeader icon={<Circle aria-hidden="true" />} titleId="completion-control-title" title={t('settings.completion.title')} description={t('settings.completion.help')} />
       <fieldset className="grid gap-3 sm:grid-cols-2">
         {(['circle', 'thumb'] as const).map((option) => (
           <label key={option} className="flex min-h-14 cursor-pointer items-center gap-3 rounded-xl border bg-background px-4 py-3 font-semibold">
-            <input type="radio" name="completion-control" value={option} checked={value === option} onChange={() => setValue(option)} />
+            <input
+              type="radio"
+              name="completion-control"
+              value={option}
+              checked={value === option}
+              onChange={() => {
+                update.reset();
+                setValue(option);
+              }}
+            />
             {t(`settings.completion.${option}` as MessageKey)}
           </label>
         ))}
       </fieldset>
-      {save.isSuccess && <FormMessage kind="status">{t('settings.saved')}</FormMessage>}
-      <FormActions><Button type="submit" disabled={save.isPending}><Save />{t('common.save')}</Button></FormActions>
+      {update.isSuccess && <FormMessage kind="status">{t('settings.saved')}</FormMessage>}
+      {update.isError && <FormMessage kind="alert">{saveErrorText(update.error)}</FormMessage>}
+      <FormActions><Button type="submit" disabled={update.isPending}><Save />{t('common.save')}</Button></FormActions>
     </form>
   );
 }
 
 function AiProviderForm({ settings }: { settings: Settings }) {
   const idPrefix = useId();
-  const queryClient = useQueryClient();
+  const limits = useLimits().data?.ai ?? FALLBACK_LIMITS.ai;
+  const update = useUpdateSettings();
   const [type, setType] = useState<AiProviderType>(settings.aiProvider.type);
   const [endpoint, setEndpoint] = useState(settings.aiProvider.endpoint ?? '');
   const [model, setModel] = useState(settings.aiProvider.model ?? '');
-  const [timeoutSeconds, setTimeoutSeconds] = useState(String(settings.aiProvider.timeoutSeconds ?? DEFAULT_AI_TIMEOUT_SECONDS));
+  const [timeoutSeconds, setTimeoutSeconds] = useState(String(settings.aiProvider.timeoutSeconds ?? limits.defaultTimeoutSeconds));
   const [message, setMessage] = useState<{ kind: 'status' | 'alert'; text: string } | null>(null);
 
-  const save = useMutation({
-    mutationFn: async (aiProvider: AiProviderSettings) =>
-      api.patch('/api/settings', { aiProvider }),
-    onSuccess: async () => {
-      setMessage({ kind: 'status', text: t('settings.saved') });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.settings });
-    },
-    onError: (error) =>
-      setMessage({
-        kind: 'alert',
-        text: error instanceof ApiRequestError && error.code === 'validation_error' ? t('settings.ai.invalid') : t('app.error'),
-      }),
-  });
-
   const testConnection = useMutation({
-    mutationFn: async (aiProvider: AiProviderSettings) => api.post<{ ok: true }>('/api/ai/test', { aiProvider }),
+    mutationFn: async (aiProvider: AiProviderPatch) =>
+      unwrap(apiV2.POST('/api/v2/ai/test', { body: { aiProvider } as unknown as components['schemas']['TestAiProviderRequest'] })),
     onSuccess: () => setMessage({ kind: 'status', text: t('settings.ai.testSuccess') }),
     onError: (error) =>
       setMessage({
@@ -155,10 +149,11 @@ function AiProviderForm({ settings }: { settings: Settings }) {
   const timeoutValue = (): number | undefined | null => {
     if (type !== 'ollama') return undefined;
     const value = Number(timeoutSeconds);
-    return Number.isInteger(value) && value >= MIN_AI_TIMEOUT_SECONDS && value <= MAX_AI_TIMEOUT_SECONDS ? value : null;
+    return Number.isInteger(value) && value >= limits.minTimeoutSeconds && value <= limits.maxTimeoutSeconds ? value : null;
   };
 
-  const providerSettings = (ollamaTimeoutSeconds?: number): AiProviderSettings => ({
+  /** The provider as the API reads it: members that are not set are left out, never sent as null. */
+  const providerSettings = (ollamaTimeoutSeconds?: number): AiProviderPatch => ({
     type,
     ...(NEEDS_ENDPOINT.includes(type) && endpoint.trim() ? { endpoint: endpoint.trim() } : {}),
     ...(NEEDS_MODEL.includes(type) && model.trim() ? { model: model.trim() } : {}),
@@ -170,10 +165,20 @@ function AiProviderForm({ settings }: { settings: Settings }) {
     setMessage(null);
     const timeout = timeoutValue();
     if (timeout === null) {
-      setMessage({ kind: 'alert', text: t('settings.ai.invalidTimeout') });
+      setMessage({ kind: 'alert', text: format('settings.ai.invalidTimeout', { min: limits.minTimeoutSeconds, max: limits.maxTimeoutSeconds }) });
       return;
     }
-    save.mutate(providerSettings(timeout));
+    update.mutate(
+      { settings, patch: { aiProvider: providerSettings(timeout) } },
+      {
+        onSuccess: () => setMessage({ kind: 'status', text: t('settings.saved') }),
+        onError: (error) =>
+          setMessage({
+            kind: 'alert',
+            text: error instanceof ApiRequestError && error.code === 'validation_error' ? t('settings.ai.invalid') : saveErrorText(error),
+          }),
+      },
+    );
   };
 
   return (
@@ -230,14 +235,14 @@ function AiProviderForm({ settings }: { settings: Settings }) {
             <Input
               id={`${idPrefix}-timeout`}
               type="number"
-              min={MIN_AI_TIMEOUT_SECONDS}
-              max={MAX_AI_TIMEOUT_SECONDS}
+              min={limits.minTimeoutSeconds}
+              max={limits.maxTimeoutSeconds}
               step="1"
               className="h-10 bg-card sm:max-w-48"
               value={timeoutSeconds}
               onChange={(e) => setTimeoutSeconds(e.target.value)}
             />
-            <p className="text-sm text-muted-foreground">{t('settings.ai.timeoutHelp')}</p>
+            <p className="text-sm text-muted-foreground">{format('settings.ai.timeoutHelp', { min: limits.minTimeoutSeconds, max: limits.maxTimeoutSeconds })}</p>
           </Field>
         )}
       </div>
@@ -264,12 +269,12 @@ function AiProviderForm({ settings }: { settings: Settings }) {
         <Button
           type="button"
           variant="secondary"
-          disabled={type === 'none' || save.isPending || testConnection.isPending}
+          disabled={type === 'none' || update.isPending || testConnection.isPending}
           onClick={() => {
             setMessage(null);
             const timeout = timeoutValue();
             if (timeout === null) {
-              setMessage({ kind: 'alert', text: t('settings.ai.invalidTimeout') });
+              setMessage({ kind: 'alert', text: format('settings.ai.invalidTimeout', { min: limits.minTimeoutSeconds, max: limits.maxTimeoutSeconds }) });
               return;
             }
             testConnection.mutate(providerSettings(timeout));
@@ -278,7 +283,7 @@ function AiProviderForm({ settings }: { settings: Settings }) {
           <TestTube2 aria-hidden="true" />
           {testConnection.isPending ? t('settings.ai.testing') : t('settings.ai.test')}
         </Button>
-        <Button type="submit" disabled={save.isPending}>
+        <Button type="submit" disabled={update.isPending}>
           <Save aria-hidden="true" />
           {t('common.save')}
         </Button>

@@ -1,24 +1,18 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { ANNA, BRAM, mockApi, storeProfile } from '../../test/fixtures.ts';
+import { ANNA, BRAM, householdRoutes, mockApi, problem, requestsTo, storeProfile } from '../../test/fixtures.ts';
 import { makeSettings, renderWithProviders } from '../../test/render.tsx';
 import { CalendarSection, isMondayKey } from './CalendarSection.tsx';
 
-const SETTINGS = makeSettings({ vacationRanges: [{ from: '2026-12-21', to: '2027-01-03' }] });
+const SETTINGS = makeSettings({ vacationRanges: [{ from: '2026-12-21', to: '2027-01-03' }], version: 4 });
 
-function setup() {
-  storeProfile(ANNA._id);
+function setup(patch: unknown = { ...SETTINGS, version: 5 }) {
+  storeProfile(ANNA.id);
   return mockApi({
-    '/api/users': [ANNA, BRAM],
-    '/api/settings': SETTINGS,
-    'PATCH /api/settings': (init: RequestInit) => makeSettings(JSON.parse(String(init.body))),
+    ...householdRoutes([ANNA, BRAM], SETTINGS),
+    'PATCH /api/v2/settings': patch,
   });
 }
-
-const patchBodies = (fetchMock: ReturnType<typeof mockApi>) =>
-  fetchMock.mock.calls
-    .filter(([u, init]) => u === '/api/settings' && (init as RequestInit | undefined)?.method === 'PATCH')
-    .map(([, init]) => JSON.parse(String((init as RequestInit).body)));
 
 describe('isMondayKey', () => {
   it.each([
@@ -32,7 +26,7 @@ describe('isMondayKey', () => {
 });
 
 describe('CalendarSection — cycle anchor', () => {
-  it('only saves a Monday', async () => {
+  it('only saves a Monday, with the version of the settings', async () => {
     const fetchMock = setup();
     renderWithProviders(<CalendarSection settings={SETTINGS} />);
     const form = screen.getByRole('form', { name: 'Cyclusstart' });
@@ -42,12 +36,25 @@ describe('CalendarSection — cycle anchor', () => {
     fireEvent.change(input, { target: { value: '2026-10-13' } });
     fireEvent.click(within(form).getByRole('button', { name: 'Opslaan' }));
     expect(within(form).getByRole('alert')).toHaveTextContent('Kies een maandag.');
-    expect(patchBodies(fetchMock)).toEqual([]);
+    expect(requestsTo(fetchMock, 'PATCH', '/api/v2/settings')).toEqual([]);
 
     fireEvent.change(input, { target: { value: '2026-10-12' } });
     fireEvent.click(within(form).getByRole('button', { name: 'Opslaan' }));
-    await waitFor(() => expect(patchBodies(fetchMock)).toEqual([{ cycleAnchorDate: '2026-10-12' }]));
+    await waitFor(() => expect(requestsTo(fetchMock, 'PATCH', '/api/v2/settings')).toHaveLength(1));
+    const [request] = requestsTo(fetchMock, 'PATCH', '/api/v2/settings');
+    expect(request!.body).toEqual({ cycleAnchorDate: '2026-10-12' });
+    expect(request!.headers['if-match']).toBe('"4"');
     expect(await within(form).findByRole('status')).toHaveTextContent('Opgeslagen.');
+  });
+
+  it('keeps the typed date and says so when the settings changed in the meantime (412)', async () => {
+    setup(problem(412, 'precondition_failed', 'The settings changed.'));
+    renderWithProviders(<CalendarSection settings={SETTINGS} />);
+    const form = screen.getByRole('form', { name: 'Cyclusstart' });
+    fireEvent.change(within(form).getByLabelText('Startdatum (maandag)'), { target: { value: '2026-10-12' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Opslaan' }));
+    expect(await within(form).findByRole('alert')).toHaveTextContent('Deze gegevens zijn intussen door iemand anders gewijzigd');
+    expect(within(form).getByLabelText('Startdatum (maandag)')).toHaveValue('2026-10-12');
   });
 });
 
@@ -80,7 +87,20 @@ describe('CalendarSection — vacations', () => {
 
     fireEvent.click(within(form).getByRole('button', { name: 'Verwijder vakantie 21-12-2026 t/m 03-01-2027' }));
     fireEvent.click(within(form).getByRole('button', { name: 'Vakanties opslaan' }));
-    await waitFor(() => expect(patchBodies(fetchMock)).toEqual([{ vacationRanges: [{ from: '2026-10-19', to: '2026-10-25' }] }]));
+    await waitFor(() => expect(requestsTo(fetchMock, 'PATCH', '/api/v2/settings')).toHaveLength(1));
+    const [request] = requestsTo(fetchMock, 'PATCH', '/api/v2/settings');
+    expect(request!.body).toEqual({ vacationRanges: [{ from: '2026-10-19', to: '2026-10-25' }] });
+    expect(request!.headers['if-match']).toBe('"4"');
     expect(await within(form).findByRole('status')).toHaveTextContent('Opgeslagen.');
+  });
+
+  it('keeps the edited list and says so when the settings changed in the meantime (412)', async () => {
+    setup(problem(412, 'precondition_failed', 'The settings changed.'));
+    renderWithProviders(<CalendarSection settings={SETTINGS} />);
+    const form = screen.getByRole('form', { name: 'Vakanties' });
+    fireEvent.click(within(form).getByRole('button', { name: 'Verwijder vakantie 21-12-2026 t/m 03-01-2027' }));
+    fireEvent.click(within(form).getByRole('button', { name: 'Vakanties opslaan' }));
+    expect(await within(form).findByRole('alert')).toHaveTextContent('Deze gegevens zijn intussen door iemand anders gewijzigd');
+    expect(within(form).queryAllByRole('listitem')).toHaveLength(0);
   });
 });

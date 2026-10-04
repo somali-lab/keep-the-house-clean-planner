@@ -1,13 +1,13 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { ANNA, BRAM, mockApi, storeProfile } from '../../test/fixtures.ts';
+import { ANNA, BRAM, mockApi, storeProfile, page } from '../../test/fixtures.ts';
 import { makeOccurrence, makeSettings } from '../../test/render.tsx';
 import { renderWithProviders } from '../../test/render.tsx';
 import { CompletionManagementPage } from './CompletionManagementPage.tsx';
 
 describe('CompletionManagementPage', () => {
   it('edits and permanently deletes completed occurrences after confirmation', async () => {
-    storeProfile(ANNA._id);
+    storeProfile(ANNA.id);
     let records = [
       makeOccurrence({
         _id: 'o00000000000000000000001',
@@ -17,7 +17,7 @@ describe('CompletionManagementPage', () => {
         status: 'done',
         statusBeforeCompletion: 'open',
         completedAt: '2026-09-27T08:00:00.000Z',
-        completedBy: ANNA._id,
+        completedBy: ANNA.id,
       }),
       makeOccurrence({
         _id: 'o00000000000000000000002',
@@ -26,12 +26,12 @@ describe('CompletionManagementPage', () => {
         status: 'done',
         statusBeforeCompletion: 'open',
         completedAt: '2026-09-26T09:00:00.000Z',
-        completedBy: BRAM._id,
+        completedBy: BRAM.id,
       }),
     ];
     const fetchMock = mockApi({
-      '/api/users': [ANNA, BRAM],
-      '/api/settings': makeSettings(),
+      '/api/v2/users': page([ANNA, BRAM]),
+      '/api/v2/settings': makeSettings(),
       '/api/occurrences': () => records,
       'PATCH /api/occurrences/o00000000000000000000001': (init: RequestInit | undefined) => {
         const body = JSON.parse(String(init?.body));
@@ -54,13 +54,13 @@ describe('CompletionManagementPage', () => {
     const editDialog = await screen.findByRole('dialog', { name: 'Kattenmandjes bewerken' });
     fireEvent.change(within(editDialog).getByLabelText('Taakdatum'), { target: { value: '2026-09-28' } });
     fireEvent.change(within(editDialog).getByLabelText('Gereed op'), { target: { value: '2026-09-28T11:30' } });
-    fireEvent.change(within(editDialog).getByLabelText('Uitgevoerd door'), { target: { value: BRAM._id } });
+    fireEvent.change(within(editDialog).getByLabelText('Uitgevoerd door'), { target: { value: BRAM.id } });
     fireEvent.click(within(editDialog).getByRole('button', { name: 'Opslaan' }));
 
     await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => {
       if (url !== '/api/occurrences/o00000000000000000000001' || (init as RequestInit).method !== 'PATCH') return false;
       const body = JSON.parse(String((init as RequestInit).body));
-      return body.action === 'edit_completion' && body.date === '2026-09-28' && body.completedBy === BRAM._id;
+      return body.action === 'edit_completion' && body.date === '2026-09-28' && body.completedBy === BRAM.id;
     })).toBe(true));
     expect(await screen.findByRole('status')).toHaveTextContent('De gereedmelding is bijgewerkt.');
 
@@ -74,7 +74,7 @@ describe('CompletionManagementPage', () => {
     expect(fetchMock.mock.calls.some(([url, init]) => url === '/api/occurrences/o00000000000000000000001' && (init as RequestInit).method === 'DELETE')).toBe(true);
     expect(screen.getByRole('button', { name: 'Filters van dit scherm resetten' })).toBeDisabled();
     fireEvent.change(screen.getByLabelText('Vanaf'), { target: { value: '2026-09-01' } });
-    expect(window.localStorage.getItem(`huishoudplanner.filters.${ANNA._id}.completions.from`)).toBe('"2026-09-01"');
+    expect(window.localStorage.getItem(`huishoudplanner.filters.${ANNA.id}.completions.from`)).toBe('"2026-09-01"');
     fireEvent.click(screen.getByRole('button', { name: 'Filters van dit scherm resetten' }));
     expect(screen.getByLabelText('Vanaf')).toHaveValue('2026-06-29');
   });

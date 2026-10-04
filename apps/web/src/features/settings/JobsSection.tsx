@@ -3,7 +3,8 @@ import { BellRing, CalendarSync, History, Play, Scale } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { api } from '../../api/index.ts';
+import { apiV2, unwrap } from '../../api/index.ts';
+import { toInt } from '../../api/occurrence.ts';
 import { format, t } from '../../i18n/nl.ts';
 import { FormMessage, SettingsCardHeader, listRowClass, settingsCardClass } from './SettingsCard.tsx';
 
@@ -33,6 +34,14 @@ interface MorningResult {
 type AuditRetentionResult =
   | { status: 'disabled' }
   | { status: 'done'; cutoff: string; deleted: number };
+
+const toGeneration = (run: Awaited<ReturnType<typeof runGeneration>>): GenerationResult => ({
+  removed: toInt(run.removed),
+  generated: run.generated.map((cycle) => ({ inserted: toInt(cycle.inserted) })),
+  due: { due: toInt(run.due.due), overdue: toInt(run.due.overdue) },
+});
+
+const runGeneration = async () => (await unwrap(apiV2.POST('/api/v2/jobs/generation'))).data;
 
 function JobRow({
   icon,
@@ -88,7 +97,7 @@ function JobRow({
 export function JobsSection() {
   const queryClient = useQueryClient();
   const generation = useMutation({
-    mutationFn: async () => (await api.post<GenerationResult>('/api/jobs/generation')).data,
+    mutationFn: async () => toGeneration(await runGeneration()),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['occurrences'] }),
@@ -98,7 +107,18 @@ export function JobsSection() {
     },
   });
   const recompute = useMutation({
-    mutationFn: async () => (await api.post<RecomputeResult>('/api/points/recompute')).data,
+    mutationFn: async (): Promise<RecomputeResult> => {
+      const run = (await unwrap(apiV2.POST('/api/v2/points/recompute'))).data;
+      return {
+        tasksDefaulted: toInt(run.tasksDefaulted),
+        snapshotsSet: toInt(run.snapshotsSet),
+        created: toInt(run.created),
+        updated: toInt(run.updated),
+        removed: toInt(run.removed),
+        bonusesCreated: toInt(run.bonusesCreated),
+        bonusesRemoved: toInt(run.bonusesRemoved),
+      };
+    },
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['points'] }),
@@ -108,10 +128,21 @@ export function JobsSection() {
     },
   });
   const morning = useMutation({
-    mutationFn: async () => (await api.post<MorningResult>('/api/jobs/morning-notify')).data,
+    mutationFn: async (): Promise<MorningResult> => {
+      const run = (await unwrap(apiV2.POST('/api/v2/jobs/morning-notify'))).data;
+      return {
+        status: run.status === 'disabled' || run.status === 'error' ? run.status : 'done',
+        sent: toInt(run.sent),
+        failed: toInt(run.failed),
+        quiet: toInt(run.quiet),
+      };
+    },
   });
   const retention = useMutation({
-    mutationFn: async () => (await api.post<AuditRetentionResult>('/api/jobs/audit-retention')).data,
+    mutationFn: async (): Promise<AuditRetentionResult> => {
+      const run = (await unwrap(apiV2.POST('/api/v2/jobs/audit-retention'))).data;
+      return run.status === 'done' ? { status: 'done', cutoff: run.cutoff ?? '', deleted: toInt(run.deleted ?? 0) } : { status: 'disabled' };
+    },
   });
 
   const generated = generation.data?.generated.reduce((sum, cycle) => sum + cycle.inserted, 0) ?? 0;

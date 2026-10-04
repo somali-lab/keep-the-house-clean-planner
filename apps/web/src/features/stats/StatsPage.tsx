@@ -11,7 +11,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { panelTabsListClass, panelTabsTriggerClass, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
-import { useRooms, useSettings, useTasks, useUsers } from '../../api/queries.ts';
+import { useRooms, useTasks } from '../../api/queries.ts';
+import { useSettings, useUsers } from '../../api/v2/household.ts';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
 import { usePersistedFilter } from '../../hooks/usePersistedFilter.ts';
@@ -95,7 +96,7 @@ function KpiCard({ icon, label, value, tint }: { icon: ReactNode; label: string;
 export function StatsPage({ now }: { now?: Date } = {}) {
   const idPrefix = useId();
   const { profile } = useProfile();
-  const profileId = profile?._id ?? null;
+  const profileId = profile?.id ?? null;
   const [activeTab, setActiveTab] = usePersistedFilter('stats.tab', profileId, 'overview');
   const [period, setPeriod, resetPeriod] = usePersistedFilter<StatsPeriod>('stats.period', profileId, { unit: 'weeks', count: 1 });
   const [groupBy, setGroupBy, resetGroupBy] = usePersistedFilter<StatsGroupBy>('stats.groupBy', profileId, 'task');
@@ -120,7 +121,7 @@ export function StatsPage({ now }: { now?: Date } = {}) {
   const purgeStatistics = useResetStatistics();
 
   const userName = (id: string | null) =>
-    id === null ? t('tasks.anyone') : (users.data?.find((u) => u._id === id)?.name ?? t('tasks.unknownUser'));
+    id === null ? t('tasks.anyone') : (users.data?.find((u) => u.id === id)?.name ?? t('tasks.unknownUser'));
 
   const taskWithRoom = (taskId: string | null, taskName: string) => {
     const task = tasks.data?.find((item) => item._id === taskId);
@@ -215,8 +216,8 @@ export function StatsPage({ now }: { now?: Date } = {}) {
 
   // People in a fixed order (creation order from the users list), so colors follow the person.
   const orderedUserIds = [
-    ...(users.data ?? []).map((u) => u._id).filter((id) => cycleList.some((c) => c.users.some((u) => u.userId === id))),
-    ...[...new Set(cycleList.flatMap((c) => c.users.map((u) => u.userId)))].filter((id) => !(users.data ?? []).some((u) => u._id === id)),
+    ...(users.data ?? []).map((u) => u.id).filter((id) => cycleList.some((c) => c.users.some((u) => u.userId === id))),
+    ...[...new Set(cycleList.flatMap((c) => c.users.map((u) => u.userId)))].filter((id) => !(users.data ?? []).some((u) => u.id === id)),
   ];
   const visibleIds = orderedUserIds.slice(0, MAX_SERIES);
   const find = (list: UserWorkload[], id: string) => list.find((u) => u.userId === id);

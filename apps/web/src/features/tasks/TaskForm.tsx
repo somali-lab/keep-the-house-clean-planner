@@ -1,4 +1,4 @@
-import type { Interval, User } from '@huishoudplanner/shared';
+import type { Interval, User } from '../../api/v2/household.ts';
 import { useId, useState, type FormEvent, type ReactNode } from 'react';
 import { NativeSelect } from '@/components/NativeSelect';
 import { Button } from '@/components/ui/button';
@@ -181,7 +181,7 @@ export function TaskForm({
           >
             <option value="">{t('tasks.anyone')}</option>
             {users.map((user) => (
-              <option key={user._id} value={user._id}>
+              <option key={user.id} value={user.id}>
                 {user.name}
               </option>
             ))}

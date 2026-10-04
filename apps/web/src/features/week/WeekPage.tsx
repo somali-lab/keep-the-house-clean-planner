@@ -9,7 +9,7 @@ import {
   useSensors,
   type DragEndEvent,
 } from '@dnd-kit/core';
-import type { User } from '@huishoudplanner/shared';
+import type { User } from '../../api/v2/household.ts';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   CalendarDays,
@@ -36,7 +36,7 @@ import { cn } from '@/lib/utils';
 import { usePersistedFilter } from '../../hooks/usePersistedFilter.ts';
 import { getActiveProfileId } from '../../identity/profileStore.ts';
 import { apiV2, unwrap, type ApiWarning, type Occurrence } from '../../api/index.ts';
-import { useSettings } from '../../api/queries.ts';
+import { useSettings } from '../../api/v2/household.ts';
 import { useCalendar, useRooms, useTasks } from '../../api/v2/queries.ts';
 import { format, t } from '../../i18n/nl.ts';
 import { Avatar } from '../../identity/Avatar.tsx';
@@ -65,7 +65,7 @@ export function warningText(warning: ApiWarning, users: User[]): string {
     const userId = typeof warning.details?.userId === 'string' ? warning.details.userId : '';
     const weekday = typeof warning.details?.weekday === 'number' ? warning.details.weekday : -1;
     return format('week.warning.unavailable', {
-      user: users.find((u) => u._id === userId)?.name ?? t('tasks.unknownUser'),
+      user: users.find((u) => u.id === userId)?.name ?? t('tasks.unknownUser'),
       weekday: weekdayName(weekday),
     });
   }
@@ -83,8 +83,8 @@ export function WeekPage({ now }: { now?: Date }) {
   const { profile, activeUsers } = useProfile();
   const queryClient = useQueryClient();
   const todayKey = dayKeyInZone(now ?? new Date(), settings.data?.timezone ?? 'Europe/Amsterdam');
-  const profileId = profile?._id ?? null;
-  const initialPersonFilter = profile?._id ?? getActiveProfileId() ?? 'all';
+  const profileId = profile?.id ?? null;
+  const initialPersonFilter = profile?.id ?? getActiveProfileId() ?? 'all';
   const [periodOffset, setPeriodOffset, resetPeriodOffset] = usePersistedFilter('week.periodOffset', profileId, 0);
   const [pastExpanded, setPastExpanded, resetPastExpanded] = usePersistedFilter('week.pastExpanded', profileId, false);
   const [personFilter, setPersonFilter, resetPersonFilter] = usePersistedFilter('week.person', profileId, initialPersonFilter);
@@ -112,7 +112,7 @@ export function WeekPage({ now }: { now?: Date }) {
   const occurrences = useOccurrences(from, to, settings.isSuccess);
   // Which cycle week each day is, and whether its cycle has started, comes from the server.
   const calendar = useCalendar(from, to);
-  const occurrenceAction = useOccurrenceAction(queryKey, { profileId: profile?._id ?? '', todayKey });
+  const occurrenceAction = useOccurrenceAction(queryKey, { profileId: profile?.id ?? '', todayKey });
   const [warnings, setWarnings] = useState<ApiWarning[]>([]);
   const [failed, setFailed] = useState(false);
   const [completionChoice, setCompletionChoice] = useState<Occurrence | null>(null);
@@ -175,7 +175,7 @@ export function WeekPage({ now }: { now?: Date }) {
   const requestComplete = (id: string) => {
     const occ = occurrences.data?.find((item) => item.id === id);
     if (!occ) return;
-    if (occ.assigneeId && occ.assigneeId !== profile?._id) {
+    if (occ.assigneeId && occ.assigneeId !== profile?.id) {
       setCompletionChoice(occ);
       return;
     }
@@ -230,7 +230,7 @@ export function WeekPage({ now }: { now?: Date }) {
           onChange={(event) => setPersonFilter(event.target.value)}
         >
           <option value="all">{t('week.allPeople')}</option>
-          {activeUsers.map((user) => <option key={user._id} value={user._id}>{user.name}</option>)}
+          {activeUsers.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}
           <option value="unassigned">{t('planner.anyone')}</option>
         </NativeSelect>
         <Input
@@ -489,7 +489,7 @@ function WeekItem({
   const style = transform
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
     : undefined;
-  const assigneeUser = users.find((u) => u._id === occ.assigneeId);
+  const assigneeUser = users.find((u) => u.id === occ.assigneeId);
   const assignee = occ.assigneeId === null ? t('today.anyone') : (assigneeUser?.name ?? t('tasks.unknownUser'));
   const task = occ.taskNameSnapshot;
 

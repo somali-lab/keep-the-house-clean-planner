@@ -6,7 +6,8 @@ import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { panelTabsListClass, panelTabsTriggerClass, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useRooms, useSettings, useTasks } from '../../api/queries.ts';
+import { useRooms, useTasks } from '../../api/queries.ts';
+import { useSettings } from '../../api/v2/household.ts';
 import { t } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
 import { usePersistedFilter } from '../../hooks/usePersistedFilter.ts';
@@ -19,7 +20,7 @@ export function DistributionPage() {
   const rooms = useRooms();
   const settings = useSettings();
   const { activeUsers, profile } = useProfile();
-  const [selectedPlanId, setSelectedPlanId, resetPlan] = usePersistedFilter<string | null>('distribution.plan', profile?._id ?? null, null);
+  const [selectedPlanId, setSelectedPlanId, resetPlan] = usePersistedFilter<string | null>('distribution.plan', profile?.id ?? null, null);
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedTab = searchParams.get('tab') === 'spacing' ? 'spacing' : 'workload';
 

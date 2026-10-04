@@ -1,17 +1,19 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Database, Download, Trash2, TriangleAlert, Upload } from 'lucide-react';
 import { useId, useState, type ChangeEvent } from 'react';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { cn } from '@/lib/utils';
-import { api, ApiRequestError } from '../../api/index.ts';
-import { useResetStatistics } from '../stats/api.ts';
+import { apiV2, ApiRequestError, unwrap } from '../../api/index.ts';
+import { toInt } from '../../api/occurrence.ts';
 import { format, t } from '../../i18n/nl.ts';
+import { useProfile } from '../../identity/index.ts';
+import { useResetStatistics } from '../stats/api.ts';
+import { useBadgeCount, useRedemptionCount } from './api.ts';
 import { Field, FormActions, FormMessage, SettingsCardHeader, settingsCardClass } from './SettingsCard.tsx';
 
-type Message = { kind: 'status' | 'alert'; text: string } | null;
+type Message = { kind: 'status' | 'alert'; text: string; details?: string[] } | null;
 
 interface PendingImport {
   fileName: string;
@@ -43,46 +45,71 @@ export function readExport(fileName: string, text: string): PendingImport | null
   return { fileName, version, body, counts: { users: count('users'), tasks: count('tasks'), occurrences: count('occurrences') } };
 }
 
-/** JSON export download and a confirmed full import. */
+/** How many problems of an import are listed; the server reports at most 200. */
+const MAX_LISTED_PROBLEMS = 5;
+
+/** The problems of a refused file as `path: reason` lines, from the `errors` of the problem (keyed by the path in the file). */
+function importProblems(error: unknown): string[] {
+  if (!(error instanceof ApiRequestError) || !isRecord(error.details)) return [];
+  return Object.entries(error.details)
+    .flatMap(([path, reasons]) => (Array.isArray(reasons) ? reasons : [reasons]).map((reason) => `${path}: ${String(reason)}`))
+    .slice(0, MAX_LISTED_PROBLEMS);
+}
+
+/** The `Content-Disposition` file name, or a plain one. */
+function fileNameOf(disposition: string | null): string {
+  const match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition ?? '');
+  return match?.[1] ? decodeURIComponent(match[1]) : 'huishoudplanner.json';
+}
+
+/** JSON export download (administrators), a confirmed full import and the reset of the execution data. */
 export function DataSection() {
   const idPrefix = useId();
   const queryClient = useQueryClient();
+  const { profile } = useProfile();
   const [pending, setPending] = useState<PendingImport | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
   const [message, setMessage] = useState<Message>(null);
   const resetExecution = useResetStatistics();
   const [acknowledged, setAcknowledged] = useState(false);
   const [acknowledgedBadges, setAcknowledgedBadges] = useState(false);
+  // What the server said it would remove when it refused an import that was not acknowledged (409).
+  const [refused, setRefused] = useState<{ redemptions: number; badges: number }>({ redemptions: 0, badges: 0 });
 
   // A file older than version 5 has no redemptions, so importing it removes the ones that exist (requirements 4.12).
   const olderFile = pending !== null && pending.version !== null && pending.version < 5;
-  const redemptions = useQuery({
-    queryKey: ['points', 'redemptions', 'count'],
-    queryFn: async () => (await api.get<{ count: number }>('/api/points/redemptions/count')).data.count,
-    enabled: olderFile,
-    retry: false,
-    gcTime: 0,
-  });
-  const lostRedemptions = olderFile ? (redemptions.data ?? 0) : 0;
+  const redemptions = useRedemptionCount(olderFile);
+  const lostRedemptions = Math.max(olderFile ? (redemptions.data ?? 0) : 0, refused.redemptions);
 
   // A file older than version 6 has no badges, so importing it removes the ones that exist (ADR-0014).
   const olderThanBadges = pending !== null && pending.version !== null && pending.version < 6;
-  const badges = useQuery({
-    queryKey: ['badges', 'count'],
-    queryFn: async () => (await api.get<{ badges: unknown[] }>('/api/badges')).data.badges.length,
-    enabled: olderThanBadges,
-    retry: false,
-    gcTime: 0,
-  });
-  const lostBadges = olderThanBadges ? (badges.data ?? 0) : 0;
+  const badges = useBadgeCount(olderThanBadges);
+  const lostBadges = Math.max(olderThanBadges ? (badges.data ?? 0) : 0, refused.badges);
   const waitingForCount = (olderFile && redemptions.isPending) || (olderThanBadges && badges.isPending);
   const needsAcknowledgement = (lostRedemptions > 0 && !acknowledged) || (lostBadges > 0 && !acknowledgedBadges);
 
   const runImport = useMutation({
-    mutationFn: ({ body, acknowledgeRedemptions, acknowledgeBadges }: { body: Record<string, unknown>; acknowledgeRedemptions: boolean; acknowledgeBadges: boolean }) =>
-      api.post(
-        `/api/import/json?mode=replace&confirm=true${acknowledgeRedemptions ? '&acknowledgeRedemptions=true' : ''}${acknowledgeBadges ? '&acknowledgeBadges=true' : ''}`,
-        body,
+    mutationFn: async ({
+      body,
+      acknowledgeRedemptions,
+      acknowledgeBadges,
+    }: {
+      body: Record<string, unknown>;
+      acknowledgeRedemptions: boolean;
+      acknowledgeBadges: boolean;
+    }) =>
+      unwrap(
+        apiV2.POST('/api/v2/import/json', {
+          params: {
+            query: {
+              mode: 'replace',
+              confirm: 'true',
+              ...(acknowledgeRedemptions ? { acknowledgeRedemptions: 'true' } : {}),
+              ...(acknowledgeBadges ? { acknowledgeBadges: 'true' } : {}),
+            },
+          },
+          body,
+        }),
       ),
     onSuccess: async () => {
       setPending(null);
@@ -91,12 +118,39 @@ export function DataSection() {
       await queryClient.invalidateQueries();
     },
     onError: (error) => {
+      if (error instanceof ApiRequestError && error.status === 409 && (error.code === 'redemptions_would_be_removed' || error.code === 'badges_would_be_removed')) {
+        // Not written: the server wants the person to know what goes. The confirmation stays open with the count.
+        const count = isRecord(error.details) ? toInt(Number(error.details.count ?? 0)) : 0;
+        setRefused((current) => (error.code === 'redemptions_would_be_removed' ? { ...current, redemptions: count } : { ...current, badges: count }));
+        return;
+      }
       setPending(null);
-      setMessage({
-        kind: 'alert',
-        text: error instanceof ApiRequestError && error.code === 'validation_error' ? t('settings.data.invalidFile') : t('app.error'),
-      });
+      if (error instanceof ApiRequestError && error.status === 413) {
+        setMessage({ kind: 'alert', text: t('settings.data.tooLarge') });
+      } else if (error instanceof ApiRequestError && error.code === 'validation_error') {
+        setMessage({ kind: 'alert', text: t('settings.data.invalidFile'), details: importProblems(error) });
+      } else {
+        setMessage({ kind: 'alert', text: t('app.error') });
+      }
     },
+  });
+
+  const download = useMutation({
+    mutationFn: async () => {
+      const { data, response } = await (async () => {
+        const answer = await apiV2.GET('/api/v2/export/json', { parseAs: 'blob' });
+        if (!answer.response.ok) throw new ApiRequestError(answer.response.status, 'http_error', answer.response.statusText);
+        return answer;
+      })();
+      // The export needs the profile header, which a plain link cannot send: the file is fetched and handed to the browser.
+      const url = URL.createObjectURL(data as unknown as Blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = fileNameOf(response.headers.get('Content-Disposition'));
+      anchor.click();
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+    },
+    onError: () => setMessage({ kind: 'alert', text: t('settings.data.exportError') }),
   });
 
   const choose = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -112,6 +166,8 @@ export function DataSection() {
     }
     setAcknowledged(false);
     setAcknowledgedBadges(false);
+    setRefused({ redemptions: 0, badges: 0 });
+    runImport.reset();
     setPending(parsed);
   };
 
@@ -124,12 +180,17 @@ export function DataSection() {
         description={t('settings.data.explainer')}
       />
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="flex items-center rounded-xl border bg-background/60 p-4">
-          <a className={cn(buttonVariants({ variant: 'outline' }), 'h-10')} href="/api/export/json" download>
-            <Download aria-hidden="true" />
-            {t('settings.data.export')}
-          </a>
-        </div>
+        {profile?.role === 'admin' && (
+          <div className="flex items-center rounded-xl border bg-background/60 p-4">
+            <Button type="button" variant="outline" className="h-10" disabled={download.isPending} onClick={() => {
+              setMessage(null);
+              download.mutate();
+            }}>
+              <Download aria-hidden="true" />
+              {t('settings.data.export')}
+            </Button>
+          </div>
+        )}
         <Field className="rounded-xl border bg-background/60 p-4">
           <Label htmlFor={`${idPrefix}-file`} className="font-semibold">
             <Upload className="size-4 text-primary" aria-hidden="true" />
@@ -162,7 +223,18 @@ export function DataSection() {
           {t('settings.data.resetAction')}
         </Button>
       </div>
-      {message && <FormMessage kind={message.kind}>{message.text}</FormMessage>}
+      {message && (
+        <FormMessage kind={message.kind}>
+          {message.text}
+          {message.details && message.details.length > 0 && (
+            <ul className="mt-1 list-disc pl-5 font-normal">
+              {message.details.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          )}
+        </FormMessage>
+      )}
 
       <Dialog open={confirmReset} onOpenChange={setConfirmReset}>
         <DialogContent>

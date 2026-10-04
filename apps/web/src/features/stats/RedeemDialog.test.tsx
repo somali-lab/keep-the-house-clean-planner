@@ -2,7 +2,7 @@ import type { PointEntryView, PointsBalancesResponse } from '@huishoudplanner/sh
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { resetRequestKeys } from '../../api/requestKey.ts';
-import { ANNA, BRAM, mockApi, storeProfile } from '../../test/fixtures.ts';
+import { ANNA, BRAM, mockApi, storeProfile, page } from '../../test/fixtures.ts';
 import { renderWithProviders } from '../../test/render.tsx';
 import { RedeemDialog } from './RedeemDialog.tsx';
 
@@ -24,7 +24,7 @@ const BALANCES = (centsPerPoint: number, annaPoints = 10): PointsBalancesRespons
   to: null,
   currencyCode: 'EUR',
   centsPerPoint,
-  balances: [balance(ANNA._id, annaPoints), balance(BRAM._id, 4)],
+  balances: [balance(ANNA.id, annaPoints), balance(BRAM.id, 4)],
 });
 
 const entryFor = (personId: string, points: number, note: string | null, cents: number): PointEntryView => ({
@@ -58,7 +58,7 @@ function deferred<T>() {
 function setup(profileId: string, routes: Record<string, unknown> = {}, balances = BALANCES(25)) {
   storeProfile(profileId);
   const fetchMock = mockApi({
-    '/api/users': [ANNA, BRAM],
+    '/api/v2/users': page([ANNA, BRAM]),
     '/api/points/balances': balances,
     ...routes,
   });
@@ -80,7 +80,7 @@ const loaded = async () => screen.findByText(/Beschikbaar saldo/);
 
 describe('RedeemDialog', () => {
   it('shows the available balance with what it is worth, and previews the money while typing', async () => {
-    setup(ANNA._id);
+    setup(ANNA.id);
     expect(await loaded()).toHaveTextContent(/Beschikbaar saldo: 10 punten \(€\s2,50\)/);
     expect(screen.queryByText(/Dat is/)).not.toBeInTheDocument();
     fireEvent.change(points(), { target: { value: '4' } });
@@ -93,7 +93,7 @@ describe('RedeemDialog', () => {
   });
 
   it('shows no money while a point is worth nothing', async () => {
-    setup(ANNA._id, {}, BALANCES(0));
+    setup(ANNA.id, {}, BALANCES(0));
     expect(await loaded()).toHaveTextContent('Beschikbaar saldo: 10 punten');
     expect(screen.getByText(/Beschikbaar saldo/)).not.toHaveTextContent('€');
     fireEvent.change(points(), { target: { value: '4' } });
@@ -101,7 +101,7 @@ describe('RedeemDialog', () => {
   });
 
   it('refuses a missing, fractional, negative or too large amount and a long note, without calling the server', async () => {
-    const { fetchMock } = setup(ANNA._id);
+    const { fetchMock } = setup(ANNA.id);
     await loaded();
     for (const bad of ['', '0', '-1', '1.5', 'abc']) {
       fireEvent.change(points(), { target: { value: bad } });
@@ -123,15 +123,15 @@ describe('RedeemDialog', () => {
   });
 
   it('books for the active profile with a trimmed note and a request key, reports the money and closes', async () => {
-    const { fetchMock, onRedeemed, onOpenChange } = setup(ANNA._id, {
-      'POST /api/points/redemptions': entryFor(ANNA._id, 4, 'Pizza', 25),
+    const { fetchMock, onRedeemed, onOpenChange } = setup(ANNA.id, {
+      'POST /api/points/redemptions': entryFor(ANNA.id, 4, 'Pizza', 25),
     });
     await loaded();
     fireEvent.change(points(), { target: { value: '4' } });
     fireEvent.change(within(dialog()).getByLabelText('Notitie (optioneel)'), { target: { value: '  Pizza  ' } });
     fireEvent.click(submit());
     await waitFor(() => expect(onRedeemed).toHaveBeenCalledTimes(1));
-    expect(posts(fetchMock)).toEqual([{ personId: ANNA._id, points: 4, note: 'Pizza', requestId: expect.stringMatching(KEY) }]);
+    expect(posts(fetchMock)).toEqual([{ personId: ANNA.id, points: 4, note: 'Pizza', requestId: expect.stringMatching(KEY) }]);
     expect(onRedeemed.mock.calls[0]![0]).toMatchObject({ amount: -4 });
     expect(onRedeemed.mock.calls[0]![1]).toMatch(/€\s1,00/);
     expect(onOpenChange).toHaveBeenCalledWith(false);
@@ -139,21 +139,21 @@ describe('RedeemDialog', () => {
 
   it('leaves the note out when it is empty and reports no money while a point is worth nothing', async () => {
     const { fetchMock, onRedeemed } = setup(
-      ANNA._id,
-      { 'POST /api/points/redemptions': entryFor(ANNA._id, 3, null, 0) },
+      ANNA.id,
+      { 'POST /api/points/redemptions': entryFor(ANNA.id, 3, null, 0) },
       BALANCES(0),
     );
     await loaded();
     fireEvent.change(points(), { target: { value: '3' } });
     fireEvent.click(submit());
     await waitFor(() => expect(onRedeemed).toHaveBeenCalled());
-    expect(posts(fetchMock)[0]).toEqual({ personId: ANNA._id, points: 3, requestId: expect.stringMatching(KEY) });
+    expect(posts(fetchMock)[0]).toEqual({ personId: ANNA.id, points: 3, requestId: expect.stringMatching(KEY) });
     expect(onRedeemed.mock.calls[0]![1]).toBeNull();
   });
 
   it('a double click books once: the second click is ignored while the first is pending', async () => {
     const reply = deferred<PointEntryView>();
-    const { fetchMock, onRedeemed } = setup(ANNA._id, { 'POST /api/points/redemptions': () => reply.promise });
+    const { fetchMock, onRedeemed } = setup(ANNA.id, { 'POST /api/points/redemptions': () => reply.promise });
     await loaded();
     fireEvent.change(points(), { target: { value: '2' } });
     const button = submit();
@@ -161,18 +161,18 @@ describe('RedeemDialog', () => {
     fireEvent.click(button);
     expect(await screen.findByRole('button', { name: 'Bezig met inwisselen…' })).toBeDisabled();
     expect(posts(fetchMock)).toHaveLength(1);
-    reply.resolve(entryFor(ANNA._id, 2, null, 25));
+    reply.resolve(entryFor(ANNA.id, 2, null, 25));
     await waitFor(() => expect(onRedeemed).toHaveBeenCalledTimes(1));
     expect(posts(fetchMock)).toHaveLength(1);
   });
 
   it('reuses the request key when the same values are retried after a failure, and takes a new one once it succeeded', async () => {
     let attempts = 0;
-    const { fetchMock, onRedeemed, view } = setup(ANNA._id, {
+    const { fetchMock, onRedeemed, view } = setup(ANNA.id, {
       'POST /api/points/redemptions': () => {
         attempts += 1;
         if (attempts === 1) throw new TypeError('network down');
-        return entryFor(ANNA._id, 2, null, 25);
+        return entryFor(ANNA.id, 2, null, 25);
       },
     });
     await loaded();
@@ -196,13 +196,13 @@ describe('RedeemDialog', () => {
   });
 
   it('says so when the server finds the balance too low in the meantime, and keeps the dialog open', async () => {
-    storeProfile(ANNA._id);
+    storeProfile(ANNA.id);
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
+      const url = input instanceof Request ? input.url : String(input);
       if (init?.method === 'POST') {
         return new Response(JSON.stringify({ code: 'insufficient_balance', balance: 1, requested: 4 }), { status: 409 });
       }
-      const body = url.includes('users') ? [ANNA, BRAM] : BALANCES(25);
+      const body = url.includes('users') ? page([ANNA, BRAM]) : BALANCES(25);
       return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -216,21 +216,21 @@ describe('RedeemDialog', () => {
   });
 
   it('lets a member redeem only for themselves: no person choice', async () => {
-    const { fetchMock, onRedeemed } = setup(BRAM._id, { 'POST /api/points/redemptions': entryFor(BRAM._id, 3, null, 25) });
+    const { fetchMock, onRedeemed } = setup(BRAM.id, { 'POST /api/points/redemptions': entryFor(BRAM.id, 3, null, 25) });
     expect(await loaded()).toHaveTextContent('Beschikbaar saldo: 4 punten');
     expect(within(dialog()).queryByLabelText('Persoon')).not.toBeInTheDocument();
     fireEvent.change(points(), { target: { value: '3' } });
     fireEvent.click(submit());
     await waitFor(() => expect(onRedeemed).toHaveBeenCalled());
-    expect(posts(fetchMock)[0]).toMatchObject({ personId: BRAM._id });
+    expect(posts(fetchMock)[0]).toMatchObject({ personId: BRAM.id });
   });
 
   it('lets an administrator pick the person, whose balance applies', async () => {
-    const { fetchMock, onRedeemed } = setup(ANNA._id, { 'POST /api/points/redemptions': entryFor(BRAM._id, 3, null, 25) });
+    const { fetchMock, onRedeemed } = setup(ANNA.id, { 'POST /api/points/redemptions': entryFor(BRAM.id, 3, null, 25) });
     await loaded();
     const person = within(dialog()).getByLabelText('Persoon');
-    expect(person).toHaveValue(ANNA._id);
-    fireEvent.change(person, { target: { value: BRAM._id } });
+    expect(person).toHaveValue(ANNA.id);
+    fireEvent.change(person, { target: { value: BRAM.id } });
     expect(await screen.findByText(/Beschikbaar saldo: 4 punten/)).toBeInTheDocument();
     fireEvent.change(points(), { target: { value: '5' } });
     fireEvent.click(submit());
@@ -238,11 +238,11 @@ describe('RedeemDialog', () => {
     fireEvent.change(points(), { target: { value: '3' } });
     fireEvent.click(submit());
     await waitFor(() => expect(onRedeemed).toHaveBeenCalled());
-    expect(posts(fetchMock)[0]).toMatchObject({ personId: BRAM._id, points: 3 });
+    expect(posts(fetchMock)[0]).toMatchObject({ personId: BRAM.id, points: 3 });
   });
 
   it('cannot book without points: the button is disabled and it says why', async () => {
-    const { fetchMock } = setup(ANNA._id, {}, BALANCES(25, 0));
+    const { fetchMock } = setup(ANNA.id, {}, BALANCES(25, 0));
     expect(await screen.findByText('Er zijn geen punten om in te wisselen.')).toBeInTheDocument();
     expect(submit()).toBeDisabled();
     expect(posts(fetchMock)).toEqual([]);

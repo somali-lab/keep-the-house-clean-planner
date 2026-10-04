@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { Occurrence } from '../../api/index.ts';
-import { useSettings } from '../../api/queries.ts';
+import { useSettings } from '../../api/v2/household.ts';
 import { useCalendar, useRooms, useTasks } from '../../api/v2/queries.ts';
 import { addDays, dayKeyInZone } from '@/lib/dayKey';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
@@ -51,16 +51,16 @@ export function TodayPage({ now }: { now?: Date }) {
   const timezone = settings.data?.timezone ?? 'Europe/Amsterdam';
   const todayKey = dayKeyInZone(now ?? new Date(), timezone);
   const [dayOffset, setDayOffset] = useState(0);
-  const defaultPersonFilter = profile?._id ?? getActiveProfileId() ?? 'all';
+  const defaultPersonFilter = profile?.id ?? getActiveProfileId() ?? 'all';
   const [personFilter, setPersonFilter, resetPersonFilter] = usePersistedFilter(
-    'today.person', profile?._id ?? null, defaultPersonFilter,
+    'today.person', profile?.id ?? null, defaultPersonFilter,
   );
   useFilterReset(resetPersonFilter, personFilter !== defaultPersonFilter);
   const selectedDay = addDays(todayKey, dayOffset);
   const from = addDays(todayKey, -OVERDUE_LOOKBACK_DAYS);
   const occurrences = useOccurrences(from, selectedDay, settings.isSuccess);
   const calendar = useCalendar(selectedDay, selectedDay);
-  const profileId = profile?._id ?? '';
+  const profileId = profile?.id ?? '';
   const action = useOccurrenceAction(occurrenceKeys.range(from, selectedDay), { profileId, todayKey });
 
   const [snackbar, setSnackbar] = useState<{ id: string; task: string; recorded?: true; plannedFor?: string } | null>(null);
@@ -133,7 +133,7 @@ export function TodayPage({ now }: { now?: Date }) {
     selectedDay,
     settings.data.cycleAnchorDate,
   );
-  const selectedPerson = activeUsers.find((user) => user._id === personFilter);
+  const selectedPerson = activeUsers.find((user) => user.id === personFilter);
   // Which cycle week the day is comes from the server; a day before the anchor belongs to no cycle yet.
   const calendarDay = calendar.data?.get(selectedDay);
   const cycleLabel = !calendarDay
@@ -212,7 +212,7 @@ export function TodayPage({ now }: { now?: Date }) {
           onChange={(event) => setPersonFilter(event.target.value)}
         >
           <option value="all">{t('today.allPeople')}</option>
-          {activeUsers.map((user) => <option key={user._id} value={user._id}>{user.name}</option>)}
+          {activeUsers.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}
           <option value="unassigned">{t('today.anyone')}</option>
         </NativeSelect>
       </div>
@@ -253,7 +253,7 @@ export function TodayPage({ now }: { now?: Date }) {
                     key === 'finished' && 'text-muted-foreground',
                   )}
                 >
-                  {key === 'mine' && selectedPerson && selectedPerson._id !== profileId
+                  {key === 'mine' && selectedPerson && selectedPerson.id !== profileId
                     ? format('today.personTasks', { name: selectedPerson.name })
                     : t(title)}
                 </h2>
@@ -317,7 +317,7 @@ export function TodayPage({ now }: { now?: Date }) {
         />
       )}
 
-      <MyBadges personId={profile?._id ?? null} />
+      <MyBadges personId={profile?.id ?? null} />
 
       <RecordWorkDialog
         open={recordOpen}

@@ -9,7 +9,7 @@ import type {
 } from '@huishoudplanner/shared';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
-import { ANNA, BRAM, makeUser, mockApi, storeProfile } from '../../test/fixtures.ts';
+import { ANNA, BRAM, makeUser, mockApi, storeProfile, page } from '../../test/fixtures.ts';
 import { makeRoom, makeSettings, makeTask, renderWithProviders } from '../../test/render.tsx';
 import { StatsPage } from './StatsPage.tsx';
 
@@ -23,8 +23,8 @@ const week = (
   weekIndex,
   startDate,
   users: [
-    { userId: ANNA._id, plannedMinutes: anna[0], doneMinutes: anna[1] },
-    { userId: BRAM._id, plannedMinutes: bram[0], doneMinutes: bram[1] },
+    { userId: ANNA.id, plannedMinutes: anna[0], doneMinutes: anna[1] },
+    { userId: BRAM.id, plannedMinutes: bram[0], doneMinutes: bram[1] },
   ],
   unassignedPlannedMinutes: unassigned,
 });
@@ -36,8 +36,8 @@ const WORKLOAD: WorkloadResponse = {
       startDate: '2026-09-14',
       endDate: '2026-10-11',
       users: [
-        { userId: ANNA._id, plannedMinutes: 165, doneMinutes: 75 },
-        { userId: BRAM._id, plannedMinutes: 40, doneMinutes: 70 },
+        { userId: ANNA.id, plannedMinutes: 165, doneMinutes: 75 },
+        { userId: BRAM.id, plannedMinutes: 40, doneMinutes: 70 },
       ],
       unassignedPlannedMinutes: 0,
       weeks: [
@@ -52,8 +52,8 @@ const WORKLOAD: WorkloadResponse = {
       startDate: '2026-10-12',
       endDate: '2026-11-08',
       users: [
-        { userId: ANNA._id, plannedMinutes: 120, doneMinutes: 30 },
-        { userId: BRAM._id, plannedMinutes: 40, doneMinutes: 0 },
+        { userId: ANNA.id, plannedMinutes: 120, doneMinutes: 30 },
+        { userId: BRAM.id, plannedMinutes: 40, doneMinutes: 0 },
       ],
       unassignedPlannedMinutes: 45,
       weeks: [
@@ -161,10 +161,10 @@ const DEVIATIONS: DeviationsResponse = {
 };
 
 function setup(workload: WorkloadResponse = WORKLOAD, extraRoutes: Record<string, unknown> = {}) {
-  storeProfile(ANNA._id);
+  storeProfile(ANNA.id);
   return mockApi({
-    '/api/users': [ANNA, BRAM],
-    '/api/settings': makeSettings(),
+    '/api/v2/users': page([ANNA, BRAM]),
+    '/api/v2/settings': makeSettings(),
     '/api/rooms': [
       makeRoom({ _id: 'r1', name: 'Badkamer' }),
       makeRoom({ _id: 'r2', name: 'Keuken' }),
@@ -428,7 +428,7 @@ describe('StatsPage', () => {
 
 describe('StatsPage: points', () => {
   const NOW = new Date('2026-09-16T08:00:00.000Z');
-  const FORMER = makeUser({ _id: 'c00000000000000000000003', name: 'Carla', active: false });
+  const FORMER = makeUser({ id: 'c00000000000000000000003', name: 'Carla', active: false });
   /** A balance without redemptions or money. */
   const bal = (personId: string, points: number, executions: number, bonusPoints = 0) => ({
     personId,
@@ -444,7 +444,7 @@ describe('StatsPage: points', () => {
     to: '2026-09-20',
     currencyCode: 'EUR',
     centsPerPoint: 0,
-    balances: [bal(ANNA._id, 8, 3), bal(BRAM._id, 0, 0), bal(FORMER._id, 4, 1)],
+    balances: [bal(ANNA.id, 8, 3), bal(BRAM.id, 0, 0), bal(FORMER.id, 4, 1)],
   };
   const entry = (id: string, personId: string, date: string, amount: number, title: string) => ({
     _id: id,
@@ -466,17 +466,17 @@ describe('StatsPage: points', () => {
     updatedAt: '2026-09-16T08:00:00.000Z',
   });
   const ENTRIES: Record<string, PointsEntriesResponse> = {
-    [ANNA._id]: {
+    [ANNA.id]: {
       entries: [
-        entry('e00000000000000000000001', ANNA._id, '2026-09-16', 5, 'Ramen lappen'),
-        entry('e00000000000000000000002', ANNA._id, '2026-09-14', 3, 'Stofzuigen'),
+        entry('e00000000000000000000001', ANNA.id, '2026-09-16', 5, 'Ramen lappen'),
+        entry('e00000000000000000000002', ANNA.id, '2026-09-14', 3, 'Stofzuigen'),
       ],
     },
-    [BRAM._id]: { entries: [] },
-    [FORMER._id]: { entries: [entry('e00000000000000000000003', FORMER._id, '2026-09-15', 4, 'Afwassen')] },
+    [BRAM.id]: { entries: [] },
+    [FORMER.id]: { entries: [entry('e00000000000000000000003', FORMER.id, '2026-09-15', 4, 'Afwassen')] },
   };
   const pointsRoutes = (balances: PointsBalancesResponse = BALANCES) => ({
-    '/api/users': [ANNA, BRAM, FORMER],
+    '/api/v2/users': page([ANNA, BRAM, FORMER]),
     '/api/points/balances': balances,
     '/api/points/entries': (_init: RequestInit | undefined, url: string) =>
       ENTRIES[new URL(url, 'http://x').searchParams.get('personId') ?? ''] ?? { entries: [] },
@@ -519,11 +519,11 @@ describe('StatsPage: points', () => {
     renderWithProviders(<StatsPage now={NOW} />);
     await selectStatsTab('Punten');
     const picker = await screen.findByLabelText('Toon posten van');
-    fireEvent.change(picker, { target: { value: FORMER._id } });
+    fireEvent.change(picker, { target: { value: FORMER.id } });
     const table = await screen.findByRole('table', { name: 'Posten van Carla' });
     expect(within(table).getAllByRole('row').slice(1).map((row) => row.textContent)).toEqual(['15 september 2026Afwassen+4']);
 
-    fireEvent.change(picker, { target: { value: BRAM._id } });
+    fireEvent.change(picker, { target: { value: BRAM.id } });
     expect(await screen.findByText('Bram de Vries heeft in deze periode geen punten verdiend.')).toBeInTheDocument();
   });
 
@@ -546,23 +546,23 @@ describe('StatsPage: points', () => {
 
   it('shows the bonus column and labels bonus entries by kind and period, with an icon', async () => {
     const bonus = (id: string, kind: PointEntryView['kind'], date: string, periodStart: string, amount: number) => ({
-      ...entry(id, ANNA._id, date, amount, ''),
-      key: `${kind}:${ANNA._id}:${periodStart}`,
+      ...entry(id, ANNA.id, date, amount, ''),
+      key: `${kind}:${ANNA.id}:${periodStart}`,
       kind,
       periodStart,
       occurrenceId: null,
     });
-    const original = ENTRIES[ANNA._id]!;
+    const original = ENTRIES[ANNA.id]!;
     onTestFinished(() => {
-      ENTRIES[ANNA._id] = original;
+      ENTRIES[ANNA.id] = original;
     });
-    ENTRIES[ANNA._id] = {
+    ENTRIES[ANNA.id] = {
       entries: [
         bonus('f00000000000000000000001', 'bonus_week_ontime', '2026-09-20', '2026-09-14', 3),
         bonus('f00000000000000000000002', 'bonus_week_done', '2026-09-20', '2026-09-14', 5),
         bonus('f00000000000000000000003', 'bonus_cycle_done', '2026-10-04', '2026-09-07', 20),
         bonus('f00000000000000000000004', 'bonus_cycle_ontime', '2026-10-04', '2026-09-07', 10),
-        entry('e00000000000000000000002', ANNA._id, '2026-09-14', 3, 'Stofzuigen'),
+        entry('e00000000000000000000002', ANNA.id, '2026-09-14', 3, 'Stofzuigen'),
       ],
     };
     setup(
@@ -572,7 +572,7 @@ describe('StatsPage: points', () => {
         to: '2026-09-20',
         currencyCode: 'EUR',
         centsPerPoint: 0,
-        balances: [bal(ANNA._id, 41, 1, 38)],
+        balances: [bal(ANNA.id, 41, 1, 38)],
       }),
     );
     renderWithProviders(<StatsPage now={NOW} />);
@@ -619,8 +619,8 @@ describe('StatsPage: points', () => {
       currencyCode: 'EUR',
       centsPerPoint: 25,
       balances: [
-        { ...bal(ANNA._id, 6, 3), earned: 10, redeemed: 4, money: { earned: 250, redeemed: 100, balance: 150 } },
-        { ...bal(BRAM._id, 0, 0), money: { earned: 0, redeemed: 0, balance: 0 } },
+        { ...bal(ANNA.id, 6, 3), earned: 10, redeemed: 4, money: { earned: 250, redeemed: 100, balance: 150 } },
+        { ...bal(BRAM.id, 0, 0), money: { earned: 0, redeemed: 0, balance: 0 } },
       ],
     };
 
@@ -651,8 +651,8 @@ describe('StatsPage: points', () => {
         currencyCode: 'EUR',
         centsPerPoint: 25,
         balances: [
-          { ...bal(ANNA._id, 30, 9), earned: 40, redeemed: 10, money: { earned: 1000, redeemed: 250, balance: 750 } },
-          { ...bal(BRAM._id, 2, 1), money: { earned: 50, redeemed: 0, balance: 50 } },
+          { ...bal(ANNA.id, 30, 9), earned: 40, redeemed: 10, money: { earned: 1000, redeemed: 250, balance: 750 } },
+          { ...bal(BRAM.id, 2, 1), money: { earned: 50, redeemed: 0, balance: 50 } },
         ],
       };
       setup(WORKLOAD, {
@@ -677,10 +677,10 @@ describe('StatsPage: points', () => {
     });
 
     it('lists a redemption with an icon, its note, the points and what they were worth then, and an undo button for an administrator', async () => {
-      withEntries(ANNA._id, [
-        redemption(REDEMPTION_ID, ANNA._id, '2026-09-16', -4, 'Pizza', 20),
-        redemption('d00000000000000000000002', ANNA._id, '2026-09-15', -1, null, 0),
-        entry('e00000000000000000000002', ANNA._id, '2026-09-14', 3, 'Stofzuigen'),
+      withEntries(ANNA.id, [
+        redemption(REDEMPTION_ID, ANNA.id, '2026-09-16', -4, 'Pizza', 20),
+        redemption('d00000000000000000000002', ANNA.id, '2026-09-15', -1, null, 0),
+        entry('e00000000000000000000002', ANNA.id, '2026-09-14', 3, 'Stofzuigen'),
       ]);
       setup(WORKLOAD, pointsRoutes(MONEY));
       renderWithProviders(<StatsPage now={NOW} />);
@@ -698,10 +698,10 @@ describe('StatsPage: points', () => {
     });
 
     it('shows each redemption in the currency and at the factor it was booked with, also after the household switched', async () => {
-      withEntries(ANNA._id, [
-        redemption(REDEMPTION_ID, ANNA._id, '2026-09-16', -4, null, 20, 'USD'),
-        redemption('d00000000000000000000002', ANNA._id, '2026-09-15', -2, null, 10, 'EUR'),
-        { ...redemption('d00000000000000000000003', ANNA._id, '2026-09-14', -1, null, 50), currencyCodeSnapshot: null },
+      withEntries(ANNA.id, [
+        redemption(REDEMPTION_ID, ANNA.id, '2026-09-16', -4, null, 20, 'USD'),
+        redemption('d00000000000000000000002', ANNA.id, '2026-09-15', -2, null, 10, 'EUR'),
+        { ...redemption('d00000000000000000000003', ANNA.id, '2026-09-14', -1, null, 50), currencyCodeSnapshot: null },
       ]);
       // The household currency now is EUR, 25 cents.
       setup(WORKLOAD, pointsRoutes(MONEY));
@@ -716,13 +716,13 @@ describe('StatsPage: points', () => {
     });
 
     it('lets a member undo their own redemption of today only, and nobody else\'s', async () => {
-      withEntries(BRAM._id, [
-        redemption(REDEMPTION_ID, BRAM._id, '2026-09-16', -2, null),
-        redemption('d00000000000000000000002', BRAM._id, '2026-09-15', -1, null),
+      withEntries(BRAM.id, [
+        redemption(REDEMPTION_ID, BRAM.id, '2026-09-16', -2, null),
+        redemption('d00000000000000000000002', BRAM.id, '2026-09-15', -1, null),
       ]);
-      withEntries(ANNA._id, [redemption('d00000000000000000000003', ANNA._id, '2026-09-16', -3, null)]);
+      withEntries(ANNA.id, [redemption('d00000000000000000000003', ANNA.id, '2026-09-16', -3, null)]);
       setup(WORKLOAD, pointsRoutes(MONEY));
-      storeProfile(BRAM._id);
+      storeProfile(BRAM.id);
       renderWithProviders(<StatsPage now={NOW} />);
       await selectStatsTab('Punten');
       const own = await screen.findByRole('table', { name: 'Posten van Bram de Vries' });
@@ -730,13 +730,13 @@ describe('StatsPage: points', () => {
       expect(within(own).getByRole('button', { name: 'Inwisseling van 2 punten ongedaan maken' })).toBeInTheDocument();
       expect(within(own).queryByRole('button', { name: 'Inwisseling van 1 punten ongedaan maken' })).not.toBeInTheDocument();
 
-      fireEvent.change(screen.getByLabelText('Toon posten van'), { target: { value: ANNA._id } });
+      fireEvent.change(screen.getByLabelText('Toon posten van'), { target: { value: ANNA.id } });
       const other = await screen.findByRole('table', { name: 'Posten van Anna' });
       expect(within(other).queryByRole('button')).not.toBeInTheDocument();
     });
 
     it('undoes a redemption and confirms it, and refetches the points', async () => {
-      withEntries(ANNA._id, [redemption(REDEMPTION_ID, ANNA._id, '2026-09-16', -4, 'Pizza')]);
+      withEntries(ANNA.id, [redemption(REDEMPTION_ID, ANNA.id, '2026-09-16', -4, 'Pizza')]);
       const fetchMock = setup(WORKLOAD, {
         ...pointsRoutes(MONEY),
         [`DELETE /api/points/redemptions/${REDEMPTION_ID}`]: { deleted: true },
@@ -751,8 +751,8 @@ describe('StatsPage: points', () => {
     });
 
     it('says why when the server refuses to undo a redemption of an earlier day', async () => {
-      withEntries(ANNA._id, [redemption(REDEMPTION_ID, ANNA._id, '2026-09-16', -4, null)]);
-      storeProfile(ANNA._id);
+      withEntries(ANNA.id, [redemption(REDEMPTION_ID, ANNA.id, '2026-09-16', -4, null)]);
+      storeProfile(ANNA.id);
       setup(WORKLOAD, pointsRoutes(MONEY));
       const original = globalThis.fetch;
       vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) =>
@@ -773,7 +773,7 @@ describe('StatsPage: points', () => {
       // 201: a new booking (the route table of mockApi always answers 200, which means a replay).
       vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) =>
         init?.method === 'POST' && String(input) === '/api/points/redemptions'
-          ? new Response(JSON.stringify(redemption(REDEMPTION_ID, ANNA._id, '2026-09-16', -4, null)), { status: 201 })
+          ? new Response(JSON.stringify(redemption(REDEMPTION_ID, ANNA.id, '2026-09-16', -4, null)), { status: 201 })
           : original(input, init),
       );
       renderWithProviders(<StatsPage now={NOW} />);
@@ -789,12 +789,12 @@ describe('StatsPage: points', () => {
     });
 
     it('tells the person when the server replayed a redemption it already had, instead of saying it was booked', async () => {
-      storeProfile(ANNA._id);
+      storeProfile(ANNA.id);
       setup(WORKLOAD, pointsRoutes(MONEY));
       const original = globalThis.fetch;
       vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) =>
         init?.method === 'POST' && String(input) === '/api/points/redemptions'
-          ? new Response(JSON.stringify(redemption(REDEMPTION_ID, ANNA._id, '2026-09-16', -4, null)), { status: 200 })
+          ? new Response(JSON.stringify(redemption(REDEMPTION_ID, ANNA.id, '2026-09-16', -4, null)), { status: 200 })
           : original(input, init),
       );
       renderWithProviders(<StatsPage now={NOW} />);
@@ -813,7 +813,7 @@ describe('StatsPage: points', () => {
   it('says so when nobody earned points in the period', async () => {
     setup(
       WORKLOAD,
-      pointsRoutes({ from: '2026-09-14', to: '2026-09-20', currencyCode: 'EUR', centsPerPoint: 0, balances: [bal(ANNA._id, 0, 0)] }),
+      pointsRoutes({ from: '2026-09-14', to: '2026-09-20', currencyCode: 'EUR', centsPerPoint: 0, balances: [bal(ANNA.id, 0, 0)] }),
     );
     renderWithProviders(<StatsPage now={NOW} />);
     await selectStatsTab('Punten');

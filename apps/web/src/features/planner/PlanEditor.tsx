@@ -8,7 +8,7 @@ import {
   useSensors,
   type DragEndEvent,
 } from '@dnd-kit/core';
-import type { Interval, User } from '@huishoudplanner/shared';
+import type { Interval, User } from '../../api/v2/household.ts';
 import { Ban, Menu, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useFilterReset } from '@/components/FilterReset';
@@ -246,7 +246,7 @@ export function PlanEditor({
   const cycleUsers = users.map((user) => ({
     user,
     minutes: summary.weeks.reduce(
-      (sum, week) => sum + (week.users.find((entry) => entry.userId === user._id)?.minutes ?? 0),
+      (sum, week) => sum + (week.users.find((entry) => entry.userId === user.id)?.minutes ?? 0),
       0,
     ),
   }));
@@ -299,7 +299,7 @@ export function PlanEditor({
 
   const issueNames = {
     task: (id: string) => allTasks.find((task) => task.id === id)?.name ?? id,
-    user: (id: string) => users.find((user) => user._id === id)?.name ?? id,
+    user: (id: string) => users.find((user) => user.id === id)?.name ?? id,
   };
 
   // Nothing to show before the server has answered once: the pool and the totals come from its summary.
@@ -410,7 +410,7 @@ export function PlanEditor({
           >
             <option value="all">{t('planner.filterAllPeople')}</option>
             {users.map((user) => (
-              <option key={user._id} value={user._id}>
+              <option key={user.id} value={user.id}>
                 {user.name}
               </option>
             ))}
@@ -443,7 +443,7 @@ export function PlanEditor({
           <strong className="mr-1 text-sm">{t('planner.distribution.cycle')}:</strong>
           {cycleUsers.map(({ user, minutes }) => (
             <span
-              key={user._id}
+              key={user.id}
               className="rounded-full bg-secondary px-3 py-1 text-xs font-semibold tabular-nums"
             >
               {format('planner.weekTotal', { name: user.name, minutes })}
@@ -489,7 +489,7 @@ export function PlanEditor({
               users={
                 assigneeFilter === 'all'
                   ? users
-                  : users.filter((user) => user._id === assigneeFilter)
+                  : users.filter((user) => user.id === assigneeFilter)
               }
               showUnassigned={assigneeFilter === 'all' || assigneeFilter === 'unassigned'}
               summary={summary}

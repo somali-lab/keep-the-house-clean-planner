@@ -15,7 +15,26 @@ export interface Limits {
     oneOffNameMaxLength: number;
     skipReasonMaxLength: number;
   };
+  /** The money conversion: cents one point is worth. */
+  points: { minCentsPerPoint: number; maxCentsPerPoint: number };
+  /** The amount of one period bonus. */
+  bonuses: { minPoints: number; maxPoints: number };
+  /** The goal of the reward meter, in points. */
+  rewards: { minGoalPoints: number; maxGoalPoints: number };
+  notifications: { maxBrowserTimes: number };
+  ai: { minTimeoutSeconds: number; maxTimeoutSeconds: number; defaultTimeoutSeconds: number };
+  defaults: { currencyCode: string };
 }
+
+/** What the forms assume until the limits are read (the values the server reports today). The server validates every write too. */
+export const FALLBACK_LIMITS = {
+  points: { minCentsPerPoint: 0, maxCentsPerPoint: 10_000 },
+  bonuses: { minPoints: 0, maxPoints: 1000 },
+  rewards: { minGoalPoints: 0, maxGoalPoints: 100_000 },
+  notifications: { maxBrowserTimes: 6 },
+  ai: { minTimeoutSeconds: 10, maxTimeoutSeconds: 900, defaultTimeoutSeconds: 180 },
+  defaults: { currencyCode: 'EUR' },
+} as const satisfies Pick<Limits, 'points' | 'bonuses' | 'rewards' | 'notifications' | 'ai' | 'defaults'>;
 
 export const limitsKey = ['limits'] as const;
 
@@ -37,6 +56,25 @@ export function useLimits() {
           oneOffNameMaxLength: toInt(tasks?.oneOffNameMaxLength ?? 120),
           skipReasonMaxLength: toInt(tasks?.skipReasonMaxLength ?? 500),
         },
+        points: {
+          minCentsPerPoint: toInt(data.points?.minCentsPerPoint ?? FALLBACK_LIMITS.points.minCentsPerPoint),
+          maxCentsPerPoint: toInt(data.points?.maxCentsPerPoint ?? FALLBACK_LIMITS.points.maxCentsPerPoint),
+        },
+        bonuses: {
+          minPoints: toInt(data.bonuses?.minPoints ?? FALLBACK_LIMITS.bonuses.minPoints),
+          maxPoints: toInt(data.bonuses?.maxPoints ?? FALLBACK_LIMITS.bonuses.maxPoints),
+        },
+        rewards: {
+          minGoalPoints: toInt(data.rewards?.minGoalPoints ?? FALLBACK_LIMITS.rewards.minGoalPoints),
+          maxGoalPoints: toInt(data.rewards?.maxGoalPoints ?? FALLBACK_LIMITS.rewards.maxGoalPoints),
+        },
+        notifications: { maxBrowserTimes: toInt(data.notifications?.maxBrowserTimes ?? FALLBACK_LIMITS.notifications.maxBrowserTimes) },
+        ai: {
+          minTimeoutSeconds: toInt(data.ai?.minTimeoutSeconds ?? FALLBACK_LIMITS.ai.minTimeoutSeconds),
+          maxTimeoutSeconds: toInt(data.ai?.maxTimeoutSeconds ?? FALLBACK_LIMITS.ai.maxTimeoutSeconds),
+          defaultTimeoutSeconds: toInt(data.defaults?.aiTimeoutSeconds ?? FALLBACK_LIMITS.ai.defaultTimeoutSeconds),
+        },
+        defaults: { currencyCode: data.defaults?.currencyCode ?? FALLBACK_LIMITS.defaults.currencyCode },
       };
     },
   });

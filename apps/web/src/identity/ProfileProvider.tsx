@@ -1,10 +1,6 @@
-import type { User } from '@huishoudplanner/shared';
-import { useQuery } from '@tanstack/react-query';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { api } from '../api/index.ts';
+import { useUsers, type User } from '../api/v2/household.ts';
 import { getActiveProfileId, setActiveProfileId } from './profileStore.ts';
-
-export const USERS_QUERY_KEY = ['users'] as const;
 
 export interface ProfileContextValue {
   status: 'loading' | 'error' | 'ready';
@@ -19,14 +15,11 @@ export interface ProfileContextValue {
 const ProfileContext = createContext<ProfileContextValue | null>(null);
 
 export function ProfileProvider({ children }: { children: ReactNode }) {
-  const usersQuery = useQuery({
-    queryKey: USERS_QUERY_KEY,
-    queryFn: async () => (await api.get<User[]>('/api/users')).data,
-  });
+  const usersQuery = useUsers();
   const [profileId, setProfileId] = useState<string | null>(() => getActiveProfileId());
 
   const activeUsers = useMemo(() => (usersQuery.data ?? []).filter((u) => u.active), [usersQuery.data]);
-  const profile = activeUsers.find((u) => u._id === profileId) ?? null;
+  const profile = activeUsers.find((u) => u.id === profileId) ?? null;
 
   const selectProfile = useCallback((id: string) => {
     setActiveProfileId(id);

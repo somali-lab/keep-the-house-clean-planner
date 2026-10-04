@@ -111,9 +111,9 @@ export function redemptionCents(text: string, centsPerPoint: number): number | n
 /** The owner can undo a redemption on the day it was booked; an administrator at any time (requirements 4.12). */
 export function canUndoRedemption(
   entry: { kind: string; personId: string; date: string },
-  profile: { _id: string; role: string } | null,
+  profile: { id: string; role: string } | null,
   todayKey: string,
 ): boolean {
   if (entry.kind !== 'redemption' || !profile) return false;
-  return profile.role === 'admin' || (entry.personId === profile._id && entry.date === todayKey);
+  return profile.role === 'admin' || (entry.personId === profile.id && entry.date === todayKey);
 }

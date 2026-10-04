@@ -25,7 +25,7 @@ function renderItem(overrides: Parameters<typeof makeOccurrenceV2>[0]) {
   );
 }
 
-const DONE = { status: 'done', completedBy: ANNA._id, assigneeId: ANNA._id, taskNameSnapshot: 'Ramen' } as const;
+const DONE = { status: 'done', completedBy: ANNA.id, assigneeId: ANNA.id, taskNameSnapshot: 'Ramen' } as const;
 
 describe('OccurrenceItem undo', () => {
   it('offers the retract of recorded work only on the day it was recorded', () => {

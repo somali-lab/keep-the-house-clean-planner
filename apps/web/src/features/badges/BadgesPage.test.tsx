@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { applyLanguage } from '../../i18n/runtime.ts';
-import { ANNA, makeBadge, makeBadgeImage, mockApi, storeProfile } from '../../test/fixtures.ts';
+import { ANNA, makeBadge, makeBadgeImage, mockApi, storeProfile, page } from '../../test/fixtures.ts';
 import { makeRoom, makeTask, renderWithProviders } from '../../test/render.tsx';
 import { BadgesPage } from './BadgesPage.tsx';
 
@@ -28,9 +28,9 @@ const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 
 const pngFile = (name = 'badge.png') => new File([PNG], name, { type: 'image/png' });
 
 function setup(extra: Record<string, unknown> = {}, badges = [TOILET, MOP]) {
-  storeProfile(ANNA._id);
+  storeProfile(ANNA.id);
   return mockApi({
-    '/api/users': [ANNA],
+    '/api/v2/users': page([ANNA]),
     '/api/rooms': [makeRoom({ _id: 'r1', name: 'Badkamer' })],
     '/api/tasks': [TOILET_TASK, MOP_TASK, OLD_TASK],
     '/api/badges': { badges },

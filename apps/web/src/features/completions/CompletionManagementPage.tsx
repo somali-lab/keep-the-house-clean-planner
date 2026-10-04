@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useSettings, useUsers } from '../../api/queries.ts';
+import { useSettings, useUsers } from '../../api/v2/household.ts';
 import { format, t } from '../../i18n/nl.ts';
 import { getLocale } from '../../i18n/runtime.ts';
 import { useProfile } from '../../identity/index.ts';
@@ -45,8 +45,8 @@ export function CompletionManagementPage({ now }: { now?: Date }) {
   const today = dayKeyInZone(now ?? new Date(), timezone);
   const { profile } = useProfile();
   const defaultFrom = addDays(today, -90);
-  const [from, setFrom, resetFrom] = usePersistedFilter('completions.from', profile?._id ?? null, defaultFrom);
-  const [to, setTo, resetTo] = usePersistedFilter('completions.to', profile?._id ?? null, today);
+  const [from, setFrom, resetFrom] = usePersistedFilter('completions.from', profile?.id ?? null, defaultFrom);
+  const [to, setTo, resetTo] = usePersistedFilter('completions.to', profile?.id ?? null, today);
   useFilterReset(() => { resetFrom(); resetTo(); }, from !== defaultFrom || to !== today);
   const completions = useCompletionRecords(from, to);
   const editCompletion = useEditCompletion();
@@ -56,7 +56,7 @@ export function CompletionManagementPage({ now }: { now?: Date }) {
   const [message, setMessage] = useState<string | null>(null);
 
   const records = useMemo(() => [...(completions.data ?? [])].reverse(), [completions.data]);
-  const userNames = useMemo(() => new Map((users.data ?? []).map((user) => [user._id, user.name])), [users.data]);
+  const userNames = useMemo(() => new Map((users.data ?? []).map((user) => [user.id, user.name])), [users.data]);
   const dayFormatter = new Intl.DateTimeFormat(getLocale(), { dateStyle: 'long', timeZone: 'UTC' });
   const dateTimeFormatter = new Intl.DateTimeFormat(getLocale(), {
     dateStyle: 'medium',
@@ -154,7 +154,7 @@ export function CompletionManagementPage({ now }: { now?: Date }) {
               <div className="grid gap-2">
                 <Label htmlFor={`${idPrefix}-completed-by`}>{t('completions.completedBy')}</Label>
                 <NativeSelect id={`${idPrefix}-completed-by`} value={edit.completedBy} onChange={(event) => setEdit({ ...edit, completedBy: event.target.value })}>
-                  {(users.data ?? []).map((user) => <option key={user._id} value={user._id}>{user.name}</option>)}
+                  {(users.data ?? []).map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}
                 </NativeSelect>
               </div>
             </div>

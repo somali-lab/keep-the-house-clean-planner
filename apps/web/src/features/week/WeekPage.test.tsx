@@ -26,11 +26,11 @@ let db: Occurrence[];
 let nextWarnings: ApiWarning[] = [];
 
 function setup(settings = makeSettings(), users = [ANNA, BRAM]) {
-  storeProfile(ANNA._id);
+  storeProfile(ANNA.id);
   db = [
-    makeOccurrenceV2({ id: 'o1', taskNameSnapshot: 'Badkamer', date: '2026-09-15', assigneeId: ANNA._id }),
-    makeOccurrenceV2({ id: 'o2', taskNameSnapshot: 'Stofzuigen', date: '2026-09-17', plannedDate: '2026-09-16', movedFrom: '2026-09-16', assigneeId: BRAM._id }),
-    makeOccurrenceV2({ id: 'o3', taskNameSnapshot: 'Afwas', date: '2026-09-15', status: 'done', assigneeId: ANNA._id }),
+    makeOccurrenceV2({ id: 'o1', taskNameSnapshot: 'Badkamer', date: '2026-09-15', assigneeId: ANNA.id }),
+    makeOccurrenceV2({ id: 'o2', taskNameSnapshot: 'Stofzuigen', date: '2026-09-17', plannedDate: '2026-09-16', movedFrom: '2026-09-16', assigneeId: BRAM.id }),
+    makeOccurrenceV2({ id: 'o3', taskNameSnapshot: 'Afwas', date: '2026-09-15', status: 'done', assigneeId: ANNA.id }),
   ];
   type Body = { date?: string; completedBy?: string | null; takeOver?: boolean | null };
   const update = (id: string, name: 'reschedule' | 'complete' | 'uncomplete') => (init: RequestInit | undefined) => {
@@ -43,8 +43,8 @@ function setup(settings = makeSettings(), users = [ANNA, BRAM]) {
           ? {
               ...current,
               status: 'done' as const,
-              assigneeId: body.takeOver ? ANNA._id : current.assigneeId,
-              completedBy: body.takeOver ? ANNA._id : (body.completedBy ?? current.assigneeId ?? ANNA._id),
+              assigneeId: body.takeOver ? ANNA.id : current.assigneeId,
+              completedBy: body.takeOver ? ANNA.id : (body.completedBy ?? current.assigneeId ?? ANNA.id),
               completedAt: NOW.toISOString(),
               statusBeforeCompletion: 'open' as const,
             }
@@ -53,8 +53,8 @@ function setup(settings = makeSettings(), users = [ANNA, BRAM]) {
     return { ...updated, warnings: nextWarnings };
   };
   return mockApi({
-    '/api/users': users,
-    '/api/settings': settings,
+    '/api/v2/users': page(users),
+    '/api/v2/settings': settings,
     '/api/v2/rooms': page([makeRoomV2({ id: 'r1', name: 'Woonkamer' })]),
     '/api/v2/tasks': page([makeTaskV2({ id: 't1', name: 'Huishoudtaak', roomId: 'r1' })]),
     ...v2Basics(settings.cycleAnchorDate),
@@ -183,9 +183,9 @@ describe('WeekPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Afgelopen 3 dagen/ }));
 
     const filter = screen.getByLabelText('Filter op persoon');
-    expect(filter).toHaveValue(ANNA._id);
+    expect(filter).toHaveValue(ANNA.id);
     expect(screen.queryByText('Stofzuigen')).not.toBeInTheDocument();
-    fireEvent.change(filter, { target: { value: BRAM._id } });
+    fireEvent.change(filter, { target: { value: BRAM.id } });
     expect(await screen.findByText('Stofzuigen')).toBeInTheDocument();
     expect(screen.queryByText('Badkamer')).not.toBeInTheDocument();
 
@@ -223,11 +223,11 @@ describe('WeekPage', () => {
 
     // A different selected profile gets its own defaults and period state.
     persistedView.unmount();
-    storeProfile(BRAM._id);
+    storeProfile(BRAM.id);
     resetProfileStore();
     renderWithProviders(<WeekPage now={NOW} />);
     expect(await screen.findByRole('heading', { name: /woensdag 16 sep Vandaag/ })).toBeInTheDocument();
-    expect(screen.getByLabelText('Filter op persoon')).toHaveValue(BRAM._id);
+    expect(screen.getByLabelText('Filter op persoon')).toHaveValue(BRAM.id);
   });
 
   it('can complete a task and undo it from the overview', async () => {
@@ -243,22 +243,22 @@ describe('WeekPage', () => {
   });
 
   it('shows recorded extra work with an Extra label and retracts it on undo', async () => {
-    storeProfile(ANNA._id);
+    storeProfile(ANNA.id);
     db = [
       makeOccurrenceV2({
         id: 'o-extra',
         taskNameSnapshot: 'Ramen',
         date: '2026-09-16',
-        assigneeId: ANNA._id,
+        assigneeId: ANNA.id,
         status: 'done',
-        completedBy: ANNA._id,
+        completedBy: ANNA.id,
         origin: 'adhoc',
         recordedDone: true,
       }),
     ];
     const fetchMock = mockApi({
-      '/api/users': [ANNA, BRAM],
-      '/api/settings': makeSettings(),
+      '/api/v2/users': page([ANNA, BRAM]),
+      '/api/v2/settings': makeSettings(),
       '/api/v2/rooms': page([makeRoomV2({ id: 'r1', name: 'Woonkamer' })]),
       '/api/v2/tasks': page([makeTaskV2({ id: 't1', name: 'Huishoudtaak', roomId: 'r1' })]),
       ...v2Basics(),
@@ -278,14 +278,14 @@ describe('WeekPage', () => {
   });
 
   it('offers no undo for recorded work of an earlier day, because retracting is only an undo of today', async () => {
-    storeProfile(ANNA._id);
+    storeProfile(ANNA.id);
     db = [
-      makeOccurrenceV2({ id: 'o-old', taskNameSnapshot: 'Ramen', date: '2026-09-15', assigneeId: ANNA._id, status: 'done', completedBy: ANNA._id, origin: 'adhoc', recordedDone: true }),
-      makeOccurrenceV2({ id: 'o-planned', taskNameSnapshot: 'Afwas', date: '2026-09-15', assigneeId: ANNA._id, status: 'done', completedBy: ANNA._id }),
+      makeOccurrenceV2({ id: 'o-old', taskNameSnapshot: 'Ramen', date: '2026-09-15', assigneeId: ANNA.id, status: 'done', completedBy: ANNA.id, origin: 'adhoc', recordedDone: true }),
+      makeOccurrenceV2({ id: 'o-planned', taskNameSnapshot: 'Afwas', date: '2026-09-15', assigneeId: ANNA.id, status: 'done', completedBy: ANNA.id }),
     ];
     mockApi({
-      '/api/users': [ANNA, BRAM],
-      '/api/settings': makeSettings(),
+      '/api/v2/users': page([ANNA, BRAM]),
+      '/api/v2/settings': makeSettings(),
       '/api/v2/rooms': page([makeRoomV2({ id: 'r1', name: 'Woonkamer' })]),
       '/api/v2/tasks': page([makeTaskV2({ id: 't1', name: 'Huishoudtaak', roomId: 'r1' })]),
       ...v2Basics(),
@@ -313,7 +313,7 @@ describe('WeekPage', () => {
   it("asks how to complete another person's task and can take it over", async () => {
     const fetchMock = setup();
     renderWithProviders(<WeekPage now={NOW} />);
-    fireEvent.change(await screen.findByLabelText('Filter op persoon'), { target: { value: BRAM._id } });
+    fireEvent.change(await screen.findByLabelText('Filter op persoon'), { target: { value: BRAM.id } });
     fireEvent.click(await screen.findByRole('button', { name: 'Afvinken: Stofzuigen' }));
 
     expect(screen.getByRole('alertdialog')).toHaveTextContent('Deze taak staat op naam van Bram de Vries');
@@ -321,8 +321,8 @@ describe('WeekPage', () => {
 
     await waitFor(() => expect(db.find((occurrence) => occurrence.id === 'o2')).toMatchObject({
       status: 'done',
-      assigneeId: ANNA._id,
-      completedBy: ANNA._id,
+      assigneeId: ANNA.id,
+      completedBy: ANNA.id,
     }));
     expect(intentBodies(fetchMock, 'o2', 'complete')).toEqual([{ takeOver: true }]);
   });
@@ -330,8 +330,8 @@ describe('WeekPage', () => {
   it('hides occurrences before the first cycle and explains that the cycle has not started', async () => {
     const fetchMock = setup(makeSettings({ cycleAnchorDate: '2026-09-21' }));
     db = [
-      makeOccurrenceV2({ id: 'o1', taskNameSnapshot: 'Te vroeg', date: '2026-09-20', assigneeId: ANNA._id, cycleIndex: -1 }),
-      makeOccurrenceV2({ id: 'o2', taskNameSnapshot: 'Vanaf de start', date: '2026-09-21', assigneeId: ANNA._id, cycleIndex: 0 }),
+      makeOccurrenceV2({ id: 'o1', taskNameSnapshot: 'Te vroeg', date: '2026-09-20', assigneeId: ANNA.id, cycleIndex: -1 }),
+      makeOccurrenceV2({ id: 'o2', taskNameSnapshot: 'Vanaf de start', date: '2026-09-21', assigneeId: ANNA.id, cycleIndex: 0 }),
     ];
     renderWithProviders(<WeekPage now={new Date('2026-09-20T08:00:00Z')} />);
 
@@ -349,15 +349,15 @@ describe('WeekPage', () => {
 
   it('uses the configured completion control and always shows a green check when done', async () => {
     mockApi({
-      '/api/users': [ANNA, BRAM],
-      '/api/settings': makeSettings({ completionControl: 'thumb' }),
+      '/api/v2/users': page([ANNA, BRAM]),
+      '/api/v2/settings': makeSettings({ completionControl: 'thumb' }),
       '/api/v2/rooms': page([makeRoomV2({ id: 'r1', name: 'Woonkamer' })]),
       '/api/v2/tasks': page([makeTaskV2({ id: 't1', name: 'Huishoudtaak', roomId: 'r1' })]),
       ...v2Basics(),
       '/api/v2/occurrences': () => page(db),
     });
-    storeProfile(ANNA._id);
-    db = [makeOccurrenceV2({ id: 'o3', taskNameSnapshot: 'Afwas', date: '2026-09-15', status: 'done', assigneeId: ANNA._id })];
+    storeProfile(ANNA.id);
+    db = [makeOccurrenceV2({ id: 'o3', taskNameSnapshot: 'Afwas', date: '2026-09-15', status: 'done', assigneeId: ANNA.id })];
     renderWithProviders(<WeekPage now={NOW} />);
     fireEvent.click(await screen.findByRole('button', { name: /Afgelopen 3 dagen/ }));
     const done = await screen.findByRole('button', { name: 'Afwas ongedaan maken' });
@@ -379,7 +379,7 @@ describe('WeekPage', () => {
   });
 
   it('shows the warnings the server returns for a move', async () => {
-    nextWarnings = [{ code: 'assignee_unavailable', message: 'unavailable', details: { userId: BRAM._id, weekday: 3 } as unknown as ApiWarning['details'] }];
+    nextWarnings = [{ code: 'assignee_unavailable', message: 'unavailable', details: { userId: BRAM.id, weekday: 3 } as unknown as ApiWarning['details'] }];
     setup();
     renderWithProviders(<WeekPage now={NOW} />);
     fireEvent.change(await screen.findByLabelText('Filter op persoon'), { target: { value: 'all' } });
@@ -393,8 +393,8 @@ describe('WeekPage', () => {
   it('puts an item back when the server refuses the move with a problem', async () => {
     setup();
     const routes = {
-      '/api/users': [ANNA, BRAM],
-      '/api/settings': makeSettings(),
+      '/api/v2/users': page([ANNA, BRAM]),
+      '/api/v2/settings': makeSettings(),
       '/api/v2/rooms': page([makeRoomV2({ id: 'r1', name: 'Woonkamer' })]),
       '/api/v2/tasks': page([makeTaskV2({ id: 't1', name: 'Huishoudtaak', roomId: 'r1' })]),
       ...v2Basics(),
@@ -416,8 +416,8 @@ describe('WeekPage', () => {
   it('keeps the week usable when the calendar cannot be read', async () => {
     setup();
     mockApi({
-      '/api/users': [ANNA, BRAM],
-      '/api/settings': makeSettings(),
+      '/api/v2/users': page([ANNA, BRAM]),
+      '/api/v2/settings': makeSettings(),
       '/api/v2/rooms': page([makeRoomV2({ id: 'r1', name: 'Woonkamer' })]),
       '/api/v2/tasks': page([makeTaskV2({ id: 't1', name: 'Huishoudtaak', roomId: 'r1' })]),
       '/api/v2/occurrences': () => page(db),

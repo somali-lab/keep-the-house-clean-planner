@@ -9,20 +9,20 @@ const badkamer = makeRoomV2({ id: 'r2', name: 'Badkamer', sortOrder: 20 });
 
 const tasks = [
   makeTaskV2({ id: 't1', name: 'Vloer dweilen', roomId: 'r1', intervalKey: '1w', durationMinutes: 20, version: 2 }),
-  makeTaskV2({ id: 't2', name: 'Aanrecht', roomId: 'r1', intervalKey: 'daily', durationMinutes: 5, defaultAssigneeId: ANNA._id, version: 3 }),
+  makeTaskV2({ id: 't2', name: 'Aanrecht', roomId: 'r1', intervalKey: 'daily', durationMinutes: 5, defaultAssigneeId: ANNA.id, version: 3 }),
   makeTaskV2({ id: 't3', name: 'Douche', roomId: 'r2', intervalKey: '2wk', durationMinutes: 30, version: 5 }),
   makeTaskV2({ id: 't4', name: 'Oude klus', roomId: 'r2', active: false }),
 ];
 
 function setup(extraRoutes: Record<string, unknown> = {}) {
   for (const key of Object.keys(localStorage)) if (key.startsWith('huishoudplanner.filters.')) localStorage.removeItem(key);
-  storeProfile(ANNA._id);
+  storeProfile(ANNA.id);
   return mockApi({
-    '/api/users': [ANNA, BRAM],
+    '/api/v2/users': page([ANNA, BRAM]),
     '/api/v2/rooms': page([badkamer, keuken]),
     '/api/v2/tasks': page(tasks),
     ...v2Basics(),
-    '/api/settings': makeSettings(),
+    '/api/v2/settings': makeSettings(),
     ...extraRoutes,
   });
 }
@@ -176,7 +176,7 @@ describe('TasksPage — form validation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Douche bewerken' }));
     const form = screen.getByRole('form', { name: 'Douche bewerken' });
     expect(within(form).getByLabelText('Duur (minuten)')).toHaveValue(30);
-    fireEvent.change(within(form).getByLabelText('Standaard uitvoerder'), { target: { value: BRAM._id } });
+    fireEvent.change(within(form).getByLabelText('Standaard uitvoerder'), { target: { value: BRAM.id } });
     fireEvent.click(within(form).getByRole('button', { name: 'Opslaan' }));
     await waitFor(() =>
       expect(bodyOf(fetchMock, 'PATCH', '/api/v2/tasks/t3')).toEqual({
@@ -185,7 +185,7 @@ describe('TasksPage — form validation', () => {
         intervalKey: '2wk',
         durationMinutes: 30,
         points: 15,
-        defaultAssigneeId: BRAM._id,
+        defaultAssigneeId: BRAM.id,
         notes: '',
         tags: [],
       }),
@@ -265,13 +265,13 @@ describe('TasksPage — actions', () => {
     fireEvent.click(within(bulk).getByRole('button', { name: 'Alle taken deactiveren' }));
     await waitFor(() => expect(bodyOf(fetchMock, 'POST', '/api/v2/rooms/r1/tasks/bulk')).toEqual({ op: 'deactivate' }));
 
-    fireEvent.change(within(bulk).getByLabelText('Alle taken toewijzen aan'), { target: { value: BRAM._id } });
+    fireEvent.change(within(bulk).getByLabelText('Alle taken toewijzen aan'), { target: { value: BRAM.id } });
     fireEvent.click(within(bulk).getByRole('button', { name: 'Toewijzen' }));
     await waitFor(() => {
       const calls = fetchMock.mock.calls.filter(([u]) => u === '/api/v2/rooms/r1/tasks/bulk');
       expect(JSON.parse(String((calls.at(-1)![1] as RequestInit).body))).toEqual({
         op: 'reassign',
-        defaultAssigneeId: BRAM._id,
+        defaultAssigneeId: BRAM.id,
       });
     });
   });
@@ -316,7 +316,7 @@ describe('TasksPage — If-Match', () => {
     await expandAllRooms();
     fireEvent.click(await screen.findByRole('button', { name: 'Douche bewerken' }));
     const form = screen.getByRole('form', { name: 'Douche bewerken' });
-    fireEvent.change(within(form).getByLabelText('Standaard uitvoerder'), { target: { value: BRAM._id } });
+    fireEvent.change(within(form).getByLabelText('Standaard uitvoerder'), { target: { value: BRAM.id } });
     fireEvent.click(within(form).getByRole('button', { name: 'Opslaan' }));
     await waitFor(() => expect(headerOf(fetchMock, 'PATCH', '/api/v2/tasks/t3', 'if-match')).toBe('"5"'));
   });
@@ -363,7 +363,7 @@ describe('TasksPage — If-Match', () => {
       '/api/v2/tasks': () => page(list),
       'PATCH /api/v2/tasks/t3': () => {
         patches += 1;
-        if (patches > 1) return makeTaskV2({ id: 't3', name: 'Douche (nieuw)', roomId: 'r2', defaultAssigneeId: BRAM._id, version: 7 });
+        if (patches > 1) return makeTaskV2({ id: 't3', name: 'Douche (nieuw)', roomId: 'r2', defaultAssigneeId: BRAM.id, version: 7 });
         list = list.map((task) => (task.id === 't3' ? { ...task, name: 'Douche (nieuw)', version: 6 } : task));
         return staleAnswer(6)();
       },
@@ -372,7 +372,7 @@ describe('TasksPage — If-Match', () => {
     await expandAllRooms();
     fireEvent.click(await screen.findByRole('button', { name: 'Douche bewerken' }));
     const form = screen.getByRole('form', { name: 'Douche bewerken' });
-    fireEvent.change(within(form).getByLabelText('Standaard uitvoerder'), { target: { value: BRAM._id } });
+    fireEvent.change(within(form).getByLabelText('Standaard uitvoerder'), { target: { value: BRAM.id } });
     const readsBefore = listReads(fetchMock);
     fireEvent.click(within(form).getByRole('button', { name: 'Opslaan' }));
 
@@ -380,13 +380,13 @@ describe('TasksPage — If-Match', () => {
     await waitFor(() => expect(listReads(fetchMock)).toBeGreaterThan(readsBefore));
     // The edit is still there, in the same open form.
     const kept = await screen.findByRole('form', { name: /bewerken/ });
-    expect(within(kept).getByLabelText('Standaard uitvoerder')).toHaveValue(BRAM._id);
+    expect(within(kept).getByLabelText('Standaard uitvoerder')).toHaveValue(BRAM.id);
 
     fireEvent.click(within(kept).getByRole('button', { name: 'Opslaan' }));
     await waitFor(() => expect(patches).toBe(2));
     const sent = sentWith(fetchMock, 'PATCH', '/api/v2/tasks/t3');
     expect(sent.map((call) => call.ifMatch)).toEqual(['"5"', '"6"']);
-    expect(sent[1]!.body).toMatchObject({ defaultAssigneeId: BRAM._id });
+    expect(sent[1]!.body).toMatchObject({ defaultAssigneeId: BRAM.id });
     await waitFor(() => expect(screen.queryByRole('form')).not.toBeInTheDocument());
     expect(screen.queryByText(STALE_MESSAGE)).not.toBeInTheDocument();
   });

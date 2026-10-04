@@ -2,7 +2,7 @@ import type { PointsProgressResponse } from '@huishoudplanner/shared';
 import { formatCents } from '@huishoudplanner/shared/points';
 import { PartyPopper } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
-import { useSettings } from '../../api/queries.ts';
+import { useSettings } from '../../api/v2/household.ts';
 import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -43,10 +43,10 @@ export function RewardPage({ now }: { now?: Date }) {
   const { profile } = useProfile();
   const settings = useSettings();
   const timezone = settings.data?.timezone ?? 'Europe/Amsterdam';
-  const [stored, setPeriod] = usePersistedFilter<RewardPeriod>('reward.period', profile?._id ?? null, 'week');
+  const [stored, setPeriod] = usePersistedFilter<RewardPeriod>('reward.period', profile?.id ?? null, 'week');
   // A stored value that is not a period (hand-edited storage) falls back to the week.
   const period: RewardPeriod = stored === 'cycle' ? 'cycle' : 'week';
-  const progress = usePointsProgress(profile?._id ?? null, period);
+  const progress = usePointsProgress(profile?.id ?? null, period);
   const data = progress.data;
 
   // The current day by the clock of this device. When it lies outside the period that was read (the week or cycle rolled
@@ -106,7 +106,7 @@ export function RewardPage({ now }: { now?: Date }) {
         <RewardCard key={`${data.personId}.${data.period}.${data.start}`} progress={data} />
       )}
 
-      <PersonBadges personId={profile?._id ?? null} title={t('badges.my')} headingLevel={2} />
+      <PersonBadges personId={profile?.id ?? null} title={t('badges.my')} headingLevel={2} />
     </section>
   );
 }

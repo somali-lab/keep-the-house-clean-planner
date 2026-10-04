@@ -1,22 +1,20 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
-import { ANNA, BRAM, mockApi, storeProfile } from '../../test/fixtures.ts';
+import { describe, expect, it } from 'vitest';
+import { ANNA, BRAM, LIMITS, householdRoutes, mockApi, problem, requestsTo, storeProfile } from '../../test/fixtures.ts';
 import { makeSettings, renderWithProviders } from '../../test/render.tsx';
 import { ConversionSection, currencyCodes, parseCentsPerPoint } from './ConversionSection.tsx';
 
-function setup(profileId: string, settings = makeSettings({ currencyCode: 'EUR', centsPerPoint: 10 })) {
+function setup(profileId: string, settings = makeSettings({ currencyCode: 'EUR', centsPerPoint: 10 }), patch: unknown = { ...settings, version: 2 }) {
   storeProfile(profileId);
   return mockApi({
-    '/api/users': [ANNA, BRAM],
-    '/api/settings': settings,
-    'PATCH /api/settings': (init: RequestInit | undefined) => ({ ...settings, ...JSON.parse(String(init?.body)) }),
+    ...householdRoutes([ANNA, BRAM], settings),
+    '/api/v2/meta/limits': LIMITS,
+    'PATCH /api/v2/settings': patch,
   });
 }
 
 const patchBodies = (fetchMock: ReturnType<typeof mockApi>) =>
-  fetchMock.mock.calls
-    .filter(([u, init]) => u === '/api/settings' && (init as RequestInit | undefined)?.method === 'PATCH')
-    .map(([, init]) => JSON.parse(String((init as RequestInit).body)));
+  requestsTo(fetchMock, 'PATCH', '/api/v2/settings').map((request) => request.body);
 
 describe('parseCentsPerPoint', () => {
   it.each([
@@ -51,14 +49,14 @@ describe('currencyCodes', () => {
 
 describe('ConversionSection', () => {
   it('shows nothing to anyone but an administrator', async () => {
-    setup(BRAM._id);
+    setup(BRAM.id);
     const { container } = renderWithProviders(<ConversionSection settings={makeSettings()} />);
     await waitFor(() => expect(screen.queryByRole('form', { name: 'Puntenwaarde' })).not.toBeInTheDocument());
     expect(container).toBeEmptyDOMElement();
   });
 
   it('shows the currency and value in force, with what one point is worth', async () => {
-    setup(ANNA._id);
+    setup(ANNA.id);
     renderWithProviders(<ConversionSection settings={makeSettings({ currencyCode: 'USD', centsPerPoint: 25 })} />);
     const form = await screen.findByRole('form', { name: 'Puntenwaarde' });
     expect(within(form).getByLabelText('Valuta')).toHaveValue('USD');
@@ -67,7 +65,7 @@ describe('ConversionSection', () => {
   });
 
   it('defaults to EUR and no money for settings that have no conversion yet, and says nothing is shown', async () => {
-    setup(ANNA._id, makeSettings());
+    setup(ANNA.id, makeSettings());
     renderWithProviders(<ConversionSection settings={makeSettings()} />);
     const form = await screen.findByRole('form', { name: 'Puntenwaarde' });
     expect(within(form).getByLabelText('Valuta')).toHaveValue('EUR');
@@ -76,7 +74,7 @@ describe('ConversionSection', () => {
   });
 
   it('updates the preview while typing', async () => {
-    setup(ANNA._id, makeSettings());
+    setup(ANNA.id, makeSettings());
     renderWithProviders(<ConversionSection settings={makeSettings()} />);
     const form = await screen.findByRole('form', { name: 'Puntenwaarde' });
     fireEvent.change(within(form).getByLabelText('Waarde van één punt (in centen)'), { target: { value: '150' } });
@@ -86,7 +84,7 @@ describe('ConversionSection', () => {
   });
 
   it('refuses a value outside 0 to 10000 or that is not a whole number, without calling the server', async () => {
-    const fetchMock = setup(ANNA._id);
+    const fetchMock = setup(ANNA.id);
     renderWithProviders(<ConversionSection settings={makeSettings({ currencyCode: 'EUR', centsPerPoint: 10 })} />);
     const form = await screen.findByRole('form', { name: 'Puntenwaarde' });
     for (const bad of ['10001', '-1', '2.5', '']) {
@@ -98,7 +96,7 @@ describe('ConversionSection', () => {
   });
 
   it('saves the currency and the cents per point together and confirms it', async () => {
-    const fetchMock = setup(ANNA._id);
+    const fetchMock = setup(ANNA.id);
     renderWithProviders(<ConversionSection settings={makeSettings({ currencyCode: 'EUR', centsPerPoint: 10 })} />);
     const form = await screen.findByRole('form', { name: 'Puntenwaarde' });
     fireEvent.change(within(form).getByLabelText('Valuta'), { target: { value: 'GBP' } });
@@ -109,7 +107,7 @@ describe('ConversionSection', () => {
   });
 
   it('does not offer JPY or KWD, and refuses one that is stored anyway, without calling the server', async () => {
-    const fetchMock = setup(ANNA._id);
+    const fetchMock = setup(ANNA.id);
     renderWithProviders(<ConversionSection settings={makeSettings({ currencyCode: 'JPY', centsPerPoint: 10 })} />);
     const form = await screen.findByRole('form', { name: 'Puntenwaarde' });
     const options = within(within(form).getByLabelText('Valuta')).getAllByRole('option').map((option) => (option as HTMLOptionElement).value);
@@ -123,8 +121,28 @@ describe('ConversionSection', () => {
     await waitFor(() => expect(patchBodies(fetchMock)).toEqual([{ currencyCode: 'EUR', centsPerPoint: 10 }]));
   });
 
+  it('sends the version of the settings as If-Match', async () => {
+    const settings = makeSettings({ currencyCode: 'EUR', centsPerPoint: 10, version: 3 });
+    const fetchMock = setup(ANNA.id, settings);
+    renderWithProviders(<ConversionSection settings={settings} />);
+    const form = await screen.findByRole('form', { name: 'Puntenwaarde' });
+    fireEvent.click(within(form).getByRole('button', { name: 'Puntenwaarde opslaan' }));
+    await waitFor(() => expect(requestsTo(fetchMock, 'PATCH', '/api/v2/settings')).toHaveLength(1));
+    expect(requestsTo(fetchMock, 'PATCH', '/api/v2/settings')[0]!.headers['if-match']).toBe('"3"');
+  });
+
+  it('keeps the typed value and says so when the settings changed in the meantime (412)', async () => {
+    setup(ANNA.id, makeSettings({ currencyCode: 'EUR', centsPerPoint: 10 }), problem(412, 'precondition_failed', 'Changed.'));
+    renderWithProviders(<ConversionSection settings={makeSettings({ currencyCode: 'EUR', centsPerPoint: 10 })} />);
+    const form = await screen.findByRole('form', { name: 'Puntenwaarde' });
+    fireEvent.change(within(form).getByLabelText('Waarde van één punt (in centen)'), { target: { value: '40' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Puntenwaarde opslaan' }));
+    expect(await within(form).findByRole('alert')).toHaveTextContent('Deze gegevens zijn intussen door iemand anders gewijzigd');
+    expect(within(form).getByLabelText('Waarde van één punt (in centen)')).toHaveValue(40);
+  });
+
   it('turns money off with 0', async () => {
-    const fetchMock = setup(ANNA._id);
+    const fetchMock = setup(ANNA.id);
     renderWithProviders(<ConversionSection settings={makeSettings({ currencyCode: 'EUR', centsPerPoint: 10 })} />);
     const form = await screen.findByRole('form', { name: 'Puntenwaarde' });
     fireEvent.change(within(form).getByLabelText('Waarde van één punt (in centen)'), { target: { value: '0' } });
@@ -134,15 +152,7 @@ describe('ConversionSection', () => {
   });
 
   it('shows an error when the server refuses', async () => {
-    storeProfile(ANNA._id);
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        if (init?.method === 'PATCH') return new Response(JSON.stringify({ code: 'permission_denied' }), { status: 403 });
-        const body = String(input).includes('users') ? [ANNA, BRAM] : makeSettings();
-        return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
-      }),
-    );
+    setup(ANNA.id, makeSettings(), problem(403, 'permission_denied', 'Not allowed.'));
     renderWithProviders(<ConversionSection settings={makeSettings()} />);
     const form = await screen.findByRole('form', { name: 'Puntenwaarde' });
     fireEvent.click(within(form).getByRole('button', { name: 'Puntenwaarde opslaan' }));

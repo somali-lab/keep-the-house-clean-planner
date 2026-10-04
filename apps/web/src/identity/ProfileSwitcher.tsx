@@ -23,15 +23,15 @@ export function ProfileSwitcher({ sidebar = false, compact = false }: { sidebar?
         )}
       >
         {activeUsers.map((user) => {
-          const isCurrent = user._id === profile?._id;
+          const isCurrent = user.id === profile?.id;
           return (
             <button
-              key={user._id}
+              key={user.id}
               type="button"
               aria-pressed={isCurrent}
               aria-label={format('profile.switchTo', { name: user.name })}
               title={user.name}
-              onClick={() => selectProfile(user._id)}
+              onClick={() => selectProfile(user.id)}
               className={cn(
                 'grid size-11 place-items-center rounded-full outline-none transition-all focus-visible:ring-[3px] focus-visible:ring-ring/50',
                 sidebar && 'size-9',

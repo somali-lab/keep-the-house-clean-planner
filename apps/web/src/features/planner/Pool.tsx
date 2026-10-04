@@ -1,5 +1,5 @@
 import { useDraggable, useDroppable } from '@dnd-kit/core';
-import type { Interval } from '@huishoudplanner/shared';
+import type { Interval } from '../../api/v2/household.ts';
 import type { Room, Task } from '../../api/v2/queries.ts';
 import type { TaskSummary } from './api.ts';
 import {

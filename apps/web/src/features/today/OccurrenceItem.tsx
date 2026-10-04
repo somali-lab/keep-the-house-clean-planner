@@ -1,4 +1,4 @@
-import type { User } from '@huishoudplanner/shared';
+import type { User } from '../../api/v2/household.ts';
 import type { Occurrence } from '../../api/index.ts';
 import {
   ArrowRight,
@@ -66,7 +66,7 @@ export function OccurrenceItem({
   const userName = (id: string | null) =>
     id === null
       ? t('today.anyone')
-      : (users.find((u) => u._id === id)?.name ?? t('tasks.unknownUser'));
+      : (users.find((u) => u.id === id)?.name ?? t('tasks.unknownUser'));
   const isOpen = occ.status === 'open';
   const recorded = occ.recordedDone === true;
 
@@ -218,7 +218,7 @@ export function OccurrenceItem({
             >
               <option value="">{t('today.assignTogether')}</option>
               {users.map((user) => (
-                <option key={user._id} value={user._id}>{user.name}</option>
+                <option key={user.id} value={user.id}>{user.name}</option>
               ))}
             </NativeSelect>
           </div>

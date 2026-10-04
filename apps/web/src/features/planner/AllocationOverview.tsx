@@ -1,4 +1,5 @@
-import type { Interval, Room, Slot, Task, User } from '@huishoudplanner/shared';
+import type { Room, Slot, Task } from '@huishoudplanner/shared';
+import type { Interval, User } from '../../api/v2/household.ts';
 import { CheckCircle2, CircleDashed, Scale, TriangleAlert } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { cn } from '@/lib/utils';
@@ -127,9 +128,9 @@ export function allocationRows(
 
   return [
     ...users.map((user) => {
-      const total = totals.get(user._id) ?? { weekday: 0, weekend: 0 };
+      const total = totals.get(user.id) ?? { weekday: 0, weekend: 0 };
       return {
-        id: user._id,
+        id: user.id,
         name: user.name,
         color: user.color,
         minutes: total.weekday + total.weekend,

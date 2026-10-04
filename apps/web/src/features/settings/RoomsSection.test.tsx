@@ -1,29 +1,24 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { ANNA, BRAM, mockApi, storeProfile } from '../../test/fixtures.ts';
-import { makeRoom, makeTask, renderWithProviders } from '../../test/render.tsx';
+import { ANNA, BRAM, householdRoutes, mockApi, page, problem, requestsTo, storeProfile } from '../../test/fixtures.ts';
+import { makeRoomV2, makeSettings, makeTaskV2, renderWithProviders } from '../../test/render.tsx';
 import { RoomsSection } from './RoomsSection.tsx';
 
-const KEUKEN = makeRoom({ _id: 'r00000000000000000000001', name: 'Keuken', sortOrder: 20 });
-const BADKAMER = makeRoom({ _id: 'r00000000000000000000002', name: 'Badkamer', sortOrder: 10 });
-const SCHUUR = makeRoom({ _id: 'r00000000000000000000003', name: 'Schuur', sortOrder: 30, active: false });
+const KEUKEN = makeRoomV2({ id: 'r00000000000000000000001', name: 'Keuken', sortOrder: 20, version: 4 });
+const BADKAMER = makeRoomV2({ id: 'r00000000000000000000002', name: 'Badkamer', sortOrder: 10, version: 2 });
+const SCHUUR = makeRoomV2({ id: 'r00000000000000000000003', name: 'Schuur', sortOrder: 30, active: false });
 
 function setup(extra: Record<string, unknown> = {}) {
-  storeProfile(ANNA._id);
+  storeProfile(ANNA.id);
   return mockApi({
-    '/api/users': [ANNA, BRAM],
-    '/api/rooms': [KEUKEN, SCHUUR, BADKAMER],
-    '/api/tasks': [],
-    [`PATCH /api/rooms/${KEUKEN._id}`]: (init: RequestInit) => ({ ...KEUKEN, ...JSON.parse(String(init.body)) }),
-    'POST /api/rooms': (init: RequestInit) => makeRoom({ _id: 'r00000000000000000000004', ...JSON.parse(String(init.body)) }),
+    ...householdRoutes([ANNA, BRAM], makeSettings()),
+    '/api/v2/rooms': page([KEUKEN, SCHUUR, BADKAMER]),
+    '/api/v2/tasks': page([]),
+    [`PATCH /api/v2/rooms/${KEUKEN.id}`]: { ...KEUKEN, name: 'Keuken & bijkeuken', sortOrder: 5, active: false, version: 5 },
+    'POST /api/v2/rooms': makeRoomV2({ id: 'r00000000000000000000004', name: 'Zolder' }),
     ...extra,
   });
 }
-
-const bodies = (fetchMock: ReturnType<typeof mockApi>, method: string) =>
-  fetchMock.mock.calls
-    .filter(([, init]) => (init as RequestInit | undefined)?.method === method)
-    .map(([u, init]) => [u, JSON.parse(String((init as RequestInit).body))]);
 
 describe('RoomsSection', () => {
   it('lists rooms in their order and marks inactive ones', async () => {
@@ -38,7 +33,7 @@ describe('RoomsSection', () => {
     ]);
   });
 
-  it('renames, reorders and deactivates a room', async () => {
+  it('renames, reorders and deactivates a room, with the version of the room as If-Match', async () => {
     const fetchMock = setup();
     renderWithProviders(<RoomsSection />);
     fireEvent.click(await screen.findByRole('button', { name: 'Bewerk Keuken' }));
@@ -49,10 +44,23 @@ describe('RoomsSection', () => {
     fireEvent.click(within(form).getByLabelText('Actief'));
     fireEvent.click(within(form).getByRole('button', { name: 'Opslaan' }));
 
-    await waitFor(() =>
-      expect(bodies(fetchMock, 'PATCH')).toEqual([[`/api/rooms/${KEUKEN._id}`, { name: 'Keuken & bijkeuken', sortOrder: 5, active: false }]]),
-    );
+    await waitFor(() => expect(requestsTo(fetchMock, 'PATCH', `/api/v2/rooms/${KEUKEN.id}`)).toHaveLength(1));
+    const [request] = requestsTo(fetchMock, 'PATCH', `/api/v2/rooms/${KEUKEN.id}`);
+    expect(request!.body).toEqual({ name: 'Keuken & bijkeuken', sortOrder: 5, active: false });
+    expect(request!.headers['if-match']).toBe('"4"');
     expect(await screen.findByRole('status')).toHaveTextContent('Opgeslagen.');
+  });
+
+  it('keeps the edit and says so when the room changed in the meantime (412)', async () => {
+    setup({ [`PATCH /api/v2/rooms/${KEUKEN.id}`]: problem(412, 'precondition_failed', 'The room changed.') });
+    renderWithProviders(<RoomsSection />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Bewerk Keuken' }));
+    const form = screen.getByRole('form', { name: 'Bewerk Keuken' });
+    fireEvent.change(within(form).getByLabelText('Naam'), { target: { value: 'Keuken 2' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Opslaan' }));
+
+    expect(await within(form).findByRole('alert')).toHaveTextContent('Deze gegevens zijn intussen door iemand anders gewijzigd');
+    expect(within(form).getByLabelText('Naam')).toHaveValue('Keuken 2');
   });
 
   it('adds a room, leaving the position to the server when empty', async () => {
@@ -66,13 +74,14 @@ describe('RoomsSection', () => {
 
     fireEvent.change(within(form).getByLabelText('Naam'), { target: { value: 'Zolder' } });
     fireEvent.click(within(form).getByRole('button', { name: 'Opslaan' }));
-    await waitFor(() => expect(bodies(fetchMock, 'POST')).toEqual([['/api/rooms', { name: 'Zolder' }]]));
+    await waitFor(() => expect(requestsTo(fetchMock, 'POST', '/api/v2/rooms')).toHaveLength(1));
+    expect(requestsTo(fetchMock, 'POST', '/api/v2/rooms')[0]!.body).toEqual({ name: 'Zolder' });
   });
 
-  it('deletes an empty room but blocks a room that still has tasks', async () => {
+  it('deletes an empty room with its version, but blocks a room that still has tasks', async () => {
     const fetchMock = setup({
-      '/api/tasks': [makeTask({ _id: 't1', name: 'Aanrecht', roomId: KEUKEN._id })],
-      [`DELETE /api/rooms/${BADKAMER._id}`]: { deleted: true },
+      '/api/v2/tasks': page([makeTaskV2({ id: 't1', name: 'Aanrecht', roomId: KEUKEN.id })]),
+      [`DELETE /api/v2/rooms/${BADKAMER.id}`]: { deleted: true },
     });
     renderWithProviders(<RoomsSection />);
 
@@ -80,6 +89,21 @@ describe('RoomsSection', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Verwijder Badkamer' }));
     expect(screen.getByRole('heading', { name: 'Badkamer definitief verwijderen?' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Ruimte verwijderen' }));
-    await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => url === `/api/rooms/${BADKAMER._id}` && (init as RequestInit)?.method === 'DELETE')).toBe(true));
+    await waitFor(() => expect(requestsTo(fetchMock, 'DELETE', `/api/v2/rooms/${BADKAMER.id}`)).toHaveLength(1));
+    expect(requestsTo(fetchMock, 'DELETE', `/api/v2/rooms/${BADKAMER.id}`)[0]!.headers['if-match']).toBe('"2"');
+  });
+
+  it('says in the dialog that the room changed (412) and starts clean when it is opened again', async () => {
+    setup({ [`DELETE /api/v2/rooms/${BADKAMER.id}`]: problem(412, 'precondition_failed', 'The room changed.') });
+    renderWithProviders(<RoomsSection />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Verwijder Badkamer' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ruimte verwijderen' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Deze gegevens zijn intussen door iemand anders gewijzigd');
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Annuleren' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Verwijder Badkamer' }));
+    expect(within(await screen.findByRole('dialog')).queryByRole('alert')).not.toBeInTheDocument();
   });
 });

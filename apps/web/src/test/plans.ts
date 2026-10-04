@@ -1,4 +1,4 @@
-import type { User } from '@huishoudplanner/shared';
+import type { User } from '../api/v2/household.ts';
 import type { CyclePlan, PlanIssue, PlanSlot, PlanValidation } from '../features/planner/api.ts';
 import type { Task } from '../api/v2/queries.ts';
 
@@ -61,9 +61,9 @@ export function standInValidation(slots: readonly PlanSlot[], tasks: readonly Ta
         weekIndex,
         weekday,
         users: users.map((user) => {
-          const minutes = here.filter((slot) => slot.assigneeId === user._id).reduce((sum, slot) => sum + minutesOf(slot), 0);
+          const minutes = here.filter((slot) => slot.assigneeId === user.id).reduce((sum, slot) => sum + minutesOf(slot), 0);
           const budget = weekday === 0 || weekday === 6 ? user.dailyBudgetMinutes.weekend : user.dailyBudgetMinutes.weekday;
-          return { userId: user._id, minutes, budget, overBudget: minutes > budget };
+          return { userId: user.id, minutes, budget, overBudget: minutes > budget };
         }),
         unassignedMinutes: here.filter((slot) => slot.assigneeId === null).reduce((sum, slot) => sum + minutesOf(slot), 0),
       };
@@ -84,8 +84,8 @@ export function standInValidation(slots: readonly PlanSlot[], tasks: readonly Ta
       weeks: [0, 1, 2, 3].map((weekIndex) => ({
         weekIndex,
         users: users.map((user) => ({
-          userId: user._id,
-          minutes: days.filter((day) => day.weekIndex === weekIndex).reduce((sum, day) => sum + (day.users.find((u) => u.userId === user._id)?.minutes ?? 0), 0),
+          userId: user.id,
+          minutes: days.filter((day) => day.weekIndex === weekIndex).reduce((sum, day) => sum + (day.users.find((u) => u.userId === user.id)?.minutes ?? 0), 0),
         })),
         unassignedMinutes: days.filter((day) => day.weekIndex === weekIndex).reduce((sum, day) => sum + day.unassignedMinutes, 0),
       })),

@@ -21,8 +21,8 @@ describe('planner task search', () => {
   });
 });
 
-const ANNA = { _id: 'u1', name: 'Anna', unavailableWeekdays: [2] }; // not on Tuesday
-const BRAM = { _id: 'u2', name: 'Bram', unavailableWeekdays: [] };
+const ANNA = { id: 'u1', name: 'Anna', unavailableWeekdays: [2] }; // not on Tuesday
+const BRAM = { id: 'u2', name: 'Bram', unavailableWeekdays: [] };
 const context = {
   tasks: [
     { id: 't1', name: 'Badkamer', defaultAssigneeId: 'u1' },

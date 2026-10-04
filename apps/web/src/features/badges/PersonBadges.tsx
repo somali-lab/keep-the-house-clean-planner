@@ -1,7 +1,7 @@
 import { CircleCheck } from 'lucide-react';
 import { useId } from 'react';
 import { cn } from '@/lib/utils';
-import { useSettings } from '../../api/queries.ts';
+import { useSettings } from '../../api/v2/household.ts';
 import { format, t } from '../../i18n/nl.ts';
 import { getLocale } from '../../i18n/runtime.ts';
 import { useBadgeProgress, useBadges } from './api.ts';

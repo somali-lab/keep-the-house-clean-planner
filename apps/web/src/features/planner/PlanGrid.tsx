@@ -1,5 +1,5 @@
 import { useDraggable, useDroppable } from '@dnd-kit/core';
-import type { User } from '@huishoudplanner/shared';
+import type { User } from '../../api/v2/household.ts';
 import type { Room, Task } from '../../api/v2/queries.ts';
 import type { PlanSlot as Slot, PlanSummary } from './api.ts';
 import { CalendarDays, GripVertical, TriangleAlert, Users, UserX, X } from 'lucide-react';
@@ -79,14 +79,14 @@ export function WeekTable({
       </div>
       <div className="grid gap-2 border-b bg-secondary/15 px-3 py-3 sm:grid-cols-2">
         {users.map((user) => {
-          const weekdayMinutes = minutesFor(user._id, [1, 2, 3, 4, 5]);
-          const weekendMinutes = minutesFor(user._id, [6, 0]);
+          const weekdayMinutes = minutesFor(user.id, [1, 2, 3, 4, 5]);
+          const weekendMinutes = minutesFor(user.id, [6, 0]);
           const overBudget =
             weekdayMinutes > user.dailyBudgetMinutes.weekday ||
             weekendMinutes > user.dailyBudgetMinutes.weekend;
           return (
             <div
-              key={user._id}
+              key={user.id}
               className={cn(
                 'flex min-w-0 items-center gap-3 rounded-xl border bg-card px-3 py-2',
                 overBudget && 'border-warning bg-warning/15',
@@ -128,7 +128,7 @@ export function WeekTable({
                 <div className="grid gap-1.5">
                   {[...users, ...(showUnassigned ? [null] : [])].map((user) => (
                     <Cell
-                      key={user?._id ?? 'any'}
+                      key={user?.id ?? 'any'}
                       weekIndex={weekIndex}
                       weekday={weekday}
                       user={user}
@@ -136,7 +136,7 @@ export function WeekTable({
                       taskById={taskById}
                       roomById={roomById}
                       searchTerm={searchTerm}
-                      minutes={user ? day?.users.find((u) => u.userId === user._id) : undefined}
+                      minutes={user ? day?.users.find((u) => u.userId === user.id) : undefined}
                       unassignedMinutes={day?.unassignedMinutes ?? 0}
                       onRemoveSlot={onRemoveSlot}
                     />
@@ -150,7 +150,7 @@ export function WeekTable({
       {weekTotals && (
         <p className="flex flex-wrap gap-2 border-t px-4 py-3 text-xs">
           {weekTotals.users.map((u) => {
-            const user = users.find((candidate) => candidate._id === u.userId);
+            const user = users.find((candidate) => candidate.id === u.userId);
             return (
               <span
                 key={u.userId}
@@ -198,7 +198,7 @@ function Cell({
   unassignedMinutes,
   onRemoveSlot,
 }: CellProps) {
-  const id = cellId(weekIndex, weekday, user?._id ?? null);
+  const id = cellId(weekIndex, weekday, user?.id ?? null);
   const { setNodeRef, isOver } = useDroppable({ id });
   const items = slots
     .map((slot, index) => ({ slot, index }))
@@ -206,7 +206,7 @@ function Cell({
       ({ slot }) =>
         slot.weekIndex === weekIndex &&
         slot.weekday === weekday &&
-        slot.assigneeId === (user?._id ?? null),
+        slot.assigneeId === (user?.id ?? null),
     );
   const visibleItems = items.filter(({ slot }) =>
     matchesTaskName(taskById.get(slot.taskId)?.name ?? slot.taskId, searchTerm),

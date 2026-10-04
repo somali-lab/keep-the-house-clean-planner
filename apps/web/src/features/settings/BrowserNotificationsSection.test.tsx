@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ANNA, BRAM, makeUser, mockApi, storeProfile } from '../../test/fixtures.ts';
+import { ANNA, BRAM, LIMITS, householdRoutes, makeUser, mockApi, problem, requestsTo, storeProfile } from '../../test/fixtures.ts';
 import { makeSettings, renderWithProviders } from '../../test/render.tsx';
 import { BrowserNotificationsSection } from './BrowserNotificationsSection.tsx';
 
@@ -34,16 +34,18 @@ function stubNotification() {
 
 const member = makeUser({ ...BRAM, browserNotifications: { enabled: true, times: ['18:30', '08:00'] } });
 
-function setup(profile = member) {
-  storeProfile(profile._id);
+function setup(profile = member, put: (user: typeof member) => unknown = (user) => ({ ...user, version: user.version + 1 })) {
+  storeProfile(profile.id);
+  const users = profile.id === ANNA.id ? [{ ...ANNA, version: 5 }, { ...BRAM, version: 2 }] : [{ ...ANNA, version: 5 }, profile];
   return mockApi({
-    '/api/users': profile._id === ANNA._id ? [ANNA, BRAM] : [ANNA, profile],
-    '/api/settings': makeSettings(),
-    [`PUT /api/users/${BRAM._id}/browser-notifications`]: (init: RequestInit) => ({ ...member, browserNotifications: JSON.parse(String(init.body)) }),
-    [`PUT /api/users/${ANNA._id}/browser-notifications`]: (init: RequestInit) => ({ ...ANNA, browserNotifications: JSON.parse(String(init.body)) }),
+    ...householdRoutes(users, makeSettings()),
+    '/api/v2/meta/limits': LIMITS,
+    [`PUT /api/v2/users/${BRAM.id}/browser-notifications`]: put(users.find((user) => user.id === BRAM.id) ?? member),
+    [`PUT /api/v2/users/${ANNA.id}/browser-notifications`]: put(users.find((user) => user.id === ANNA.id)!),
   });
 }
 
+/** The saves a mock received, as [url, body]. */
 const puts = (fetchMock: ReturnType<typeof mockApi>) =>
   fetchMock.mock.calls
     .filter(([, init]) => (init as RequestInit | undefined)?.method === 'PUT')
@@ -85,10 +87,32 @@ describe('BrowserNotificationsSection moments', () => {
 
     await waitFor(() =>
       expect(puts(fetchMock)).toEqual([
-        [`/api/users/${BRAM._id}/browser-notifications`, { enabled: true, times: ['07:15', '18:30'] }],
+        [`/api/v2/users/${BRAM.id}/browser-notifications`, { enabled: true, times: ['07:15', '18:30'] }],
       ]),
     );
     expect(await screen.findByRole('status')).toHaveTextContent('Opgeslagen.');
+  });
+
+  it('sends the version of the person as If-Match, and the whole setting as the body', async () => {
+    const fetchMock = setup(makeUser({ ...BRAM, version: 8, browserNotifications: { enabled: true, times: ['08:00'] } }));
+    renderWithProviders(<BrowserNotificationsSection />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Opslaan' }));
+    await waitFor(() => expect(requestsTo(fetchMock, 'PUT', `/api/v2/users/${BRAM.id}/browser-notifications`)).toHaveLength(1));
+    const [request] = requestsTo(fetchMock, 'PUT', `/api/v2/users/${BRAM.id}/browser-notifications`);
+    expect(request!.body).toEqual({ enabled: true, times: ['08:00'] });
+    expect(request!.headers['if-match']).toBe('"8"');
+  });
+
+  it('keeps the edited moments and says so when the person changed in the meantime (412)', async () => {
+    setup(makeUser({ ...BRAM, browserNotifications: { enabled: true, times: ['08:00'] } }), () =>
+      problem(412, 'precondition_failed', 'The person changed.'),
+    );
+    renderWithProviders(<BrowserNotificationsSection />);
+    fireEvent.change(await screen.findByLabelText('Nieuwe tijd'), { target: { value: '09:30' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Tijd toevoegen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Opslaan' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Deze gegevens zijn intussen door iemand anders gewijzigd');
+    expect(within(screen.getByRole('list', { name: 'Gekozen tijden' })).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['08:00', '09:30']);
   });
 
   it('explains an empty, duplicate or surplus time without saving', async () => {
@@ -131,7 +155,7 @@ describe('BrowserNotificationsSection moments', () => {
     fireEvent.change(await screen.findByLabelText('Nieuwe tijd'), { target: { value: '07:00' } });
     fireEvent.click(screen.getByRole('button', { name: 'Opslaan' }));
     await waitFor(() =>
-      expect(puts(fetchMock)).toEqual([[`/api/users/${BRAM._id}/browser-notifications`, { enabled: true, times: ['07:00', '08:00'] }]]),
+      expect(puts(fetchMock)).toEqual([[`/api/v2/users/${BRAM.id}/browser-notifications`, { enabled: true, times: ['07:00', '08:00'] }]]),
     );
     expect(within(screen.getByRole('list', { name: 'Gekozen tijden' })).getAllByRole('listitem')).toHaveLength(2);
   });
@@ -164,7 +188,7 @@ describe('BrowserNotificationsSection moments', () => {
   it("says whose times were saved when an administrator edits another person", async () => {
     setup(ANNA);
     renderWithProviders(<BrowserNotificationsSection />);
-    fireEvent.change(await screen.findByLabelText('Instellen voor'), { target: { value: BRAM._id } });
+    fireEvent.change(await screen.findByLabelText('Instellen voor'), { target: { value: BRAM.id } });
     fireEvent.click(screen.getByRole('button', { name: 'Opslaan' }));
     expect(await screen.findByRole('status')).toHaveTextContent('Opgeslagen voor Bram de Vries.');
   });
@@ -174,15 +198,15 @@ describe('BrowserNotificationsSection moments', () => {
     renderWithProviders(<BrowserNotificationsSection />);
     const picker = await screen.findByLabelText('Instellen voor');
     expect(within(picker).getAllByRole('option').map((o) => o.textContent)).toEqual(['Anna', 'Bram de Vries']);
-    expect(picker).toHaveValue(ANNA._id);
+    expect(picker).toHaveValue(ANNA.id);
 
-    fireEvent.change(picker, { target: { value: BRAM._id } });
+    fireEvent.change(picker, { target: { value: BRAM.id } });
     fireEvent.change(screen.getByLabelText('Nieuwe tijd'), { target: { value: '09:00' } });
     fireEvent.click(screen.getByRole('button', { name: 'Tijd toevoegen' }));
     fireEvent.click(screen.getByRole('button', { name: 'Opslaan' }));
 
     await waitFor(() => expect(puts(fetchMock)).toHaveLength(1));
-    expect(puts(fetchMock)[0]).toEqual([`/api/users/${BRAM._id}/browser-notifications`, { enabled: false, times: ['09:00'] }]);
+    expect(puts(fetchMock)[0]).toEqual([`/api/v2/users/${BRAM.id}/browser-notifications`, { enabled: false, times: ['09:00'] }]);
   });
 });
 

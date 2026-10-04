@@ -1,5 +1,4 @@
-import { MAX_BROWSER_NOTIFICATION_TIMES, type User } from '@huishoudplanner/shared';
-import { isTimeOfDay } from '@huishoudplanner/shared/time';
+import { isTimeOfDay } from '@/lib/timeOfDay';
 import { Bell, BellOff, BellRing, Clock, Plus, Save, X, type LucideIcon } from 'lucide-react';
 import { useEffect, useId, useState, type FormEvent } from 'react';
 import { NativeSelect } from '@/components/NativeSelect';
@@ -7,7 +6,9 @@ import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useSettings } from '../../api/queries.ts';
+import { isStaleEntity } from '../../api/index.ts';
+import { useSettings, type User } from '../../api/v2/household.ts';
+import { FALLBACK_LIMITS, useLimits } from '../../api/v2/queries.ts';
 import { format, t, type MessageKey } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
 import { useSaveBrowserNotifications } from '../notifications/api.ts';
@@ -33,11 +34,12 @@ export function BrowserNotificationsSection() {
   const idPrefix = useId();
   const { profile, activeUsers } = useProfile();
   const settings = useSettings();
+  const maxTimes = (useLimits().data?.notifications ?? FALLBACK_LIMITS.notifications).maxBrowserTimes;
   const [personId, setPersonId] = useState<string | null>(null);
   if (!profile) return null;
 
   const isAdmin = profile.role === 'admin';
-  const person = (isAdmin ? activeUsers.find((user) => user._id === personId) : undefined) ?? profile;
+  const person = (isAdmin ? activeUsers.find((user) => user.id === personId) : undefined) ?? profile;
 
   return (
     <div className="flex max-w-3xl flex-col gap-6">
@@ -48,22 +50,22 @@ export function BrowserNotificationsSection() {
           title={t('settings.notifications.times')}
           description={format('settings.notifications.timesHelp', {
             timezone: settings.data?.timezone ?? '',
-            max: MAX_BROWSER_NOTIFICATION_TIMES,
+            max: maxTimes,
           })}
         />
         {isAdmin && (
           <Field>
             <Label htmlFor={`${idPrefix}-person`}>{t('settings.notifications.person')}</Label>
-            <NativeSelect id={`${idPrefix}-person`} value={person._id} onChange={(event) => setPersonId(event.target.value)}>
+            <NativeSelect id={`${idPrefix}-person`} value={person.id} onChange={(event) => setPersonId(event.target.value)}>
               {activeUsers.map((user) => (
-                <option key={user._id} value={user._id}>
+                <option key={user.id} value={user.id}>
                   {user.name}
                 </option>
               ))}
             </NativeSelect>
           </Field>
         )}
-        <MomentsForm key={person._id} user={person} />
+        <MomentsForm key={person.id} user={person} maxTimes={maxTimes} />
         <p className="text-sm text-muted-foreground">{t('settings.notifications.separate')}</p>
       </section>
       <DevicePermission />
@@ -71,11 +73,11 @@ export function BrowserNotificationsSection() {
   );
 }
 
-function MomentsForm({ user }: { user: User }) {
+function MomentsForm({ user, maxTimes }: { user: User; maxTimes: number }) {
   const idPrefix = useId();
   const { profile } = useProfile();
   const save = useSaveBrowserNotifications();
-  const stored = user.browserNotifications ?? { enabled: false, times: [] };
+  const stored = user.browserNotifications;
   const [enabled, setEnabled] = useState(stored.enabled);
   const [times, setTimes] = useState<string[]>([...stored.times].sort());
   const [draft, setDraft] = useState('');
@@ -88,7 +90,7 @@ function MomentsForm({ user }: { user: User }) {
       ? 'settings.notifications.timeInvalid'
       : times.includes(draft)
         ? 'settings.notifications.timeDuplicate'
-        : times.length >= MAX_BROWSER_NOTIFICATION_TIMES
+        : times.length >= maxTimes
           ? 'settings.notifications.timeMax'
           : null;
     setDraftError(problem);
@@ -116,11 +118,11 @@ function MomentsForm({ user }: { user: User }) {
       setDraft('');
       setDraftError(null);
     }
-    save.mutate({ userId: user._id, settings: { enabled, times: toSave } });
+    save.mutate({ user, settings: { enabled, times: toSave } });
   };
 
   const savedMessage =
-    user._id === profile?._id ? t('settings.saved') : format('settings.notifications.savedFor', { name: user.name });
+    user.id === profile?.id ? t('settings.saved') : format('settings.notifications.savedFor', { name: user.name });
 
   return (
     <form className="flex flex-col gap-4" onSubmit={submit} noValidate aria-label={t('settings.notifications.times')}>
@@ -183,17 +185,17 @@ function MomentsForm({ user }: { user: User }) {
             }}
           />
         </Field>
-        <Button type="button" variant="outline" onClick={addTime} disabled={times.length >= MAX_BROWSER_NOTIFICATION_TIMES}>
+        <Button type="button" variant="outline" onClick={addTime} disabled={times.length >= maxTimes}>
           <Plus aria-hidden="true" />
           {t('settings.notifications.addTime')}
         </Button>
       </div>
       {draftError && (
         <div id={errorId}>
-          <FormMessage kind="alert">{format(draftError, { max: MAX_BROWSER_NOTIFICATION_TIMES })}</FormMessage>
+          <FormMessage kind="alert">{format(draftError, { max: maxTimes })}</FormMessage>
         </div>
       )}
-      {save.isError && <FormMessage kind="alert">{t('app.error')}</FormMessage>}
+      {save.isError && <FormMessage kind="alert">{isStaleEntity(save.error) ? t('app.staleEntity') : t('app.error')}</FormMessage>}
       {save.isSuccess && <FormMessage kind="status">{savedMessage}</FormMessage>}
       <FormActions>
         <Button type="submit" disabled={save.isPending}>

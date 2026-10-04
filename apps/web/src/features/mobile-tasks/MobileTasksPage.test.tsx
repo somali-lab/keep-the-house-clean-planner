@@ -19,10 +19,10 @@ const VACUUM = makeTaskV2({ id: 't1', name: 'Stofzuigen', roomId: LIVING.id });
 const BEDDING = makeTaskV2({ id: 't2', name: 'Beddengoed', roomId: BEDROOM.id });
 
 const planned: Occurrence[] = [
-  makeOccurrenceV2({ id: 'o1', taskId: VACUUM.id, taskNameSnapshot: VACUUM.name, date: '2026-09-16', assigneeId: ANNA._id }),
-  makeOccurrenceV2({ id: 'o2', taskId: VACUUM.id, taskNameSnapshot: VACUUM.name, date: '2026-09-23', assigneeId: ANNA._id }),
-  makeOccurrenceV2({ id: 'o3', taskId: VACUUM.id, taskNameSnapshot: VACUUM.name, date: '2026-09-30', assigneeId: ANNA._id }),
-  makeOccurrenceV2({ id: 'o4', taskId: VACUUM.id, taskNameSnapshot: VACUUM.name, date: '2026-10-07', assigneeId: ANNA._id }),
+  makeOccurrenceV2({ id: 'o1', taskId: VACUUM.id, taskNameSnapshot: VACUUM.name, date: '2026-09-16', assigneeId: ANNA.id }),
+  makeOccurrenceV2({ id: 'o2', taskId: VACUUM.id, taskNameSnapshot: VACUUM.name, date: '2026-09-23', assigneeId: ANNA.id }),
+  makeOccurrenceV2({ id: 'o3', taskId: VACUUM.id, taskNameSnapshot: VACUUM.name, date: '2026-09-30', assigneeId: ANNA.id }),
+  makeOccurrenceV2({ id: 'o4', taskId: VACUUM.id, taskNameSnapshot: VACUUM.name, date: '2026-10-07', assigneeId: ANNA.id }),
   makeOccurrenceV2({ id: 'o5', taskId: BEDDING.id, taskNameSnapshot: BEDDING.name, date: '2026-09-18' }),
 ];
 const assignedToSomeoneElse = makeOccurrenceV2({
@@ -30,14 +30,14 @@ const assignedToSomeoneElse = makeOccurrenceV2({
   taskId: BEDDING.id,
   taskNameSnapshot: BEDDING.name,
   date: '2026-09-19',
-  assigneeId: BRAM._id,
+  assigneeId: BRAM.id,
 });
 
 function setup(routes: Record<string, unknown> = {}) {
-  storeProfile(ANNA._id);
+  storeProfile(ANNA.id);
   return mockApi({
-    '/api/users': [ANNA, BRAM],
-    '/api/settings': makeSettings(),
+    '/api/v2/users': page([ANNA, BRAM]),
+    '/api/v2/settings': makeSettings(),
     '/api/v2/rooms': page([LIVING, BEDROOM]),
     '/api/v2/tasks': page([VACUUM, BEDDING]),
     ...v2Basics(),
@@ -163,7 +163,7 @@ describe('MobileTasksPage', () => {
     expect(await screen.findByRole('button', { name: '1 week' })).toHaveAttribute('aria-pressed', 'true');
   });
   it('opens the Extra Task dialog from the header, on already done, and shows a planned task in its dated block', async () => {
-    const created = makeOccurrenceV2({ id: 'o-new', taskId: BEDDING.id, taskNameSnapshot: BEDDING.name, date: '2026-09-17', assigneeId: ANNA._id, origin: 'adhoc' });
+    const created = makeOccurrenceV2({ id: 'o-new', taskId: BEDDING.id, taskNameSnapshot: BEDDING.name, date: '2026-09-17', assigneeId: ANNA.id, origin: 'adhoc' });
     const fetchMock = setup({
       'POST /api/v2/occurrences': () => {
         planned.push(created);
@@ -184,7 +184,7 @@ describe('MobileTasksPage', () => {
       await waitFor(() => expect(within(task).getAllByRole('option')).toHaveLength(3));
       fireEvent.change(task, { target: { value: BEDDING.id } });
       fireEvent.change(within(dialog).getByLabelText('Datum'), { target: { value: '2026-09-17' } });
-      fireEvent.change(within(dialog).getByLabelText('Voor wie'), { target: { value: ANNA._id } });
+      fireEvent.change(within(dialog).getByLabelText('Voor wie'), { target: { value: ANNA.id } });
       fireEvent.click(within(dialog).getByRole('button', { name: 'Inplannen' }));
 
       await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());

@@ -32,8 +32,8 @@ function stubServer() {
     if (method === 'GET') {
       const path = url.split('?')[0]!;
       const routes: Record<string, unknown> = {
-        '/api/users': [ANNA, BRAM],
-        '/api/settings': makeSettings(),
+        '/api/v2/users': page([ANNA, BRAM]),
+        '/api/v2/settings': makeSettings(),
         '/api/rooms': [],
         '/api/tasks': [],
         '/api/v2/occurrences': page(db),
@@ -81,18 +81,18 @@ const inSection = (name: string, text: string) =>
 
 const queuedBadkamer = () => ({
   action: { id: 'o-mine', kind: 'complete' as const },
-  profileId: ANNA._id,
+  profileId: ANNA.id,
   taskName: 'Badkamer',
   queuedAt: '2026-09-16T07:00:00.000Z',
 });
 
 describe('offline check-off', () => {
   beforeEach(() => {
-    storeProfile(ANNA._id);
+    storeProfile(ANNA.id);
     mode = 'online';
     store = memoryStore();
     db = [
-      makeOccurrenceV2({ id: 'o-mine', taskId: 't2', taskNameSnapshot: 'Badkamer', date: TODAY, assigneeId: ANNA._id }),
+      makeOccurrenceV2({ id: 'o-mine', taskId: 't2', taskNameSnapshot: 'Badkamer', date: TODAY, assigneeId: ANNA.id }),
       makeOccurrenceV2({ id: 'o-free', taskId: 't4', taskNameSnapshot: 'Wastafel', date: TODAY, assigneeId: null }),
     ];
   });
@@ -107,11 +107,11 @@ describe('offline check-off', () => {
     expect(await inSection('Afgerond', 'Badkamer')).toBeInTheDocument();
     expect(await screen.findByText(PENDING_ONE)).toBeInTheDocument();
     expect(screen.queryByText('Dat lukte niet. De wijziging is teruggedraaid.')).not.toBeInTheDocument();
-    expect(await store.all()).toMatchObject([{ action: { id: 'o-mine', kind: 'complete' }, profileId: ANNA._id, taskName: 'Badkamer' }]);
+    expect(await store.all()).toMatchObject([{ action: { id: 'o-mine', kind: 'complete' }, profileId: ANNA.id, taskName: 'Badkamer' }]);
     expect(db.find((o) => o.id === 'o-mine')?.status).toBe('open');
 
     // Someone else picks up the phone before the connection returns.
-    storeProfile(BRAM._id);
+    storeProfile(BRAM.id);
     mode = 'online';
     await act(async () => {
       window.dispatchEvent(new Event('online'));
@@ -119,10 +119,10 @@ describe('offline check-off', () => {
 
     await waitFor(() => expect(db.find((o) => o.id === 'o-mine')?.status).toBe('done'));
     const sent = (await patchCalls(fetchMock)).at(-1)!;
-    expect((sent.init!.headers as Record<string, string>)['x-profile-id']).toBe(ANNA._id);
+    expect((sent.init!.headers as Record<string, string>)['x-profile-id']).toBe(ANNA.id);
     // Optional fields are left out, not sent as null: the server refuses an explicit null.
     expect(sent.init!.body).toBe('{}');
-    expect(db.find((o) => o.id === 'o-mine')?.completedBy).toBe(ANNA._id);
+    expect(db.find((o) => o.id === 'o-mine')?.completedBy).toBe(ANNA.id);
     await waitFor(() => expect(screen.queryByText(PENDING_ONE)).not.toBeInTheDocument());
     expect(await store.all()).toEqual([]);
   });

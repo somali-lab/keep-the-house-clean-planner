@@ -16,11 +16,11 @@ const DRAFT = makePlanV2({
 });
 
 function setup(aiType: 'none' | 'mock', extra: Record<string, unknown> = {}) {
-  storeProfile(ANNA._id);
+  storeProfile(ANNA.id);
   const plans = [ACTIVE, DRAFT];
   return mockApi({
-    '/api/users': [ANNA, BRAM],
-    '/api/settings': makeSettings({ aiProvider: { type: aiType } }),
+    '/api/v2/users': page([ANNA, BRAM]),
+    '/api/v2/settings': makeSettings({ aiProvider: { type: aiType, endpoint: null, model: null, timeoutSeconds: null } }),
     '/api/v2/rooms': page([makeRoomV2({ id: 'r1', name: 'Keuken' })]),
     '/api/v2/cycle-plans': () => page(plans),
     'POST /api/v2/ai/propose-plan': { planId: 'p-draft', proposalId: 'prop-1', warnings: [], rationale: DRAFT.rationale },

@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { ANNA, BRAM, mockApi, problem, storeProfile } from '../../test/fixtures.ts';
+import { ANNA, BRAM, mockApi, problem, storeProfile, page } from '../../test/fixtures.ts';
 import { renderWithProviders } from '../../test/render.tsx';
 import type { PromoteSuggestion } from './api.ts';
 import { PromoteBanner } from './PromoteBanner.tsx';
@@ -9,15 +9,15 @@ const SUGGESTION: PromoteSuggestion = {
   planId: 'p1',
   taskId: 't1',
   taskName: 'Badkamer',
-  fromSlot: { weekIndex: 1, weekday: 2, assigneeId: ANNA._id },
+  fromSlot: { weekIndex: 1, weekday: 2, assigneeId: ANNA.id },
   toWeekday: 3,
   toAssigneeId: null,
   evidence: ['o2', 'o1'],
 };
 
 function setup(suggestions: PromoteSuggestion[], extra: Record<string, unknown> = {}) {
-  storeProfile(ANNA._id);
-  return mockApi({ '/api/users': [ANNA, BRAM], '/api/v2/promote-suggestions': { items: suggestions }, ...extra });
+  storeProfile(ANNA.id);
+  return mockApi({ '/api/v2/users': page([ANNA, BRAM]), '/api/v2/promote-suggestions': { items: suggestions }, ...extra });
 }
 
 const bodyOf = (fetchMock: ReturnType<typeof mockApi>, url: string) => {
@@ -33,7 +33,7 @@ describe('PromoteBanner', () => {
   });
 
   it('mentions the other person when the moves also changed who does it', async () => {
-    setup([{ ...SUGGESTION, toWeekday: 4, toAssigneeId: BRAM._id }]);
+    setup([{ ...SUGGESTION, toWeekday: 4, toAssigneeId: BRAM.id }]);
     renderWithProviders(<PromoteBanner />);
     expect(
       await screen.findByText('Je verplaatst ‘Badkamer’ steeds van dinsdag naar donderdag, en Bram de Vries doet hem. Plan aanpassen?'),
@@ -51,7 +51,7 @@ describe('PromoteBanner', () => {
   });
 
   it('applies a suggestion that also changes the person, with that person in the body', async () => {
-    const fetchMock = setup([{ ...SUGGESTION, toAssigneeId: BRAM._id }], { 'POST /api/v2/promote-suggestions/apply': { plan: {}, warnings: [] } });
+    const fetchMock = setup([{ ...SUGGESTION, toAssigneeId: BRAM.id }], { 'POST /api/v2/promote-suggestions/apply': { plan: {}, warnings: [] } });
     renderWithProviders(<PromoteBanner />);
     fireEvent.click(await screen.findByRole('button', { name: 'Plan aanpassen' }));
     await waitFor(() =>
@@ -61,7 +61,7 @@ describe('PromoteBanner', () => {
         weekIndex: 1,
         weekday: 2,
         toWeekday: 3,
-        toAssigneeId: BRAM._id,
+        toAssigneeId: BRAM.id,
       }),
     );
   });

@@ -1,7 +1,7 @@
 import { toDayKey } from '@huishoudplanner/shared/time';
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
-import { useSettings } from '../../api/queries.ts';
+import { useSettings } from '../../api/v2/household.ts';
 import { useProfile } from '../../identity/index.ts';
 import { fetchOpenOccurrences } from './api.ts';
 import { getPermissionState, showNotification, type PermissionState } from './browserNotification.ts';
@@ -127,5 +127,5 @@ export function BrowserNotificationHost() {
   const { enabled = false, times = [] } = profile?.browserNotifications ?? {};
   if (!profile || !enabled || times.length === 0) return null;
   if (permission !== 'granted' && permission !== 'default') return null;
-  return <Scheduler key={profile._id} personId={profile._id} times={times} />;
+  return <Scheduler key={profile.id} personId={profile.id} times={times} />;
 }

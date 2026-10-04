@@ -1,6 +1,6 @@
 import { fireEvent, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ANNA, BRAM, mockApi, storeProfile } from '../../test/fixtures.ts';
+import { ANNA, BRAM, mockApi, storeProfile, page } from '../../test/fixtures.ts';
 import { makeSettings, renderWithProviders } from '../../test/render.tsx';
 import { ExportDialog } from './ExportDialog.tsx';
 
@@ -22,8 +22,8 @@ const option = (label: string) =>
 
 describe('ExportDialog', () => {
   beforeEach(() => {
-    storeProfile(ANNA._id);
-    mockApi({ '/api/users': [ANNA, BRAM], '/api/settings': makeSettings(), '/api/cycles': CYCLES });
+    storeProfile(ANNA.id);
+    mockApi({ '/api/v2/users': page([ANNA, BRAM]), '/api/v2/settings': makeSettings(), '/api/cycles': CYCLES });
   });
 
   it('disables weeks that are not generated and explains why', async () => {
