@@ -12,6 +12,8 @@ interface AllocationOverviewProps {
   users: User[];
   rooms: Room[];
   intervals: Interval[];
+  /** The length of a cycle in days, from `GET /api/v2/meta/limits`. */
+  cycleDays: number;
   view: 'workload' | 'spacing';
 }
 
@@ -27,7 +29,6 @@ interface AllocationRow {
 }
 
 const UNASSIGNED_ID = 'any';
-const CYCLE_DAYS = 28;
 
 export interface SpacingRow {
   taskId: string;
@@ -50,6 +51,7 @@ export function spacingRows(
   tasks: Task[],
   intervals: Interval[],
   rooms: Room[],
+  cycleDays: number,
 ): SpacingRow[] {
   const requiredByInterval = new Map(
     intervals.map((interval) => [interval.key, interval.perCycle]),
@@ -62,7 +64,7 @@ export function spacingRows(
     if (required === null || required === undefined || required <= 1) return [];
 
     const taskSlots = slots.filter((slot) => slot.taskId === task.id);
-    const ideal = CYCLE_DAYS / required;
+    const ideal = cycleDays / required;
     const expectedGap = gapText(Math.floor(ideal), Math.ceil(ideal));
     if (taskSlots.length !== required) {
       return [
@@ -86,7 +88,7 @@ export function spacingRows(
       .sort((a, b) => a - b);
     const gaps = positions.map((position, index) => {
       const next = positions[(index + 1) % positions.length]!;
-      return index === positions.length - 1 ? next + CYCLE_DAYS - position : next - position;
+      return index === positions.length - 1 ? next + cycleDays - position : next - position;
     });
     const minimum = Math.min(...gaps);
     const maximum = Math.max(...gaps);
@@ -270,6 +272,7 @@ export function AllocationOverview({
   users,
   rooms,
   intervals,
+  cycleDays,
   view,
 }: AllocationOverviewProps) {
   const weeks = [0, 1, 2, 3].map((weekIndex) => ({
@@ -281,7 +284,7 @@ export function AllocationOverview({
     ),
   }));
   const cycleRows = allocationRows(slots, tasks, users, 4);
-  const cadence = spacingRows(slots, tasks, intervals, rooms);
+  const cadence = spacingRows(slots, tasks, intervals, rooms, cycleDays);
   const titleId =
     view === 'workload'
       ? 'planner-distribution-workload-title'

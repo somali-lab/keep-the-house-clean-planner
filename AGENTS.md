@@ -84,7 +84,7 @@ Empty these documents as part of finishing the work, and report anything left in
 - All MongoDB writes belong in `apps/server/src/data/`. Every actual state change must have a corresponding audit entry; no-op updates write and audit nothing.
 - A selected profile is attribution, not authentication. Keep the documented trusted-network warning. Enforce existing role guards (`requirePlanner`, `requireAdmin`) on protected write routes.
 - Do not expose configuration values in validation errors or logs. Never commit `.env`, tokens, database dumps, backups, or generated reports.
-- Web runtime values from shared modules should use focused subpath imports. Type-only imports may use `@huishoudplanner/shared`.
+- `apps/web` does not import `@huishoudplanner/shared`; it talks to the v2 API only (types in `src/api/v2/schema.d.ts`) and keeps pure day-key helpers in `src/lib/dayKey.ts`. The package stays for `apps/server` and the golden vectors until phase 8.4.
 - User-facing text goes through the existing i18n helpers and must be added to both Dutch and English catalogs.
 - UI changes must work in mobile and desktop layouts, remain keyboard accessible, and not rely on color alone.
 

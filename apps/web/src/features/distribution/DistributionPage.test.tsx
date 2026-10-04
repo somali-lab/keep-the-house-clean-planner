@@ -1,7 +1,7 @@
 import type { CyclePlan, PlanSlot } from '../planner/api.ts';
 import { fireEvent, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { makeUser, mockApi, storeProfile, page } from '../../test/fixtures.ts';
+import { makeUser, mockApi, storeProfile, page, v2Basics, LIMITS } from '../../test/fixtures.ts';
 import { makeRoomV2, makeSettings, makeTaskV2, renderWithProviders } from '../../test/render.tsx';
 import { DistributionPage } from './DistributionPage.tsx';
 
@@ -43,6 +43,7 @@ describe('DistributionPage', () => {
   it('keeps the selected plan after remount and offers a reset', async () => {
     storeProfile(ANNA.id);
     mockApi({
+      ...v2Basics(),
       '/api/v2/users': page([ANNA]),
       '/api/v2/tasks': page([]),
       '/api/v2/rooms': page([]),
@@ -77,6 +78,7 @@ describe('DistributionPage', () => {
     });
     storeProfile(ANNA.id);
     mockApi({
+      ...v2Basics(),
       '/api/v2/users': page([ANNA, BRAM]),
       '/api/v2/tasks': page([weekly, small]),
       '/api/v2/rooms': page([makeRoomV2({ id: 'r1', name: 'Woonkamer' })]),
@@ -144,6 +146,7 @@ describe('DistributionPage', () => {
     });
     storeProfile(ANNA.id);
     mockApi({
+      ...v2Basics(),
       '/api/v2/users': page([ANNA]),
       '/api/v2/tasks': page([task]),
       '/api/v2/rooms': page([makeRoomV2({ id: 'r1', name: 'Woonkamer' })]),
@@ -174,6 +177,7 @@ describe('DistributionPage', () => {
     });
     storeProfile(ANNA.id);
     mockApi({
+      ...v2Basics(),
       '/api/v2/users': page([ANNA, BRAM]),
       '/api/v2/tasks': page([task]),
       '/api/v2/rooms': page([makeRoomV2({ id: 'r1', name: 'Keuken' })]),
@@ -192,9 +196,30 @@ describe('DistributionPage', () => {
     expect(spacing).toHaveTextContent('Goed verdeeld');
   });
 
+  it('takes the length of the cycle from the server limits when it judges the spacing', async () => {
+    const task = makeTaskV2({ id: 't1', name: 'Koelkast schoonmaken', roomId: 'r1', intervalKey: '2wk', durationMinutes: 25 });
+    storeProfile(ANNA.id);
+    mockApi({
+      ...v2Basics(),
+      '/api/v2/meta/limits': { ...LIMITS, calendar: { ...LIMITS.calendar, cycleDays: 14 } },
+      '/api/v2/users': page([ANNA]),
+      '/api/v2/tasks': page([task]),
+      '/api/v2/rooms': page([makeRoomV2({ id: 'r1', name: 'Keuken' })]),
+      '/api/v2/settings': makeSettings(),
+      '/api/v2/cycle-plans': page([plan([slot('t1', 0, 1, ANNA.id), slot('t1', 2, 1, ANNA.id)])]),
+    });
+    renderWithProviders(<DistributionPage />, { route: '/distribution?tab=spacing' });
+
+    const spacing = await screen.findByRole('region', { name: 'Spreiding over de cyclus' });
+    // 14 days per cycle over 2 placements is a wish of 7 days; with 28 days it would read 14.
+    expect(spacing).toHaveTextContent('Gewenst: ongeveer elke 7 dagen');
+    expect(spacing).toHaveTextContent('Kan gelijkmatiger');
+  });
+
   it('reads the plans, tasks and rooms from /api/v2, hides discarded plans and ignores inactive tasks', async () => {
     storeProfile(ANNA.id);
     const fetchMock = mockApi({
+      ...v2Basics(),
       '/api/v2/users': page([ANNA]),
       '/api/v2/tasks': page([
         makeTaskV2({ id: 't1', name: 'Actief', roomId: 'r1', durationMinutes: 20 }),

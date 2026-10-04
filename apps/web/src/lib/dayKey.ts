@@ -36,6 +36,12 @@ export function addDays(dayKey: string, days: number): string {
   return new Date(parse(dayKey) + days * DAY_MS).toISOString().slice(0, 10);
 }
 
+/** The Monday of the week of a day key (weeks start on Monday). A pure day-key string helper, no calendar rule of the household. */
+export function mondayOfDay(dayKey: string): string {
+  const weekday = new Date(parse(dayKey)).getUTCDay();
+  return addDays(dayKey, -((weekday + 6) % 7));
+}
+
 /** Whole calendar days from `from` to `to` (negative when `to` is earlier). */
 export function daysBetween(from: string, to: string): number {
   return Math.round((parse(to) - parse(from)) / DAY_MS);

@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ANNA, BRAM, mockApi, storeProfile, page } from '../../test/fixtures.ts';
+import { ANNA, BRAM, mockApi, storeProfile, page, v2Basics } from '../../test/fixtures.ts';
 import { makeSettings, renderWithProviders } from '../../test/render.tsx';
 import { applyLanguage } from '../../i18n/runtime.ts';
 import { ExportDialog } from './ExportDialog.tsx';
@@ -24,7 +24,7 @@ const option = (label: string) =>
 describe('ExportDialog', () => {
   beforeEach(() => {
     storeProfile(ANNA.id);
-    mockApi({ '/api/v2/users': page([ANNA, BRAM]), '/api/v2/settings': makeSettings(), '/api/v2/cycles': page(CYCLES) });
+    mockApi({ ...v2Basics(), '/api/v2/users': page([ANNA, BRAM]), '/api/v2/settings': makeSettings(), '/api/v2/cycles': page(CYCLES) });
   });
 
   it('disables weeks that are not generated and explains why', async () => {
@@ -91,6 +91,7 @@ describe('ExportDialog', () => {
 
   it('reads every page of the generated cycles and offers the weeks of the later pages', async () => {
     const fetchMock = mockApi({
+      ...v2Basics(),
       '/api/v2/users': page([ANNA, BRAM]),
       '/api/v2/settings': makeSettings(),
       '/api/v2/cycles': (_init: RequestInit | undefined, url: string) =>

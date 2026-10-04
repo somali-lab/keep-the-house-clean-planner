@@ -6,7 +6,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { panelTabsListClass, panelTabsTriggerClass, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useRooms, useTasks } from '../../api/v2/queries.ts';
+import { useLimits, useRooms, useTasks } from '../../api/v2/queries.ts';
 import { useSettings } from '../../api/v2/household.ts';
 import { t } from '../../i18n/nl.ts';
 import { useProfile } from '../../identity/index.ts';
@@ -19,19 +19,20 @@ export function DistributionPage() {
   const tasks = useTasks();
   const rooms = useRooms();
   const settings = useSettings();
+  const limits = useLimits();
   const { activeUsers, profile } = useProfile();
   const [selectedPlanId, setSelectedPlanId, resetPlan] = usePersistedFilter<string | null>('distribution.plan', profile?.id ?? null, null);
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedTab = searchParams.get('tab') === 'spacing' ? 'spacing' : 'workload';
 
-  if (plans.isPending || tasks.isPending || rooms.isPending || settings.isPending) {
+  if (plans.isPending || tasks.isPending || rooms.isPending || settings.isPending || limits.isPending) {
     return (
       <p role="status" className="text-muted-foreground">
         {t('app.loading')}
       </p>
     );
   }
-  if (plans.isError || tasks.isError || rooms.isError || settings.isError) {
+  if (plans.isError || tasks.isError || rooms.isError || settings.isError || limits.isError) {
     return (
       <p role="alert" className="rounded-xl bg-destructive/10 p-4 text-destructive">
         {t('app.error')}
@@ -94,6 +95,7 @@ export function DistributionPage() {
               users={activeUsers}
               rooms={rooms.data}
               intervals={settings.data.intervals}
+              cycleDays={limits.data.calendar.cycleDays}
               view="workload"
             />
           </TabsContent>
@@ -104,6 +106,7 @@ export function DistributionPage() {
               users={activeUsers}
               rooms={rooms.data}
               intervals={settings.data.intervals}
+              cycleDays={limits.data.calendar.cycleDays}
               view="spacing"
             />
           </TabsContent>

@@ -1,28 +1,9 @@
 import type { Language } from '../../i18n/runtime.ts';
 import { addDays } from '@/lib/dayKey';
+import type { CalendarDay } from '../../api/v2/queries.ts';
 import type { Cycle } from './api.ts';
 
 type CycleRange = Pick<Cycle, 'startDate' | 'endDate'>;
-
-function utcDate(dayKey: string): Date {
-  const [y, m, d] = dayKey.split('-').map(Number) as [number, number, number];
-  return new Date(Date.UTC(y, m - 1, d));
-}
-
-/** ISO week label ('2026-W38') of a day key, without a date library in the bundle. */
-export function isoWeekLabel(dayKey: string): string {
-  const date = utcDate(dayKey);
-  const weekday = date.getUTCDay() || 7;
-  date.setUTCDate(date.getUTCDate() + 4 - weekday); // Thursday decides the ISO year
-  const yearStart = Date.UTC(date.getUTCFullYear(), 0, 1);
-  const week = Math.ceil(((date.getTime() - yearStart) / 86_400_000 + 1) / 7);
-  return `${date.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
-}
-
-export function mondayOfDay(dayKey: string): string {
-  const weekday = utcDate(dayKey).getUTCDay();
-  return addDays(dayKey, -((weekday + 6) % 7));
-}
 
 export function isGenerated(dayKey: string, cycles: CycleRange[]): boolean {
   return cycles.some((c) => c.startDate <= dayKey && dayKey <= c.endDate);
@@ -36,13 +17,23 @@ export interface WeekOption {
 
 export const WEEK_OPTION_COUNT = 12;
 
-/** The current week and the following weeks, Monday-based. */
-export function weekOptions(todayKey: string, count = WEEK_OPTION_COUNT): WeekOption[] {
-  const first = mondayOfDay(todayKey);
+/** The first and last day the calendar has to answer for `weekOptions`: the Monday of the current week lies at most six days back. */
+export function weekOptionsRange(todayKey: string, count = WEEK_OPTION_COUNT): { from: string; to: string } {
+  return { from: addDays(todayKey, -6), to: addDays(todayKey, count * 7) };
+}
+
+/**
+ * The current week and the following weeks, Monday-based. The Monday of the week and the ISO week labels come from the
+ * server's calendar (`GET /api/v2/calendar`, range `weekOptionsRange`); a week the calendar does not know is left out.
+ */
+export function weekOptions(todayKey: string, calendar: ReadonlyMap<string, CalendarDay>, count = WEEK_OPTION_COUNT): WeekOption[] {
+  const first = calendar.get(todayKey)?.weekStart;
+  if (first === undefined) return [];
   return Array.from({ length: count }, (_, i) => {
     const monday = addDays(first, i * 7);
-    return { label: isoWeekLabel(monday), monday, sunday: addDays(monday, 6) };
-  });
+    const label = calendar.get(monday)?.isoWeek;
+    return label === undefined ? [] : [{ label, monday, sunday: addDays(monday, 6) }];
+  }).flat();
 }
 
 /** Every week of the range must lie in a generated cycle (cycles align with Monday-based weeks). */
