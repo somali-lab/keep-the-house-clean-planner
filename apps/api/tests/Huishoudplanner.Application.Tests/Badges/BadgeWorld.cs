@@ -4,6 +4,7 @@ using Huishoudplanner.Application.Tests.Rooms;
 using Huishoudplanner.Application.Tests.Tasks;
 using Huishoudplanner.Domain.Audit;
 using Huishoudplanner.Domain.Badges;
+using Huishoudplanner.Domain.Concurrency;
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Identity;
 using Huishoudplanner.Domain.Ports.Driven;
@@ -184,7 +185,7 @@ internal sealed class FakeBadgeStore : ForStoringBadges
         }
 
         Writes++;
-        var stored = new Badge(NextId(), badge.Name, badge.Description, badge.Rule, badge.Active, badge.ExampleKey, badge.Image?.Info, badge.CreatedAt, badge.CreatedAt);
+        var stored = new Badge(NextId(), badge.Name, badge.Description, badge.Rule, badge.Active, badge.ExampleKey, badge.Image?.Info, badge.CreatedAt, badge.CreatedAt, 1);
         Items.Add(stored);
         if (badge.Image is { } image)
         {
@@ -194,21 +195,27 @@ internal sealed class FakeBadgeStore : ForStoringBadges
         return Task.FromResult<OneOf<Badge, PortError>>(stored);
     }
 
-    public Task<OneOf<Badge, NotFound, PortError>> UpdateAsync(string id, BadgeChanges changes, DateTimeOffset updatedAt, CancellationToken cancellationToken)
+    public Task<OneOf<Badge, NotFound, PortError, PreconditionFailed>> UpdateAsync(
+        string id, BadgeChanges changes, DateTimeOffset updatedAt, CancellationToken cancellationToken, int? expectedVersion = null)
     {
         if (FailWrites)
         {
-            return Task.FromResult<OneOf<Badge, NotFound, PortError>>(new PortError("fake write failure"));
+            return Task.FromResult<OneOf<Badge, NotFound, PortError, PreconditionFailed>>(new PortError("fake write failure"));
         }
 
         var index = Items.FindIndex(b => b.Id == id);
         if (index < 0)
         {
-            return Task.FromResult<OneOf<Badge, NotFound, PortError>>(new NotFound());
+            return Task.FromResult<OneOf<Badge, NotFound, PortError, PreconditionFailed>>(new NotFound());
+        }
+
+        var current = Items[index];
+        if (EntityVersion.Check(expectedVersion, current.Version) is { } stale)
+        {
+            return Task.FromResult<OneOf<Badge, NotFound, PortError, PreconditionFailed>>(stale);
         }
 
         Writes++;
-        var current = Items[index];
         var updated = current with
         {
             Name = changes.Name ?? current.Name,
@@ -217,6 +224,7 @@ internal sealed class FakeBadgeStore : ForStoringBadges
             Active = changes.Active ?? current.Active,
             Image = changes.ClearImage ? null : changes.Image?.Info ?? current.Image,
             UpdatedAt = updatedAt,
+            Version = current.Version + 1,
         };
         if (changes.Image is { } image)
         {
@@ -228,24 +236,31 @@ internal sealed class FakeBadgeStore : ForStoringBadges
         }
 
         Items[index] = updated;
-        return Task.FromResult<OneOf<Badge, NotFound, PortError>>(updated);
+        return Task.FromResult<OneOf<Badge, NotFound, PortError, PreconditionFailed>>(updated);
     }
 
-    public Task<OneOf<Success, NotFound, PortError>> DeleteAsync(string id, CancellationToken cancellationToken)
+    public Task<OneOf<Success, NotFound, PortError, PreconditionFailed>> DeleteAsync(string id, CancellationToken cancellationToken, int? expectedVersion = null)
     {
         if (FailWrites)
         {
-            return Task.FromResult<OneOf<Success, NotFound, PortError>>(new PortError("fake write failure"));
+            return Task.FromResult<OneOf<Success, NotFound, PortError, PreconditionFailed>>(new PortError("fake write failure"));
         }
 
-        if (Items.RemoveAll(b => b.Id == id) == 0)
+        var current = Items.FirstOrDefault(b => b.Id == id);
+        if (current is null)
         {
-            return Task.FromResult<OneOf<Success, NotFound, PortError>>(new NotFound());
+            return Task.FromResult<OneOf<Success, NotFound, PortError, PreconditionFailed>>(new NotFound());
         }
 
+        if (EntityVersion.Check(expectedVersion, current.Version) is { } stale)
+        {
+            return Task.FromResult<OneOf<Success, NotFound, PortError, PreconditionFailed>>(stale);
+        }
+
+        Items.RemoveAll(b => b.Id == id);
         Writes++;
         Images.Remove(id);
-        return Task.FromResult<OneOf<Success, NotFound, PortError>>(new Success());
+        return Task.FromResult<OneOf<Success, NotFound, PortError, PreconditionFailed>>(new Success());
     }
 }
 

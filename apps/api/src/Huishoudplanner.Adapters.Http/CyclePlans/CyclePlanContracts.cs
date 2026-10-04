@@ -31,7 +31,10 @@ public sealed record PlanSlotResponse(string TaskId, int WeekIndex, int Weekday,
     internal static PlanSlotResponse From(CyclePlanSlot slot) => new(slot.TaskId, slot.WeekIndex, slot.Weekday, slot.AssigneeId, slot.SortOrder);
 }
 
-/// <summary>A cycle plan as the API shows it. Exactly one plan is active; the oldest plan is the default plan.</summary>
+/// <summary>
+/// A cycle plan as the API shows it. Exactly one plan is active; the oldest plan is the default plan. <c>version</c> is the concurrency version of the plan
+/// (the number inside its ETag); it also rises when the plan is activated or deactivated.
+/// </summary>
 public sealed record CyclePlanResponse(
     string Id,
     string Name,
@@ -44,7 +47,8 @@ public sealed record CyclePlanResponse(
     IReadOnlyList<string>? Rationale,
     bool Discarded,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt)
+    DateTimeOffset UpdatedAt,
+    int Version)
 {
     internal static CyclePlanResponse From(CyclePlan plan) => new(
         plan.Id,
@@ -58,7 +62,8 @@ public sealed record CyclePlanResponse(
         plan.Rationale,
         plan.Discarded,
         plan.CreatedAt,
-        plan.UpdatedAt);
+        plan.UpdatedAt,
+        plan.Version);
 }
 
 /// <summary>One page of plans, oldest first; <see cref="NextCursor"/> is <c>null</c> on the last page.</summary>

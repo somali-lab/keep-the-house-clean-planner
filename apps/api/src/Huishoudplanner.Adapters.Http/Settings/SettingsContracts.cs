@@ -70,7 +70,8 @@ public sealed record SettingsResponse(
     int CentsPerPoint,
     RewardGoalsDto RewardGoals,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt)
+    DateTimeOffset UpdatedAt,
+    [property: System.ComponentModel.Description("The concurrency version of the settings (the number inside their ETag); send the ETag as If-Match when you change the settings.")] int Version)
 {
     public static SettingsResponse From(SettingsView view)
     {
@@ -98,7 +99,8 @@ public sealed record SettingsResponse(
             view.CentsPerPoint,
             new RewardGoalsDto(view.RewardGoals.WeekPoints, view.RewardGoals.CyclePoints),
             settings.CreatedAt,
-            settings.UpdatedAt);
+            settings.UpdatedAt,
+            settings.Version);
     }
 
     private static AiPromptTemplateDto Template(AiPromptTemplate template) => new(template.System, template.User);

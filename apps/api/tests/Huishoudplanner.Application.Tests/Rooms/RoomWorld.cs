@@ -1,6 +1,7 @@
 using Huishoudplanner.Application.Rooms;
 using Huishoudplanner.Application.Tests.Tasks;
 using Huishoudplanner.Domain.Audit;
+using Huishoudplanner.Domain.Concurrency;
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Identity;
 using Huishoudplanner.Domain.Ports.Driven;
@@ -136,26 +137,32 @@ internal sealed class FakeRooms : ForStoringRooms
         }
 
         Writes++;
-        var stored = new Room(NextId(), room.Name, room.SortOrder, room.Active, room.Virtual, room.CreatedAt, room.CreatedAt);
+        var stored = new Room(NextId(), room.Name, room.SortOrder, room.Active, room.Virtual, room.CreatedAt, room.CreatedAt, 1);
         Items.Add(stored);
         return Task.FromResult<OneOf<Room, PortError>>(stored);
     }
 
-    public Task<OneOf<Room, NotFound, PortError>> UpdateAsync(string id, RoomChanges changes, DateTimeOffset updatedAt, CancellationToken cancellationToken)
+    public Task<OneOf<Room, NotFound, PortError, PreconditionFailed>> UpdateAsync(
+        string id, RoomChanges changes, DateTimeOffset updatedAt, CancellationToken cancellationToken, int? expectedVersion = null)
     {
         if (FailWrites)
         {
-            return Task.FromResult<OneOf<Room, NotFound, PortError>>(new PortError("fake write failure"));
+            return Task.FromResult<OneOf<Room, NotFound, PortError, PreconditionFailed>>(new PortError("fake write failure"));
         }
 
         var index = Items.FindIndex(r => r.Id == id);
         if (index < 0)
         {
-            return Task.FromResult<OneOf<Room, NotFound, PortError>>(new NotFound());
+            return Task.FromResult<OneOf<Room, NotFound, PortError, PreconditionFailed>>(new NotFound());
+        }
+
+        var current = Items[index];
+        if (EntityVersion.Check(expectedVersion, current.Version) is { } stale)
+        {
+            return Task.FromResult<OneOf<Room, NotFound, PortError, PreconditionFailed>>(stale);
         }
 
         Writes++;
-        var current = Items[index];
         var updated = current with
         {
             Name = changes.Name ?? current.Name,
@@ -163,26 +170,33 @@ internal sealed class FakeRooms : ForStoringRooms
             Active = changes.Active ?? current.Active,
             Virtual = changes.Virtual ?? current.Virtual,
             UpdatedAt = updatedAt,
+            Version = current.Version + 1,
         };
         Items[index] = updated;
-        return Task.FromResult<OneOf<Room, NotFound, PortError>>(updated);
+        return Task.FromResult<OneOf<Room, NotFound, PortError, PreconditionFailed>>(updated);
     }
 
-    public Task<OneOf<Success, NotFound, PortError>> DeleteAsync(string id, CancellationToken cancellationToken)
+    public Task<OneOf<Success, NotFound, PortError, PreconditionFailed>> DeleteAsync(string id, CancellationToken cancellationToken, int? expectedVersion = null)
     {
         if (FailWrites)
         {
-            return Task.FromResult<OneOf<Success, NotFound, PortError>>(new PortError("fake write failure"));
+            return Task.FromResult<OneOf<Success, NotFound, PortError, PreconditionFailed>>(new PortError("fake write failure"));
         }
 
-        var removed = Items.RemoveAll(r => r.Id == id);
-        if (removed == 0)
+        var current = Items.FirstOrDefault(r => r.Id == id);
+        if (current is null)
         {
-            return Task.FromResult<OneOf<Success, NotFound, PortError>>(new NotFound());
+            return Task.FromResult<OneOf<Success, NotFound, PortError, PreconditionFailed>>(new NotFound());
         }
 
+        if (EntityVersion.Check(expectedVersion, current.Version) is { } stale)
+        {
+            return Task.FromResult<OneOf<Success, NotFound, PortError, PreconditionFailed>>(stale);
+        }
+
+        Items.RemoveAll(r => r.Id == id);
         Writes++;
-        return Task.FromResult<OneOf<Success, NotFound, PortError>>(new Success());
+        return Task.FromResult<OneOf<Success, NotFound, PortError, PreconditionFailed>>(new Success());
     }
 }
 

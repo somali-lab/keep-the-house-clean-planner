@@ -1,3 +1,4 @@
+using Huishoudplanner.Domain.Concurrency;
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Ports.Driven;
 using Huishoudplanner.Domain.Rooms;
@@ -133,6 +134,7 @@ internal sealed class MongoRoomStore : ForStoringRooms
             { "virtual", room.Virtual },
             { "createdAt", now },
             { "updatedAt", now },
+            { EntityVersioning.Field, EntityVersion.Initial },
         };
         try
         {
@@ -145,7 +147,8 @@ internal sealed class MongoRoomStore : ForStoringRooms
         }
     }
 
-    public async Task<OneOf<Room, NotFound, PortError>> UpdateAsync(string id, RoomChanges changes, DateTimeOffset updatedAt, CancellationToken cancellationToken)
+    public async Task<OneOf<Room, NotFound, PortError, PreconditionFailed>> UpdateAsync(
+        string id, RoomChanges changes, DateTimeOffset updatedAt, CancellationToken cancellationToken, int? expectedVersion = null)
     {
         ArgumentNullException.ThrowIfNull(changes);
         if (MongoTransactionContext.Session is not { IsInTransaction: true } session)
@@ -184,11 +187,17 @@ internal sealed class MongoRoomStore : ForStoringRooms
         {
             var document = await rooms.FindOneAndUpdateAsync(
                 session,
-                new BsonDocument("_id", objectId),
-                new BsonDocument("$set", set),
+                EntityVersioning.Filter(objectId, expectedVersion),
+                EntityVersioning.Raise(new BsonDocument("$set", set)),
                 new FindOneAndUpdateOptions<BsonDocument> { ReturnDocument = ReturnDocument.After },
                 cancellationToken).ConfigureAwait(false);
-            return document is null ? new NotFound() : ToRoom(document);
+            if (document is not null)
+            {
+                return ToRoom(document);
+            }
+
+            var missed = await EntityVersioning.ExplainMissAsync(rooms, session, objectId, cancellationToken).ConfigureAwait(false);
+            return missed.Match<OneOf<Room, NotFound, PortError, PreconditionFailed>>(notFound => notFound, failed => failed);
         }
         catch (Exception e) when (IsFailure(e))
         {
@@ -196,7 +205,7 @@ internal sealed class MongoRoomStore : ForStoringRooms
         }
     }
 
-    public async Task<OneOf<Success, NotFound, PortError>> DeleteAsync(string id, CancellationToken cancellationToken)
+    public async Task<OneOf<Success, NotFound, PortError, PreconditionFailed>> DeleteAsync(string id, CancellationToken cancellationToken, int? expectedVersion = null)
     {
         if (MongoTransactionContext.Session is not { IsInTransaction: true } session)
         {
@@ -210,8 +219,14 @@ internal sealed class MongoRoomStore : ForStoringRooms
 
         try
         {
-            var result = await rooms.DeleteOneAsync(session, new BsonDocument("_id", objectId), cancellationToken: cancellationToken).ConfigureAwait(false);
-            return result.DeletedCount == 1 ? new Success() : new NotFound();
+            var result = await rooms.DeleteOneAsync(session, EntityVersioning.Filter(objectId, expectedVersion), cancellationToken: cancellationToken).ConfigureAwait(false);
+            if (result.DeletedCount == 1)
+            {
+                return new Success();
+            }
+
+            var missed = await EntityVersioning.ExplainMissAsync(rooms, session, objectId, cancellationToken).ConfigureAwait(false);
+            return missed.Match<OneOf<Success, NotFound, PortError, PreconditionFailed>>(notFound => notFound, failed => failed);
         }
         catch (Exception e) when (IsFailure(e))
         {
@@ -247,7 +262,8 @@ internal sealed class MongoRoomStore : ForStoringRooms
             document.GetValue("active", true).ToBoolean(),
             document.GetValue("virtual", false).ToBoolean(),
             createdAt,
-            document.Contains("updatedAt") ? Instant(document, "updatedAt") : createdAt);
+            document.Contains("updatedAt") ? Instant(document, "updatedAt") : createdAt,
+            EntityVersioning.VersionOf(document));
     }
 
     private static DateTimeOffset Instant(BsonDocument document, string field) =>

@@ -1,4 +1,5 @@
 using System.Globalization;
+using Huishoudplanner.Adapters.Http.Concurrency;
 using Huishoudplanner.Adapters.Http.Identity;
 using Huishoudplanner.Adapters.Http.Problems;
 using Huishoudplanner.Domain.Badges;
@@ -34,6 +35,17 @@ public static class BadgeEndpoints
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status500InternalServerError);
 
+        routes.MapGet(Path + "/{id}", GetAsync)
+            .WithName("getBadge")
+            .WithTags(BadgesTag)
+            .WithSummary("Reads one badge.")
+            .WithDescription("Needs no profile. The ETag header carries the version of the badge; send it as If-Match when you change or delete the badge. Answers 404 not_found for an unknown badge and 400 validation_error on id for a malformed id.")
+            .Produces<BadgeResponse>(StatusCodes.Status200OK)
+            .ReturnsETag()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status500InternalServerError);
+
         routes.MapPost(Path, CreateAsync)
             .RequireAdmin()
             .WithName("createBadge")
@@ -42,6 +54,7 @@ public static class BadgeEndpoints
             .WithDescription("The badge is active unless active is false. The rule is executions or minutes over the chosen tasks (none chosen counts every task) or onTimeWeeks; tasks that do not exist are dropped and a rule that names only unknown tasks is refused (rule.taskIds unknown_task). The picture is { contentType, data } with at most 256 KB of PNG, JPEG or WebP as base64; image.data answers invalid_base64, image_too_large or unsupported_image_type and image.contentType image_type_mismatch. At most 100 badges can exist (409 badge_limit). The change is audited, then the awards are evaluated again.")
             .Accepts<CreateBadgeRequest>("application/json")
             .Produces<BadgeResponse>(StatusCodes.Status201Created)
+            .ReturnsETag()
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status409Conflict)
@@ -90,12 +103,14 @@ public static class BadgeEndpoints
 
         routes.MapPatch(Path + "/{id}", UpdateAsync)
             .RequireAdmin()
+            .RequireIfMatch()
             .WithName("updateBadge")
             .WithTags(BadgesTag)
             .WithSummary("Changes a badge (administrators).")
-            .WithDescription("Every field is optional; image: null removes the picture and a new image replaces it. A change that changes nothing writes and audits nothing. A change of the rule or the active flag evaluates the awards again. Answers 404 not_found for an unknown badge.")
+            .WithDescription("Every field is optional; image: null removes the picture and a new image replaces it. A change that changes nothing writes and audits nothing. A change of the rule or the active flag evaluates the awards again. Answers 404 not_found for an unknown badge. Needs If-Match with the ETag of the badge you read: another version is 412 precondition_failed (also for a change that would change nothing), and a change that changes nothing keeps the version.")
             .Accepts<UpdateBadgeRequest>("application/json")
             .Produces<BadgeResponse>(StatusCodes.Status200OK)
+            .ReturnsETag()
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -104,10 +119,11 @@ public static class BadgeEndpoints
 
         routes.MapDelete(Path + "/{id}", DeleteAsync)
             .RequireAdmin()
+            .RequireIfMatch()
             .WithName("deleteBadge")
             .WithTags(BadgesTag)
             .WithSummary("Deletes a badge (administrators).")
-            .WithDescription("The awards of the badge are withdrawn with it. Answers 404 not_found for an unknown badge.")
+            .WithDescription("The awards of the badge are withdrawn with it. Answers 404 not_found for an unknown badge. Needs If-Match with the ETag of the badge you read; another version is 412 precondition_failed and nothing is deleted.")
             .Produces<BadgeDeletedResponse>(StatusCodes.Status200OK)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status403Forbidden)
@@ -149,6 +165,25 @@ public static class BadgeEndpoints
         var result = await badges.ListAsync(activeFilter, limitValue, cursor, cancellationToken);
         return result.Match(
             list => Results.Ok(new BadgeListResponse([.. list.Items.Select(BadgeResponse.From)], list.NextCursor)),
+            ProblemResults.From,
+            error => ProblemResults.From(error, logger));
+    }
+
+    private static async Task<IResult> GetAsync(
+        string id,
+        HttpContext http,
+        IBadgeService badges,
+        ILogger<IBadgeService> logger,
+        CancellationToken cancellationToken)
+    {
+        var result = await badges.GetAsync(id, cancellationToken);
+        return result.Match(
+            badge =>
+            {
+                ETags.Set(http.Response, badge.Version);
+                return Results.Ok(BadgeResponse.From(badge));
+            },
+            ProblemResults.From,
             ProblemResults.From,
             error => ProblemResults.From(error, logger));
     }
@@ -253,7 +288,11 @@ public static class BadgeEndpoints
 
         var result = await badges.CreateAsync(await ActorOf(http), command, cancellationToken);
         return result.Match(
-            badge => Results.Json(BadgeResponse.From(badge), statusCode: StatusCodes.Status201Created),
+            badge =>
+            {
+                ETags.Set(http.Response, badge.Version);
+                return Results.Json(BadgeResponse.From(badge), statusCode: StatusCodes.Status201Created);
+            },
             ProblemResults.From,
             LimitProblem,
             ProblemResults.From,
@@ -303,13 +342,18 @@ public static class BadgeEndpoints
             return ProblemResults.From(invalid);
         }
 
-        var result = await badges.UpdateAsync(await ActorOf(http), id, patch, cancellationToken);
+        var result = await badges.UpdateAsync(await ActorOf(http), id, patch, cancellationToken, http.GetIfMatch());
         return result.Match(
-            badge => Results.Ok(BadgeResponse.From(badge)),
+            badge =>
+            {
+                ETags.Set(http.Response, badge.Version);
+                return Results.Ok(BadgeResponse.From(badge));
+            },
             ProblemResults.From,
             ProblemResults.From,
             ProblemResults.From,
-            error => ProblemResults.From(error, logger));
+            error => ProblemResults.From(error, logger),
+            ProblemResults.From);
     }
 
     private static async Task<IResult> DeleteAsync(
@@ -319,13 +363,14 @@ public static class BadgeEndpoints
         ILogger<IBadgeService> logger,
         CancellationToken cancellationToken)
     {
-        var result = await badges.DeleteAsync(await ActorOf(http), id, cancellationToken);
+        var result = await badges.DeleteAsync(await ActorOf(http), id, cancellationToken, http.GetIfMatch());
         return result.Match(
             _ => Results.Ok(new BadgeDeletedResponse(true)),
             ProblemResults.From,
             ProblemResults.From,
             ProblemResults.From,
-            error => ProblemResults.From(error, logger));
+            error => ProblemResults.From(error, logger),
+            ProblemResults.From);
     }
 
     private static int? ParseLimit(string? limit, Dictionary<string, string[]> errors)

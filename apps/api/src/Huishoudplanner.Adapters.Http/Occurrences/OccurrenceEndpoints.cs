@@ -1,3 +1,4 @@
+using Huishoudplanner.Adapters.Http.Concurrency;
 using Huishoudplanner.Adapters.Http.Identity;
 using Huishoudplanner.Adapters.Http.Problems;
 using Huishoudplanner.Domain.Errors;
@@ -144,6 +145,7 @@ public static class OccurrenceEndpoints
 
         routes.MapDelete(Path + "/{id}", DeleteAsync)
             .RequireAdmin()
+            .WithoutIfMatch("An administrator's correction of a recorded completion, guarded by the state of the occurrence (409 invalid_transition); an occurrence is an event of the history, not a document that a client reads and edits.")
             .WithName("deleteOccurrence")
             .WithTags(OccurrencesTag)
             .WithSummary("Permanently deletes a completed occurrence (administrators).")

@@ -37,7 +37,10 @@ public sealed record BulkRoomTasksRequest(
     [property: Description("deactivate or reassign.")] string? Op,
     string? DefaultAssigneeId);
 
-/// <summary>A task as the API shows it. <c>points</c> is always present: a task from before points existed shows the default for its duration.</summary>
+/// <summary>
+/// A task as the API shows it. <c>points</c> is always present: a task from before points existed shows the default for its duration.
+/// <c>version</c> is the concurrency version of the task (the number inside its ETag), so a list-based editor can build the <c>If-Match</c> header without a read of the single task.
+/// </summary>
 public sealed record TaskResponse(
     string Id,
     string Name,
@@ -51,7 +54,8 @@ public sealed record TaskResponse(
     IReadOnlyList<string> Tags,
     DateTimeOffset? LastCompletedAt,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt)
+    DateTimeOffset UpdatedAt,
+    int Version)
 {
     internal static TaskResponse From(HouseholdTask task) => new(
         task.Id,
@@ -66,7 +70,8 @@ public sealed record TaskResponse(
         task.Tags,
         task.LastCompletedAt,
         task.CreatedAt,
-        task.UpdatedAt);
+        task.UpdatedAt,
+        task.Version);
 }
 
 /// <summary>One page of tasks; <see cref="NextCursor"/> is <c>null</c> on the last page.</summary>

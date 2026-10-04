@@ -1,3 +1,4 @@
+using Huishoudplanner.Domain.Concurrency;
 using Huishoudplanner.Domain.Identity;
 using Huishoudplanner.Domain.Users;
 using MongoDB.Bson;
@@ -27,6 +28,7 @@ internal static class UserDocuments
         { "browserNotifications", Notifications(BrowserNotifications.Disabled) },
         { "createdAt", new BsonDateTime(now.UtcDateTime) },
         { "updatedAt", new BsonDateTime(now.UtcDateTime) },
+        { EntityVersioning.Field, EntityVersion.Initial },
     };
 
     /// <summary>One <c>$set</c> per member of the patch that is set, plus <c>updatedAt</c>.</summary>
@@ -89,7 +91,8 @@ internal static class UserDocuments
         MinutesOf(document, "maxDailyMinutes") ?? UserDefaults.LegacyMaxDailyMinutes,
         NotificationsOf(document),
         InstantOf(document, "createdAt"),
-        InstantOf(document, "updatedAt"));
+        InstantOf(document, "updatedAt"),
+        EntityVersioning.VersionOf(document));
 
     public static bool IsActive(BsonDocument document) =>
         document.TryGetValue("active", out var active) && active.IsBoolean && active.AsBoolean;

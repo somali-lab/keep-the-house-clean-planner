@@ -1,3 +1,4 @@
+using Huishoudplanner.Domain.Concurrency;
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Ports.Driven;
 using Huishoudplanner.Domain.Settings;
@@ -58,21 +59,36 @@ internal sealed class MongoSettingsStore : ForStoringSettings, ForReadingCycleAn
         }
     }
 
-    public async Task<OneOf<HouseholdSettings, SettingsMissing, PortError>> UpdateAsync(SettingsChanges changes, CancellationToken cancellationToken)
+    public async Task<OneOf<HouseholdSettings, SettingsMissing, PortError, PreconditionFailed>> UpdateAsync(
+        SettingsChanges changes, CancellationToken cancellationToken, int? expectedVersion = null)
     {
         ArgumentNullException.ThrowIfNull(changes);
         var sets = SettingsDocument.ToSets(changes)
             .Select(set => Builders<BsonDocument>.Update.Set(set.Key, set.Value))
             .Append(Builders<BsonDocument>.Update.Set("updatedAt", new BsonDateTime(timeProvider.GetUtcNow().UtcDateTime)))
+            .Append(Builders<BsonDocument>.Update.Inc(EntityVersioning.Field, 1))
             .ToList();
         var options = new FindOneAndUpdateOptions<BsonDocument> { ReturnDocument = ReturnDocument.After };
         try
         {
             var update = Builders<BsonDocument>.Update.Combine(sets);
+            FilterDefinition<BsonDocument> filter = EntityVersioning.Filter(SettingsDocument.SingletonId, expectedVersion);
             var document = MongoTransactionContext.Session is { } session
-                ? await settings.FindOneAndUpdateAsync(session, SingletonFilter, update, options, cancellationToken).ConfigureAwait(false)
-                : await settings.FindOneAndUpdateAsync(SingletonFilter, update, options, cancellationToken).ConfigureAwait(false);
-            return document is null ? new SettingsMissing() : SettingsDocument.Read(document);
+                ? await settings.FindOneAndUpdateAsync(session, filter, update, options, cancellationToken).ConfigureAwait(false)
+                : await settings.FindOneAndUpdateAsync(filter, update, options, cancellationToken).ConfigureAwait(false);
+            if (document is not null)
+            {
+                return SettingsDocument.Read(document);
+            }
+
+            if (expectedVersion is null)
+            {
+                return new SettingsMissing();
+            }
+
+            // The conditional write matched nothing: the document is missing, or its version moved on.
+            var stored = await Find(cancellationToken).ConfigureAwait(false);
+            return stored is null ? new SettingsMissing() : new PreconditionFailed(EntityVersioning.VersionOf(stored));
         }
         catch (Exception e) when (IsInfrastructureFailure(e) && !IsTransient(e))
         {

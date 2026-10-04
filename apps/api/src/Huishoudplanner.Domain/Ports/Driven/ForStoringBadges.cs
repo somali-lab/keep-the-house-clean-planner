@@ -40,8 +40,13 @@ public interface ForStoringBadges
 
     Task<OneOf<Badge, PortError>> InsertAsync(NewBadge badge, CancellationToken cancellationToken);
 
-    /// <summary>Sets the given fields and <c>updatedAt</c>; returns the badge as stored afterwards.</summary>
-    Task<OneOf<Badge, NotFound, PortError>> UpdateAsync(string id, BadgeChanges changes, DateTimeOffset updatedAt, CancellationToken cancellationToken);
+    /// <summary>
+    /// Sets the given fields and <c>updatedAt</c>, raises the version by one in the same write, and returns the badge as stored afterwards. With an
+    /// <paramref name="expectedVersion"/> the write is conditional on the stored version (<see cref="PreconditionFailed"/> when it differs, nothing written).
+    /// </summary>
+    Task<OneOf<Badge, NotFound, PortError, PreconditionFailed>> UpdateAsync(
+        string id, BadgeChanges changes, DateTimeOffset updatedAt, CancellationToken cancellationToken, int? expectedVersion = null);
 
-    Task<OneOf<Success, NotFound, PortError>> DeleteAsync(string id, CancellationToken cancellationToken);
+    /// <summary>Deletes the badge; with an <paramref name="expectedVersion"/> the delete is conditional on the stored version (<see cref="PreconditionFailed"/> when it differs).</summary>
+    Task<OneOf<Success, NotFound, PortError, PreconditionFailed>> DeleteAsync(string id, CancellationToken cancellationToken, int? expectedVersion = null);
 }

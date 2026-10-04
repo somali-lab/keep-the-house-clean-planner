@@ -20,7 +20,10 @@ public sealed record BrowserNotifications(bool Enabled, IReadOnlyList<string> Ti
     public override int GetHashCode() => HashCode.Combine(Enabled, Times.Count);
 }
 
-/// <summary>A person of the household (requirements section 3, <c>users</c>). <see cref="Id"/> is the 24-character hex id.</summary>
+/// <summary>
+/// A person of the household (requirements section 3, <c>users</c>). <see cref="Id"/> is the 24-character hex id. <see cref="Version"/> is the
+/// optimistic concurrency version of the document (<see cref="Concurrency.EntityVersion"/>, ADR-0022).
+/// </summary>
 public sealed record User(
     string Id,
     string Name,
@@ -32,7 +35,8 @@ public sealed record User(
     DailyMinutes MaxDailyMinutes,
     BrowserNotifications BrowserNotifications,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    int Version = 0);
 
 /// <summary>A validated, normalised person that does not exist yet. The store assigns the id.</summary>
 public sealed record NewUser(

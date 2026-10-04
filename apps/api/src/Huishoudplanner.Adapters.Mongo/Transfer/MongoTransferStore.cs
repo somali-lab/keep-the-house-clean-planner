@@ -27,6 +27,17 @@ internal sealed class MongoTransferStore : ForTransferringData
     private const int AuditLookupBatch = 1000;
 
     private static readonly JsonWriterSettings Relaxed = new() { OutputMode = JsonOutputMode.RelaxedExtendedJson };
+
+    /// <summary>
+    /// The collections whose documents carry a concurrency version (ADR-0022). The file never does (an import keeps only the known fields), so a replacement
+    /// gives every document of such a collection one version above the highest one of the collection it replaces: an ETag that was handed out before the import
+    /// can never match an imported document, whatever its id.
+    /// </summary>
+    private static readonly HashSet<string> Versioned =
+    [
+        MongoCollections.Settings, MongoCollections.Users, MongoCollections.Rooms, MongoCollections.Tasks, MongoCollections.CyclePlans, MongoCollections.Badges,
+    ];
+
     private static readonly string[] ReplacedInOrder =
     [
         MongoCollections.Settings, MongoCollections.Users, MongoCollections.Rooms, MongoCollections.Tasks, MongoCollections.CyclePlans, MongoCollections.Cycles,
@@ -167,6 +178,20 @@ internal sealed class MongoTransferStore : ForTransferringData
     private async Task ReplaceCollectionAsync(IClientSessionHandle session, string name, List<BsonDocument> documents, CancellationToken cancellationToken)
     {
         var collection = Collection(name);
+        if (Versioned.Contains(name) && documents.Count > 0)
+        {
+            var highest = await collection.Find(session, FilterDefinition<BsonDocument>.Empty)
+                .Sort(Builders<BsonDocument>.Sort.Descending(EntityVersioning.Field))
+                .Limit(1)
+                .Project(new BsonDocument(EntityVersioning.Field, 1))
+                .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+            var next = (highest is null ? 0 : EntityVersioning.VersionOf(highest)) + 1;
+            foreach (var document in documents)
+            {
+                document[EntityVersioning.Field] = next;
+            }
+        }
+
         await collection.DeleteManyAsync(session, FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken).ConfigureAwait(false);
         if (documents.Count > 0)
         {

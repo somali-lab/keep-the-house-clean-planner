@@ -1,5 +1,6 @@
 using Huishoudplanner.Domain.Ai;
 using Huishoudplanner.Domain.CyclePlans;
+using Huishoudplanner.Domain.Concurrency;
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Ports.Driven;
 using MongoDB.Bson;
@@ -113,6 +114,7 @@ internal sealed class MongoCyclePlanStore : ForStoringCyclePlans
             { "discarded", false },
             { "createdAt", now },
             { "updatedAt", now },
+            { EntityVersioning.Field, EntityVersion.Initial },
         };
         try
         {
@@ -148,6 +150,7 @@ internal sealed class MongoCyclePlanStore : ForStoringCyclePlans
             { "discarded", false },
             { "createdAt", now },
             { "updatedAt", now },
+            { EntityVersioning.Field, EntityVersion.Initial },
         };
         try
         {
@@ -160,7 +163,8 @@ internal sealed class MongoCyclePlanStore : ForStoringCyclePlans
         }
     }
 
-    public async Task<OneOf<CyclePlan, NotFound, PortError>> UpdateMetaAsync(string id, PlanMetaChanges changes, DateTimeOffset updatedAt, CancellationToken cancellationToken)
+    public async Task<OneOf<CyclePlan, NotFound, PortError, PreconditionFailed>> UpdateMetaAsync(
+        string id, PlanMetaChanges changes, DateTimeOffset updatedAt, CancellationToken cancellationToken, int? expectedVersion = null)
     {
         ArgumentNullException.ThrowIfNull(changes);
         var set = new BsonDocument();
@@ -174,16 +178,17 @@ internal sealed class MongoCyclePlanStore : ForStoringCyclePlans
             set.Add("weekThemes", new BsonArray(changes.WeekThemes));
         }
 
-        return await UpdateAsync(id, set, updatedAt, cancellationToken).ConfigureAwait(false);
+        return await UpdateAsync(id, set, updatedAt, expectedVersion, cancellationToken).ConfigureAwait(false);
     }
 
-    public Task<OneOf<CyclePlan, NotFound, PortError>> ReplaceSlotsAsync(string id, IReadOnlyList<CyclePlanSlot> slots, DateTimeOffset updatedAt, CancellationToken cancellationToken)
+    public Task<OneOf<CyclePlan, NotFound, PortError, PreconditionFailed>> ReplaceSlotsAsync(
+        string id, IReadOnlyList<CyclePlanSlot> slots, DateTimeOffset updatedAt, CancellationToken cancellationToken, int? expectedVersion = null)
     {
         ArgumentNullException.ThrowIfNull(slots);
-        return UpdateAsync(id, new BsonDocument("slots", ToBson(slots)), updatedAt, cancellationToken);
+        return UpdateAsync(id, new BsonDocument("slots", ToBson(slots)), updatedAt, expectedVersion, cancellationToken);
     }
 
-    public async Task<OneOf<Success, NotFound, PortError>> DeleteAsync(string id, CancellationToken cancellationToken)
+    public async Task<OneOf<Success, NotFound, PortError, PreconditionFailed>> DeleteAsync(string id, CancellationToken cancellationToken, int? expectedVersion = null)
     {
         if (MongoTransactionContext.Session is not { IsInTransaction: true } session)
         {
@@ -197,8 +202,14 @@ internal sealed class MongoCyclePlanStore : ForStoringCyclePlans
 
         try
         {
-            var result = await plans.DeleteOneAsync(session, new BsonDocument("_id", objectId), cancellationToken: cancellationToken).ConfigureAwait(false);
-            return result.DeletedCount == 1 ? new Success() : new NotFound();
+            var result = await plans.DeleteOneAsync(session, EntityVersioning.Filter(objectId, expectedVersion), cancellationToken: cancellationToken).ConfigureAwait(false);
+            if (result.DeletedCount == 1)
+            {
+                return new Success();
+            }
+
+            var missed = await EntityVersioning.ExplainMissAsync(plans, session, objectId, cancellationToken).ConfigureAwait(false);
+            return missed.Match<OneOf<Success, NotFound, PortError, PreconditionFailed>>(notFound => notFound, failed => failed);
         }
         catch (Exception e) when (IsFailure(e))
         {
@@ -206,7 +217,8 @@ internal sealed class MongoCyclePlanStore : ForStoringCyclePlans
         }
     }
 
-    private async Task<OneOf<CyclePlan, NotFound, PortError>> UpdateAsync(string id, BsonDocument set, DateTimeOffset updatedAt, CancellationToken cancellationToken)
+    private async Task<OneOf<CyclePlan, NotFound, PortError, PreconditionFailed>> UpdateAsync(
+        string id, BsonDocument set, DateTimeOffset updatedAt, int? expectedVersion, CancellationToken cancellationToken)
     {
         if (MongoTransactionContext.Session is not { IsInTransaction: true } session)
         {
@@ -223,11 +235,17 @@ internal sealed class MongoCyclePlanStore : ForStoringCyclePlans
         {
             var document = await plans.FindOneAndUpdateAsync(
                 session,
-                new BsonDocument("_id", objectId),
-                new BsonDocument("$set", set),
+                EntityVersioning.Filter(objectId, expectedVersion),
+                EntityVersioning.Raise(new BsonDocument("$set", set)),
                 new FindOneAndUpdateOptions<BsonDocument> { ReturnDocument = ReturnDocument.After },
                 cancellationToken).ConfigureAwait(false);
-            return document is null ? new NotFound() : ToPlan(document);
+            if (document is not null)
+            {
+                return ToPlan(document);
+            }
+
+            var missed = await EntityVersioning.ExplainMissAsync(plans, session, objectId, cancellationToken).ConfigureAwait(false);
+            return missed.Match<OneOf<CyclePlan, NotFound, PortError, PreconditionFailed>>(notFound => notFound, failed => failed);
         }
         catch (Exception e) when (IsFailure(e))
         {
@@ -294,7 +312,8 @@ internal sealed class MongoCyclePlanStore : ForStoringCyclePlans
             Strings(document, "rationale"),
             document.GetValue("discarded", false).ToBoolean(),
             createdAt,
-            Instant(document, "updatedAt") ?? createdAt);
+            Instant(document, "updatedAt") ?? createdAt,
+            EntityVersioning.VersionOf(document));
     }
 
     private static CyclePlanSlot ToSlot(BsonDocument slot) => new(

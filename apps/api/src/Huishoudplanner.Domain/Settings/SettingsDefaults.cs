@@ -43,7 +43,8 @@ public static class SettingsDefaults
         CentsPerPoint: null,
         RewardGoals: null,
         CreatedAt: now,
-        UpdatedAt: now);
+        UpdatedAt: now,
+        Version: Concurrency.EntityVersion.Initial);
 
     /// <summary>
     /// The intervals with the shipped <c>3w</c> added before <c>2w</c> (at the end without <c>2w</c>) when missing; otherwise the

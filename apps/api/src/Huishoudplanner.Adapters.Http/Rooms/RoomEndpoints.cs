@@ -1,3 +1,4 @@
+using Huishoudplanner.Adapters.Http.Concurrency;
 using Huishoudplanner.Adapters.Http.Identity;
 using Huishoudplanner.Adapters.Http.OpenApi;
 using Huishoudplanner.Adapters.Http.Problems;
@@ -30,6 +31,17 @@ public static class RoomEndpoints
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status500InternalServerError);
 
+        routes.MapGet(Path + "/{id}", GetAsync)
+            .WithName("getRoom")
+            .WithTags(OpenApiSetup.RoomsTag)
+            .WithSummary("Reads one room.")
+            .WithDescription("The ETag header carries the version of the room; send it as If-Match when you change or delete the room. Answers 404 not_found for an unknown room and 400 validation_error on id for a malformed id.")
+            .Produces<RoomResponse>(StatusCodes.Status200OK)
+            .ReturnsETag()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status500InternalServerError);
+
         routes.MapPost(Path, CreateAsync)
             .RequireAdmin()
             .WithName("createRoom")
@@ -38,6 +50,7 @@ public static class RoomEndpoints
             .WithDescription("The room is created active. Without sortOrder it goes ten places after the last room (10 for the first one). The change is audited.")
             .Accepts<CreateRoomRequest>("application/json")
             .Produces<RoomResponse>(StatusCodes.Status201Created)
+            .ReturnsETag()
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status409Conflict)
@@ -45,12 +58,14 @@ public static class RoomEndpoints
 
         routes.MapPatch(Path + "/{id}", UpdateAsync)
             .RequireAdmin()
+            .RequireIfMatch()
             .WithName("updateRoom")
             .WithTags(OpenApiSetup.RoomsTag)
             .WithSummary("Changes a room (administrators).")
-            .WithDescription("Renames, reorders, deactivates or marks the room virtual. A change that changes nothing writes and audits nothing. Answers 404 not_found for an unknown room.")
+            .WithDescription("Renames, reorders, deactivates or marks the room virtual. A change that changes nothing writes and audits nothing. Answers 404 not_found for an unknown room. Needs If-Match with the ETag of the room you read: another version is 412 precondition_failed (also for a change that would change nothing), and a change that changes nothing keeps the version.")
             .Accepts<UpdateRoomRequest>("application/json")
             .Produces<RoomResponse>(StatusCodes.Status200OK)
+            .ReturnsETag()
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -59,10 +74,11 @@ public static class RoomEndpoints
 
         routes.MapDelete(Path + "/{id}", DeleteAsync)
             .RequireAdmin()
+            .RequireIfMatch()
             .WithName("deleteRoom")
             .WithTags(OpenApiSetup.RoomsTag)
             .WithSummary("Deletes a room that holds no tasks (administrators).")
-            .WithDescription("A room that still holds tasks, active or inactive, cannot be deleted: 409 room_in_use with the number of tasks in the taskCount extension. Answers 404 not_found for an unknown room.")
+            .WithDescription("A room that still holds tasks, active or inactive, cannot be deleted: 409 room_in_use with the number of tasks in the taskCount extension. Answers 404 not_found for an unknown room. Needs If-Match with the ETag of the room you read; another version is 412 precondition_failed and nothing is deleted.")
             .Produces<RoomDeletedResponse>(StatusCodes.Status200OK)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status403Forbidden)
@@ -121,6 +137,25 @@ public static class RoomEndpoints
             error => ProblemResults.From(error, logger));
     }
 
+    private static async Task<IResult> GetAsync(
+        string id,
+        HttpContext http,
+        IRoomService rooms,
+        ILogger<IRoomService> logger,
+        CancellationToken cancellationToken)
+    {
+        var result = await rooms.GetAsync(id, cancellationToken);
+        return result.Match(
+            room =>
+            {
+                ETags.Set(http.Response, room.Version);
+                return Results.Ok(RoomResponse.From(room));
+            },
+            ProblemResults.From,
+            ProblemResults.From,
+            error => ProblemResults.From(error, logger));
+    }
+
     private static async Task<IResult> CreateAsync(
         HttpContext http,
         IRoomService rooms,
@@ -140,7 +175,11 @@ public static class RoomEndpoints
 
         var result = await rooms.CreateAsync(await ActorOf(http), command, cancellationToken);
         return result.Match(
-            room => Results.Json(RoomResponse.From(room), statusCode: StatusCodes.Status201Created),
+            room =>
+            {
+                ETags.Set(http.Response, room.Version);
+                return Results.Json(RoomResponse.From(room), statusCode: StatusCodes.Status201Created);
+            },
             ProblemResults.From,
             ProblemResults.From,
             error => ProblemResults.From(error, logger));
@@ -164,13 +203,18 @@ public static class RoomEndpoints
             return ProblemResults.From(invalid);
         }
 
-        var result = await rooms.UpdateAsync(await ActorOf(http), id, patch, cancellationToken);
+        var result = await rooms.UpdateAsync(await ActorOf(http), id, patch, cancellationToken, http.GetIfMatch());
         return result.Match(
-            room => Results.Ok(RoomResponse.From(room)),
+            room =>
+            {
+                ETags.Set(http.Response, room.Version);
+                return Results.Ok(RoomResponse.From(room));
+            },
             ProblemResults.From,
             ProblemResults.From,
             ProblemResults.From,
-            error => ProblemResults.From(error, logger));
+            error => ProblemResults.From(error, logger),
+            ProblemResults.From);
     }
 
     private static async Task<IResult> DeleteAsync(
@@ -180,14 +224,15 @@ public static class RoomEndpoints
         ILogger<IRoomService> logger,
         CancellationToken cancellationToken)
     {
-        var result = await rooms.DeleteAsync(await ActorOf(http), id, cancellationToken);
+        var result = await rooms.DeleteAsync(await ActorOf(http), id, cancellationToken, http.GetIfMatch());
         return result.Match(
             _ => Results.Ok(new RoomDeletedResponse(true)),
             ProblemResults.From,
             ProblemResults.From,
             RoomInUseProblem,
             ProblemResults.From,
-            error => ProblemResults.From(error, logger));
+            error => ProblemResults.From(error, logger),
+            ProblemResults.From);
     }
 
     /// <summary><c>409 room_in_use</c>; the number of tasks travels as the <c>taskCount</c> extension (Node: <c>details.taskCount</c>).</summary>

@@ -1,4 +1,5 @@
 using Huishoudplanner.Domain.Badges;
+using Huishoudplanner.Domain.Concurrency;
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Ports.Driven;
 using MongoDB.Bson;
@@ -201,6 +202,7 @@ internal sealed class MongoBadgeStore : ForStoringBadges
             { "image", badge.Image is { } image ? ImageDocument(image) : BsonNull.Value },
             { "createdAt", now },
             { "updatedAt", now },
+            { EntityVersioning.Field, EntityVersion.Initial },
         };
         try
         {
@@ -213,7 +215,8 @@ internal sealed class MongoBadgeStore : ForStoringBadges
         }
     }
 
-    public async Task<OneOf<Badge, NotFound, PortError>> UpdateAsync(string id, BadgeChanges changes, DateTimeOffset updatedAt, CancellationToken cancellationToken)
+    public async Task<OneOf<Badge, NotFound, PortError, PreconditionFailed>> UpdateAsync(
+        string id, BadgeChanges changes, DateTimeOffset updatedAt, CancellationToken cancellationToken, int? expectedVersion = null)
     {
         ArgumentNullException.ThrowIfNull(changes);
         if (MongoTransactionContext.Session is not { IsInTransaction: true } session)
@@ -261,13 +264,14 @@ internal sealed class MongoBadgeStore : ForStoringBadges
         {
             var document = await badges.FindOneAndUpdateAsync(
                 session,
-                new BsonDocument("_id", objectId),
-                new BsonDocument("$set", set),
+                EntityVersioning.Filter(objectId, expectedVersion),
+                EntityVersioning.Raise(new BsonDocument("$set", set)),
                 new FindOneAndUpdateOptions<BsonDocument> { ReturnDocument = ReturnDocument.After, Projection = WithoutBytes },
                 cancellationToken).ConfigureAwait(false);
             if (document is null)
             {
-                return new NotFound();
+                var missed = await EntityVersioning.ExplainMissAsync(badges, session, objectId, cancellationToken).ConfigureAwait(false);
+                return missed.Match<OneOf<Badge, NotFound, PortError, PreconditionFailed>>(notFound => notFound, failed => failed);
             }
 
             return TryMap(document, out var updated) ? updated : Unreadable();
@@ -278,7 +282,7 @@ internal sealed class MongoBadgeStore : ForStoringBadges
         }
     }
 
-    public async Task<OneOf<Success, NotFound, PortError>> DeleteAsync(string id, CancellationToken cancellationToken)
+    public async Task<OneOf<Success, NotFound, PortError, PreconditionFailed>> DeleteAsync(string id, CancellationToken cancellationToken, int? expectedVersion = null)
     {
         if (MongoTransactionContext.Session is not { IsInTransaction: true } session)
         {
@@ -292,8 +296,14 @@ internal sealed class MongoBadgeStore : ForStoringBadges
 
         try
         {
-            var result = await badges.DeleteOneAsync(session, new BsonDocument("_id", objectId), cancellationToken: cancellationToken).ConfigureAwait(false);
-            return result.DeletedCount == 1 ? new Success() : new NotFound();
+            var result = await badges.DeleteOneAsync(session, EntityVersioning.Filter(objectId, expectedVersion), cancellationToken: cancellationToken).ConfigureAwait(false);
+            if (result.DeletedCount == 1)
+            {
+                return new Success();
+            }
+
+            var missed = await EntityVersioning.ExplainMissAsync(badges, session, objectId, cancellationToken).ConfigureAwait(false);
+            return missed.Match<OneOf<Success, NotFound, PortError, PreconditionFailed>>(notFound => notFound, failed => failed);
         }
         catch (Exception e) when (IsFailure(e))
         {
@@ -377,7 +387,8 @@ internal sealed class MongoBadgeStore : ForStoringBadges
                 document.TryGetValue("exampleKey", out var key) && key.IsString ? key.AsString : null,
                 image,
                 createdAt,
-                document.TryGetValue("updatedAt", out var updated) ? Instant(updated) : createdAt);
+                document.TryGetValue("updatedAt", out var updated) ? Instant(updated) : createdAt,
+                EntityVersioning.VersionOf(document));
             return true;
         }
         catch (Exception e) when (e is KeyNotFoundException or InvalidCastException or FormatException or InvalidOperationException or OverflowException)

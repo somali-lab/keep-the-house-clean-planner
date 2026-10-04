@@ -3,6 +3,7 @@ using Huishoudplanner.Application.Tests.Rooms;
 using Huishoudplanner.Application.Tests.Settings;
 using Huishoudplanner.Application.Tests.Users;
 using Huishoudplanner.Domain.Audit;
+using Huishoudplanner.Domain.Concurrency;
 using Huishoudplanner.Domain.CyclePlans;
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Identity;
@@ -104,26 +105,32 @@ internal sealed partial class FakeTaskStore : ForStoringTasks
         Writes++;
         var stored = new HouseholdTask(
             NextId(), task.Name, task.RoomId, task.IntervalKey, task.DurationMinutes, task.Points, task.DefaultAssigneeId, true,
-            task.Notes, task.Tags, null, task.CreatedAt, task.CreatedAt);
+            task.Notes, task.Tags, null, task.CreatedAt, task.CreatedAt, Version: 1);
         Items.Add(stored);
         return Task.FromResult<OneOf<HouseholdTask, PortError>>(stored);
     }
 
-    public Task<OneOf<HouseholdTask, NotFound, PortError>> UpdateAsync(string id, TaskChanges changes, DateTimeOffset updatedAt, CancellationToken cancellationToken)
+    public Task<OneOf<HouseholdTask, NotFound, PortError, PreconditionFailed>> UpdateAsync(
+        string id, TaskChanges changes, DateTimeOffset updatedAt, CancellationToken cancellationToken, int? expectedVersion = null)
     {
         if (FailWrites)
         {
-            return Task.FromResult<OneOf<HouseholdTask, NotFound, PortError>>(new PortError("fake write failure"));
+            return Task.FromResult<OneOf<HouseholdTask, NotFound, PortError, PreconditionFailed>>(new PortError("fake write failure"));
         }
 
         var index = Items.FindIndex(t => t.Id == id);
         if (index < 0)
         {
-            return Task.FromResult<OneOf<HouseholdTask, NotFound, PortError>>(new NotFound());
+            return Task.FromResult<OneOf<HouseholdTask, NotFound, PortError, PreconditionFailed>>(new NotFound());
+        }
+
+        var current = Items[index];
+        if (EntityVersion.Check(expectedVersion, current.Version) is { } stale)
+        {
+            return Task.FromResult<OneOf<HouseholdTask, NotFound, PortError, PreconditionFailed>>(stale);
         }
 
         Writes++;
-        var current = Items[index];
         var updated = current with
         {
             Name = changes.Name ?? current.Name,
@@ -136,16 +143,23 @@ internal sealed partial class FakeTaskStore : ForStoringTasks
             Notes = changes.Notes ?? current.Notes,
             Tags = changes.Tags ?? current.Tags,
             UpdatedAt = updatedAt,
+            Version = current.Version + 1,
         };
         Items[index] = updated;
-        return Task.FromResult<OneOf<HouseholdTask, NotFound, PortError>>(updated);
+        return Task.FromResult<OneOf<HouseholdTask, NotFound, PortError, PreconditionFailed>>(updated);
     }
 
-    public Task<OneOf<Success, NotFound, PortError>> DeleteAsync(string id, CancellationToken cancellationToken)
+    public Task<OneOf<Success, NotFound, PortError, PreconditionFailed>> DeleteAsync(string id, CancellationToken cancellationToken, int? expectedVersion = null)
     {
         if (FailWrites)
         {
-            return Task.FromResult<OneOf<Success, NotFound, PortError>>(new PortError("fake write failure"));
+            return Task.FromResult<OneOf<Success, NotFound, PortError, PreconditionFailed>>(new PortError("fake write failure"));
+        }
+
+        var current = Items.FirstOrDefault(t => t.Id == id);
+        if (current is not null && EntityVersion.Check(expectedVersion, current.Version) is { } stale)
+        {
+            return Task.FromResult<OneOf<Success, NotFound, PortError, PreconditionFailed>>(stale);
         }
 
         var removed = Items.RemoveAll(t => t.Id == id);
@@ -154,7 +168,7 @@ internal sealed partial class FakeTaskStore : ForStoringTasks
             Writes++;
         }
 
-        return Task.FromResult<OneOf<Success, NotFound, PortError>>(removed > 0 ? new Success() : new NotFound());
+        return Task.FromResult<OneOf<Success, NotFound, PortError, PreconditionFailed>>(removed > 0 ? new Success() : new NotFound());
     }
 
     public Task<OneOf<int, PortError>> CountInRoomAsync(string roomId, CancellationToken cancellationToken) =>

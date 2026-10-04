@@ -1,4 +1,5 @@
 using System.Globalization;
+using Huishoudplanner.Adapters.Http.Concurrency;
 using Huishoudplanner.Adapters.Http.Identity;
 using Huishoudplanner.Adapters.Http.Problems;
 using Huishoudplanner.Domain.CyclePlans;
@@ -39,8 +40,9 @@ public static class CyclePlanEndpoints
             .WithName("getActiveCyclePlan")
             .WithTags(CyclePlansTag)
             .WithSummary("The active cycle plan.")
-            .WithDescription("Needs no profile. Answers 404 not_found when no plan is active.")
+            .WithDescription("Needs no profile. The ETag header carries the version of the plan. Answers 404 not_found when no plan is active.")
             .Produces<CyclePlanResponse>(StatusCodes.Status200OK)
+            .ReturnsETag()
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status500InternalServerError);
 
@@ -48,8 +50,9 @@ public static class CyclePlanEndpoints
             .WithName("getCyclePlan")
             .WithTags(CyclePlansTag)
             .WithSummary("One cycle plan.")
-            .WithDescription("Needs no profile. Answers 404 not_found for an unknown plan.")
+            .WithDescription("Needs no profile. The ETag header carries the version of the plan; send it as If-Match when you change, delete or save the slots of the plan. Answers 404 not_found for an unknown plan.")
             .Produces<CyclePlanResponse>(StatusCodes.Status200OK)
+            .ReturnsETag()
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status500InternalServerError);
@@ -62,6 +65,7 @@ public static class CyclePlanEndpoints
             .WithDescription("With copyFromId the new plan gets the slots and week themes of that plan, and the audit entry names the source in meta.copiedFrom; an unknown source answers 404 not_found. The change is audited.")
             .Accepts<CreateCyclePlanRequest>("application/json")
             .Produces<CyclePlanResponse>(StatusCodes.Status201Created)
+            .ReturnsETag()
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -70,12 +74,14 @@ public static class CyclePlanEndpoints
 
         routes.MapPatch(Path + "/{id}", UpdateAsync)
             .RequirePlanner()
+            .RequireIfMatch()
             .WithName("updateCyclePlan")
             .WithTags(CyclePlansTag)
             .WithSummary("Renames a plan or sets its week themes (planners).")
-            .WithDescription("A change that changes nothing writes and audits nothing. Answers 404 not_found for an unknown plan.")
+            .WithDescription("A change that changes nothing writes and audits nothing. Answers 404 not_found for an unknown plan. Needs If-Match with the ETag of the plan you read: another version is 412 precondition_failed (also for a change that would change nothing), and a change that changes nothing keeps the version.")
             .Accepts<UpdateCyclePlanRequest>("application/json")
             .Produces<CyclePlanResponse>(StatusCodes.Status200OK)
+            .ReturnsETag()
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -84,10 +90,11 @@ public static class CyclePlanEndpoints
 
         routes.MapDelete(Path + "/{id}", DeleteAsync)
             .RequirePlanner()
+            .RequireIfMatch()
             .WithName("deleteCyclePlan")
             .WithTags(CyclePlansTag)
             .WithSummary("Deletes a plan that is neither the default nor the active plan (planners).")
-            .WithDescription("The oldest plan is the default plan: 409 default_plan. The active plan: 409 active_plan. Answers 404 not_found for an unknown plan. The deleted plan is audited.")
+            .WithDescription("The oldest plan is the default plan: 409 default_plan. The active plan: 409 active_plan. Answers 404 not_found for an unknown plan. The deleted plan is audited. Needs If-Match with the ETag of the plan you read; another version is 412 precondition_failed and nothing is deleted.")
             .Produces<CyclePlanDeletedResponse>(StatusCodes.Status200OK)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status403Forbidden)
@@ -107,12 +114,14 @@ public static class CyclePlanEndpoints
 
         routes.MapPut(Path + "/{id}/slots", PutSlotsAsync)
             .RequirePlanner()
+            .RequireIfMatch()
             .WithName("replaceCyclePlanSlots")
             .WithTags(CyclePlansTag)
             .WithSummary("Replaces all slots of a plan (planners).")
-            .WithDescription("The plan is validated first: a plan that breaks a hard rule (unknown or inactive task or person, unavailable assignee, the same task twice on one day) is refused with 422 invalid_plan, carrying errors, issues, warnings and summary, and nothing is written. Otherwise the plan is saved and returned with the warnings and the summary. The audit entry holds only the added, removed and changed slots; saving what is stored writes and audits nothing. Saving the slots of the ACTIVE plan always synchronises the upcoming occurrences in the same transaction (the open generated occurrences from today to the end of the next cycle are replaced; done, skipped, moved and ad-hoc ones stay): the replacement is reported in synchronized and audited with the system as source and the saving profile as actor. Saving a draft plan changes no occurrences and answers synchronized null. Answers 500 settings_missing when the installation has no settings.")
+            .WithDescription("The plan is validated first: a plan that breaks a hard rule (unknown or inactive task or person, unavailable assignee, the same task twice on one day) is refused with 422 invalid_plan, carrying errors, issues, warnings and summary, and nothing is written. Otherwise the plan is saved and returned with the warnings and the summary. The audit entry holds only the added, removed and changed slots; saving what is stored writes and audits nothing. Saving the slots of the ACTIVE plan always synchronises the upcoming occurrences in the same transaction (the open generated occurrences from today to the end of the next cycle are replaced; done, skipped, moved and ad-hoc ones stay): the replacement is reported in synchronized and audited with the system as source and the saving profile as actor. Saving a draft plan changes no occurrences and answers synchronized null. Answers 500 settings_missing when the installation has no settings. The slots are part of the plan, so the save needs If-Match with the ETag of the plan you read (GET /cycle-plans/{id}): another version is 412 precondition_failed, checked before the validation and also for slots that are already stored; the answer carries the new ETag of the plan (a save that stores nothing new keeps it).")
             .Accepts<PlanSlotsRequest>("application/json")
             .Produces<PlanSlotsSavedResponse>(StatusCodes.Status200OK)
+            .ReturnsETag()
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -175,20 +184,28 @@ public static class CyclePlanEndpoints
             error => ProblemResults.From(error, logger));
     }
 
-    private static async Task<IResult> GetActiveAsync(ICyclePlanService plans, ILogger<ICyclePlanService> logger, CancellationToken cancellationToken)
+    private static async Task<IResult> GetActiveAsync(HttpContext http, ICyclePlanService plans, ILogger<ICyclePlanService> logger, CancellationToken cancellationToken)
     {
         var result = await plans.GetActiveAsync(cancellationToken);
         return result.Match(
-            plan => Results.Ok(CyclePlanResponse.From(plan)),
+            plan =>
+            {
+                ETags.Set(http.Response, plan.Version);
+                return Results.Ok(CyclePlanResponse.From(plan));
+            },
             ProblemResults.From,
             error => ProblemResults.From(error, logger));
     }
 
-    private static async Task<IResult> GetAsync(string id, ICyclePlanService plans, ILogger<ICyclePlanService> logger, CancellationToken cancellationToken)
+    private static async Task<IResult> GetAsync(string id, HttpContext http, ICyclePlanService plans, ILogger<ICyclePlanService> logger, CancellationToken cancellationToken)
     {
         var result = await plans.GetAsync(id, cancellationToken);
         return result.Match(
-            plan => Results.Ok(CyclePlanResponse.From(plan)),
+            plan =>
+            {
+                ETags.Set(http.Response, plan.Version);
+                return Results.Ok(CyclePlanResponse.From(plan));
+            },
             ProblemResults.From,
             ProblemResults.From,
             error => ProblemResults.From(error, logger));
@@ -209,7 +226,11 @@ public static class CyclePlanEndpoints
 
         var result = await plans.CreateAsync(await ActorOf(http), command, cancellationToken);
         return result.Match(
-            plan => Results.Json(CyclePlanResponse.From(plan), statusCode: StatusCodes.Status201Created),
+            plan =>
+            {
+                ETags.Set(http.Response, plan.Version);
+                return Results.Json(CyclePlanResponse.From(plan), statusCode: StatusCodes.Status201Created);
+            },
             ProblemResults.From,
             ProblemResults.From,
             ProblemResults.From,
@@ -229,24 +250,30 @@ public static class CyclePlanEndpoints
             return ProblemResults.From(invalid);
         }
 
-        var result = await plans.UpdateAsync(await ActorOf(http), id, patch, cancellationToken);
+        var result = await plans.UpdateAsync(await ActorOf(http), id, patch, cancellationToken, http.GetIfMatch());
         return result.Match(
-            plan => Results.Ok(CyclePlanResponse.From(plan)),
+            plan =>
+            {
+                ETags.Set(http.Response, plan.Version);
+                return Results.Ok(CyclePlanResponse.From(plan));
+            },
             ProblemResults.From,
             ProblemResults.From,
             ProblemResults.From,
-            error => ProblemResults.From(error, logger));
+            error => ProblemResults.From(error, logger),
+            ProblemResults.From);
     }
 
     private static async Task<IResult> DeleteAsync(string id, HttpContext http, ICyclePlanService plans, ILogger<ICyclePlanService> logger, CancellationToken cancellationToken)
     {
-        var result = await plans.DeleteAsync(await ActorOf(http), id, cancellationToken);
+        var result = await plans.DeleteAsync(await ActorOf(http), id, cancellationToken, http.GetIfMatch());
         return result.Match(
             _ => Results.Ok(new CyclePlanDeletedResponse(true)),
             ProblemResults.From,
             ProblemResults.From,
             ProblemResults.From,
-            error => ProblemResults.From(error, logger));
+            error => ProblemResults.From(error, logger),
+            ProblemResults.From);
     }
 
     private static async Task<IResult> DiffAsync(string id, ICyclePlanService plans, ILogger<ICyclePlanService> logger, CancellationToken cancellationToken, string? against = null)
@@ -277,14 +304,19 @@ public static class CyclePlanEndpoints
             return ProblemResults.From(invalid);
         }
 
-        var result = await plans.ReplaceSlotsAsync(await ActorOf(http), id, slots, cancellationToken);
+        var result = await plans.ReplaceSlotsAsync(await ActorOf(http), id, slots, cancellationToken, expectedVersion: http.GetIfMatch());
         return result.Match(
-            saved => Results.Ok(PlanSlotsSavedResponse.From(saved)),
+            saved =>
+            {
+                ETags.Set(http.Response, saved.Plan.Version);
+                return Results.Ok(PlanSlotsSavedResponse.From(saved));
+            },
             ProblemResults.From,
             ProblemResults.From,
             InvalidPlanProblem,
             ProblemResults.From,
             error => ProblemResults.From(error, logger),
+            ProblemResults.From,
             ProblemResults.From);
     }
 

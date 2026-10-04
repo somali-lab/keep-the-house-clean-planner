@@ -26,17 +26,29 @@ public interface ICyclePlanService
     /// <summary>Creates an inactive manual plan, empty or with the slots and week themes of <see cref="CreateCyclePlanCommand.CopyFromId"/> (<see cref="NotFound"/> when that plan does not exist).</summary>
     Task<OneOf<CyclePlan, NotFound, ValidationErrors, ConflictError, PortError>> CreateAsync(Actor actor, CreateCyclePlanCommand command, CancellationToken cancellationToken);
 
-    /// <summary>Changes the name and/or week themes. A patch that changes nothing writes and audits nothing and returns the plan as it is.</summary>
-    Task<OneOf<CyclePlan, NotFound, ValidationErrors, ConflictError, PortError>> UpdateAsync(Actor actor, string id, CyclePlanPatch patch, CancellationToken cancellationToken);
+    /// <summary>
+    /// Changes the name and/or week themes. A patch that changes nothing writes and audits nothing and returns the plan as it is. <paramref name="expectedVersion"/>
+    /// is the version the caller read (<c>If-Match</c>, ADR-0022): another version is a <see cref="PreconditionFailed"/>, also for a patch that would change nothing;
+    /// <see langword="null"/> skips the check.
+    /// </summary>
+    Task<OneOf<CyclePlan, NotFound, ValidationErrors, ConflictError, PortError, PreconditionFailed>> UpdateAsync(
+        Actor actor, string id, CyclePlanPatch patch, CancellationToken cancellationToken, int? expectedVersion = null);
 
-    /// <summary>Deletes a plan. The default (oldest) plan is a <c>409 default_plan</c>, the active plan a <c>409 active_plan</c> (a <see cref="ConflictError"/> with that code).</summary>
-    Task<OneOf<Success, NotFound, ValidationErrors, ConflictError, PortError>> DeleteAsync(Actor actor, string id, CancellationToken cancellationToken);
+    /// <summary>
+    /// Deletes a plan. The default (oldest) plan is a <c>409 default_plan</c>, the active plan a <c>409 active_plan</c> (a <see cref="ConflictError"/> with that code).
+    /// Another <paramref name="expectedVersion"/> than the stored one is a <see cref="PreconditionFailed"/>.
+    /// </summary>
+    Task<OneOf<Success, NotFound, ValidationErrors, ConflictError, PortError, PreconditionFailed>> DeleteAsync(
+        Actor actor, string id, CancellationToken cancellationToken, int? expectedVersion = null);
 
     /// <summary>
     /// Replaces all slots after the plan validation: a hard error is an <see cref="InvalidPlan"/> and nothing is written; otherwise the
-    /// saved plan comes back with the warnings and the summary. Saving what is already stored writes and audits nothing.
+    /// saved plan comes back with the warnings and the summary. Saving what is already stored writes and audits nothing. The slots are part of the plan's document, so
+    /// the save is conditional on the plan's version like any other change (<paramref name="expectedVersion"/>, <see cref="PreconditionFailed"/>, checked before the validation
+    /// and also when the slots are unchanged).
     /// </summary>
-    Task<OneOf<PlanSlotsSaved, NotFound, ValidationErrors, InvalidPlan, ConflictError, PortError, SettingsMissing>> ReplaceSlotsAsync(Actor actor, string id, IReadOnlyList<CyclePlanSlot> slots, CancellationToken cancellationToken, AuditObject? meta = null);
+    Task<OneOf<PlanSlotsSaved, NotFound, ValidationErrors, InvalidPlan, ConflictError, PortError, SettingsMissing, PreconditionFailed>> ReplaceSlotsAsync(
+        Actor actor, string id, IReadOnlyList<CyclePlanSlot> slots, CancellationToken cancellationToken, AuditObject? meta = null, int? expectedVersion = null);
 
     /// <summary>The slot differences between the plan and the active plan, and the minutes per person per week before and after.</summary>
     Task<OneOf<PlanComparison, NotFound, ValidationErrors, PortError>> CompareWithActiveAsync(string id, CancellationToken cancellationToken);

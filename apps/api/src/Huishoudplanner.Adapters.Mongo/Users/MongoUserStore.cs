@@ -1,3 +1,4 @@
+using Huishoudplanner.Domain.Concurrency;
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Identity;
 using Huishoudplanner.Domain.Ports.Driven;
@@ -173,8 +174,8 @@ internal sealed class MongoUserStore : ForStoringUsers, ForFindingUsers
         }
     }
 
-    public async Task<OneOf<Success, NotFound, PortError>> UpdateAsync(
-        string userId, UserPatch patch, DateTimeOffset now, CancellationToken cancellationToken)
+    public async Task<OneOf<Success, NotFound, PortError, PreconditionFailed>> UpdateAsync(
+        string userId, UserPatch patch, DateTimeOffset now, CancellationToken cancellationToken, int? expectedVersion = null)
     {
         ArgumentNullException.ThrowIfNull(patch);
         if (!ObjectIdConverter.TryParse(userId?.ToLowerInvariant(), out var id))
@@ -182,15 +183,26 @@ internal sealed class MongoUserStore : ForStoringUsers, ForFindingUsers
             return new NotFound();
         }
 
-        var update = Builders<BsonDocument>.Update.Combine(UserDocuments.ToSets(patch, now));
+        var update = Builders<BsonDocument>.Update.Combine([.. UserDocuments.ToSets(patch, now), Builders<BsonDocument>.Update.Inc(EntityVersioning.Field, 1)]);
         try
         {
-            var filter = Builders<BsonDocument>.Filter.Eq("_id", id);
+            FilterDefinition<BsonDocument> filter = EntityVersioning.Filter(id, expectedVersion);
             var session = MongoTransactionContext.Session;
             var result = session is null
                 ? await users.UpdateOneAsync(filter, update, cancellationToken: cancellationToken).ConfigureAwait(false)
                 : await users.UpdateOneAsync(session, filter, update, cancellationToken: cancellationToken).ConfigureAwait(false);
-            return result.MatchedCount == 0 ? new NotFound() : new Success();
+            if (result.MatchedCount > 0)
+            {
+                return new Success();
+            }
+
+            if (expectedVersion is null || session is null)
+            {
+                return new NotFound();
+            }
+
+            var missed = await EntityVersioning.ExplainMissAsync(users, session, id, cancellationToken).ConfigureAwait(false);
+            return missed.Match<OneOf<Success, NotFound, PortError, PreconditionFailed>>(notFound => notFound, failed => failed);
         }
         catch (Exception e) when (IsInfrastructureFailure(e) && !IsTransient(e))
         {

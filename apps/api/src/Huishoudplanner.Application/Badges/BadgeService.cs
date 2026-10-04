@@ -1,4 +1,5 @@
 using Huishoudplanner.Domain.Audit;
+using Huishoudplanner.Domain.Concurrency;
 using Huishoudplanner.Domain.Badges;
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Identity;
@@ -57,6 +58,18 @@ public sealed class BadgeService(
                 ? new BadgeList([.. items.Take(take)], BadgeCursor.After(items[take - 1]).Encode())
                 : new BadgeList(items, null),
             error => error);
+    }
+
+    public async Task<OneOf<Badge, NotFound, ValidationErrors, PortError>> GetAsync(string id, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(id);
+        if (!BadgeIds.IsValid(id))
+        {
+            return ValidationErrors.For("id", "invalid_object_id");
+        }
+
+        var found = await badges.FindAsync(id.ToLowerInvariant(), cancellationToken).ConfigureAwait(false);
+        return found.Match<OneOf<Badge, NotFound, ValidationErrors, PortError>>(badge => badge, notFound => notFound, error => error);
     }
 
     public async Task<OneOf<BadgeAwardList, ValidationErrors, PortError>> AwardsAsync(string? personId, int? limit, string? cursor, CancellationToken cancellationToken)
@@ -245,7 +258,8 @@ public sealed class BadgeService(
 
     // ---- update
 
-    public async Task<OneOf<Badge, NotFound, ValidationErrors, ConflictError, PortError>> UpdateAsync(Actor actor, string id, BadgePatch patch, CancellationToken cancellationToken)
+    public async Task<OneOf<Badge, NotFound, ValidationErrors, ConflictError, PortError, PreconditionFailed>> UpdateAsync(
+        Actor actor, string id, BadgePatch patch, CancellationToken cancellationToken, int? expectedVersion = null)
     {
         ArgumentNullException.ThrowIfNull(actor);
         ArgumentNullException.ThrowIfNull(id);
@@ -266,15 +280,16 @@ public sealed class BadgeService(
         }
 
         var checkedPatch = new CheckedPatch(name, description, rule, patch.Active, image, patch.Image is { Image: null });
-        var ran = await transactions.RunAsync(ct => UpdateInTransactionAsync(actor, id.ToLowerInvariant(), checkedPatch, ct), cancellationToken).ConfigureAwait(false);
+        var ran = await transactions.RunAsync(ct => UpdateInTransactionAsync(actor, id.ToLowerInvariant(), checkedPatch, expectedVersion, ct), cancellationToken).ConfigureAwait(false);
         if (!ran.TryPickT0(out var inner, out var runFailure))
         {
-            return runFailure.Match<OneOf<Badge, NotFound, ValidationErrors, ConflictError, PortError>>(conflict => conflict, error => error);
+            return runFailure.Match<OneOf<Badge, NotFound, ValidationErrors, ConflictError, PortError, PreconditionFailed>>(conflict => conflict, error => error);
         }
 
         if (!inner.TryPickT0(out var updated, out var failure))
         {
-            return failure.Match<OneOf<Badge, NotFound, ValidationErrors, ConflictError, PortError>>(notFound => notFound, invalid => invalid, error => error);
+            return failure.Match<OneOf<Badge, NotFound, ValidationErrors, ConflictError, PortError, PreconditionFailed>>(
+                notFound => notFound, invalid => invalid, error => error, stale => stale);
         }
 
         if (updated.AffectsAwards)
@@ -289,9 +304,10 @@ public sealed class BadgeService(
 
     private sealed record Updated(Badge Badge, bool AffectsAwards);
 
-    private async Task<TransactionOutcome<OneOf<Updated, NotFound, ValidationErrors, PortError>>> UpdateInTransactionAsync(Actor actor, string id, CheckedPatch patch, CancellationToken ct)
+    private async Task<TransactionOutcome<OneOf<Updated, NotFound, ValidationErrors, PortError, PreconditionFailed>>> UpdateInTransactionAsync(
+        Actor actor, string id, CheckedPatch patch, int? expectedVersion, CancellationToken ct)
     {
-        static TransactionOutcome<OneOf<Updated, NotFound, ValidationErrors, PortError>> Abort(OneOf<Updated, NotFound, ValidationErrors, PortError> value) =>
+        static TransactionOutcome<OneOf<Updated, NotFound, ValidationErrors, PortError, PreconditionFailed>> Abort(OneOf<Updated, NotFound, ValidationErrors, PortError, PreconditionFailed> value) =>
             TransactionOutcome.Abort(value);
 
         var found = await badges.FindAsync(id, ct).ConfigureAwait(false);
@@ -305,13 +321,19 @@ public sealed class BadgeService(
             return Abort(findFailure);
         }
 
+        // The precondition is checked before the rule is resolved and before the no-op rule: a stale If-Match is a 412 whatever the patch says.
+        if (EntityVersion.Check(expectedVersion, before.Version) is { } stale)
+        {
+            return Abort(stale);
+        }
+
         var rule = patch.Rule;
         if (rule is not null)
         {
             var resolved = await ExistingTasksAsync(rule, ct).ConfigureAwait(false);
             if (resolved.TryPickT1(out var resolveFailure, out rule))
             {
-                return Abort(resolveFailure.Match<OneOf<Updated, NotFound, ValidationErrors, PortError>>(invalid => invalid, error => error));
+                return Abort(resolveFailure.Match<OneOf<Updated, NotFound, ValidationErrors, PortError, PreconditionFailed>>(invalid => invalid, error => error));
             }
         }
 
@@ -326,7 +348,7 @@ public sealed class BadgeService(
         var change = BadgeAudit.Between(before, after);
         if (change.IsNoOp)
         {
-            return TransactionOutcome.Commit<OneOf<Updated, NotFound, ValidationErrors, PortError>>(new Updated(before, false));
+            return TransactionOutcome.Commit<OneOf<Updated, NotFound, ValidationErrors, PortError, PreconditionFailed>>(new Updated(before, false));
         }
 
         var changes = new BadgeChanges(
@@ -336,26 +358,22 @@ public sealed class BadgeService(
             after.Active != before.Active ? after.Active : null,
             patch.Image is not null && after.Image != before.Image ? patch.Image : null,
             patch.ClearImage && before.Image is not null);
-        var written = await badges.UpdateAsync(id, changes, Now(), ct).ConfigureAwait(false);
-        if (written.TryPickT1(out var gone, out var restWritten))
+        var written = await badges.UpdateAsync(id, changes, Now(), ct, expectedVersion).ConfigureAwait(false);
+        if (!written.TryPickT0(out var stored, out var writeFailure))
         {
-            return Abort(gone);
-        }
-
-        if (restWritten.TryPickT1(out var writeFailure, out var stored))
-        {
-            return Abort(writeFailure);
+            return Abort(writeFailure.Match<OneOf<Updated, NotFound, ValidationErrors, PortError, PreconditionFailed>>(notFound => notFound, error => error, failed => failed));
         }
 
         var recorded = await audit.RecordAsync(BadgeAudit.ForUpdate(AuditActor.From(actor), id, change), ct).ConfigureAwait(false);
         return recorded.Match(
-            _ => TransactionOutcome.Commit<OneOf<Updated, NotFound, ValidationErrors, PortError>>(new Updated(stored, BadgeAudit.AffectsAwards(change))),
+            _ => TransactionOutcome.Commit<OneOf<Updated, NotFound, ValidationErrors, PortError, PreconditionFailed>>(new Updated(stored, BadgeAudit.AffectsAwards(change))),
             error => Abort(error));
     }
 
     // ---- delete
 
-    public async Task<OneOf<Success, NotFound, ValidationErrors, ConflictError, PortError>> DeleteAsync(Actor actor, string id, CancellationToken cancellationToken)
+    public async Task<OneOf<Success, NotFound, ValidationErrors, ConflictError, PortError, PreconditionFailed>> DeleteAsync(
+        Actor actor, string id, CancellationToken cancellationToken, int? expectedVersion = null)
     {
         ArgumentNullException.ThrowIfNull(actor);
         ArgumentNullException.ThrowIfNull(id);
@@ -364,15 +382,16 @@ public sealed class BadgeService(
             return ValidationErrors.For("id", "invalid_object_id");
         }
 
-        var ran = await transactions.RunAsync(ct => DeleteInTransactionAsync(actor, id.ToLowerInvariant(), ct), cancellationToken).ConfigureAwait(false);
+        var ran = await transactions.RunAsync(ct => DeleteInTransactionAsync(actor, id.ToLowerInvariant(), expectedVersion, ct), cancellationToken).ConfigureAwait(false);
         if (!ran.TryPickT0(out var inner, out var runFailure))
         {
-            return runFailure.Match<OneOf<Success, NotFound, ValidationErrors, ConflictError, PortError>>(conflict => conflict, error => error);
+            return runFailure.Match<OneOf<Success, NotFound, ValidationErrors, ConflictError, PortError, PreconditionFailed>>(conflict => conflict, error => error);
         }
 
         if (!inner.TryPickT0(out var deleted, out var failure))
         {
-            return failure.Match<OneOf<Success, NotFound, ValidationErrors, ConflictError, PortError>>(notFound => notFound, error => error);
+            return failure.Match<OneOf<Success, NotFound, ValidationErrors, ConflictError, PortError, PreconditionFailed>>(
+                notFound => notFound, error => error, stale => stale);
         }
 
         // The badge is gone, so its name travels along for the history of the awards that are withdrawn with it.
@@ -384,9 +403,10 @@ public sealed class BadgeService(
         return new Success();
     }
 
-    private async Task<TransactionOutcome<OneOf<Badge, NotFound, PortError>>> DeleteInTransactionAsync(Actor actor, string id, CancellationToken ct)
+    private async Task<TransactionOutcome<OneOf<Badge, NotFound, PortError, PreconditionFailed>>> DeleteInTransactionAsync(
+        Actor actor, string id, int? expectedVersion, CancellationToken ct)
     {
-        static TransactionOutcome<OneOf<Badge, NotFound, PortError>> Abort(OneOf<Badge, NotFound, PortError> value) => TransactionOutcome.Abort(value);
+        static TransactionOutcome<OneOf<Badge, NotFound, PortError, PreconditionFailed>> Abort(OneOf<Badge, NotFound, PortError, PreconditionFailed> value) => TransactionOutcome.Abort(value);
 
         var found = await badges.FindAsync(id, ct).ConfigureAwait(false);
         if (found.TryPickT1(out var notFound, out var rest))
@@ -399,20 +419,20 @@ public sealed class BadgeService(
             return Abort(findFailure);
         }
 
-        var deleted = await badges.DeleteAsync(id, ct).ConfigureAwait(false);
-        if (deleted.TryPickT1(out var gone, out var restDeleted))
+        if (EntityVersion.Check(expectedVersion, before.Version) is { } stale)
         {
-            return Abort(gone);
+            return Abort(stale);
         }
 
-        if (restDeleted.TryPickT1(out var deleteFailure, out _))
+        var deleted = await badges.DeleteAsync(id, ct, expectedVersion).ConfigureAwait(false);
+        if (!deleted.TryPickT0(out _, out var deleteFailure))
         {
-            return Abort(deleteFailure);
+            return Abort(deleteFailure.Match<OneOf<Badge, NotFound, PortError, PreconditionFailed>>(notFound => notFound, error => error, failed => failed));
         }
 
         var recorded = await audit.RecordAsync(BadgeAudit.ForDelete(AuditActor.From(actor), before), ct).ConfigureAwait(false);
         return recorded.Match(
-            _ => TransactionOutcome.Commit<OneOf<Badge, NotFound, PortError>>(before),
+            _ => TransactionOutcome.Commit<OneOf<Badge, NotFound, PortError, PreconditionFailed>>(before),
             error => Abort(error));
     }
 
@@ -586,9 +606,12 @@ public sealed class BadgeService(
                 new BadgeChanges(Rule: after.Rule, Active: after.Active != before.Active ? after.Active : null),
                 Now(),
                 ct).ConfigureAwait(false);
-            if (written.TryPickT2(out var writeFailure, out _))
+            if (!written.TryPickT0(out _, out var writeFailure))
             {
-                return Abort(writeFailure);
+                return Abort(writeFailure.Match<PortError>(
+                    _ => new PortError("badges.remove_task: the badge vanished during the update."),
+                    error => error,
+                    _ => new PortError("badges.remove_task: an unconditional write reported a version conflict.")));
             }
 
             var meta = AuditObject.Of(("reason", "task_deleted"), ("taskId", new AuditObjectId(taskId)));

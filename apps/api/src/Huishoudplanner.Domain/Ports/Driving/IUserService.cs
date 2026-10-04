@@ -13,20 +13,26 @@ public interface IUserService
     /// <param name="limit">1 to <see cref="UserLimits.MaxPageSize"/>, default <see cref="UserLimits.DefaultPageSize"/>.</param>
     Task<OneOf<UserPage, ValidationErrors, PortError>> ListAsync(bool? active, string? cursor, int? limit, CancellationToken cancellationToken);
 
+    /// <summary>One person; <see cref="NotFound"/> for an unknown id, a <see cref="ValidationErrors"/> on <c>id</c> for a malformed one.</summary>
+    Task<OneOf<User, NotFound, ValidationErrors, PortError>> GetAsync(string userId, CancellationToken cancellationToken);
+
     /// <summary>Administrators only (the endpoint's policy). Audit: <c>user</c> / <c>create</c>.</summary>
     Task<OneOf<User, ValidationErrors, ConflictError, PortError>> CreateAsync(Actor actor, CreateUserInput input, CancellationToken cancellationToken);
 
     /// <summary>
     /// Administrators only. <c>last_admin</c> when the last active administrator would be deactivated or demoted. A patch that
-    /// changes nothing writes and audits nothing and returns the user as stored.
+    /// changes nothing writes and audits nothing and returns the user as stored. <paramref name="expectedVersion"/> is the version the caller read
+    /// (<c>If-Match</c>, ADR-0022): another version is a <see cref="PreconditionFailed"/>, also for a patch that would change nothing; <see langword="null"/>
+    /// skips the check.
     /// </summary>
-    Task<OneOf<User, NotFound, ValidationErrors, ConflictError, PortError>> UpdateAsync(
-        Actor actor, string userId, UpdateUserInput input, CancellationToken cancellationToken);
+    Task<OneOf<User, NotFound, ValidationErrors, ConflictError, PortError, PreconditionFailed>> UpdateAsync(
+        Actor actor, string userId, UpdateUserInput input, CancellationToken cancellationToken, int? expectedVersion = null);
 
     /// <summary>
     /// A person sets their own moments; an administrator may set anyone's, anyone else is <see cref="Forbidden"/>. The complete
-    /// setting replaces the stored one; a setting equal to the stored one writes and audits nothing.
+    /// setting replaces the stored one; a setting equal to the stored one writes and audits nothing. The setting is a field of the person's document, so it is conditional on the person's version
+    /// like any other change (<paramref name="expectedVersion"/>, <see cref="PreconditionFailed"/>).
     /// </summary>
-    Task<OneOf<User, NotFound, ValidationErrors, Forbidden, ConflictError, PortError>> SetBrowserNotificationsAsync(
-        Actor actor, string userId, BrowserNotificationsInput input, CancellationToken cancellationToken);
+    Task<OneOf<User, NotFound, ValidationErrors, Forbidden, ConflictError, PortError, PreconditionFailed>> SetBrowserNotificationsAsync(
+        Actor actor, string userId, BrowserNotificationsInput input, CancellationToken cancellationToken, int? expectedVersion = null);
 }

@@ -1,3 +1,4 @@
+using Huishoudplanner.Adapters.Http.Concurrency;
 using System.Globalization;
 using Huishoudplanner.Adapters.Http.Identity;
 using Huishoudplanner.Adapters.Http.Problems;
@@ -64,6 +65,7 @@ public static class StatisticsEndpoints
 
         routes.MapDelete(Path, ResetAsync)
             .RequireAdmin()
+            .WithoutIfMatch("A bulk administrative reset or purge of the history; there is no single entity to version.")
             .WithName("resetStatistics")
             .WithTags(StatisticsTag)
             .WithSummary("Starts the statistics over, or purges the history before a day (administrators).")

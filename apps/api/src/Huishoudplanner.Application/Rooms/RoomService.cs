@@ -1,4 +1,5 @@
 using Huishoudplanner.Domain.Audit;
+using Huishoudplanner.Domain.Concurrency;
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Identity;
 using Huishoudplanner.Domain.Ports.Driven;
@@ -49,6 +50,17 @@ public sealed class RoomService(
             error => error);
     }
 
+    public async Task<OneOf<Room, NotFound, ValidationErrors, PortError>> GetAsync(string id, CancellationToken cancellationToken)
+    {
+        if (!RoomIds.IsValid(id))
+        {
+            return InvalidId();
+        }
+
+        var found = await rooms.FindAsync(id, cancellationToken).ConfigureAwait(false);
+        return found.Match<OneOf<Room, NotFound, ValidationErrors, PortError>>(room => room, notFound => notFound, error => error);
+    }
+
     public async Task<OneOf<Room, ValidationErrors, ConflictError, PortError>> CreateAsync(Actor actor, CreateRoomCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(actor);
@@ -92,7 +104,8 @@ public sealed class RoomService(
         return await CommitWithAuditAsync(entry, room, ct).ConfigureAwait(false);
     }
 
-    public async Task<OneOf<Room, NotFound, ValidationErrors, ConflictError, PortError>> UpdateAsync(Actor actor, string id, RoomPatch patch, CancellationToken cancellationToken)
+    public async Task<OneOf<Room, NotFound, ValidationErrors, ConflictError, PortError, PreconditionFailed>> UpdateAsync(
+        Actor actor, string id, RoomPatch patch, CancellationToken cancellationToken, int? expectedVersion = null)
     {
         ArgumentNullException.ThrowIfNull(actor);
         ArgumentNullException.ThrowIfNull(patch);
@@ -107,24 +120,35 @@ public sealed class RoomService(
             return NameRequired();
         }
 
-        var ran = await transactions.RunAsync(ct => UpdateInTransactionAsync(actor, id, patch with { Name = name }, ct), cancellationToken).ConfigureAwait(false);
-        return ran.Match<OneOf<Room, NotFound, ValidationErrors, ConflictError, PortError>>(
-            outcome => outcome.Match<OneOf<Room, NotFound, ValidationErrors, ConflictError, PortError>>(room => room, notFound => notFound, error => error),
+        var ran = await transactions.RunAsync(ct => UpdateInTransactionAsync(actor, id, patch with { Name = name }, expectedVersion, ct), cancellationToken).ConfigureAwait(false);
+        return ran.Match<OneOf<Room, NotFound, ValidationErrors, ConflictError, PortError, PreconditionFailed>>(
+            outcome => outcome.Match<OneOf<Room, NotFound, ValidationErrors, ConflictError, PortError, PreconditionFailed>>(
+                room => room, notFound => notFound, error => error, stale => stale),
             conflict => conflict,
             error => error);
     }
 
-    private async Task<TransactionOutcome<OneOf<Room, NotFound, PortError>>> UpdateInTransactionAsync(Actor actor, string id, RoomPatch patch, CancellationToken ct)
+    private async Task<TransactionOutcome<OneOf<Room, NotFound, PortError, PreconditionFailed>>> UpdateInTransactionAsync(
+        Actor actor, string id, RoomPatch patch, int? expectedVersion, CancellationToken ct)
     {
+        static TransactionOutcome<OneOf<Room, NotFound, PortError, PreconditionFailed>> Abort(OneOf<Room, NotFound, PortError, PreconditionFailed> value) =>
+            TransactionOutcome.Abort(value);
+
         var found = await rooms.FindAsync(id, ct).ConfigureAwait(false);
         if (found.TryPickT1(out var notFound, out var rest))
         {
-            return TransactionOutcome.Abort<OneOf<Room, NotFound, PortError>>(notFound);
+            return Abort(notFound);
         }
 
         if (rest.TryPickT1(out var findError, out var before))
         {
-            return TransactionOutcome.Abort<OneOf<Room, NotFound, PortError>>(findError);
+            return Abort(findError);
+        }
+
+        // The precondition is checked before the no-op rule: a stale If-Match on a patch that changes nothing is still a 412.
+        if (EntityVersion.Check(expectedVersion, before.Version) is { } stale)
+        {
+            return Abort(stale);
         }
 
         var after = before with
@@ -137,7 +161,7 @@ public sealed class RoomService(
         var changes = ChangeSet.Between(Fields(before), Fields(after));
         if (changes.IsNoOp)
         {
-            return TransactionOutcome.Commit<OneOf<Room, NotFound, PortError>>(before);
+            return TransactionOutcome.Commit<OneOf<Room, NotFound, PortError, PreconditionFailed>>(before);
         }
 
         var updated = await rooms.UpdateAsync(
@@ -148,25 +172,22 @@ public sealed class RoomService(
                 after.Active != before.Active ? after.Active : null,
                 after.Virtual != before.Virtual ? after.Virtual : null),
             time.GetUtcNow(),
-            ct).ConfigureAwait(false);
-        if (updated.TryPickT1(out var gone, out var restUpdated))
+            ct,
+            expectedVersion).ConfigureAwait(false);
+        if (!updated.TryPickT0(out var room, out var updateFailure))
         {
-            return TransactionOutcome.Abort<OneOf<Room, NotFound, PortError>>(gone);
-        }
-
-        if (restUpdated.TryPickT1(out var updateError, out var room))
-        {
-            return TransactionOutcome.Abort<OneOf<Room, NotFound, PortError>>(updateError);
+            return Abort(updateFailure.Match<OneOf<Room, NotFound, PortError, PreconditionFailed>>(notFound => notFound, error => error, failed => failed));
         }
 
         var entry = changes.ToEntry(AuditActor.From(actor), AuditEntity.Room, id, AuditAction.Update);
         var recorded = await audit.RecordAsync(entry, ct).ConfigureAwait(false);
         return recorded.Match(
-            _ => TransactionOutcome.Commit<OneOf<Room, NotFound, PortError>>(room),
-            error => TransactionOutcome.Abort<OneOf<Room, NotFound, PortError>>(error));
+            _ => TransactionOutcome.Commit<OneOf<Room, NotFound, PortError, PreconditionFailed>>(room),
+            error => Abort(error));
     }
 
-    public async Task<OneOf<Success, NotFound, ValidationErrors, RoomInUse, ConflictError, PortError>> DeleteAsync(Actor actor, string id, CancellationToken cancellationToken)
+    public async Task<OneOf<Success, NotFound, ValidationErrors, RoomInUse, ConflictError, PortError, PreconditionFailed>> DeleteAsync(
+        Actor actor, string id, CancellationToken cancellationToken, int? expectedVersion = null)
     {
         ArgumentNullException.ThrowIfNull(actor);
         if (!RoomIds.IsValid(id))
@@ -174,15 +195,16 @@ public sealed class RoomService(
             return InvalidId();
         }
 
-        var ran = await transactions.RunAsync(ct => DeleteInTransactionAsync(actor, id, ct), cancellationToken).ConfigureAwait(false);
-        return ran.Match<OneOf<Success, NotFound, ValidationErrors, RoomInUse, ConflictError, PortError>>(
-            outcome => outcome.Match<OneOf<Success, NotFound, ValidationErrors, RoomInUse, ConflictError, PortError>>(
-                success => success, notFound => notFound, inUse => inUse, error => error),
+        var ran = await transactions.RunAsync(ct => DeleteInTransactionAsync(actor, id, expectedVersion, ct), cancellationToken).ConfigureAwait(false);
+        return ran.Match<OneOf<Success, NotFound, ValidationErrors, RoomInUse, ConflictError, PortError, PreconditionFailed>>(
+            outcome => outcome.Match<OneOf<Success, NotFound, ValidationErrors, RoomInUse, ConflictError, PortError, PreconditionFailed>>(
+                success => success, notFound => notFound, inUse => inUse, error => error, stale => stale),
             conflict => conflict,
             error => error);
     }
 
-    private async Task<TransactionOutcome<OneOf<Success, NotFound, RoomInUse, PortError>>> DeleteInTransactionAsync(Actor actor, string id, CancellationToken ct)
+    private async Task<TransactionOutcome<OneOf<Success, NotFound, RoomInUse, PortError, PreconditionFailed>>> DeleteInTransactionAsync(
+        Actor actor, string id, int? expectedVersion, CancellationToken ct)
     {
         var found = await rooms.FindAsync(id, ct).ConfigureAwait(false);
         if (found.TryPickT1(out var notFound, out var rest))
@@ -193,6 +215,11 @@ public sealed class RoomService(
         if (rest.TryPickT1(out var findError, out var before))
         {
             return Abort(findError);
+        }
+
+        if (EntityVersion.Check(expectedVersion, before.Version) is { } stale)
+        {
+            return Abort(stale);
         }
 
         var counted = await tasks.CountInRoomAsync(id, ct).ConfigureAwait(false);
@@ -206,25 +233,20 @@ public sealed class RoomService(
             return Abort(new RoomInUse(taskCount));
         }
 
-        var deleted = await rooms.DeleteAsync(id, ct).ConfigureAwait(false);
-        if (deleted.TryPickT1(out var gone, out var restDeleted))
+        var deleted = await rooms.DeleteAsync(id, ct, expectedVersion).ConfigureAwait(false);
+        if (!deleted.TryPickT0(out _, out var deleteFailure))
         {
-            return Abort(gone);
-        }
-
-        if (restDeleted.TryPickT1(out var deleteError, out _))
-        {
-            return Abort(deleteError);
+            return Abort(deleteFailure.Match<OneOf<Success, NotFound, RoomInUse, PortError, PreconditionFailed>>(notFound => notFound, error => error, failed => failed));
         }
 
         var entry = ChangeSet.Between(Fields(before), null).ToEntry(AuditActor.From(actor), AuditEntity.Room, id, AuditAction.Delete);
         var recorded = await audit.RecordAsync(entry, ct).ConfigureAwait(false);
         return recorded.Match(
-            _ => TransactionOutcome.Commit<OneOf<Success, NotFound, RoomInUse, PortError>>(new Success()),
+            _ => TransactionOutcome.Commit<OneOf<Success, NotFound, RoomInUse, PortError, PreconditionFailed>>(new Success()),
             error => Abort(error));
     }
 
-    private static TransactionOutcome<OneOf<Success, NotFound, RoomInUse, PortError>> Abort(OneOf<Success, NotFound, RoomInUse, PortError> value) =>
+    private static TransactionOutcome<OneOf<Success, NotFound, RoomInUse, PortError, PreconditionFailed>> Abort(OneOf<Success, NotFound, RoomInUse, PortError, PreconditionFailed> value) =>
         TransactionOutcome.Abort(value);
 
     private async Task<TransactionOutcome<OneOf<Room, PortError>>> CommitWithAuditAsync(AuditEntry entry, Room room, CancellationToken ct)

@@ -1,4 +1,5 @@
 using Huishoudplanner.Domain.Audit;
+using Huishoudplanner.Domain.Concurrency;
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Identity;
 using Huishoudplanner.Domain.Ports.Driven;
@@ -95,22 +96,28 @@ internal sealed class FakeUserStore(UserWorld world) : ForStoringUsers
         world.Inserts++;
         var stored = new User(
             Guid.NewGuid().ToString("N")[..24], user.Name, user.Color, true, user.Role, user.UnavailableWeekdays,
-            user.DailyBudgetMinutes, user.MaxDailyMinutes, BrowserNotifications.Disabled, now, now);
+            user.DailyBudgetMinutes, user.MaxDailyMinutes, BrowserNotifications.Disabled, now, now, 1);
         world.Users.Add(stored);
         return Task.FromResult<OneOf<User, PortError>>(stored);
     }
 
-    public Task<OneOf<Success, NotFound, PortError>> UpdateAsync(string userId, UserPatch patch, DateTimeOffset now, CancellationToken cancellationToken)
+    public Task<OneOf<Success, NotFound, PortError, PreconditionFailed>> UpdateAsync(
+        string userId, UserPatch patch, DateTimeOffset now, CancellationToken cancellationToken, int? expectedVersion = null)
     {
         var index = world.Users.FindIndex(u => u.Id == userId);
         if (index < 0)
         {
-            return Task.FromResult<OneOf<Success, NotFound, PortError>>(new NotFound());
+            return Task.FromResult<OneOf<Success, NotFound, PortError, PreconditionFailed>>(new NotFound());
+        }
+
+        if (EntityVersion.Check(expectedVersion, world.Users[index].Version) is { } stale)
+        {
+            return Task.FromResult<OneOf<Success, NotFound, PortError, PreconditionFailed>>(stale);
         }
 
         world.Updates++;
-        world.Users[index] = UserRules.Apply(world.Users[index], patch, now);
-        return Task.FromResult<OneOf<Success, NotFound, PortError>>(new Success());
+        world.Users[index] = UserRules.Apply(world.Users[index], patch, now) with { Version = world.Users[index].Version + 1 };
+        return Task.FromResult<OneOf<Success, NotFound, PortError, PreconditionFailed>>(new Success());
     }
 }
 

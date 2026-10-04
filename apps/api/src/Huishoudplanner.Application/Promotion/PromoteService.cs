@@ -177,7 +177,8 @@ public sealed class PromoteService(
             rejected => rejected,
             conflict => conflict,
             error => error,
-            missing => missing);
+            missing => missing,
+            _ => new PortError("promote.apply: an unconditional plan write reported a version conflict."));
         return result.IsT0 ? TransactionOutcome.Commit(result) : Abort(result);
     }
 
@@ -226,14 +227,12 @@ public sealed class PromoteService(
         }
 
         var written = await settings.UpdateAsync(changes, ct).ConfigureAwait(false);
-        if (written.TryPickT1(out var vanished, out var writtenRest))
+        if (!written.TryPickT0(out _, out var writeFailure))
         {
-            return Abort(vanished);
-        }
-
-        if (writtenRest.TryPickT1(out var writeError, out _))
-        {
-            return Abort(writeError);
+            return Abort(writeFailure.Match<OneOf<Success, SettingsMissing, PortError>>(
+                missing => missing,
+                error => error,
+                _ => new PortError("promote.dismiss: an unconditional write reported a version conflict.")));
         }
 
         var recorded = await audit

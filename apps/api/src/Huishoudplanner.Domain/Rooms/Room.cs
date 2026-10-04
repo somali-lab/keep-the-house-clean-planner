@@ -2,7 +2,8 @@ namespace Huishoudplanner.Domain.Rooms;
 
 /// <summary>
 /// A space of the house (requirements 3, <c>rooms</c>). <see cref="Virtual"/> marks the room for house-wide work that belongs to
-/// no single space. <see cref="Id"/> is the 24 character hexadecimal id.
+/// no single space. <see cref="Id"/> is the 24 character hexadecimal id. <see cref="Version"/> is the optimistic concurrency version of the
+/// document (<see cref="Concurrency.EntityVersion"/>, ADR-0022).
 /// </summary>
 public sealed record Room(
     string Id,
@@ -11,7 +12,8 @@ public sealed record Room(
     bool Active,
     bool Virtual,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    int Version = 0);
 
 /// <summary>What the caller asks for when creating a room. A missing <see cref="SortOrder"/> puts the room at the end of the list.</summary>
 public sealed record CreateRoomCommand(string Name, int? SortOrder = null, bool Virtual = false);

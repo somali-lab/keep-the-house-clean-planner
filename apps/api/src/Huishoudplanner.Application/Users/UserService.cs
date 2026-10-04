@@ -1,11 +1,12 @@
 using Huishoudplanner.Domain.Audit;
+using Huishoudplanner.Domain.Concurrency;
 using Huishoudplanner.Domain.Errors;
 using Huishoudplanner.Domain.Identity;
 using Huishoudplanner.Domain.Ports.Driven;
 using Huishoudplanner.Domain.Ports.Driving;
 using Huishoudplanner.Domain.Users;
 using OneOf;
-using Changed = OneOf.OneOf<Huishoudplanner.Domain.Users.User, Huishoudplanner.Domain.Errors.NotFound, Huishoudplanner.Domain.Errors.ConflictError, Huishoudplanner.Domain.Errors.PortError>;
+using Changed = OneOf.OneOf<Huishoudplanner.Domain.Users.User, Huishoudplanner.Domain.Errors.NotFound, Huishoudplanner.Domain.Errors.ConflictError, Huishoudplanner.Domain.Errors.PortError, Huishoudplanner.Domain.Errors.PreconditionFailed>;
 
 namespace Huishoudplanner.Application.Users;
 
@@ -44,6 +45,17 @@ public sealed class UserService(
         return page.Match<OneOf<UserPage, ValidationErrors, PortError>>(p => p, e => e);
     }
 
+    public async Task<OneOf<User, NotFound, ValidationErrors, PortError>> GetAsync(string userId, CancellationToken cancellationToken)
+    {
+        if (!UserRules.IsObjectId(userId))
+        {
+            return ValidationErrors.For("id", UserRules.InvalidObjectId);
+        }
+
+        var found = await users.FindAsync(userId.ToLowerInvariant(), cancellationToken).ConfigureAwait(false);
+        return found.Match<OneOf<User, NotFound, ValidationErrors, PortError>>(user => user, notFound => notFound, error => error);
+    }
+
     public async Task<OneOf<User, ValidationErrors, ConflictError, PortError>> CreateAsync(
         Actor actor, CreateUserInput input, CancellationToken cancellationToken)
     {
@@ -70,8 +82,8 @@ public sealed class UserService(
             error => error);
     }
 
-    public async Task<OneOf<User, NotFound, ValidationErrors, ConflictError, PortError>> UpdateAsync(
-        Actor actor, string userId, UpdateUserInput input, CancellationToken cancellationToken)
+    public async Task<OneOf<User, NotFound, ValidationErrors, ConflictError, PortError, PreconditionFailed>> UpdateAsync(
+        Actor actor, string userId, UpdateUserInput input, CancellationToken cancellationToken, int? expectedVersion = null)
     {
         ArgumentNullException.ThrowIfNull(actor);
         if (!UserRules.IsObjectId(userId))
@@ -85,12 +97,12 @@ public sealed class UserService(
             return parsed.AsT1;
         }
 
-        var changed = await ChangeAsync(actor, userId.ToLowerInvariant(), parsed.AsT0, cancellationToken).ConfigureAwait(false);
-        return changed.Match<OneOf<User, NotFound, ValidationErrors, ConflictError, PortError>>(u => u, nf => nf, c => c, e => e);
+        var changed = await ChangeAsync(actor, userId.ToLowerInvariant(), parsed.AsT0, expectedVersion, cancellationToken).ConfigureAwait(false);
+        return changed.Match<OneOf<User, NotFound, ValidationErrors, ConflictError, PortError, PreconditionFailed>>(u => u, nf => nf, c => c, e => e, p => p);
     }
 
-    public async Task<OneOf<User, NotFound, ValidationErrors, Forbidden, ConflictError, PortError>> SetBrowserNotificationsAsync(
-        Actor actor, string userId, BrowserNotificationsInput input, CancellationToken cancellationToken)
+    public async Task<OneOf<User, NotFound, ValidationErrors, Forbidden, ConflictError, PortError, PreconditionFailed>> SetBrowserNotificationsAsync(
+        Actor actor, string userId, BrowserNotificationsInput input, CancellationToken cancellationToken, int? expectedVersion = null)
     {
         ArgumentNullException.ThrowIfNull(actor);
         if (!UserRules.IsObjectId(userId))
@@ -110,11 +122,11 @@ public sealed class UserService(
             return new Forbidden("Only an administrator can change another person's notifications");
         }
 
-        var changed = await ChangeAsync(actor, id, new UserPatch(BrowserNotifications: parsed.AsT0), cancellationToken).ConfigureAwait(false);
-        return changed.Match<OneOf<User, NotFound, ValidationErrors, Forbidden, ConflictError, PortError>>(u => u, nf => nf, c => c, e => e);
+        var changed = await ChangeAsync(actor, id, new UserPatch(BrowserNotifications: parsed.AsT0), expectedVersion, cancellationToken).ConfigureAwait(false);
+        return changed.Match<OneOf<User, NotFound, ValidationErrors, Forbidden, ConflictError, PortError, PreconditionFailed>>(u => u, nf => nf, c => c, e => e, p => p);
     }
 
-    private async Task<Changed> ChangeAsync(Actor actor, string id, UserPatch patch, CancellationToken cancellationToken)
+    private async Task<Changed> ChangeAsync(Actor actor, string id, UserPatch patch, int? expectedVersion, CancellationToken cancellationToken)
     {
         var auditActor = AuditActor.From(actor);
         var result = await transactions.RunAsync<Changed>(
@@ -132,6 +144,13 @@ public sealed class UserService(
                 }
 
                 var before = found.AsT0;
+
+                // The precondition is checked before the other rules and the no-op rule: a stale If-Match is a 412 whatever the patch says.
+                if (EntityVersion.Check(expectedVersion, before.Version) is { } stale)
+                {
+                    return TransactionOutcome.Abort<Changed>(stale);
+                }
+
                 if (UserRules.RemovesActiveAdmin(before, patch))
                 {
                     var others = await users.CountOtherActiveAdminsAsync(id, token).ConfigureAwait(false);
@@ -147,22 +166,17 @@ public sealed class UserService(
                 }
 
                 var now = time.GetUtcNow();
-                var after = UserRules.Apply(before, patch, now);
+                var after = UserRules.Apply(before, patch, now) with { Version = before.Version + 1 };
                 var change = ChangeSet.Between(UserRules.ToAudit(before), UserRules.ToAudit(after));
                 if (change.IsNoOp)
                 {
                     return TransactionOutcome.Commit<Changed>(before);
                 }
 
-                var written = await users.UpdateAsync(id, patch, now, token).ConfigureAwait(false);
-                if (written.IsT1)
+                var written = await users.UpdateAsync(id, patch, now, token, expectedVersion).ConfigureAwait(false);
+                if (!written.TryPickT0(out _, out var writeFailure))
                 {
-                    return TransactionOutcome.Abort<Changed>(written.AsT1);
-                }
-
-                if (written.IsT2)
-                {
-                    return TransactionOutcome.Abort<Changed>(written.AsT2);
+                    return TransactionOutcome.Abort<Changed>(writeFailure.Match<Changed>(notFound => notFound, error => error, failed => failed));
                 }
 
                 var recorded = await audit.RecordAsync(

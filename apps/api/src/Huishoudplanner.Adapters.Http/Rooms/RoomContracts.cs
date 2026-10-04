@@ -2,7 +2,7 @@ using Huishoudplanner.Domain.Rooms;
 
 namespace Huishoudplanner.Adapters.Http.Rooms;
 
-/// <summary>A room as the API shows it.</summary>
+/// <summary>A room as the API shows it. <c>version</c> is the concurrency version of the room (the number inside its ETag).</summary>
 public sealed record RoomResponse(
     string Id,
     string Name,
@@ -10,10 +10,11 @@ public sealed record RoomResponse(
     bool Active,
     bool Virtual,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt)
+    DateTimeOffset UpdatedAt,
+    int Version)
 {
     internal static RoomResponse From(Room room) =>
-        new(room.Id, room.Name, room.SortOrder, room.Active, room.Virtual, room.CreatedAt, room.UpdatedAt);
+        new(room.Id, room.Name, room.SortOrder, room.Active, room.Virtual, room.CreatedAt, room.UpdatedAt, room.Version);
 }
 
 /// <summary>One page of rooms; <see cref="NextCursor"/> is <c>null</c> on the last page.</summary>

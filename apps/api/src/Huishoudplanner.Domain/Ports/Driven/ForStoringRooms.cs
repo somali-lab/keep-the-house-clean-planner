@@ -25,8 +25,13 @@ public interface ForStoringRooms
 
     Task<OneOf<Room, PortError>> InsertAsync(NewRoom room, CancellationToken cancellationToken);
 
-    /// <summary>Sets the given fields and <c>updatedAt</c>; returns the room as stored afterwards.</summary>
-    Task<OneOf<Room, NotFound, PortError>> UpdateAsync(string id, RoomChanges changes, DateTimeOffset updatedAt, CancellationToken cancellationToken);
+    /// <summary>
+    /// Sets the given fields and <c>updatedAt</c>, raises the version by one in the same write, and returns the room as stored afterwards. With an
+    /// <paramref name="expectedVersion"/> the write is conditional on the stored version (<see cref="PreconditionFailed"/> when it differs, nothing written).
+    /// </summary>
+    Task<OneOf<Room, NotFound, PortError, PreconditionFailed>> UpdateAsync(
+        string id, RoomChanges changes, DateTimeOffset updatedAt, CancellationToken cancellationToken, int? expectedVersion = null);
 
-    Task<OneOf<Success, NotFound, PortError>> DeleteAsync(string id, CancellationToken cancellationToken);
+    /// <summary>Deletes the room; with an <paramref name="expectedVersion"/> the delete is conditional on the stored version (<see cref="PreconditionFailed"/> when it differs).</summary>
+    Task<OneOf<Success, NotFound, PortError, PreconditionFailed>> DeleteAsync(string id, CancellationToken cancellationToken, int? expectedVersion = null);
 }

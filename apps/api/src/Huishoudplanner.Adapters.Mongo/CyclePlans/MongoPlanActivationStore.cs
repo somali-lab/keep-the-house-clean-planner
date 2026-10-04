@@ -88,7 +88,7 @@ internal sealed class MongoPlanActivationStore : ForActivatingCyclePlans, ForRea
                 await plans.UpdateManyAsync(
                     session,
                     new BsonDocument("_id", new BsonDocument("$in", new BsonArray(otherIds))),
-                    new BsonDocument("$set", new BsonDocument { { "active", false }, { "updatedAt", now } }),
+                    EntityVersioning.Raise(new BsonDocument("$set", new BsonDocument { { "active", false }, { "updatedAt", now } })),
                     cancellationToken: cancellationToken).ConfigureAwait(false);
             }
 
@@ -101,7 +101,7 @@ internal sealed class MongoPlanActivationStore : ForActivatingCyclePlans, ForRea
             var afterDocument = await plans.FindOneAndUpdateAsync(
                 session,
                 new BsonDocument("_id", id),
-                new BsonDocument("$set", set),
+                EntityVersioning.Raise(new BsonDocument("$set", set)),
                 new FindOneAndUpdateOptions<BsonDocument> { ReturnDocument = ReturnDocument.After },
                 cancellationToken).ConfigureAwait(false);
             if (afterDocument is null)
