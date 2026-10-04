@@ -234,7 +234,7 @@ public sealed class WriteRouteCoverageTests(AuditCoverageHarness h) : IClassFixt
         new("POST /api/v2/import/json", Kind.Audited, async h =>
         {
             // Importing the export of the household itself: every collection is replaced by the same documents, the audit log is merged without duplicates.
-            var (status, file) = await h.SendAsync(HttpMethod.Get, "/api/v2/export/json", null, null);
+            var (status, file) = await h.SendAsync(HttpMethod.Get, "/api/v2/export/json", null, h.Admin);
             status.Should().Be(HttpStatusCode.OK);
             return new(HttpMethod.Post, "/api/v2/import/json?mode=replace&confirm=true", file.GetRawText(), h.Admin);
         }, "import", "create", Covers: [MongoCollections.Settings, MongoCollections.Users, MongoCollections.Rooms, MongoCollections.Tasks, MongoCollections.CyclePlans, MongoCollections.Cycles, MongoCollections.Occurrences, MongoCollections.Badges, MongoCollections.BadgeAwards]), // one summary entry stands for the replacement of every collection; not idempotent by design (as in Node): the import is recorded every time

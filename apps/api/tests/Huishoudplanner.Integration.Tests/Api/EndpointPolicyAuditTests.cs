@@ -18,10 +18,11 @@ public sealed class EndpointPolicyAuditTests
     /// <summary>Non-GET endpoints that are intentionally open, by route pattern. Needs a reason per entry.</summary>
     private static readonly HashSet<string> AnonymousWrites = [];
 
-    /// <summary>GET endpoints that require a role, by route pattern (Node: requirePlanner on the activation preview).</summary>
+    /// <summary>GET endpoints that require a role, by route pattern (Node: requirePlanner on the activation preview; the JSON export is administrators only in v2, a maintainer decision).</summary>
     private static readonly Dictionary<string, string> ProtectedReads = new()
     {
         ["/api/v2/cycle-plans/{id}/activation-preview"] = AuthorizationPolicies.PlannerPolicy,
+        ["/api/v2/export/json"] = AuthorizationPolicies.AdminPolicy,
     };
 
     /// <summary>Writing endpoints and the policy each must declare, by "METHOD pattern" (the Node route guards: requireAdmin, requireActor).</summary>
@@ -193,13 +194,13 @@ public sealed class EndpointPolicyAuditTests
     }
 
     [Fact]
-    public void TheJsonExport_staysOpenLikeTheNodeRoute()
+    public void TheJsonExport_isForAdministrators_unlikeTheNodeRoute()
     {
         using var factory = ApiFactory.WithoutDatabase();
 
         var export = EndpointsOf(factory).Single(e => e.RoutePattern.RawText == "/api/v2/export/json");
 
-        export.Metadata.GetOrderedMetadata<IAuthorizeData>().Should().BeEmpty("the GET of routes/transfer.ts has no guard");
+        export.Metadata.GetOrderedMetadata<IAuthorizeData>().Should().ContainSingle().Which.Policy.Should().Be(AuthorizationPolicies.AdminPolicy, "the export holds the whole household history, like the import it feeds");
     }
 
     [Fact]

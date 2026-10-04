@@ -201,6 +201,33 @@ public sealed class StatisticsServiceTests
         entry.Meta["resetId"].Should().BeOfType<AuditString>().Which.Value.Should().NotBeNullOrWhiteSpace();
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Reset_thatRemovesNothing_answersTheZeroCounts_butWritesAndAuditsNothing(bool purge)
+    {
+        var world = new StatisticsWorld();
+        world.Resetter.Result = new StatisticsResetResult(0, 0, 0, 0, 0, 0, 0);
+
+        var result = await world.Service.ResetAsync(Admin, purge ? new DateOnly(2026, 10, 12) : null, Ct);
+
+        result.AsT0.Should().Be(new StatisticsResetResult(0, 0, 0, 0, 0, 0, 0));
+        world.Audit.Entries.Should().BeEmpty();
+        world.Transactions.Aborts.Should().Be(1, "the transaction rolls back whatever the store wrote, such as the bonus floor");
+    }
+
+    [Fact]
+    public async Task Reset_thatRemovesOnlyOneKindOfThing_isStillRecorded()
+    {
+        var world = new StatisticsWorld();
+        world.Resetter.Result = new StatisticsResetResult(0, 0, 0, 0, 0, 0, 1);
+
+        (await world.Service.ResetAsync(Admin, null, Ct)).IsT0.Should().BeTrue();
+
+        world.Audit.Entries.Should().ContainSingle();
+        world.Transactions.Aborts.Should().Be(0);
+    }
+
     [Fact]
     public async Task Reset_withBefore_purgesOnlyOlderData_andIsScoped()
     {

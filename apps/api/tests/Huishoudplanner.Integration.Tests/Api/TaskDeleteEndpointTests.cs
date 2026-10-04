@@ -111,7 +111,7 @@ public sealed class TaskDeleteEndpointTests(MongoContainerFixture mongo)
         (await h.SendAsync(HttpMethod.Patch, $"/api/v2/badges/{onlyId}", new { active = true, rule = Executions([h.Mop], 1) }, h.P1)).Status.Should().Be(HttpStatusCode.OK);
 
         // And the export of the household imports again.
-        var export = await h.GetAsync("/api/v2/export/json");
+        var export = await h.SendAsync(HttpMethod.Get, "/api/v2/export/json", null, h.P1);
         export.Status.Should().Be(HttpStatusCode.OK);
         await using var target = await BadgeHarness.StartAsync(mongo, moveToWednesday: false);
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v2/import/json?mode=replace&confirm=true")

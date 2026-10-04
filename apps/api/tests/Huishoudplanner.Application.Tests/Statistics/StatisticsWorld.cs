@@ -141,11 +141,14 @@ internal sealed class FakeResetter(FakeAudit audit) : ForResettingStatistics
 
     public PortError? Failure { get; set; }
 
+    /// <summary>What the reset removed; <see cref="Counts"/> unless a test says otherwise.</summary>
+    public StatisticsResetResult Result { get; set; } = Counts;
+
     public Task<OneOf<StatisticsResetResult, PortError>> ResetAsync(StatisticsResetPlan plan, CancellationToken cancellationToken)
     {
         Plans.Add(plan);
         AuditEntriesWhenRun = audit.Entries.Count;
-        return Task.FromResult(Failure is { } failure ? (OneOf<StatisticsResetResult, PortError>)failure : Counts);
+        return Task.FromResult(Failure is { } failure ? (OneOf<StatisticsResetResult, PortError>)failure : Result);
     }
 }
 
